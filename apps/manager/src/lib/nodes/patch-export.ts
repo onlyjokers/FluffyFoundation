@@ -283,10 +283,14 @@ export function exportGraphForPatch(
     if (registry) {
       const def = registry.get(String(n.type));
       for (const field of def?.configSchema ?? []) {
-        if ((field as any)?.type !== 'asset-picker') continue;
-        const key = String((field as any).key ?? '');
+        const fieldRecord =
+          field && typeof field === 'object' ? (field as Record<string, unknown>) : null;
+        if (fieldRecord?.type !== 'asset-picker') continue;
+        const key = typeof fieldRecord.key === 'string' ? fieldRecord.key : String(fieldRecord?.key ?? '');
         if (!key) continue;
-        const normalized = normalizeAssetPickerValue((n.config as any)?.[key]);
+        const configRecord =
+          n.config && typeof n.config === 'object' ? (n.config as Record<string, unknown>) : null;
+        const normalized = normalizeAssetPickerValue(configRecord?.[key]);
         if (normalized && !seen.has(normalized)) {
           seen.add(normalized);
           assetRefs.push(normalized);

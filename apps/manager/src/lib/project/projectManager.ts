@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import { nodeEngine } from '$lib/nodes';
-import type { GraphState } from '$lib/nodes/types';
+import type { GraphState, PortType } from '$lib/nodes/types';
 import { parameterRegistry } from '$lib/parameters/registry';
 import { minimapPreferences, type MinimapPreferences } from './uiState';
 import { nodeGroupsState } from './nodeGraphUiState';
@@ -94,9 +94,19 @@ export function loadLocalProject(): boolean {
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
-  const parseNodeGroups = (value: unknown) => {
+  type ParsedGroup = {
+    id: string;
+    parentId: string | null;
+    name: string;
+    nodeIds: string[];
+    disabled: boolean;
+    minimized: boolean;
+    runtimeActive?: boolean;
+  };
+
+  const parseNodeGroups = (value: unknown): ParsedGroup[] => {
     if (!Array.isArray(value)) return [];
-    const groups: any[] = [];
+    const groups: ParsedGroup[] = [];
     for (const item of value) {
       if (!isRecord(item)) continue;
       const id = typeof item.id === 'string' ? item.id : '';
@@ -108,8 +118,7 @@ export function loadLocalProject(): boolean {
       const nodeIds = nodeIdsRaw.map((v) => String(v)).filter(Boolean);
       const disabled = Boolean(item.disabled);
       const minimized = Boolean(item.minimized);
-      const runtimeActive =
-        typeof (item as any).runtimeActive === 'boolean' ? Boolean((item as any).runtimeActive) : undefined;
+      const runtimeActive = typeof item.runtimeActive === 'boolean' ? item.runtimeActive : undefined;
       groups.push({ id, parentId, name, nodeIds, disabled, minimized, runtimeActive });
     }
     return groups;
@@ -130,46 +139,59 @@ export function loadLocalProject(): boolean {
 
       const template: GraphState = {
         nodes: nodesRaw
-          .map((n: any) => ({
-            ...n,
-            id: String(n?.id ?? ''),
-            type: String(n?.type ?? ''),
-            position: {
-              x: typeof n?.position?.x === 'number' ? n.position.x : Number(n?.position?.x ?? 0),
-              y: typeof n?.position?.y === 'number' ? n.position.y : Number(n?.position?.y ?? 0),
-            },
-            config: isRecord(n?.config) ? (n.config as Record<string, unknown>) : {},
-            inputValues: isRecord(n?.inputValues) ? (n.inputValues as Record<string, unknown>) : {},
-            outputValues: {},
-          }))
-          .filter((n: any) => Boolean(n.id && n.type)),
+          .map((n) => {
+            const nodeRecord = isRecord(n) ? n : null;
+            const positionRecord = isRecord(nodeRecord?.position) ? nodeRecord?.position : null;
+            const config = isRecord(nodeRecord?.config) ? nodeRecord.config : {};
+            const inputValues = isRecord(nodeRecord?.inputValues) ? nodeRecord.inputValues : {};
+            return {
+              ...(nodeRecord ?? {}),
+              id: String(nodeRecord?.id ?? ''),
+              type: String(nodeRecord?.type ?? ''),
+              position: {
+                x: typeof positionRecord?.x === 'number' ? positionRecord.x : Number(positionRecord?.x ?? 0),
+                y: typeof positionRecord?.y === 'number' ? positionRecord.y : Number(positionRecord?.y ?? 0),
+              },
+              config,
+              inputValues,
+              outputValues: {},
+            };
+          })
+          .filter((n) => Boolean(n.id && n.type)),
         connections: connectionsRaw
-          .map((c: any) => ({
-            ...c,
-            id: String(c?.id ?? ''),
-            sourceNodeId: String(c?.sourceNodeId ?? ''),
-            sourcePortId: String(c?.sourcePortId ?? ''),
-            targetNodeId: String(c?.targetNodeId ?? ''),
-            targetPortId: String(c?.targetPortId ?? ''),
-          }))
-          .filter((c: any) => Boolean(c.id && c.sourceNodeId && c.targetNodeId && c.sourcePortId && c.targetPortId)),
+          .map((c) => {
+            const connectionRecord = isRecord(c) ? c : null;
+            return {
+              ...(connectionRecord ?? {}),
+              id: String(connectionRecord?.id ?? ''),
+              sourceNodeId: String(connectionRecord?.sourceNodeId ?? ''),
+              sourcePortId: String(connectionRecord?.sourcePortId ?? ''),
+              targetNodeId: String(connectionRecord?.targetNodeId ?? ''),
+              targetPortId: String(connectionRecord?.targetPortId ?? ''),
+            };
+          })
+          .filter((c) => Boolean(c.id && c.sourceNodeId && c.targetNodeId && c.sourcePortId && c.targetPortId)),
       };
 
       const portsRaw = Array.isArray(item.ports) ? item.ports : [];
       const ports = portsRaw
-        .map((p: any) => ({
-          portKey: String(p?.portKey ?? ''),
-          side: String(p?.side) === 'input' ? 'input' : ('output' as const),
-          label: String(p?.label ?? ''),
-          type: String(p?.type ?? 'any') as any,
-          pinned: Boolean(p?.pinned),
-          y: typeof p?.y === 'number' ? p.y : Number(p?.y ?? 0),
-          binding: {
-            nodeId: String(p?.binding?.nodeId ?? ''),
-            portId: String(p?.binding?.portId ?? ''),
-          },
-        }))
-        .filter((p: any) => Boolean(p.portKey && p.binding?.nodeId && p.binding?.portId));
+        .map((p) => {
+          const portRecord = isRecord(p) ? p : null;
+          const bindingRecord = isRecord(portRecord?.binding) ? portRecord?.binding : null;
+          return {
+            portKey: String(portRecord?.portKey ?? ''),
+            side: String(portRecord?.side) === 'input' ? 'input' : ('output' as const),
+            label: String(portRecord?.label ?? ''),
+            type: String(portRecord?.type ?? 'any') as PortType,
+            pinned: Boolean(portRecord?.pinned),
+            y: typeof portRecord?.y === 'number' ? portRecord.y : Number(portRecord?.y ?? 0),
+            binding: {
+              nodeId: String(bindingRecord?.nodeId ?? ''),
+              portId: String(bindingRecord?.portId ?? ''),
+            },
+          };
+        })
+        .filter((p) => Boolean(p.portKey && p.binding?.nodeId && p.binding?.portId));
 
       defs.push({ definitionId, name, template, ports });
     }
@@ -203,14 +225,12 @@ export function loadLocalProject(): boolean {
         const param = parameterRegistry.get(p.path);
         if (param) {
           // Restore base value
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (param as any).setValue?.(p.baseValue, 'SYSTEM');
+          param.setValue(p.baseValue, 'SYSTEM');
 
           // Restore modulation offsets if present
           if (p.modulators) {
             Object.entries(p.modulators).forEach(([sourceId, offset]) => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (param as any).setModulation?.(sourceId, offset, 'SYSTEM');
+              param.setModulation(sourceId, offset, 'SYSTEM');
             });
           }
         }
@@ -221,14 +241,14 @@ export function loadLocalProject(): boolean {
     if (
       mini &&
       typeof mini === 'object' &&
-      typeof (mini as any).x === 'number' &&
-      typeof (mini as any).y === 'number' &&
-      typeof (mini as any).size === 'number'
+      typeof (mini as Record<string, unknown>).x === 'number' &&
+      typeof (mini as Record<string, unknown>).y === 'number' &&
+      typeof (mini as Record<string, unknown>).size === 'number'
     ) {
       minimapPreferences.set({
-        x: Number((mini as any).x),
-        y: Number((mini as any).y),
-        size: Number((mini as any).size),
+        x: Number((mini as Record<string, unknown>).x),
+        y: Number((mini as Record<string, unknown>).y),
+        size: Number((mini as Record<string, unknown>).size),
       });
     }
     return true;

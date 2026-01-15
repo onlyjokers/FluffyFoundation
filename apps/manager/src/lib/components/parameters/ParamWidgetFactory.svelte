@@ -6,21 +6,21 @@
   import ParamColor from './widgets/ParamColor.svelte';
   import ParamSelect from './widgets/ParamSelect.svelte';
 
-  export let parameter: Parameter<any>;
+  export let parameter: Parameter<unknown>;
   export let label: string | undefined = undefined;
 
   const dispatch = createEventDispatcher<{
-    contextmenu: { parameter: Parameter<any>; event: MouseEvent };
+    contextmenu: { parameter: Parameter<unknown>; event: MouseEvent };
   }>();
 
-  function handleContextMenu(e: CustomEvent<{ parameter: Parameter<any>; event: MouseEvent }>) {
+  function handleContextMenu(e: CustomEvent<{ parameter: Parameter<unknown>; event: MouseEvent }>) {
     dispatch('contextmenu', e.detail);
   }
 
   // Determine widget type
   $: widgetType = parameter.metadata?.widgetType ?? inferWidgetType(parameter);
 
-  function inferWidgetType(param: Parameter<any>): string {
+  function inferWidgetType(param: Parameter<unknown>): string {
     switch (param.type) {
       case 'number':
         return 'slider';

@@ -286,7 +286,7 @@ function teardownPort(): void {
         {
           type: 'shugu:display:control',
           action: 'screenColor',
-          payload: { color: '#000000', opacity: 0, mode: 'solid' } as any,
+          payload: { color: '#000000', opacity: 0, mode: 'solid' } as ControlPayload,
         },
       ];
       for (const msg of cleanup) controlPort.postMessage(msg);

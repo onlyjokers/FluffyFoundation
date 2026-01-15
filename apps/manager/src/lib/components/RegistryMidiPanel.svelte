@@ -152,7 +152,7 @@
     if (!source) return 'Unbound';
     if (!source.inputId) return formatMidiSource(source);
     const name = inputList.find((i) => i.id === source.inputId)?.name ?? source.inputId;
-    return formatMidiSource({ ...source, inputId: name } as any).replace(/^in:/, '');
+    return formatMidiSource({ ...source, inputId: name }).replace(/^in:/, '');
   }
 
   function clampNumber(value: number, min?: number, max?: number): number {

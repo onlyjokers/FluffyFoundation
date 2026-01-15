@@ -15,7 +15,11 @@ import {
   type ControlAction,
   type ControlPayload,
 } from '@shugu/protocol';
-import { NodeRegistry as CoreNodeRegistry, registerDefaultNodeDefinitions } from '@shugu/node-core';
+import {
+  NodeRegistry as CoreNodeRegistry,
+  registerDefaultNodeDefinitions,
+  type NodeCommand,
+} from '@shugu/node-core';
 
 import { nodeRegistry } from '../registry';
 import type { ConfigField, NodeDefinition, NodePort, ProcessContext } from '../types';
@@ -149,7 +153,7 @@ const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     getClientId: () => null,
     getSensorForClientId: (clientId) => {
       if (!clientId) return null;
-      return (get(sensorData).get(clientId) as any) ?? null;
+      return get(sensorData).get(clientId) ?? null;
     },
     executeCommand: () => {
       // Manager always routes via executeCommandForClientId.
@@ -198,6 +202,12 @@ const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+type AnyRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): AnyRecord | null {
+  return value && typeof value === 'object' ? (value as AnyRecord) : null;
 }
 
 function clampNumber(value: number, clamp: ClampSpec | undefined): number {
@@ -301,7 +311,7 @@ function applyClientSelectionFromInputs(nodeId: string, inputs: Record<string, u
   const randomValue = hasRandom ? coerceBoolean(randomRaw, prev.random) : prev.random;
   if (!Number.isFinite(indexValue) || !Number.isFinite(rangeValue)) return;
 
-  const clients = get(state).clients.map((c: any) => String(c.clientId ?? '')).filter(Boolean);
+  const clients = (get(state).clients ?? []).map((c) => String(c.clientId ?? '')).filter(Boolean);
   if (clients.length === 0) return;
 
   const total = clients.length;
@@ -378,7 +388,7 @@ function applyClientSelectionFromInputs(nodeId: string, inputs: Record<string, u
 }
 
 function getSelectedClientIndexOut(): number {
-  const clients = get(state).clients.map((c: any) => String(c.clientId ?? '')).filter(Boolean);
+  const clients = (get(state).clients ?? []).map((c) => String(c.clientId ?? '')).filter(Boolean);
   if (clients.length === 0) return 0;
   const selected = get(state).selectedClientIds.map(String);
   const targetId = selected[0];
@@ -387,7 +397,11 @@ function getSelectedClientIndexOut(): number {
   return idx >= 0 ? idx + 1 : 0;
 }
 
-function getString(inputs: Record<string, unknown>, config: Record<string, unknown>, mapping: any): string {
+function getString(
+  inputs: Record<string, unknown>,
+  config: Record<string, unknown>,
+  mapping: Extract<CommandFieldMapping, { kind: 'string' }>
+): string {
   const fromInput = mapping.inputKey ? inputs[mapping.inputKey] : undefined;
   if (typeof fromInput === 'string' && fromInput !== '') return fromInput;
   const fromConfig = mapping.configKey ? config[mapping.configKey] : undefined;
@@ -395,7 +409,11 @@ function getString(inputs: Record<string, unknown>, config: Record<string, unkno
   return String(mapping.default ?? '');
 }
 
-function getNumber(inputs: Record<string, unknown>, config: Record<string, unknown>, mapping: any): number {
+function getNumber(
+  inputs: Record<string, unknown>,
+  config: Record<string, unknown>,
+  mapping: Extract<CommandFieldMapping, { kind: 'number' }>
+): number {
   const fromInput = mapping.inputKey ? inputs[mapping.inputKey] : undefined;
   if (isFiniteNumber(fromInput)) return fromInput;
   const fromConfig = mapping.configKey ? config[mapping.configKey] : undefined;
@@ -404,8 +422,12 @@ function getNumber(inputs: Record<string, unknown>, config: Record<string, unkno
   return Number.isFinite(fallback) ? fallback : 0;
 }
 
-function getEnumFromFuzzy(inputs: Record<string, unknown>, config: Record<string, unknown>, mapping: any): string {
-  const options = Array.isArray(mapping.options) ? (mapping.options as string[]) : [];
+function getEnumFromFuzzy(
+  inputs: Record<string, unknown>,
+  config: Record<string, unknown>,
+  mapping: Extract<CommandFieldMapping, { kind: 'enumFromFuzzy' }>
+): string {
+  const options = Array.isArray(mapping.options) ? mapping.options : [];
   const fallback = mapping.configKey ? config[mapping.configKey] : undefined;
   const fallbackStr =
     typeof fallback === 'string' && fallback ? fallback : typeof mapping.default === 'string' ? mapping.default : '';
@@ -427,7 +449,7 @@ function getEnumFromFuzzy(inputs: Record<string, unknown>, config: Record<string
 function getEnumFromThreshold(
   inputs: Record<string, unknown>,
   config: Record<string, unknown>,
-  mapping: any
+  mapping: Extract<CommandFieldMapping, { kind: 'enumFromThreshold' }>
 ): string {
   const raw = inputs[mapping.inputKey];
   if (isFiniteNumber(raw)) return raw >= Number(mapping.threshold ?? 0) ? mapping.whenTrue : mapping.whenFalse;
@@ -511,8 +533,9 @@ function createCommandProcess(runtime: CommandRuntime): NodeDefinition['process'
 
   return (inputs, config) => {
     if (clientInput) {
-      const client = inputs[clientInput] as any;
-      if (!client?.clientId) return { [outKey]: null };
+      const clientRecord = asRecord(inputs[clientInput]);
+      const clientId = typeof clientRecord?.clientId === 'string' ? clientRecord.clientId : '';
+      if (!clientId) return { [outKey]: null };
     }
 
     const payload: Record<string, unknown> = {};
@@ -520,7 +543,7 @@ function createCommandProcess(runtime: CommandRuntime): NodeDefinition['process'
 
     // Phase 1: conditions that do not depend on other computed payload fields.
     for (const [key, mapping] of entries) {
-      const when = (mapping as any).when as WhenCondition | undefined;
+      const when = mapping.when;
       if (when?.source === 'payload') continue;
       const value = evalCommandMapping(mapping, inputs, config, payload);
       if (value !== undefined) payload[key] = value;
@@ -528,7 +551,7 @@ function createCommandProcess(runtime: CommandRuntime): NodeDefinition['process'
 
     // Phase 2: payload-dependent conditions (e.g. include `frequency` only when `mode === "blink"`).
     for (const [key, mapping] of entries) {
-      const when = (mapping as any).when as WhenCondition | undefined;
+      const when = mapping.when;
       if (when?.source !== 'payload') continue;
       const value = evalCommandMapping(mapping, inputs, config, payload);
       if (value !== undefined) payload[key] = value;
@@ -571,7 +594,7 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
         onSink: (inputs, config, context) => {
           applyClientSelectionFromInputs(context.nodeId, inputs);
 
-          const clients = get(state).clients.map((c: any) => String(c.clientId ?? '')).filter(Boolean);
+          const clients = (get(state).clients ?? []).map((c) => String(c.clientId ?? '')).filter(Boolean);
           if (clients.length === 0) return;
 
           const selection = clientSelectionState.get(context.nodeId);
@@ -580,11 +603,11 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
               ? selection.selectedIds
               : get(state).selectedClientIds.map(String).filter(Boolean);
 
-          const fallbackClientId = typeof (config as any)?.clientId === 'string' ? String((config as any).clientId) : '';
+          const fallbackClientId = typeof config.clientId === 'string' ? String(config.clientId) : '';
           const targets = selectedIds.length > 0 ? selectedIds : fallbackClientId ? [fallbackClientId] : [];
           if (targets.length === 0) return;
 
-          const raw = (inputs as any).in;
+          const raw = inputs.in;
           const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
           if (commands.length === 0) return;
 
@@ -592,11 +615,14 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
           if (!sdk) return;
 
           for (const cmd of commands) {
-            if (!cmd || typeof cmd !== 'object') continue;
-            const action = (cmd as any).action as ControlAction | undefined;
-            if (!action) continue;
-            const payload = ((cmd as any).payload ?? {}) as ControlPayload;
-            const executeAt = (cmd as any).executeAt as number | undefined;
+            const cmdRecord = asRecord(cmd);
+            if (!cmdRecord) continue;
+            const actionRaw = cmdRecord.action;
+            if (typeof actionRaw !== 'string') continue;
+            const action = actionRaw as ControlAction;
+            const payloadRecord = asRecord(cmdRecord.payload) ?? {};
+            const payload = payloadRecord as ControlPayload;
+            const executeAt = typeof cmdRecord.executeAt === 'number' ? cmdRecord.executeAt : undefined;
 
             for (const clientId of targets) {
               sdk.sendControl(targetClients([clientId]), action, payload, executeAt);
@@ -610,7 +636,7 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
         ...base,
         process: () => ({}),
         onSink: (inputs, _config, context) => {
-          const raw = (inputs as any).in;
+          const raw = inputs.in;
           const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
           if (commands.length === 0) return;
 
@@ -630,11 +656,14 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
           }
 
           for (const cmd of commands) {
-            if (!cmd || typeof cmd !== 'object') continue;
-            const action = (cmd as any).action as ControlAction | undefined;
-            if (!action) continue;
-            const payload = ((cmd as any).payload ?? {}) as ControlPayload;
-            const executeAt = (cmd as any).executeAt as number | undefined;
+            const cmdRecord = asRecord(cmd);
+            if (!cmdRecord) continue;
+            const actionRaw = cmdRecord.action;
+            if (typeof actionRaw !== 'string') continue;
+            const action = actionRaw as ControlAction;
+            const payloadRecord = asRecord(cmdRecord.payload) ?? {};
+            const payload = payloadRecord as ControlPayload;
+            const executeAt = typeof cmdRecord.executeAt === 'number' ? cmdRecord.executeAt : undefined;
 
             const sendResult = displayTransport.sendControl(action, payload, executeAt);
 
@@ -644,7 +673,7 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
               const lastAt = displayObjectLogLastAt.get(nodeKey) ?? 0;
               if (now - lastAt >= 500) {
                 displayObjectLogLastAt.set(nodeKey, now);
-                const urlCandidate = (payload as any)?.url;
+                const urlCandidate = (payload as Record<string, unknown>)?.url;
                 const url = typeof urlCandidate === 'string' ? urlCandidate : '';
                 console.info('[Manager] display-object', {
                   nodeId: context?.nodeId,
@@ -660,7 +689,11 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
           // Clear any long-lived effects when the Display route is disabled (e.g. group gate closed / graph stop).
           displayTransport.sendControl('stopMedia', {}, undefined);
           displayTransport.sendControl('hideImage', {}, undefined);
-          displayTransport.sendControl('screenColor', { color: '#000000', opacity: 0, mode: 'solid' } as any, undefined);
+          displayTransport.sendControl(
+            'screenColor',
+            { color: '#000000', opacity: 0, mode: 'solid' },
+            undefined
+          );
         },
       };
     }
@@ -674,8 +707,8 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
       return {
         ...base,
         process: (inputs) => {
-          const numberRaw = (inputs as any)?.number;
-          const triggerRaw = (inputs as any)?.trigger;
+          const numberRaw = inputs.number;
+          const triggerRaw = inputs.trigger;
 
           const numberValue = isFiniteNumber(numberRaw) ? numberRaw : Number(numberRaw ?? 0);
           const triggerValue = isFiniteNumber(triggerRaw) ? triggerRaw : Number(triggerRaw ?? 0.5);
@@ -747,12 +780,15 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
         process: (inputs, config, context: ProcessContext) => {
           const path = String(config.path ?? '');
           const modeRaw =
-            typeof (inputs as any).mode === 'string' && String((inputs as any).mode).trim()
-              ? String((inputs as any).mode).trim()
+            typeof inputs.mode === 'string' && String(inputs.mode).trim()
+              ? String(inputs.mode).trim()
               : String(config.mode ?? 'REMOTE');
           const mode = modeRaw === 'MODULATION' ? 'MODULATION' : 'REMOTE';
-          const value = (inputs.value as number) ?? 0;
-          const bypass = (inputs.bypass as boolean) ?? false;
+          const value =
+            typeof inputs.value === 'number' && Number.isFinite(inputs.value)
+              ? inputs.value
+              : Number(inputs.value ?? 0);
+          const bypass = typeof inputs.bypass === 'boolean' ? inputs.bypass : Boolean(inputs.bypass ?? false);
 
           if (!path || bypass) return { value };
 
@@ -786,8 +822,8 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
         process: (inputs, config, context) => {
           const source = (config.source ?? null) as MidiSource | null;
           const key = midiSourceKey(source);
-          const buttonize = coerceBoolean((config as any)?.buttonize, true);
-          const thresholdFromInput = (inputs as any).threshold;
+          const buttonize = coerceBoolean(config.buttonize, true);
+          const thresholdFromInput = inputs.threshold;
           const thresholdRaw =
             typeof thresholdFromInput === 'number' && Number.isFinite(thresholdFromInput)
               ? thresholdFromInput
@@ -842,7 +878,7 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
       return {
         ...base,
         process: (inputs) => {
-          const raw = (inputs as any).active;
+          const raw = inputs.active;
           const active =
             typeof raw === 'boolean'
               ? raw
@@ -860,14 +896,16 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
           const value = typeof inputs.in === 'number' ? (inputs.in as number) : null;
           if (value === null || !Number.isFinite(value)) return { out: null };
 
-          const minRaw = typeof (inputs as any).min === 'number' ? (inputs as any).min : Number(config.min ?? 0);
-          const maxRaw = typeof (inputs as any).max === 'number' ? (inputs as any).max : Number(config.max ?? 1);
+          const minInput = inputs.min;
+          const maxInput = inputs.max;
+          const minRaw = typeof minInput === 'number' ? minInput : Number(config.min ?? 0);
+          const maxRaw = typeof maxInput === 'number' ? maxInput : Number(config.max ?? 1);
           const min = Number.isFinite(minRaw) ? minRaw : 0;
           const max = Number.isFinite(maxRaw) ? maxRaw : 1;
-          const invert = coerceBoolean((inputs as any).invert, Boolean(config.invert));
-          const round = coerceBoolean((inputs as any).round, Boolean(config.round));
+          const invert = coerceBoolean(inputs.invert, Boolean(config.invert));
+          const round = coerceBoolean(inputs.round, Boolean(config.round));
           // Integer output helper: avoids float inputs for discrete targets (e.g. client index/range).
-          const integer = coerceBoolean((inputs as any).integer, Boolean((config as any).integer));
+          const integer = coerceBoolean(inputs.integer, Boolean(config.integer));
 
           const mapped = mapRangeWithOptions(value, min, max, invert);
           const out = integer || round ? Math.round(mapped) : mapped;
@@ -884,8 +922,8 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
           const value = typeof inputs.in === 'number' ? (inputs.in as number) : null;
           if (value === null || !Number.isFinite(value)) return { out: null };
 
-          const invert = coerceBoolean((inputs as any).invert, Boolean(config.invert));
-          const rawOptions = Array.isArray((config as any).options) ? ((config as any).options as unknown[]) : [];
+          const invert = coerceBoolean(inputs.invert, Boolean(config.invert));
+          const rawOptions = Array.isArray(config.options) ? config.options : [];
           const options = rawOptions.map((opt) => String(opt)).filter((opt) => opt !== '');
 
           const t = clamp01(invert ? 1 - value : value);
@@ -940,11 +978,11 @@ function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): NodeDefini
         ...base,
         process: (inputs, config) => {
           const raw = typeof inputs.in === 'number' ? (inputs.in as number) : 0;
-          const invert = coerceBoolean((inputs as any).invert, Boolean(config.invert));
+          const invert = coerceBoolean(inputs.invert, Boolean(config.invert));
           const t = invert ? 1 - clamp01(raw) : clamp01(raw);
 
-          const fromInput = (inputs as any).from;
-          const toInput = (inputs as any).to;
+          const fromInput = inputs.from;
+          const toInput = inputs.to;
           const fromRaw = typeof fromInput === 'string' && fromInput.trim() ? fromInput.trim() : (config.from ?? '#6366f1');
           const toRaw = typeof toInput === 'string' && toInput.trim() ? toInput.trim() : (config.to ?? '#ffffff');
           const from = parseHexColor(fromRaw) ?? parseHexColor('#6366f1');
@@ -993,12 +1031,13 @@ function applySpecOverlay(base: NodeDefinition, spec: NodeSpec): NodeDefinition 
   const mergePorts = (basePorts: NodePort[], overlayPorts: unknown): NodePort[] => {
     if (!Array.isArray(overlayPorts) || overlayPorts.length === 0) return basePorts;
 
-    const byId = new Map<string, any>();
+    const byId = new Map<string, AnyRecord>();
     for (const raw of overlayPorts) {
-      if (!raw || typeof raw !== 'object') continue;
-      const id = typeof (raw as any).id === 'string' ? String((raw as any).id) : '';
+      const record = asRecord(raw);
+      if (!record) continue;
+      const id = typeof record.id === 'string' ? String(record.id) : '';
       if (!id) continue;
-      byId.set(id, raw);
+      byId.set(id, record);
     }
 
     return basePorts.map((port) => {
@@ -1024,12 +1063,13 @@ function applySpecOverlay(base: NodeDefinition, spec: NodeSpec): NodeDefinition 
   const mergeConfigSchema = (baseSchema: ConfigField[], overlaySchema: unknown): ConfigField[] => {
     if (!Array.isArray(overlaySchema) || overlaySchema.length === 0) return baseSchema;
 
-    const byKey = new Map<string, any>();
+    const byKey = new Map<string, AnyRecord>();
     for (const raw of overlaySchema) {
-      if (!raw || typeof raw !== 'object') continue;
-      const key = typeof (raw as any).key === 'string' ? String((raw as any).key) : '';
+      const record = asRecord(raw);
+      if (!record) continue;
+      const key = typeof record.key === 'string' ? String(record.key) : '';
       if (!key) continue;
-      byKey.set(key, raw);
+      byKey.set(key, record);
     }
 
     return baseSchema.map((field) => {
@@ -1067,7 +1107,7 @@ function loadSpecs(): NodeSpec[] {
   const specs: NodeSpec[] = [];
 
   for (const mod of Object.values(modules)) {
-    const spec = (mod as any)?.default as any;
+    const spec = mod?.default;
     if (!spec || typeof spec !== 'object') continue;
     const type = typeof spec.type === 'string' ? spec.type.trim() : '';
     if (!type) continue;
@@ -1086,15 +1126,15 @@ registerDefaultNodeDefinitions(nodeRegistry, {
   // Client node selection should only enumerate audience clients; Display has its own `display-object` node.
   getAllClientIds: () =>
     (get(state).clients ?? [])
-      .filter((c: any) => String(c?.group ?? '') !== 'display')
-      .map((c: any) => String(c?.clientId ?? ''))
+      .filter((c) => String(c?.group ?? '') !== 'display')
+      .map((c) => String(c?.clientId ?? ''))
       .filter(Boolean),
   // Decouple Node Graph client targeting from Manager UI "selected clients".
   // Client targeting must be driven by the graph itself (client-object inputs/config).
   getSelectedClientIds: () => [],
   getSensorForClientId: (clientId: string) => {
     if (!clientId) return null;
-    return (get(sensorData).get(clientId) as any) ?? null;
+    return get(sensorData).get(clientId) ?? null;
   },
   getImageForClientId: (clientId: string) => {
     if (!clientId) return null;
@@ -1103,13 +1143,13 @@ registerDefaultNodeDefinitions(nodeRegistry, {
   executeCommand: () => {
     // Manager always routes via executeCommandForClientId.
   },
-  executeCommandForClientId: (clientId: string, cmd: any) => {
+  executeCommandForClientId: (clientId: string, cmd: NodeCommand) => {
     if (!clientId) return;
     const sdk = getSDK();
     if (!sdk) return;
     sdk.sendControl(targetClients([clientId]), cmd.action, cmd.payload ?? {}, cmd.executeAt);
   },
-} as any);
+});
 
 // Backward-compatible fallback: `load-audio-from-assets` is a newer convenience node.
 // If a dev environment is running with stale node-core builds, templates may fail to import.
@@ -1155,8 +1195,8 @@ if (!nodeRegistry.get('load-audio-from-assets')) {
       },
     ],
     process: (inputs, config) => {
-      const assetId = typeof (config as any)?.assetId === 'string' ? String((config as any).assetId).trim() : '';
-      const playRaw = (inputs as any)?.play;
+      const assetId = typeof config.assetId === 'string' ? String(config.assetId).trim() : '';
+      const playRaw = inputs.play;
       const play = typeof playRaw === 'number' ? playRaw >= 0.5 : Boolean(playRaw);
       // Manager-side placeholder: the actual audio playback is implemented on the client runtime.
       // Return a simple gate value so downstream nodes can reflect play/pause state.
@@ -1195,10 +1235,10 @@ if (!nodeRegistry.get('load-image-from-assets')) {
     ],
     process: (_inputs, config) => {
       const assetId =
-        typeof (config as any)?.assetId === 'string' ? String((config as any).assetId).trim() : '';
+        typeof config.assetId === 'string' ? String(config.assetId).trim() : '';
       const fitRaw =
-        typeof (config as any)?.fit === 'string'
-          ? String((config as any).fit).trim().toLowerCase()
+        typeof config.fit === 'string'
+          ? String(config.fit).trim().toLowerCase()
           : '';
       const fit =
         fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
@@ -1257,31 +1297,31 @@ if (!nodeRegistry.get('load-video-from-assets')) {
       },
     ],
     process: (inputs, config) => {
-      const assetId = typeof (config as any)?.assetId === 'string' ? String((config as any).assetId).trim() : '';
-      const fitRaw = typeof (config as any)?.fit === 'string' ? String((config as any).fit).trim().toLowerCase() : '';
+      const assetId = typeof config.assetId === 'string' ? String(config.assetId).trim() : '';
+      const fitRaw = typeof config.fit === 'string' ? String(config.fit).trim().toLowerCase() : '';
       const fit = fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
       const startSec =
-        typeof (inputs as any)?.startSec === 'number' && Number.isFinite((inputs as any).startSec)
-          ? Number((inputs as any).startSec)
+        typeof inputs.startSec === 'number' && Number.isFinite(inputs.startSec)
+          ? Number(inputs.startSec)
           : 0;
       const endSec =
-        typeof (inputs as any)?.endSec === 'number' && Number.isFinite((inputs as any).endSec)
-          ? Number((inputs as any).endSec)
+        typeof inputs.endSec === 'number' && Number.isFinite(inputs.endSec)
+          ? Number(inputs.endSec)
           : -1;
       const cursorSec =
-        typeof (inputs as any)?.cursorSec === 'number' && Number.isFinite((inputs as any).cursorSec)
-          ? Number((inputs as any).cursorSec)
+        typeof inputs.cursorSec === 'number' && Number.isFinite(inputs.cursorSec)
+          ? Number(inputs.cursorSec)
           : -1;
 
-      const loopRaw = (inputs as any)?.loop;
-      const playRaw = (inputs as any)?.play;
+      const loopRaw = inputs.loop;
+      const playRaw = inputs.play;
       const loop = typeof loopRaw === 'number' ? loopRaw >= 0.5 : Boolean(loopRaw);
       const play = typeof playRaw === 'number' ? playRaw >= 0.5 : Boolean(playRaw);
-      const reverseRaw = (inputs as any)?.reverse;
+      const reverseRaw = inputs.reverse;
       const reverse = typeof reverseRaw === 'number' ? reverseRaw >= 0.5 : Boolean(reverseRaw);
-      const mutedRaw = (inputs as any)?.muted;
+      const mutedRaw = inputs.muted;
       const muted = typeof mutedRaw === 'number' ? mutedRaw >= 0.5 : Boolean(mutedRaw);
-      const volumeRaw = (inputs as any)?.volume;
+      const volumeRaw = inputs.volume;
       const volumeParam = typeof volumeRaw === 'string' ? Number(volumeRaw) : Number(volumeRaw);
       const volumeValue = Number.isFinite(volumeParam) ? Math.max(-1, Math.min(100, volumeParam)) : 0;
       const volumeGain =
@@ -1408,12 +1448,12 @@ if (!nodeRegistry.get('load-audio-from-local')) {
     ],
     process: (inputs, config) => {
       const asset =
-        typeof (inputs as any)?.asset === 'string' && String((inputs as any).asset).trim()
-          ? String((inputs as any).asset).trim()
-          : typeof (config as any)?.assetPath === 'string'
-            ? String((config as any).assetPath).trim()
+        typeof inputs.asset === 'string' && String(inputs.asset).trim()
+          ? String(inputs.asset).trim()
+          : typeof config.assetPath === 'string'
+            ? String(config.assetPath).trim()
             : '';
-      const playRaw = (inputs as any)?.play;
+      const playRaw = inputs.play;
       const play = typeof playRaw === 'number' ? playRaw >= 0.5 : Boolean(playRaw);
       return { ref: asset && play ? 1 : 0, ended: false };
     },
@@ -1450,15 +1490,15 @@ if (!nodeRegistry.get('load-image-from-local')) {
     ],
     process: (inputs, config) => {
       const baseUrl =
-        typeof (inputs as any)?.asset === 'string' && String((inputs as any).asset).trim()
-          ? String((inputs as any).asset).trim()
-          : typeof (config as any)?.assetPath === 'string'
-            ? String((config as any).assetPath).trim()
+        typeof inputs.asset === 'string' && String(inputs.asset).trim()
+          ? String(inputs.asset).trim()
+          : typeof config.assetPath === 'string'
+            ? String(config.assetPath).trim()
             : '';
       const baseRef = baseUrl ? normalizeLocalMediaRef(baseUrl, 'image') : '';
       const fitRaw =
-        typeof (config as any)?.fit === 'string'
-          ? String((config as any).fit).trim().toLowerCase()
+        typeof config.fit === 'string'
+          ? String(config.fit).trim().toLowerCase()
           : '';
       const fit =
         fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
@@ -1526,37 +1566,37 @@ if (!nodeRegistry.get('load-video-from-local')) {
     ],
     process: (inputs, config, context) => {
       const assetUrl =
-        typeof (inputs as any)?.asset === 'string' && String((inputs as any).asset).trim()
-          ? String((inputs as any).asset).trim()
-          : typeof (config as any)?.assetPath === 'string'
-            ? String((config as any).assetPath).trim()
+        typeof inputs.asset === 'string' && String(inputs.asset).trim()
+          ? String(inputs.asset).trim()
+          : typeof config.assetPath === 'string'
+            ? String(config.assetPath).trim()
             : '';
       const localRef = assetUrl ? normalizeLocalMediaRef(assetUrl, 'video') : '';
-      const fitRaw = typeof (config as any)?.fit === 'string' ? String((config as any).fit).trim().toLowerCase() : '';
+      const fitRaw = typeof config.fit === 'string' ? String(config.fit).trim().toLowerCase() : '';
       const fit = fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
 
       const startSec =
-        typeof (inputs as any)?.startSec === 'number' && Number.isFinite((inputs as any).startSec)
-          ? Number((inputs as any).startSec)
+        typeof inputs.startSec === 'number' && Number.isFinite(inputs.startSec)
+          ? Number(inputs.startSec)
           : 0;
       const endSec =
-        typeof (inputs as any)?.endSec === 'number' && Number.isFinite((inputs as any).endSec)
-          ? Number((inputs as any).endSec)
+        typeof inputs.endSec === 'number' && Number.isFinite(inputs.endSec)
+          ? Number(inputs.endSec)
           : -1;
       const cursorSec =
-        typeof (inputs as any)?.cursorSec === 'number' && Number.isFinite((inputs as any).cursorSec)
-          ? Number((inputs as any).cursorSec)
+        typeof inputs.cursorSec === 'number' && Number.isFinite(inputs.cursorSec)
+          ? Number(inputs.cursorSec)
           : -1;
 
-      const loopRaw = (inputs as any)?.loop;
-      const playRaw = (inputs as any)?.play;
-      const reverseRaw = (inputs as any)?.reverse;
-      const mutedRaw = (inputs as any)?.muted;
+      const loopRaw = inputs.loop;
+      const playRaw = inputs.play;
+      const reverseRaw = inputs.reverse;
+      const mutedRaw = inputs.muted;
       const loop = typeof loopRaw === 'number' ? loopRaw >= 0.5 : Boolean(loopRaw);
       const play = typeof playRaw === 'number' ? playRaw >= 0.5 : Boolean(playRaw);
       const reverse = typeof reverseRaw === 'number' ? reverseRaw >= 0.5 : Boolean(reverseRaw);
       const muted = typeof mutedRaw === 'number' ? mutedRaw >= 0.5 : Boolean(mutedRaw);
-      const volumeRaw = (inputs as any)?.volume;
+      const volumeRaw = inputs.volume;
       const volumeParam = typeof volumeRaw === 'string' ? Number(volumeRaw) : Number(volumeRaw);
       const volumeValue = Number.isFinite(volumeParam) ? Math.max(-1, Math.min(100, volumeParam)) : 0;
       const volumeGain =
@@ -1608,7 +1648,8 @@ for (const spec of loadSpecs()) {
     }
 
     // Manager-only node (not in node-core): still defined via JSON runtime.kind (backward-compatible path).
-    if (!spec.runtime || typeof (spec as any).runtime?.kind !== 'string') {
+    const runtimeRecord = asRecord(spec.runtime);
+    if (!runtimeRecord || typeof runtimeRecord.kind !== 'string') {
       console.warn('[node-specs] missing runtime.kind for manager-only spec:', type);
       continue;
     }

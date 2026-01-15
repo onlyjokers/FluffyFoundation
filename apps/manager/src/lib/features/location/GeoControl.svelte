@@ -57,8 +57,9 @@
           rangeM = parsed.rangeM;
         }
         if (parsed.location && typeof parsed.location === 'object') {
-          const lat = (parsed.location as any).lat;
-          const lng = (parsed.location as any).lng;
+          const loc = parsed.location as Record<string, unknown>;
+          const lat = typeof loc.lat === 'number' ? loc.lat : NaN;
+          const lng = typeof loc.lng === 'number' ? loc.lng : NaN;
           if (
             typeof lat === 'number' &&
             typeof lng === 'number' &&
@@ -171,7 +172,7 @@
           return maybe.message ?? '获取位置失败';
       }
     }
-    return (error as any).message ?? String(error);
+    return (error as { message?: string }).message ?? String(error);
   }
 
   async function resolveAddress(location: SelectedGeoLocation): Promise<void> {
@@ -205,8 +206,9 @@
       };
       selectedAddress = (json.formattedAddress || json.displayName || '').trim() || null;
     } catch (error) {
-      if ((error as any)?.name === 'AbortError') return;
-      addressError = (error as any)?.message ?? String(error);
+      const err = error as { name?: string; message?: string };
+      if (err?.name === 'AbortError') return;
+      addressError = err?.message ?? String(error);
     } finally {
       isResolvingAddress = false;
     }
@@ -270,8 +272,9 @@
 
       lastFenceSyncKey = key;
     } catch (error) {
-      if ((error as any)?.name === 'AbortError') return;
-      fenceSyncError = (error as any)?.message ?? String(error);
+      const err = error as { name?: string; message?: string };
+      if (err?.name === 'AbortError') return;
+      fenceSyncError = err?.message ?? String(error);
     } finally {
       isSyncingFence = false;
     }

@@ -43,7 +43,7 @@
     window.addEventListener('pointerdown', onWindowPointerDown, { capture: true });
     window.addEventListener('keydown', onKeyDown);
     return () => {
-      window.removeEventListener('pointerdown', onWindowPointerDown, { capture: true } as any);
+      window.removeEventListener('pointerdown', onWindowPointerDown, { capture: true });
       window.removeEventListener('keydown', onKeyDown);
     };
   });

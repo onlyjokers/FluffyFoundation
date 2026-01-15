@@ -48,11 +48,11 @@ function normalizeKind(kind: unknown): LocalDisplayMediaKind | null {
 
 function normalizeFileRef(file: File, kind: LocalDisplayMediaKind): LocalDisplayMediaFile {
   const id = createRandomId('df_');
-  const name = safeTrim((file as any)?.name) || 'file';
-  const mimeType = safeTrim((file as any)?.type);
-  const sizeBytesRaw = (file as any)?.size;
+  const name = safeTrim(file.name) || 'file';
+  const mimeType = safeTrim(file.type);
+  const sizeBytesRaw = file.size;
   const sizeBytes = typeof sizeBytesRaw === 'number' && Number.isFinite(sizeBytesRaw) ? Math.max(0, sizeBytesRaw) : 0;
-  const lastModifiedRaw = (file as any)?.lastModified;
+  const lastModifiedRaw = file.lastModified;
   const lastModified =
     typeof lastModifiedRaw === 'number' && Number.isFinite(lastModifiedRaw) ? lastModifiedRaw : Date.now();
 
@@ -108,4 +108,3 @@ export const localDisplayMediaStore = {
   removeFile,
   normalizeKind,
 };
-

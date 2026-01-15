@@ -109,18 +109,21 @@ function nodeLabel(type: string): string {
 }
 
 function mapConfigFromNode(node: NodeInstance | undefined): MidiBindingTemplateV1['mapping'] {
-  const cfg = node?.config ?? {};
+  const cfg = (node?.config ?? {}) as Record<string, unknown>;
+  const integerFlag = Boolean(cfg.integer);
+  const roundFlag = Boolean(cfg.round);
   return {
     min: asNumber(cfg.min, 0),
     max: asNumber(cfg.max, 1),
     invert: Boolean(cfg.invert),
     // `midi-map` supports `integer` as a newer alias for `round` (integer output).
-    round: Boolean((cfg as any).integer || cfg.round),
+    round: integerFlag || roundFlag,
   };
 }
 
 function midiSourceFromNode(node: NodeInstance | undefined): MidiSource | null {
-  const source = (node?.config as any)?.source ?? null;
+  const cfg = (node?.config ?? {}) as Record<string, unknown>;
+  const source = cfg.source ?? null;
   return source && typeof source === 'object' ? (source as MidiSource) : null;
 }
 
@@ -182,8 +185,9 @@ export function detectMidiBindings(graph: GraphState): DetectedMidiBinding[] {
     let target: MidiBindingTargetV1;
     let label = `${nodeLabel(targetType)} · ${portLabel(targetType, targetPortId)}`;
     if (targetType === 'param-set' && targetPortId === 'value') {
-      const path = String((targetNode.config as any)?.path ?? '');
-      const modeRaw = String((targetNode.config as any)?.mode ?? 'REMOTE');
+      const targetConfig = (targetNode.config ?? {}) as Record<string, unknown>;
+      const path = String(targetConfig.path ?? '');
+      const modeRaw = String(targetConfig.mode ?? 'REMOTE');
       const mode: MidiBindingMode = modeRaw === 'MODULATION' ? 'MODULATION' : 'REMOTE';
       label = path ? `Parameter · ${path}` : 'Parameter · (unset)';
       target = { kind: 'param', path, mode };

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
 
-  export let value: any;
-  export let options: { value: any; label: string }[] = [];
+  export let value: unknown;
+  export let options: { value: unknown; label: string }[] = [];
   export let label = '';
   export let disabled = false;
 

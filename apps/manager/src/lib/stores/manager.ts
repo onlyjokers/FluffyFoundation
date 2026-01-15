@@ -141,7 +141,8 @@ if (typeof window !== 'undefined') {
         if (lastSendToDisplayEnabled === true && !enabled) {
             displayTransport.sendControl('stopMedia', {}, undefined);
             displayTransport.sendControl('hideImage', {}, undefined);
-            displayTransport.sendControl('screenColor', { color: '#000000', opacity: 0, mode: 'solid' } as any, undefined);
+            const clearScreen: ScreenColorPayload = { color: '#000000', opacity: 0, mode: 'solid' };
+            displayTransport.sendControl('screenColor', clearScreen, undefined);
         }
         lastSendToDisplayEnabled = enabled;
 

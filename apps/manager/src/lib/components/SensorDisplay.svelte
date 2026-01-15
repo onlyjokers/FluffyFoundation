@@ -1,8 +1,11 @@
 <script lang="ts">
   import { sensorData, state } from '$lib/stores/manager';
 
-  let clientData: any = null;
-  let payload: any = {};
+  type SensorPayload = Record<string, number | null | undefined>;
+  type SensorClientData = { sensorType: string; payload?: SensorPayload };
+
+  let clientData: SensorClientData | null = null;
+  let payload: SensorPayload = {};
 
   $: selectedClientId = $state.selectedClientIds[0] ?? null;
   $: clientData = selectedClientId ? $sensorData.get(selectedClientId) : null;

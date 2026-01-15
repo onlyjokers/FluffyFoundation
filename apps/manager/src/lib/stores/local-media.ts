@@ -42,7 +42,7 @@ function buildUrl(serverUrl: string, path: string): string | null {
   }
 }
 
-async function fetchJson(url: string, init: RequestInit): Promise<any> {
+async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
   const res = await fetch(url, init);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -83,8 +83,9 @@ async function refresh(): Promise<void> {
       const url = buildUrl(serverUrl, 'api/local-media');
       if (!url) throw new Error('Missing or invalid Server URL.');
       const data = await fetchJson(url, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
-      const files = Array.isArray(data?.files) ? (data.files as LocalMediaFile[]) : [];
-      const roots = Array.isArray(data?.roots) ? data.roots.map(String) : [];
+      const record = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : null;
+      const files = Array.isArray(record?.files) ? (record.files as LocalMediaFile[]) : [];
+      const roots = Array.isArray(record?.roots) ? record.roots.map(String) : [];
       files.sort((a, b) => (Number(b?.modifiedAt ?? 0) || 0) - (Number(a?.modifiedAt ?? 0) || 0));
       store.set({ status: 'idle', error: null, files, roots, lastUpdatedAt: Date.now() });
     } catch (err) {
@@ -111,7 +112,11 @@ async function validatePath(path: string, kind: LocalMediaKind): Promise<LocalMe
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, kind }),
   });
-  const file = data?.file ?? null;
+  const record = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : null;
+  const file =
+    record?.file && typeof record.file === 'object' && record.file !== null
+      ? (record.file as Record<string, unknown>)
+      : null;
   return {
     path: String(file?.path ?? ''),
     label: String(file?.path ?? ''),
@@ -128,4 +133,3 @@ export const localMediaStore = {
   refresh,
   validatePath,
 };
-

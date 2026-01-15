@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { createEventDispatcher } from 'svelte';
   import type { Parameter } from '$lib/parameters/parameter';
   import { createParamStore, type ParamStore } from '$lib/stores/param-store';
 

@@ -45,7 +45,7 @@ function buildUrl(serverUrl: string, path: string): string | null {
   }
 }
 
-async function fetchJson(url: string, init: RequestInit): Promise<any> {
+async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
   const res = await fetch(url, init);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -86,7 +86,8 @@ async function refresh(opts?: { serverUrl?: string; writeToken?: string }): Prom
       const url = buildUrl(serverUrl, 'api/assets');
       if (!url) throw new Error('Missing or invalid Server URL.');
       const data = await fetchJson(url, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
-      const assets = Array.isArray(data?.assets) ? (data.assets as AssetRecord[]) : [];
+      const record = (data ?? {}) as Record<string, unknown>;
+      const assets = Array.isArray(record.assets) ? (record.assets as AssetRecord[]) : [];
       assets.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
       store.set({ status: 'idle', error: null, assets, lastUpdatedAt: Date.now() });
     } catch (err) {

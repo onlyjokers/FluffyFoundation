@@ -1,7 +1,7 @@
 import { parameterRegistry } from './registry';
 import type { Parameter } from './parameter';
 
-type ParameterMap = Record<string, Parameter<any>>;
+type ParameterMap = Record<string, Parameter<unknown>>;
 
 /**
  * Register a minimal set of control-surface parameters so the UI factory can render them.

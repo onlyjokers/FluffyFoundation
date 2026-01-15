@@ -13,8 +13,8 @@
   export let description: string | undefined = undefined;
   export let disabled = false;
 
-  let param: Parameter<any> | undefined;
-  let store: Writable<any> = writable(0);
+  let param: Parameter<unknown> | undefined;
+  let store: Writable<unknown> = writable(0);
   let widget: string | undefined;
   let type: string | undefined;
   let min: number | undefined;
@@ -27,8 +27,8 @@
       }[]
     | undefined;
 
-  $: param = parameterRegistry.get(path);
-  $: store = param ? (parameterWritable(param) as Writable<any>) : store;
+  $: param = parameterRegistry.get(path) as Parameter<unknown> | undefined;
+  $: store = param ? (parameterWritable(param) as Writable<unknown>) : store;
   $: widget = param?.metadata?.widgetType;
   $: type = param?.type;
   $: min = param?.min;

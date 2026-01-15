@@ -35,7 +35,7 @@ export async function getMediaDurationSec(url: string, kind: MediaKind): Promise
     try {
       const el = makeMediaElement(kind);
       el.preload = 'metadata';
-      (el as any).crossOrigin = 'anonymous';
+      el.crossOrigin = 'anonymous';
       el.src = key;
 
       const duration = await new Promise<number>((resolve, reject) => {
@@ -49,7 +49,7 @@ export async function getMediaDurationSec(url: string, kind: MediaKind): Promise
         };
 
         const handleLoaded = () => {
-          const d = Number((el as any).duration);
+          const d = Number(el.duration);
           cleanup();
           resolve(d);
         };
@@ -157,7 +157,11 @@ async function decodeAudio(url: string): Promise<{ buffer: AudioBuffer; ctx: Aud
     const res = await fetch(url);
     if (!res.ok) return null;
     const ab = await res.arrayBuffer();
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    type WebkitAudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
+    const AudioContextCtor =
+      window.AudioContext ?? (window as WebkitAudioWindow).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    const ctx = new AudioContextCtor();
     const buffer = await ctx.decodeAudioData(ab.slice(0));
     return { buffer, ctx };
   } catch {
@@ -194,10 +198,12 @@ export async function getAudioSpectrogramDataUrl(
   if (inFlight) return inFlight;
 
   const promise = (async () => {
+    let audioCtx: AudioContext | null = null;
     try {
       const decoded = await decodeAudio(key);
       if (!decoded) return null;
       const { buffer, ctx } = decoded;
+      audioCtx = ctx;
 
       const width = Math.max(64, Math.floor(opts.width ?? 360));
       const height = Math.max(24, Math.floor(opts.height ?? 72));
@@ -286,6 +292,13 @@ export async function getAudioSpectrogramDataUrl(
       spectrogramCache.set(key, dataUrl);
       return dataUrl;
     } finally {
+      if (audioCtx) {
+        try {
+          void audioCtx.close?.();
+        } catch {
+          // ignore
+        }
+      }
       spectrogramInFlight.delete(key);
     }
   })();
@@ -293,4 +306,3 @@ export async function getAudioSpectrogramDataUrl(
   spectrogramInFlight.set(key, promise);
   return promise;
 }
-
