@@ -27,6 +27,9 @@ type RuntimeOverridesByKind = {
   config: Map<string, RuntimeOverride>;
 };
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
 export class NodeRuntime {
   private nodes = new Map<string, NodeInstance>();
   private connections: Connection[] = [];
@@ -531,15 +534,16 @@ export class NodeRuntime {
       'modulateSoundUpdate',
     ]);
 
-    const signatureFor = (cmd: any): string | null => {
-      if (!cmd || typeof cmd !== 'object') return null;
+    const signatureFor = (value: unknown): string | null => {
+      const cmd = asRecord(value);
+      if (!cmd) return null;
       const action = typeof cmd.action === 'string' ? cmd.action : '';
       if (!action) return null;
 
       // Skip oscillation detection for continuous/smoothly-updating actions.
       if (continuousActions.has(action)) return null;
 
-      const payload: any = cmd.payload && typeof cmd.payload === 'object' ? cmd.payload : {};
+      const payload = asRecord(cmd.payload) ?? {};
 
       const parts: string[] = [`a=${action}`];
       if (typeof payload.mode === 'string' && payload.mode) parts.push(`mode=${payload.mode}`);
@@ -566,14 +570,14 @@ export class NodeRuntime {
       const items = value as unknown[];
       const sigs = items
         .slice(0, 3)
-        .map((v) => signatureFor(v as any))
+        .map((v) => signatureFor(v))
         .filter(Boolean) as string[];
       if (sigs.length === 0) return null;
       const extra = items.length > 3 ? `+${items.length - 3}` : '';
       return `arr(${sigs.join('|')})${extra}`;
     }
 
-    return signatureFor(value as any);
+    return signatureFor(value);
   }
 
   private recordSinkSignature(
@@ -940,8 +944,9 @@ export class NodeRuntime {
       }
     };
 
-    const keyFor = (cmd: any, counts: Map<string, number>): string => {
-      const action = typeof cmd?.action === 'string' ? String(cmd.action) : '';
+    const keyFor = (value: unknown, counts: Map<string, number>): string => {
+      const record = asRecord(value);
+      const action = typeof record?.action === 'string' ? String(record.action) : '';
       if (!action) return '';
       const idx = counts.get(action) ?? 0;
       counts.set(action, idx + 1);

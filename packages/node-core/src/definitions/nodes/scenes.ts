@@ -4,12 +4,13 @@
 import type { VisualSceneLayerItem } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
+import { getRecordString } from './node-definition-utils.js';
 
 export function createSceneBoxNode(): NodeDefinition {
   const coerceSceneChain = (raw: unknown): VisualSceneLayerItem[] =>
     (Array.isArray(raw) ? raw : []).filter(
       (v): v is VisualSceneLayerItem =>
-        Boolean(v) && typeof v === 'object' && typeof (v as any).type === 'string'
+        Boolean(v) && getRecordString(v, 'type') !== null
     );
 
   return {
@@ -31,7 +32,7 @@ export function createSceneMelNode(): NodeDefinition {
   const coerceSceneChain = (raw: unknown): VisualSceneLayerItem[] =>
     (Array.isArray(raw) ? raw : []).filter(
       (v): v is VisualSceneLayerItem =>
-        Boolean(v) && typeof v === 'object' && typeof (v as any).type === 'string'
+        Boolean(v) && getRecordString(v, 'type') !== null
     );
 
   return {
@@ -53,7 +54,7 @@ export function createSceneFrontCameraNode(): NodeDefinition {
   const coerceSceneChain = (raw: unknown): VisualSceneLayerItem[] =>
     (Array.isArray(raw) ? raw : []).filter(
       (v): v is VisualSceneLayerItem =>
-        Boolean(v) && typeof v === 'object' && typeof (v as any).type === 'string'
+        Boolean(v) && getRecordString(v, 'type') !== null
     );
 
   return {
@@ -75,7 +76,7 @@ export function createSceneBackCameraNode(): NodeDefinition {
   const coerceSceneChain = (raw: unknown): VisualSceneLayerItem[] =>
     (Array.isArray(raw) ? raw : []).filter(
       (v): v is VisualSceneLayerItem =>
-        Boolean(v) && typeof v === 'object' && typeof (v as any).type === 'string'
+        Boolean(v) && getRecordString(v, 'type') !== null
     );
 
   return {

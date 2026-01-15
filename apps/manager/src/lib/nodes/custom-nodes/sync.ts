@@ -85,13 +85,13 @@ export function syncCustomNodeInternalGraph(opts: {
     .map((c) => ({ ...c }))
     .filter(
       (c) =>
-        nodeIdSet.has(String((c as any).sourceNodeId ?? '')) &&
-        nodeIdSet.has(String((c as any).targetNodeId ?? '')) &&
-        Boolean(String((c as any).sourcePortId ?? '')) &&
-        Boolean(String((c as any).targetPortId ?? ''))
+        nodeIdSet.has(String(c.sourceNodeId ?? '')) &&
+        nodeIdSet.has(String(c.targetNodeId ?? '')) &&
+        Boolean(String(c.sourcePortId ?? '')) &&
+        Boolean(String(c.targetPortId ?? ''))
     );
 
-  return { nodes: nextNodes, connections: nextConnections as any };
+  return { nodes: nextNodes, connections: nextConnections };
 }
 
 export function syncNestedCustomNodesToDefinition(opts: {
@@ -158,7 +158,7 @@ export function syncNestedCustomNodesToDefinition(opts: {
     }
 
     if (!changed) return { graph, changed: false };
-    return { graph: { nodes: nextNodes, connections: connections.map((c) => ({ ...c })) } as any, changed: true };
+    return { graph: { nodes: nextNodes, connections: connections.map((c) => ({ ...c })) }, changed: true };
   };
 
   return visitGraph(opts.graph);

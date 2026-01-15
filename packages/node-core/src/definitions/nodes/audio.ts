@@ -227,7 +227,7 @@ export function createToneOscNode(): NodeDefinition {
         defaultValue: '',
       },
     ],
-    process: (inputs, config) => {
+    process: (inputs, _config) => {
       const ampInput = Number(inputs.amplitude ?? 0);
       const value = Number.isFinite(ampInput) ? ampInput : 0;
       return { value };

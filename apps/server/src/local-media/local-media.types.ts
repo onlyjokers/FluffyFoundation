@@ -11,5 +11,5 @@ export type LocalMediaFile = {
   mimeType: string;
   sizeBytes: number;
   modifiedAt: number;
+  etag?: string;
 };
-

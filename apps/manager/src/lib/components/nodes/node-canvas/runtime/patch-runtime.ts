@@ -4,24 +4,48 @@
 
 import { get } from 'svelte/store';
 import type { Readable } from 'svelte/store';
-import type { GraphState, PortType } from '$lib/nodes/types';
+import type {
+  Connection,
+  GraphState,
+  NodeDefinition,
+  NodeInstance,
+  NodePort,
+  PortType,
+} from '$lib/nodes/types';
 import type { GraphViewAdapter } from '../adapters/graph-view-adapter';
 import { buildStableRandomOrder, clampInt, coerceBoolean, toFiniteNumber } from './client-utils';
 
+type AnyRecord = Record<string, unknown>;
+
+type PatchPayload = {
+  graph: Pick<GraphState, 'nodes' | 'connections'>;
+  meta: {
+    loopId: string;
+    requiredCapabilities: string[];
+    tickIntervalMs: number;
+    protocolVersion: string;
+    executorVersion: string;
+  };
+  assetRefs: string[];
+};
+
+const asRecord = (value: unknown): AnyRecord | null =>
+  value && typeof value === 'object' ? (value as AnyRecord) : null;
+
 type NodeRegistryLike = {
-  get(type: string): { inputs?: any[]; outputs?: any[] } | undefined;
+  get(type: string): NodeDefinition | undefined;
 };
 
 type NodeEngineLike = {
-  getNode(nodeId: string): any;
+  getNode(nodeId: string): NodeInstance | undefined;
   getLastComputedInputs(nodeId: string): Record<string, unknown> | null;
-  exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): any;
+  exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): PatchPayload;
   lastError: Readable<string | null> & { set(value: string | null): void };
   setPatchOffloadedNodeIds(nodeIds: string[]): void;
   getTimeRangePlayheadSec(nodeId: string): number | null;
 };
 
-type ManagerStateLike = { clients?: any[]; selectedClientIds?: unknown[] };
+type ManagerStateLike = { clients?: unknown[]; selectedClientIds?: unknown[] };
 
 type DisplayTransportAvailabilityLike = {
   route: string;
@@ -53,12 +77,15 @@ type SdkLike = {
 
 type LoopControllerLike = {
   deployedLoopIds: Readable<Set<string>>;
-  localLoops: Readable<any[]>;
+  localLoops: Readable<unknown[]>;
   loopActions: {
-    getLoopClientId(loop: any): string | null;
+    getLoopClientId(loop: unknown): string | null;
     getDeployedLoopForNode(nodeId: string): { id: string } | null;
   };
 };
+
+type ExecutorStatusLike = { loopId?: unknown; running?: unknown };
+type WritableLike<T> = { set(value: T): void; subscribe: (run: (v: T) => void) => () => void };
 
 export type SendNodeOverrideFn = (
   nodeId: string,
@@ -66,6 +93,14 @@ export type SendNodeOverrideFn = (
   portId: string,
   value: unknown
 ) => void;
+
+type NodeOverride = {
+  nodeId: string;
+  kind: 'input' | 'config';
+  portId: string;
+  value?: unknown;
+  ttlMs?: number;
+};
 
 type DeployedPatch = {
   patchId: string;
@@ -115,9 +150,9 @@ export interface CreatePatchRuntimeOptions {
   isRunningStore: Readable<boolean>;
   getGraphState: () => GraphState;
   groupDisabledNodeIds: Readable<Set<string>>;
-  executorStatusByClient: Readable<Map<string, any>>;
-  showExecutorLogs: { set(value: boolean): void; subscribe: (run: (v: boolean) => void) => () => void };
-  logsClientId: { set(value: string): void; subscribe: (run: (v: string) => void) => () => void };
+  executorStatusByClient: Readable<Map<string, ExecutorStatusLike>>;
+  showExecutorLogs: WritableLike<boolean>;
+  logsClientId: WritableLike<string>;
   loopController: LoopControllerLike | null;
   managerState: Readable<ManagerStateLike>;
   displayTransport: DisplayTransportLike;
@@ -148,12 +183,23 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   const LOCAL_DISPLAY_TARGET_ID = 'local:display';
 
   const clientIdsInOrder = () =>
-    (get(managerState).clients ?? []).map((c: any) => String(c?.clientId ?? '')).filter(Boolean);
+    (get(managerState).clients ?? [])
+      .map((client) => {
+        const record = asRecord(client);
+        return record ? String(record.clientId ?? '') : '';
+      })
+      .filter(Boolean);
 
   const audienceClientIdsInOrder = () =>
     (get(managerState).clients ?? [])
-      .filter((c: any) => String(c?.group ?? '') !== 'display')
-      .map((c: any) => String(c?.clientId ?? ''))
+      .filter((client) => {
+        const record = asRecord(client);
+        return String(record?.group ?? '') !== 'display';
+      })
+      .map((client) => {
+        const record = asRecord(client);
+        return record ? String(record.clientId ?? '') : '';
+      })
       .filter(Boolean);
 
   const isLocalDisplayTarget = (id: string): boolean => id === LOCAL_DISPLAY_TARGET_ID;
@@ -161,7 +207,11 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   const isDisplayTarget = (id: string): boolean => {
     if (isLocalDisplayTarget(id)) return true;
     const clients = get(managerState).clients ?? [];
-    return clients.some((c: any) => String(c?.clientId ?? '') === id && String(c?.group ?? '') === 'display');
+    return clients.some((client) => {
+      const record = asRecord(client);
+      if (!record) return false;
+      return String(record.clientId ?? '') === id && String(record.group ?? '') === 'display';
+    });
   };
 
   let patchPendingCommitByKey = new Map<string, ReturnType<typeof setTimeout>>();
@@ -174,13 +224,10 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   // node-executor control transport
   // ────────────────────────────────────────────────────────────────────────────
 
-  const sendNodeExecutorPluginControl = (
-    targetId: string,
-    command: string,
-    payload: Record<string, unknown>
-  ) => {
+  const sendNodeExecutorPluginControl = (targetId: string, command: string, payload: unknown) => {
     const id = String(targetId ?? '');
     if (!id) return;
+    const payloadRecord = asRecord(payload) ?? {};
 
     // Display-only nodes can reference `displayfile:<id>` (browser-local File) that must be registered on Display
     // before node-executor starts playback. This works in paired mode (MessagePort) and same-origin fallback mode
@@ -190,13 +237,13 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     }
 
     if (isLocalDisplayTarget(id)) {
-      displayTransport.sendPlugin('node-executor', command, payload, { localOnly: true });
+      displayTransport.sendPlugin('node-executor', command, payloadRecord, { localOnly: true });
       return;
     }
 
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [id] }, 'node-executor', command as any, payload as any);
+    sdk.sendPluginControl({ mode: 'clientIds', ids: [id] }, 'node-executor', command, payload);
   };
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -215,7 +262,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const stopped = !running;
     const state = getGraphState();
     for (const node of state.nodes ?? []) {
-      const id = String((node as any).id);
+      const id = String(node.id ?? '');
       if (!id) continue;
       const prev = adapter.getNodeVisualState(id);
       if (Boolean(prev?.stopped) !== stopped) await adapter.setNodeVisualState(id, { stopped });
@@ -226,7 +273,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const ids = patchNodeIds ?? new Set<string>();
     const state = getGraphState();
     for (const node of state.nodes ?? []) {
-      const id = String((node as any).id);
+      const id = String(node.id ?? '');
       if (!id) continue;
       const deployedPatch = ids.has(id);
       const prev = adapter.getNodeVisualState(id);
@@ -253,7 +300,6 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   const isMidiNodeType = (type: string): boolean => type.startsWith('midi-');
 
   let midiBridgeRoutes: MidiBridgeRoute[] = [];
-  let midiBridgeDesiredKeys = new Set<string>();
   let midiBridgeActiveKeysByClientId = new Map<string, Set<string>>();
   let midiBridgeLastSignatureByClientKey = new Map<string, string>();
   let midiBridgeLastSendAt = 0;
@@ -261,19 +307,21 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   const midiBridgeClientKey = (clientId: string, patchId: string, nodeId: string, portId: string) =>
     `${clientId}|${patchId}|${nodeId}|${portId}`;
 
-  const computeMidiBridgeRoutes = (patchNodeIds: Set<string>): { routes: MidiBridgeRoute[]; keys: Set<string> } => {
+  const computeMidiBridgeRoutes = (
+    patchNodeIds: Set<string>
+  ): { routes: MidiBridgeRoute[]; keys: Set<string> } => {
     const state = getGraphState();
-    const nodeById = new Map((state.nodes ?? []).map((n: any) => [String(n.id), n]));
+    const nodeById = new Map((state.nodes ?? []).map((n) => [String(n.id), n] as const));
     const routes: MidiBridgeRoute[] = [];
     const keys = new Set<string>();
 
     for (const c of state.connections ?? []) {
-      const targetNodeId = String((c as any).targetNodeId);
-      const targetPortId = String((c as any).targetPortId);
+      const targetNodeId = String(c.targetNodeId);
+      const targetPortId = String(c.targetPortId);
       if (!patchNodeIds.has(targetNodeId)) continue;
 
-      const sourceNodeId = String((c as any).sourceNodeId);
-      const sourcePortId = String((c as any).sourcePortId);
+      const sourceNodeId = String(c.sourceNodeId);
+      const sourcePortId = String(c.sourcePortId);
       const sourceNode = nodeById.get(sourceNodeId);
       if (!sourceNode) continue;
       if (!isMidiNodeType(String(sourceNode.type))) continue;
@@ -305,7 +353,6 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
   const clearMidiBridgeState = () => {
     midiBridgeRoutes = [];
-    midiBridgeDesiredKeys = new Set();
     midiBridgeActiveKeysByClientId = new Map();
     midiBridgeLastSignatureByClientKey = new Map();
   };
@@ -318,7 +365,6 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     const { routes, keys } = computeMidiBridgeRoutes(patchNodeIds);
     midiBridgeRoutes = routes;
-    midiBridgeDesiredKeys = keys;
 
     // Remove overrides that are no longer wired from MIDI.
     for (const [clientId, patch] of deployedPatchByClientId.entries()) {
@@ -333,7 +379,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         sendNodeExecutorPluginControl(String(clientId), 'override-remove', {
           loopId: patch.patchId,
           overrides,
-        } as any);
+        });
 
         for (const k of toRemove) {
           const [nodeId, portId] = k.split('|');
@@ -388,8 +434,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     midiBridgeLastSendAt = now;
 
     for (const [clientId, patch] of deployedPatchByClientId.entries()) {
-      const overrides: any[] = [];
-      const removals: any[] = [];
+      const overrides: NodeOverride[] = [];
+      const removals: NodeOverride[] = [];
       const activeKeys = midiBridgeActiveKeysByClientId.get(clientId) ?? new Set<string>();
 
       for (const route of midiBridgeRoutes) {
@@ -434,14 +480,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         sendNodeExecutorPluginControl(String(clientId), 'override-remove', {
           loopId: patch.patchId,
           overrides: removals,
-        } as any);
+        });
       }
 
       if (overrides.length > 0) {
         sendNodeExecutorPluginControl(String(clientId), 'override-set', {
           loopId: patch.patchId,
           overrides,
-        } as any);
+        });
       }
     }
   };
@@ -476,12 +522,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const loops = get(loopController.localLoops) ?? [];
     const targets: MidiLoopBridgeTarget[] = [];
     for (const loop of loops) {
-      const loopId = String(loop?.id ?? '');
+      const record = asRecord(loop);
+      const loopId = String(record?.id ?? '');
       if (!loopId || !deployed.has(loopId)) continue;
       const clientId = loopController.loopActions.getLoopClientId(loop);
       if (!clientId) continue;
 
-      const nodeIds = new Set((loop.nodeIds ?? []).map((id: any) => String(id)).filter(Boolean));
+      const nodeIdsRaw = Array.isArray(record?.nodeIds) ? record?.nodeIds : [];
+      const nodeIds = new Set(nodeIdsRaw.map((id) => String(id)).filter(Boolean));
       if (nodeIds.size === 0) continue;
 
       targets.push({ loopId, clientId: String(clientId), nodeIds });
@@ -520,7 +568,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         sendNodeExecutorPluginControl(String(target.clientId), 'override-remove', {
           loopId: target.loopId,
           overrides,
-        } as any);
+        });
 
         for (const k of toRemove) {
           const [nodeId, portId] = k.split('|');
@@ -550,8 +598,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       const routes = midiLoopBridgeRoutesByLoopId.get(target.loopId) ?? [];
       if (routes.length === 0) continue;
 
-      const overrides: any[] = [];
-      const removals: any[] = [];
+      const overrides: NodeOverride[] = [];
+      const removals: NodeOverride[] = [];
       const activeKeys = midiLoopBridgeActiveKeysByLoopId.get(target.loopId) ?? new Set<string>();
 
       for (const route of routes) {
@@ -596,14 +644,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         sendNodeExecutorPluginControl(String(target.clientId), 'override-remove', {
           loopId: target.loopId,
           overrides: removals,
-        } as any);
+        });
       }
 
       if (overrides.length > 0) {
         sendNodeExecutorPluginControl(String(target.clientId), 'override-set', {
           loopId: target.loopId,
           overrides,
-        } as any);
+        });
       }
     }
   };
@@ -612,20 +660,20 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   // Patch deployment
   // ────────────────────────────────────────────────────────────────────────────
 
-  const computeTopologySignature = (payload: { nodes?: any[]; connections?: any[] }): string => {
-    const nodes = (payload.nodes ?? []).map((n: any) => ({
-      id: String(n.id),
-      type: String(n.type),
+  const computeTopologySignature = (payload: Pick<GraphState, 'nodes' | 'connections'>): string => {
+    const nodes = (payload.nodes ?? []).map((node) => ({
+      id: String(node.id),
+      type: String(node.type),
     }));
-    nodes.sort((a: any, b: any) => a.id.localeCompare(b.id));
+    nodes.sort((a, b) => a.id.localeCompare(b.id));
 
-    const connections = (payload.connections ?? []).map((c: any) => ({
-      s: String(c.sourceNodeId),
-      sp: String(c.sourcePortId),
-      t: String(c.targetNodeId),
-      tp: String(c.targetPortId),
+    const connections = (payload.connections ?? []).map((conn) => ({
+      s: String(conn.sourceNodeId),
+      sp: String(conn.sourcePortId),
+      t: String(conn.targetNodeId),
+      tp: String(conn.targetPortId),
     }));
-    connections.sort((a: any, b: any) => {
+    connections.sort((a, b) => {
       const sa = `${a.s}:${a.sp}->${a.t}:${a.tp}`;
       const sb = `${b.s}:${b.sp}->${b.t}:${b.tp}`;
       return sa.localeCompare(sb);
@@ -641,30 +689,30 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const def = nodeRegistry.get(String(node.type));
     if (!def) return false;
 
-    const inputs = Array.isArray(def.inputs) ? def.inputs : [];
-    const outputs = Array.isArray(def.outputs) ? def.outputs : [];
+    const inputs: NodePort[] = Array.isArray(def.inputs) ? def.inputs : [];
+    const outputs: NodePort[] = Array.isArray(def.outputs) ? def.outputs : [];
 
-    const isSafeType = (type: any) => type !== 'command' && type !== 'client';
+    const isSafeType = (type: unknown) => String(type) !== 'command' && String(type) !== 'client';
 
-    const inPort = inputs.find((p: any) => String(p?.id ?? '') === 'in') ?? null;
-    const outPort = outputs.find((p: any) => String(p?.id ?? '') === 'out') ?? null;
+    const inPort = inputs.find((p) => String(p?.id ?? '') === 'in') ?? null;
+    const outPort = outputs.find((p) => String(p?.id ?? '') === 'out') ?? null;
     if (inPort && outPort && String(inPort.type) === String(outPort.type) && isSafeType(inPort.type)) {
       return true;
     }
 
     if (inputs.length === 1 && outputs.length === 1) {
-      const onlyIn: any = inputs[0];
-      const onlyOut: any = outputs[0];
+      const onlyIn = inputs[0];
+      const onlyOut = outputs[0];
       if (String(onlyIn?.type ?? '') === String(onlyOut?.type ?? '') && isSafeType(onlyIn?.type)) {
         return true;
       }
     }
 
-    const sinkInputs = inputs.filter((p: any) => p?.kind === 'sink');
-    const sinkOutputs = outputs.filter((p: any) => p?.kind === 'sink');
+    const sinkInputs = inputs.filter((p) => p?.kind === 'sink');
+    const sinkOutputs = outputs.filter((p) => p?.kind === 'sink');
     if (sinkInputs.length === 1 && sinkOutputs.length === 1) {
-      const onlyIn: any = sinkInputs[0];
-      const onlyOut: any = sinkOutputs[0];
+      const onlyIn = sinkInputs[0];
+      const onlyOut = sinkOutputs[0];
       if (String(onlyIn?.type ?? '') === String(onlyOut?.type ?? '') && isSafeType(onlyIn?.type)) {
         return true;
       }
@@ -673,7 +721,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     return false;
   };
 
-  const applyTimeRangePlayheadsToPatchPayload = (payload: any) => {
+  const applyTimeRangePlayheadsToPatchPayload = (payload: PatchPayload) => {
     const nodes = payload?.graph?.nodes;
     if (!Array.isArray(nodes) || nodes.length === 0) return;
 
@@ -690,12 +738,12 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   };
 
   const resolvePatchDeploymentPlan = (): PatchDeploymentPlan | null => {
-    const patchRootTypes = ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out'] as const;
+    const patchRootTypes = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out']);
     const disabled = get(groupDisabledNodeIds);
     const state = getGraphState();
     const roots = (state.nodes ?? [])
-      .filter((n: any) => patchRootTypes.includes(String(n.type) as any))
-      .map((n: any) => ({ id: String(n.id ?? ''), type: String(n.type ?? '') }))
+      .filter((node) => patchRootTypes.has(String(node.type ?? '')))
+      .map((node) => ({ id: String(node.id ?? ''), type: String(node.type ?? '') }))
       .filter((n) => Boolean(n.id));
     const enabledRoots = roots.filter((root) => !disabled.has(root.id));
     if (enabledRoots.length === 0) return null;
@@ -703,10 +751,10 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const connectedAll = new Set(clientIdsInOrder());
     const connectedAudience = new Set(audienceClientIdsInOrder());
 
-    const connections = state.connections ?? [];
+    const connections: Connection[] = state.connections ?? [];
 
     const activeRoots = enabledRoots.filter((root) =>
-      connections.some((c: any) => String(c.sourceNodeId) === root.id && String(c.sourcePortId) === 'cmd')
+      connections.some((c) => String(c.sourceNodeId) === root.id && String(c.sourcePortId) === 'cmd')
     );
 
     const formatRootList = (items: { id: string; type: string }[]) =>
@@ -726,9 +774,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     if (!selectedRoots) return null;
 
-    const outgoingBySourceKey = new Map<string, (typeof connections)[number][]>();
+    const outgoingBySourceKey = new Map<string, Connection[]>();
     for (const c of connections) {
-      const key = `${String((c as any).sourceNodeId)}:${String((c as any).sourcePortId)}`;
+      const key = `${String(c.sourceNodeId)}:${String(c.sourcePortId)}`;
       const list = outgoingBySourceKey.get(key) ?? [];
       list.push(c);
       outgoingBySourceKey.set(key, list);
@@ -736,31 +784,29 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     const typeById = new Map<string, string>();
     for (const n of state.nodes ?? []) {
-      const id = String((n as any)?.id ?? '');
+      const id = String(n?.id ?? '');
       if (!id) continue;
-      typeById.set(id, String((n as any)?.type ?? ''));
+      typeById.set(id, String(n?.type ?? ''));
     }
 
     const getCommandOutputPorts = (type: string): string[] => {
       const def = nodeRegistry.get(String(type));
-      const ports = (def?.outputs ?? []).filter((p: any) => String(p.type) === 'command');
-      return ports.map((p: any) => String(p.id));
+      const ports = def?.outputs ?? [];
+      return ports.filter((p) => String(p.type) === 'command').map((p) => String(p.id));
     };
 
     const isCommandInputPort = (type: string, portId: string): boolean => {
       const def = nodeRegistry.get(String(type));
-      const port = (def?.inputs ?? []).find((p: any) => String(p.id) === String(portId));
-      return Boolean(port) && String((port as any)?.type) === 'command';
+      const port = (def?.inputs ?? []).find((p) => String(p.id) === String(portId));
+      return Boolean(port) && String(port?.type ?? '') === 'command';
     };
 
     const resolveClientId = (nodeId: string, outputPortId: string) => {
       const runtimeNode = nodeEngine.getNode(nodeId);
-      const runtimeOut = runtimeNode?.outputValues?.[outputPortId] as any;
+      const runtimeOut = asRecord(runtimeNode?.outputValues?.[outputPortId]);
       const fromOut = typeof runtimeOut?.clientId === 'string' ? String(runtimeOut.clientId).trim() : '';
-      const fromConfig =
-        typeof (runtimeNode?.config as any)?.clientId === 'string'
-          ? String((runtimeNode?.config as any).clientId).trim()
-          : '';
+      const config = asRecord(runtimeNode?.config);
+      const fromConfig = typeof config?.clientId === 'string' ? String(config.clientId).trim() : '';
       return fromOut || fromConfig;
     };
 
@@ -771,14 +817,15 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       const computed = nodeEngine.getLastComputedInputs(nodeId);
       const isPortConnected = (portId: string) =>
         connections.some(
-          (c: any) => String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
+          (c) => String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
         );
       const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
         const connected = isPortConnected(portId);
         if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
-          return (computed as any)[portId];
+          return computed[portId];
         }
-        return (runtimeNode.inputValues as any)?.[portId];
+        const inputValues = runtimeNode.inputValues as Record<string, unknown> | undefined;
+        return inputValues?.[portId];
       };
 
       const clients = audienceClientIdsInOrder();
@@ -828,9 +875,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
         const outgoing = outgoingBySourceKey.get(visitKey) ?? [];
         for (const c of outgoing) {
-          const targetNodeId = String((c as any)?.targetNodeId ?? '');
+          const targetNodeId = String(c?.targetNodeId ?? '');
           if (!targetNodeId) continue;
-          const targetPortId = String((c as any)?.targetPortId ?? '');
+          const targetPortId = String(c?.targetPortId ?? '');
 
           const targetType = typeById.get(targetNodeId) ?? '';
           if (!targetType) continue;
@@ -876,8 +923,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         }
 
         const displayIds = (get(managerState).clients ?? [])
-          .filter((c: any) => String(c?.group ?? '') === 'display')
-          .map((c: any) => String(c?.clientId ?? ''))
+          .filter((client) => {
+            const record = asRecord(client);
+            return String(record?.group ?? '') === 'display';
+          })
+          .map((client) => {
+            const record = asRecord(client);
+            return record ? String(record.clientId ?? '') : '';
+          })
           .filter((id) => Boolean(id) && connectedAll.has(id));
 
         for (const id of displayIds) {
@@ -953,8 +1006,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const id = String(clientId ?? '');
     const loopId = String(patchId ?? '');
     if (!id || !loopId) return;
-    sendNodeExecutorPluginControl(id, 'stop', { loopId } as any);
-    sendNodeExecutorPluginControl(id, 'remove', { loopId } as any);
+    sendNodeExecutorPluginControl(id, 'stop', { loopId });
+    sendNodeExecutorPluginControl(id, 'remove', { loopId });
   };
 
   const stopAllDeployedPatches = () => {
@@ -993,7 +1046,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         patchId: string;
         nodeIds: Set<string>;
         topologySignature: string;
-        payload: any;
+        payload: PatchPayload;
       }
     >();
     const desiredNodeIds = new Set<string>();
@@ -1008,7 +1061,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     }
 
     for (const group of groupsByRootKey.values()) {
-      let payload: any;
+      let payload: PatchPayload;
       try {
         payload = nodeEngine.exportGraphForPatchFromRootNodeIds(group.rootIds);
       } catch (err) {
@@ -1019,7 +1072,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
       let targets = group.clientIds.slice();
       const applyLocalOnlyTargetFilter = () => {
-        const isLocalOnlyPatch = (payload?.graph?.nodes ?? []).some((n: any) => localOnlyNodeTypes.has(String(n?.type ?? '')));
+        const isLocalOnlyPatch = (payload?.graph?.nodes ?? []).some((node) =>
+          localOnlyNodeTypes.has(String(node?.type ?? ''))
+        );
         if (!isLocalOnlyPatch) return true;
 
         const displayTargets = targets.filter((id) => isDisplayTarget(id));
@@ -1033,7 +1088,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
       if (!applyLocalOnlyTargetFilter() || targets.length === 0) continue;
 
-      let nodeIds = new Set((payload?.graph?.nodes ?? []).map((n: any) => String(n.id)));
+      let nodeIds = new Set((payload?.graph?.nodes ?? []).map((node) => String(node.id)));
       let hasDisabledNodes = Array.from(nodeIds).some((id) => disabled.has(id));
 
       // Disabled nodes do not exist on the client runtime; drop roots that include disabled nodes so other roots can
@@ -1043,7 +1098,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         for (const rootId of group.rootIds) {
           try {
             const rootPayload = nodeEngine.exportGraphForPatchFromRootNodeIds([rootId]);
-            const rootNodeIds = new Set((rootPayload?.graph?.nodes ?? []).map((n: any) => String(n.id)));
+            const rootNodeIds = new Set((rootPayload?.graph?.nodes ?? []).map((node) => String(node.id)));
             const rootHasDisabled = Array.from(rootNodeIds).some((id) => disabled.has(id));
             if (!rootHasDisabled) enabledRoots.push(rootId);
           } catch {
@@ -1066,7 +1121,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         targets = group.clientIds.slice();
         if (!applyLocalOnlyTargetFilter() || targets.length === 0) continue;
 
-        nodeIds = new Set((payload?.graph?.nodes ?? []).map((n: any) => String(n.id)));
+        nodeIds = new Set((payload?.graph?.nodes ?? []).map((node) => String(node.id)));
         hasDisabledNodes = Array.from(nodeIds).some((id) => disabled.has(id));
       }
 
@@ -1075,7 +1130,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         continue;
       }
 
-      const topologySignature = computeTopologySignature(payload.graph ?? {});
+      const topologySignature = computeTopologySignature(payload.graph);
       const patchId = String(payload?.meta?.loopId ?? '');
 
       applyTimeRangePlayheadsToPatchPayload(payload);
@@ -1115,17 +1170,19 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     for (const [clientId, desired] of desiredByClientId.entries()) {
       const deployed = deployedPatchByClientId.get(clientId) ?? null;
       const status = statusMap.get(clientId) ?? null;
+      const statusLoopId = status?.loopId ? String(status.loopId) : '';
+      const statusRunning = status?.running === false;
 
       const needDeploy =
         !deployed ||
         deployed.patchId !== desired.patchId ||
         deployed.topologySignature !== desired.topologySignature ||
-        (status?.loopId && status.loopId !== desired.patchId);
+        (statusLoopId && statusLoopId !== desired.patchId);
 
       if (!needDeploy) {
         // Best-effort: if the patch is targeted but was stopped on the client, restart it.
-        if (status?.loopId === desired.patchId && status.running === false) {
-          sendNodeExecutorPluginControl(String(clientId), 'start', { loopId: desired.patchId } as any);
+        if (statusLoopId === desired.patchId && statusRunning) {
+          sendNodeExecutorPluginControl(String(clientId), 'start', { loopId: desired.patchId });
         }
 
         // Keep nodeId membership up to date for per-node override routing.
@@ -1146,7 +1203,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       }
 
       sendNodeExecutorPluginControl(String(clientId), 'deploy', desired.payload);
-      sendNodeExecutorPluginControl(String(clientId), 'start', { loopId: desired.patchId } as any);
+      sendNodeExecutorPluginControl(String(clientId), 'start', { loopId: desired.patchId });
 
       deployedPatchByClientId.set(String(clientId), {
         patchId: desired.patchId,
@@ -1180,18 +1237,20 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (!nodeId || !portId) return;
 
     const state = getGraphState();
-    const node = (state.nodes ?? []).find((n: any) => String(n.id) === String(nodeId));
-    if ((node as any)?.type === 'client-object' && kind === 'config' && portId === 'clientId') return;
+    const node = (state.nodes ?? []).find((n) => String(n.id) === String(nodeId));
+    if (node && String(node.type ?? '') === 'client-object' && kind === 'config' && portId === 'clientId')
+      return;
 
     const loop = loopController?.loopActions.getDeployedLoopForNode(nodeId);
     if (loop) {
+      const loopId = String(loop?.id ?? '');
       // Important: once a loop is deployed, the executor client is the "source of truth" for where to send overrides.
       // Using the current `client-object.config.clientId` is incorrect because Index/Range changes can retarget the
       // picker selection without redeploying the loop.
       const deployedClientId = (() => {
         const statusMap = get(executorStatusByClient);
         for (const [cid, status] of statusMap.entries()) {
-          if (String((status as any)?.loopId ?? '') === String((loop as any).id)) return String(cid);
+          if (String(status?.loopId ?? '') === loopId) return String(cid);
         }
         return '';
       })();
@@ -1200,20 +1259,20 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       if (!clientId) return;
 
       sendNodeExecutorPluginControl(clientId, 'override-set', {
-        loopId: (loop as any).id,
+        loopId,
         overrides: [{ nodeId, kind, portId, value, ttlMs: OVERRIDE_TTL_MS }],
-      } as any);
+      });
 
       // Commit: persist the latest value after inactivity (debounced).
-      const key = `${clientId}|${String((loop as any).id)}|${nodeId}|${kind}|${portId}`;
+      const key = `${clientId}|${loopId}|${nodeId}|${kind}|${portId}`;
       const existing = patchPendingCommitByKey.get(key);
       if (existing) clearTimeout(existing);
       const timer = setTimeout(() => {
         patchPendingCommitByKey.delete(key);
         sendNodeExecutorPluginControl(clientId, 'override-set', {
-          loopId: (loop as any).id,
+          loopId,
           overrides: [{ nodeId, kind, portId, value }],
-        } as any);
+        });
       }, 420);
       patchPendingCommitByKey.set(key, timer);
       return;
@@ -1230,7 +1289,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       sendNodeExecutorPluginControl(String(target.clientId), 'override-set', {
         loopId: target.patch.patchId,
         overrides: [{ nodeId, kind, portId, value, ttlMs: OVERRIDE_TTL_MS }],
-      } as any);
+      });
 
       const key = `${target.clientId}|${target.patch.patchId}|${nodeId}|${kind}|${portId}`;
       const existing = patchPendingCommitByKey.get(key);
@@ -1240,7 +1299,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         sendNodeExecutorPluginControl(String(target.clientId), 'override-set', {
           loopId: target.patch.patchId,
           overrides: [{ nodeId, kind, portId, value }],
-        } as any);
+        });
       }, 420);
       patchPendingCommitByKey.set(key, timer);
     }
@@ -1251,8 +1310,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   // ────────────────────────────────────────────────────────────────────────────
 
   const toggleExecutorLogs = () => {
-    const show = get(showExecutorLogs as any);
-    const current = get(logsClientId as any);
+    const show = get(showExecutorLogs);
+    const current = get(logsClientId);
     const patchTargets = resolvePatchTargetClientIds();
     const selected = (get(managerState).selectedClientIds ?? []).map(String).filter(Boolean);
     const targetId = patchTargets[0] ?? selected[0] ?? clientIdsInOrder()[0] ?? '';

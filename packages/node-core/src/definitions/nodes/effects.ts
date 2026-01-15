@@ -4,6 +4,7 @@
 import type { ConvolutionPreset, VisualEffect } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
+import { getBooleanValue, getNumberValue, getStringValue } from './node-definition-utils.js';
 
 const isVisualEffect = (value: unknown): value is VisualEffect => {
   if (!value || typeof value !== 'object') return false;
@@ -47,7 +48,7 @@ export function createEffectAsciiNode(): NodeDefinition {
       const chain = coerceEffectChain(inputs.in);
       const resolution = (() => {
         const fromInput = inputs.resolution;
-        const fromConfig = (config as any).resolution;
+        const fromConfig = getNumberValue(config.resolution);
         const raw =
           typeof fromInput === 'number' ? fromInput : Number(fromInput ?? fromConfig ?? 11);
         const clamped = Number.isFinite(raw) ? Math.max(1, Math.min(100, raw)) : 11;
@@ -130,7 +131,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
         ] as const;
 
         const fromInput = inputs.preset;
-        const fromConfig = (config as any).preset;
+        const fromConfig = getStringValue(config.preset);
         const raw =
           typeof fromInput === 'string' && fromInput.trim()
             ? fromInput.trim()
@@ -143,7 +144,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
 
       const mix = (() => {
         const fromInput = inputs.mix;
-        const fromConfig = (config as any).mix;
+        const fromConfig = getNumberValue(config.mix);
         const raw =
           typeof fromInput === 'number' ? fromInput : Number(fromInput ?? fromConfig ?? 1);
         if (!Number.isFinite(raw)) return 1;
@@ -152,7 +153,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
 
       const scale = (() => {
         const fromInput = inputs.scale;
-        const fromConfig = (config as any).scale;
+        const fromConfig = getNumberValue(config.scale);
         const raw =
           typeof fromInput === 'number' ? fromInput : Number(fromInput ?? fromConfig ?? 0.5);
         if (!Number.isFinite(raw)) return 0.5;
@@ -161,7 +162,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
 
       const bias = (() => {
         const fromInput = inputs.bias;
-        const fromConfig = (config as any).bias;
+        const fromConfig = getNumberValue(config.bias);
         const raw =
           typeof fromInput === 'number' ? fromInput : Number(fromInput ?? fromConfig ?? 0);
         if (!Number.isFinite(raw)) return 0;
@@ -172,7 +173,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
         const fromInput = inputs.normalize;
         if (typeof fromInput === 'number' && Number.isFinite(fromInput)) return fromInput >= 0.5;
         if (typeof fromInput === 'boolean') return fromInput;
-        const fromConfig = (config as any).normalize;
+        const fromConfig = getBooleanValue(config.normalize);
         if (typeof fromConfig === 'number' && Number.isFinite(fromConfig)) return fromConfig >= 0.5;
         if (typeof fromConfig === 'boolean') return fromConfig;
         return true;
@@ -181,7 +182,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
       const kernel = (() => {
         if (preset !== 'custom') return undefined;
         const fromInput = inputs.kernel;
-        const fromConfig = (config as any).kernel;
+        const fromConfig = getStringValue(config.kernel);
         const raw =
           typeof fromInput === 'string' && fromInput.trim()
             ? fromInput.trim()

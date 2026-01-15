@@ -3,8 +3,10 @@
   // @ts-nocheck
   import Button from '$lib/components/ui/Button.svelte';
 
-  export let marqueeRect: any = null;
-  export let selectionBounds: any = null;
+  type RectLike = { left: number; top: number; width: number; height: number };
+
+  export let marqueeRect: RectLike | null = null;
+  export let selectionBounds: RectLike | null = null;
   export let selectionCount = 0;
 
   export let onCreateGroup: () => void = () => undefined;

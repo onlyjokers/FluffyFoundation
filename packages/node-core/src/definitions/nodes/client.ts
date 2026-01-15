@@ -6,6 +6,7 @@ import type { ControlAction, ControlPayload } from '@shugu/protocol';
 import type { NodeDefinition } from '../../types.js';
 import type { ClientObject, ClientObjectDeps, ClientSensorMessage, NodeCommand } from '../types.js';
 import { selectClientIdsForNode } from '../client-selection.js';
+import { asRecord, getArrayValue, getNumberValue, getStringValue } from './node-definition-utils.js';
 
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
   return {
@@ -89,18 +90,16 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
       const configured = typeof config.clientId === 'string' ? String(config.clientId) : '';
 
       const available = deps.getAllClientIds?.() ?? [];
-      const loadInds = (inputs as any).loadIndexs;
-      const loadedIds = Array.isArray(loadInds)
-        ? loadInds.map(String).filter((id) => available.includes(id))
-        : [];
+      const loadInds = getArrayValue(inputs.loadIndexs);
+      const loadedIds = loadInds ? loadInds.map(String).filter((id) => available.includes(id)) : [];
 
       const selection =
         loadedIds.length > 0
           ? { index: 1, selectedIds: loadedIds }
           : selectClientIdsForNode(context.nodeId, available, {
-              index: (inputs as any).index,
-              range: (inputs as any).range,
-              random: (inputs as any).random,
+              index: inputs.index,
+              range: inputs.range,
+              random: inputs.random,
             });
 
       const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
@@ -118,13 +117,14 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
       const raw = inputs.in;
       const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
       for (const cmd of commands) {
-        if (!cmd || typeof cmd !== 'object') continue;
-        const action = (cmd as any).action as ControlAction | undefined;
+        const record = asRecord(cmd);
+        if (!record) continue;
+        const action = getStringValue(record.action) as ControlAction | undefined;
         if (!action) continue;
         const next: NodeCommand = {
           action,
-          payload: ((cmd as any).payload ?? {}) as ControlPayload,
-          executeAt: (cmd as any).executeAt as number | undefined,
+          payload: (record.payload ?? {}) as ControlPayload,
+          executeAt: getNumberValue(record.executeAt) ?? undefined,
         };
 
         for (const clientId of targets) {
@@ -138,18 +138,16 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
       const configured = typeof config.clientId === 'string' ? String(config.clientId) : '';
 
       const available = deps.getAllClientIds?.() ?? [];
-      const loadInds = (inputs as any).loadIndexs;
-      const loadedIds = Array.isArray(loadInds)
-        ? loadInds.map(String).filter((id) => available.includes(id))
-        : [];
+      const loadInds = getArrayValue(inputs.loadIndexs);
+      const loadedIds = loadInds ? loadInds.map(String).filter((id) => available.includes(id)) : [];
 
       const selection =
         loadedIds.length > 0
           ? { index: 1, selectedIds: loadedIds }
           : selectClientIdsForNode(context.nodeId, available, {
-              index: (inputs as any).index,
-              range: (inputs as any).range,
-              random: (inputs as any).random,
+              index: inputs.index,
+              range: inputs.range,
+              random: inputs.random,
             });
 
       const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
@@ -243,8 +241,8 @@ export function createClientSensorsProcessorNode(): NodeDefinition {
     ],
     configSchema: [],
     process: (inputs) => {
-      const client = inputs.client as any;
-      const msg = client?.sensors as any;
+      const client = asRecord(inputs.client);
+      const msg = client ? asRecord(client.sensors) : null;
 
       const out = {
         accelX: 0,

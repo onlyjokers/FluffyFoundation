@@ -14,7 +14,8 @@ export const isGroupPortNodeType = (type: string) =>
 export const isLegacyGroupActivateNodeType = (type: string) => type === LEGACY_GROUP_ACTIVATE_NODE_TYPE;
 
 export const groupIdFromNode = (node: NodeInstance): string => {
-  const raw = (node.config as any)?.groupId;
+  const config = node.config as Record<string, unknown> | undefined;
+  const raw = config?.groupId;
   return typeof raw === 'string' ? raw : raw ? String(raw) : '';
 };
 

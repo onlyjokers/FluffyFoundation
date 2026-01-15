@@ -2,6 +2,8 @@
  * Purpose: Shared loop deployment helpers for the node canvas.
  */
 import type { LocalLoop } from '$lib/nodes';
+import type { GraphState, NodeInstance } from '$lib/nodes/types';
+import type { NodeEngine } from '$lib/nodes/engine';
 
 export type DeployPendingEntry = { clientId: string; timeoutId: ReturnType<typeof setTimeout> | null };
 
@@ -29,18 +31,18 @@ export type ManagerSdkLike = {
     target: { mode: string; ids: string[] },
     plugin: string,
     event: string,
-    payload: any
+    payload: Record<string, unknown>
   ) => void;
   stopSound: (force?: boolean) => void;
   stopMedia: (force?: boolean) => void;
   hideImage: (force?: boolean) => void;
   flashlight: (mode: string, intensity?: number, force?: boolean) => void;
-  screenColor: (payload: any, force?: boolean) => void;
+  screenColor: (payload: Record<string, unknown>, force?: boolean) => void;
 };
 
 export type LoopActionsOptions = {
   getSDK: () => ManagerSdkLike | null;
-  getGraphState: () => { nodes: any[] };
+  getGraphState: () => Pick<GraphState, 'nodes'>;
   getLocalLoops: () => LocalLoop[];
   getDeployedLoopIds: () => Set<string>;
   getDeployPendingByLoopId: () => Map<string, DeployPendingEntry>;
@@ -48,7 +50,7 @@ export type LoopActionsOptions = {
   setDeployPendingByLoopId: (next: Map<string, DeployPendingEntry>) => void;
   setDeployedLoopClientIdByLoopId: (next: Map<string, string>) => void;
   markLoopDeployed: (loopId: string, deployed: boolean) => void;
-  exportGraphForLoop: (loopId: string) => any;
+  exportGraphForLoop: (loopId: string) => ReturnType<NodeEngine['exportGraphForLoop']>;
   isRunning: () => boolean;
   onDeployTimeout?: (loopId: string) => void;
   onDeployError?: (message: string) => void;
@@ -134,7 +136,7 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
 
   const getLoopClientId = (loop: LocalLoop): string => {
     const clientNodeId = loop.clientsInvolved?.[0] ?? '';
-    const node = getGraphState().nodes.find((n: any) => String(n.id) === String(clientNodeId));
+    const node = getGraphState().nodes.find((n: NodeInstance) => String(n.id) === String(clientNodeId));
     const id = node?.config?.clientId;
     return typeof id === 'string' ? id : '';
   };
@@ -201,7 +203,7 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
     if (!sdk) return;
     sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'stop', {
       loopId: loop.id,
-    } as any);
+    });
     markLoopDeployed(loop.id, false);
   };
 
@@ -211,10 +213,10 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
     if (!sdk) return;
     sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'stop', {
       loopId,
-    } as any);
+    });
     sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'remove', {
       loopId,
-    } as any);
+    });
   };
 
   const stopAllDeployedLoops = () => {
@@ -247,7 +249,7 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
     if (!sdk) return;
     sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'remove', {
       loopId: loop.id,
-    } as any);
+    });
     markLoopDeployed(loop.id, false);
   };
 

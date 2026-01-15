@@ -1,27 +1,28 @@
 /**
  * Purpose: Sync the node engine graph into the Rete editor view.
  */
-import { ClassicPreset, type NodeEditor } from 'rete';
+import { ClassicPreset, type BaseSchemes, type NodeEditor } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 import type { NodeRegistry } from '@shugu/node-core';
 import type { Connection as EngineConnection, GraphState, NodeInstance } from '$lib/nodes/types';
 import { CUSTOM_NODE_TYPE_PREFIX } from '$lib/nodes/custom-nodes/store';
 
-type AnyAreaPlugin = AreaPlugin<any, any>;
+type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
+type AnyRecord = Record<string, unknown>;
 
 type GraphSyncOptions = {
-  editor: NodeEditor<any> | null;
+  editor: NodeEditor<BaseSchemes> | null;
   areaPlugin: AnyAreaPlugin | null;
-  nodeMap: Map<string, any>;
-  connectionMap: Map<string, any>;
+  nodeMap: Map<string, ClassicPreset.Node>;
+  connectionMap: Map<string, ClassicPreset.Connection<ClassicPreset.Node, ClassicPreset.Node>>;
   nodeRegistry: NodeRegistry;
   socketFor: (type?: string) => ClassicPreset.Socket;
-  buildReteNode: (instance: NodeInstance) => any;
+  buildReteNode: (instance: NodeInstance) => ClassicPreset.Node;
   nodeLabel: (node: NodeInstance) => string;
   applyMidiMapRangeConstraints: (
     state: { nodes: NodeInstance[]; connections: EngineConnection[] },
     areaPlugin: AnyAreaPlugin | null,
-    nodeMap: Map<string, any>
+    nodeMap: Map<string, ClassicPreset.Node>
   ) => Promise<void>;
   setGraphState: (state: GraphState) => void;
   setNodeCount: (count: number) => void;
@@ -46,7 +47,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
     return true;
   };
 
-  const shouldRebuildCustomNode = (instance: NodeInstance, reteNode: any): boolean => {
+  const shouldRebuildCustomNode = (instance: NodeInstance, reteNode: ClassicPreset.Node): boolean => {
     if (!String(instance.type ?? '').startsWith(CUSTOM_NODE_TYPE_PREFIX)) return false;
     const def = opts.nodeRegistry.get(String(instance.type));
     if (!def) return false;
@@ -59,7 +60,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
 
   const ensureCmdAggregatorInputs = async (
     instance: NodeInstance,
-    reteNode: any,
+    reteNode: ClassicPreset.Node,
     connections: EngineConnection[]
   ) => {
     if (!opts.areaPlugin) return;
@@ -77,7 +78,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
     }, 0);
     if (maxFromDef <= 0) return;
 
-    const raw = (instance.config as any)?.inCount;
+    const raw = (instance.config as AnyRecord)?.inCount;
     const fromConfig = typeof raw === 'number' ? raw : Number(raw);
     const configCount = Number.isFinite(fromConfig) ? Math.max(1, Math.floor(fromConfig)) : 1;
 
@@ -99,7 +100,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
       if (reteNode?.inputs?.[portId]) continue;
       const portDef = def.inputs.find((p) => String(p.id) === portId);
       if (!portDef) continue;
-      const input: any = new ClassicPreset.Input(
+      const input = new ClassicPreset.Input(
         opts.socketFor(portDef.type),
         portDef.label ?? portDef.id,
         true
@@ -179,14 +180,14 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
         const src = opts.nodeMap.get(c.sourceNodeId);
         const tgt = opts.nodeMap.get(c.targetNodeId);
         if (!src || !tgt) continue;
-        const conn: any = new ClassicPreset.Connection(src, c.sourcePortId, tgt, c.targetPortId);
+        const conn = new ClassicPreset.Connection(src, c.sourcePortId, tgt, c.targetPortId);
         conn.id = c.id;
         await opts.editor.addConnection(conn);
         opts.connectionMap.set(c.id, conn);
       }
 
       for (const conn of opts.editor.getConnections()) {
-        const id = String((conn as any).id);
+        const id = String(conn.id);
         if (engineConnIds.has(id)) continue;
         try {
           await opts.editor.removeConnection(id);
@@ -197,7 +198,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
       }
 
       for (const node of opts.editor.getNodes()) {
-        const id = String((node as any).id);
+        const id = String(node.id);
         if (engineNodeIds.has(id)) continue;
         try {
           await opts.editor.removeNode(id);
@@ -217,7 +218,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
         let updated = false;
         for (const port of def?.inputs ?? []) {
           const input = reteNode?.inputs?.[port.id];
-          const control = input?.control as any;
+          const control = input?.control as { readonly?: boolean } | null;
           if (!control) continue;
           const nextReadonly = connectedInputs.has(`${n.id}:${port.id}`);
           if (Boolean(control.readonly) !== nextReadonly) {

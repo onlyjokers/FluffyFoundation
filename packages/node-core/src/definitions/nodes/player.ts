@@ -11,6 +11,12 @@ import type {
 import type { NodeDefinition } from '../../types.js';
 import type { ClientObjectDeps, NodeCommand } from '../types.js';
 import { clampInt, clampNumber, coerceBooleanOr, coerceNumber } from '../utils.js';
+import {
+  asRecord,
+  getArrayValue,
+  getRecordString,
+  getStringValue,
+} from './node-definition-utils.js';
 
 export function createAudioOutNode(): NodeDefinition {
   return {
@@ -36,16 +42,13 @@ export function createImageOutNode(deps: ClientObjectDeps): NodeDefinition {
       for (let i = raw.length - 1; i >= 0; i--) {
         const item = raw[i];
         if (typeof item === 'string' && item.trim()) return item.trim();
-        if (item && typeof item === 'object' && typeof (item as any).url === 'string') {
-          const url = String((item as any).url).trim();
-          if (url) return url;
-        }
+        const url = getRecordString(item, 'url');
+        if (url) return url;
       }
       return '';
     }
-    if (raw && typeof raw === 'object' && typeof (raw as any).url === 'string') {
-      return String((raw as any).url).trim();
-    }
+    const url = getRecordString(raw, 'url');
+    if (url) return url;
     return '';
   };
 
@@ -85,16 +88,13 @@ export function createVideoOutNode(deps: ClientObjectDeps): NodeDefinition {
     if (Array.isArray(raw)) {
       for (const item of raw) {
         if (typeof item === 'string' && item.trim()) return item.trim();
-        if (item && typeof item === 'object' && typeof (item as any).url === 'string') {
-          const url = String((item as any).url).trim();
-          if (url) return url;
-        }
+        const url = getRecordString(item, 'url');
+        if (url) return url;
       }
       return '';
     }
-    if (raw && typeof raw === 'object' && typeof (raw as any).url === 'string') {
-      return String((raw as any).url).trim();
-    }
+    const url = getRecordString(raw, 'url');
+    if (url) return url;
     return '';
   };
 
@@ -185,31 +185,31 @@ export function createEffectOutNode(deps: ClientObjectDeps): NodeDefinition {
     const effects: VisualEffect[] = [];
 
     for (const item of raw) {
-      if (!item || typeof item !== 'object') continue;
-      const type = typeof (item as any).type === 'string' ? String((item as any).type) : '';
+      const record = asRecord(item);
+      if (!record) continue;
+      const type = getStringValue(record.type) ?? '';
       if (type === 'ascii') {
-        const cellSizeRaw = (item as any).cellSize;
-        const cellSize = clampInt(cellSizeRaw, 11, 1, 100);
+        const cellSize = clampInt(record.cellSize, 11, 1, 100);
         effects.push({ type: 'ascii', cellSize });
         continue;
       }
       if (type === 'convolution') {
-        const preset =
-          typeof (item as any).preset === 'string' ? String((item as any).preset) : undefined;
-        const kernel = Array.isArray((item as any).kernel)
-          ? (item as any).kernel
+        const preset = getStringValue(record.preset) ?? undefined;
+        const kernelRaw = getArrayValue(record.kernel);
+        const kernel = kernelRaw
+          ? kernelRaw
               .map((n: unknown) => (typeof n === 'number' ? n : Number(n)))
               .filter((n: number) => Number.isFinite(n))
               .slice(0, 9)
           : undefined;
-        const mix = clampNumber(coerceNumber((item as any).mix, 1), 0, 1);
-        const bias = clampNumber(coerceNumber((item as any).bias, 0), -1, 1);
-        const normalize = coerceBooleanOr((item as any).normalize, true);
-        const scale = clampNumber(coerceNumber((item as any).scale, 0.5), 0.1, 1);
+        const mix = clampNumber(coerceNumber(record.mix, 1), 0, 1);
+        const bias = clampNumber(coerceNumber(record.bias, 0), -1, 1);
+        const normalize = coerceBooleanOr(record.normalize, true);
+        const scale = clampNumber(coerceNumber(record.scale, 0.5), 0.1, 1);
 
         effects.push({
           type: 'convolution',
-          ...(preset ? { preset: preset as any } : {}),
+          ...(preset ? { preset } : {}),
           ...(kernel && kernel.length === 9 ? { kernel } : {}),
           mix,
           bias,
@@ -256,8 +256,9 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
     const scenes: VisualSceneLayerItem[] = [];
 
     for (const item of raw.slice(0, 12)) {
-      if (!item || typeof item !== 'object') continue;
-      const type = typeof (item as any).type === 'string' ? String((item as any).type) : '';
+      const record = asRecord(item);
+      if (!record) continue;
+      const type = getStringValue(record.type) ?? '';
 
       if (type === 'box') {
         scenes.push({ type: 'box' });

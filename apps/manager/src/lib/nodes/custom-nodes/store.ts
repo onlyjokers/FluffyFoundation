@@ -5,24 +5,25 @@
  * into the runtime NodeRegistry as `custom:<definitionId>` types.
  */
 import { get, writable, type Writable } from 'svelte/store';
-import type { NodeDefinition, NodePort } from '$lib/nodes/types';
+import type { Connection, GraphState, NodeDefinition, NodePort, NodeInstance, PortType } from '$lib/nodes/types';
 import { nodeRegistry } from '$lib/nodes/registry';
 import type { CustomNodeDefinition } from './types';
 import { readCustomNodeState } from './instance';
 import { NodeRuntime } from '@shugu/node-core';
+import { CUSTOM_NODE_TYPE_PREFIX, customNodeType } from './custom-node-type';
 
-const buildInternalSignature = (graph: any): string => {
+const buildInternalSignature = (graph: GraphState | null | undefined): string => {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
   try {
     return JSON.stringify({
-      n: nodes.map((n: any) => ({
+      n: nodes.map((n) => ({
         id: String(n?.id ?? ''),
         type: String(n?.type ?? ''),
         config: n?.config ?? {},
         inputValues: n?.inputValues ?? {},
       })),
-      c: connections.map((c: any) => ({
+      c: connections.map((c) => ({
         s: String(c?.sourceNodeId ?? ''),
         sp: String(c?.sourcePortId ?? ''),
         t: String(c?.targetNodeId ?? ''),
@@ -43,8 +44,8 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     }
   >();
 
-  const inputPorts = (definition.ports ?? []).filter((p: any) => String(p?.side ?? '') === 'input');
-  const outputPorts = (definition.ports ?? []).filter((p: any) => String(p?.side ?? '') === 'output');
+  const inputPorts = (definition.ports ?? []).filter((p) => String(p?.side ?? '') === 'input');
+  const outputPorts = (definition.ports ?? []).filter((p) => String(p?.side ?? '') === 'output');
 
   return (inputs, config, context) => {
     const state = readCustomNodeState(config ?? {});
@@ -60,20 +61,20 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     let entry = runtimeByNodeId.get(nodeId);
     if (!entry || entry.signature !== signature) {
       const runtime = new NodeRuntime(nodeRegistry);
-      const nodes = (internal.nodes ?? []).map((n: any) => ({
+      const nodes: NodeInstance[] = (internal.nodes ?? []).map((n) => ({
         ...n,
-        id: String((n as any)?.id ?? ''),
-        type: String((n as any)?.type ?? ''),
-        config: { ...((n as any)?.config ?? {}) },
-        inputValues: { ...((n as any)?.inputValues ?? {}) },
+        id: String(n?.id ?? ''),
+        type: String(n?.type ?? ''),
+        config: { ...(n?.config ?? {}) },
+        inputValues: { ...(n?.inputValues ?? {}) },
         outputValues: {},
       }));
-      const connections = (internal.connections ?? []).map((c: any) => ({
+      const connections: Connection[] = (internal.connections ?? []).map((c) => ({
         ...c,
-        sourceNodeId: String((c as any)?.sourceNodeId ?? ''),
-        sourcePortId: String((c as any)?.sourcePortId ?? ''),
-        targetNodeId: String((c as any)?.targetNodeId ?? ''),
-        targetPortId: String((c as any)?.targetPortId ?? ''),
+        sourceNodeId: String(c?.sourceNodeId ?? ''),
+        sourcePortId: String(c?.sourcePortId ?? ''),
+        targetNodeId: String(c?.targetNodeId ?? ''),
+        targetPortId: String(c?.targetPortId ?? ''),
       }));
       runtime.loadGraph({ nodes, connections });
       entry = { runtime, signature };
@@ -84,8 +85,8 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     runtime.clearOverrides();
 
     for (const port of inputPorts) {
-      const portKey = String((port as any)?.portKey ?? '');
-      const binding = (port as any)?.binding ?? null;
+      const portKey = String(port?.portKey ?? '');
+      const binding = port?.binding ?? null;
       if (!portKey || !binding?.nodeId || !binding?.portId) continue;
       if (!Object.prototype.hasOwnProperty.call(inputs ?? {}, portKey)) continue;
       runtime.applyOverride(String(binding.nodeId), 'input', String(binding.portId), inputs[portKey]);
@@ -96,8 +97,8 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
 
     const outputs: Record<string, unknown> = {};
     for (const port of outputPorts) {
-      const portKey = String((port as any)?.portKey ?? '');
-      const binding = (port as any)?.binding ?? null;
+      const portKey = String(port?.portKey ?? '');
+      const binding = port?.binding ?? null;
       if (!portKey || !binding?.nodeId || !binding?.portId) continue;
       const node = runtime.getNode(String(binding.nodeId));
       outputs[portKey] = node?.outputValues?.[String(binding.portId)];
@@ -107,15 +108,9 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
   };
 };
 
-export const CUSTOM_NODE_TYPE_PREFIX = 'custom:' as const;
 export const CUSTOM_NODE_CATEGORY = 'Custom' as const;
-
 export const customNodeDefinitions: Writable<CustomNodeDefinition[]> = writable([]);
-
-export function customNodeType(definitionId: string): string {
-  const id = String(definitionId ?? '');
-  return `${CUSTOM_NODE_TYPE_PREFIX}${id}`;
-}
+export { CUSTOM_NODE_TYPE_PREFIX, customNodeType };
 
 function gatePort(): NodePort {
   return { id: 'gate', label: 'Gate', type: 'boolean', defaultValue: true };
@@ -126,13 +121,13 @@ function portsFor(definition: CustomNodeDefinition): { inputs: NodePort[]; outpu
   const outputs: NodePort[] = [];
 
   for (const port of definition.ports ?? []) {
-    const id = String(port?.portKey ?? '');
-    if (!id) continue;
-    const def: NodePort = {
-      id,
-      label: String(port?.label ?? id),
-      type: (port?.type ?? 'any') as any,
-    };
+      const id = String(port?.portKey ?? '');
+      if (!id) continue;
+      const def: NodePort = {
+        id,
+        label: String(port?.label ?? id),
+        type: (port?.type ?? 'any') as PortType,
+      };
     if (String(port?.side) === 'input') inputs.push(def);
     else outputs.push(def);
   }

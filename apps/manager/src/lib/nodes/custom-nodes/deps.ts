@@ -9,13 +9,15 @@
  */
 import { readCustomNodeState } from './instance';
 import type { CustomNodeDefinition } from './types';
+import { asRecord } from '$lib/utils/value-guards';
 
 export function dependenciesForDefinition(definition: CustomNodeDefinition): Set<string> {
   const deps = new Set<string>();
   const nodes = Array.isArray(definition?.template?.nodes) ? definition.template.nodes : [];
 
   for (const node of nodes) {
-    const state = readCustomNodeState(node.config ?? {});
+    const record = asRecord(node);
+    const state = readCustomNodeState(asRecord(record.config));
     if (!state) continue;
     const id = String(state.definitionId ?? '');
     if (id) deps.add(id);
@@ -87,4 +89,3 @@ export function wouldCreateCycle(definitions: CustomNodeDefinition[], fromId: st
 
   return false;
 }
-

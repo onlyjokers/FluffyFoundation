@@ -20,7 +20,7 @@
   const graphHeight = height - 2 * padding;
 
   // Parse and validate bezier value
-  function parseBezier(v: any): [number, number, number, number] {
+  function parseBezier(v: unknown): [number, number, number, number] {
     if (!Array.isArray(v) || v.length !== 4) return [0.25, 0.1, 0.25, 1.0];
     return v.map((n, i) => {
       const val = typeof n === 'number' && Number.isFinite(n) ? n : i % 2 === 0 ? 0.25 : 0.1;

@@ -4,6 +4,7 @@
  * Wraps existing Rete areaPlugin, nodeViews, and connectionMap to provide
  * a renderer-agnostic interface for controllers.
  */
+import type { BaseSchemes } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 import type {
   GraphViewAdapter,
@@ -14,13 +15,14 @@ import type {
 } from './graph-view-adapter';
 import { normalizeAreaTransform } from '../utils/view-utils';
 
-type AnyAreaPlugin = AreaPlugin<any, any>;
+type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
+type AnyRecord = Record<string, unknown>;
 
 export interface ReteAdapterOptions {
   getContainer: () => HTMLDivElement | null;
   getAreaPlugin: () => AnyAreaPlugin | null;
-  getNodeMap: () => Map<string, any>;
-  getConnectionMap: () => Map<string, any>;
+  getNodeMap: () => Map<string, AnyRecord>;
+  getConnectionMap: () => Map<string, AnyRecord>;
   requestFramesUpdate: () => void;
 }
 
@@ -58,8 +60,8 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
     const area = areaPlugin?.area;
     if (!area) return;
     area.transform = { k: transform.k, x: transform.tx, y: transform.ty };
-    // Force area update (using any cast because update() is private in Rete types)
-    (area as any).update?.();
+    // Force area update (update() is private in Rete types)
+    (area as { update?: () => void }).update?.();
     requestFramesUpdate();
   };
 
@@ -135,19 +137,19 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
     const node = getNodeMap().get(String(nodeId));
     if (!node) return null;
     return {
-      selected: Boolean((node as any).selected),
-      collapsed: Boolean((node as any).collapsed),
-      hidden: Boolean((node as any).hidden),
-      groupMinimized: Boolean((node as any).groupMinimized),
-      groupDisabled: Boolean((node as any).groupDisabled),
-      groupSelected: Boolean((node as any).groupSelected),
-      localLoop: Boolean((node as any).localLoop),
-      deployedLoop: Boolean((node as any).deployedLoop),
-      deployedPatch: Boolean((node as any).deployedPatch),
-      stopped: Boolean((node as any).stopped),
-      active: Boolean((node as any).active),
-      activeInputs: normalizeStringArray((node as any).activeInputs),
-      activeOutputs: normalizeStringArray((node as any).activeOutputs),
+      selected: Boolean((node as AnyRecord).selected),
+      collapsed: Boolean((node as AnyRecord).collapsed),
+      hidden: Boolean((node as AnyRecord).hidden),
+      groupMinimized: Boolean((node as AnyRecord).groupMinimized),
+      groupDisabled: Boolean((node as AnyRecord).groupDisabled),
+      groupSelected: Boolean((node as AnyRecord).groupSelected),
+      localLoop: Boolean((node as AnyRecord).localLoop),
+      deployedLoop: Boolean((node as AnyRecord).deployedLoop),
+      deployedPatch: Boolean((node as AnyRecord).deployedPatch),
+      stopped: Boolean((node as AnyRecord).stopped),
+      active: Boolean((node as AnyRecord).active),
+      activeInputs: normalizeStringArray((node as AnyRecord).activeInputs),
+      activeOutputs: normalizeStringArray((node as AnyRecord).activeOutputs),
     };
   };
 
@@ -162,106 +164,106 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
 
     if ('collapsed' in patch) {
       const next = Boolean(patch.collapsed);
-      if (Boolean((node as any).collapsed) !== next) {
-        (node as any).collapsed = next;
+      if (Boolean((node as AnyRecord).collapsed) !== next) {
+        (node as AnyRecord).collapsed = next;
         changed = true;
       }
     }
 
     if ('hidden' in patch) {
       const next = Boolean(patch.hidden);
-      if (Boolean((node as any).hidden) !== next) {
-        (node as any).hidden = next;
+      if (Boolean((node as AnyRecord).hidden) !== next) {
+        (node as AnyRecord).hidden = next;
         changed = true;
       }
     }
 
     if ('selected' in patch) {
       const next = Boolean(patch.selected);
-      if (Boolean((node as any).selected) !== next) {
-        (node as any).selected = next;
+      if (Boolean((node as AnyRecord).selected) !== next) {
+        (node as AnyRecord).selected = next;
         changed = true;
       }
     }
 
     if ('groupDisabled' in patch) {
       const next = Boolean(patch.groupDisabled);
-      if (Boolean((node as any).groupDisabled) !== next) {
-        (node as any).groupDisabled = next;
+      if (Boolean((node as AnyRecord).groupDisabled) !== next) {
+        (node as AnyRecord).groupDisabled = next;
         changed = true;
       }
     }
 
     if ('groupSelected' in patch) {
       const next = Boolean(patch.groupSelected);
-      if (Boolean((node as any).groupSelected) !== next) {
-        (node as any).groupSelected = next;
+      if (Boolean((node as AnyRecord).groupSelected) !== next) {
+        (node as AnyRecord).groupSelected = next;
         changed = true;
       }
     }
 
     if ('groupMinimized' in patch) {
       const next = Boolean(patch.groupMinimized);
-      if (Boolean((node as any).groupMinimized) !== next) {
-        (node as any).groupMinimized = next;
+      if (Boolean((node as AnyRecord).groupMinimized) !== next) {
+        (node as AnyRecord).groupMinimized = next;
         changed = true;
       }
     }
 
     if ('localLoop' in patch) {
       const next = Boolean(patch.localLoop);
-      if (Boolean((node as any).localLoop) !== next) {
-        (node as any).localLoop = next;
+      if (Boolean((node as AnyRecord).localLoop) !== next) {
+        (node as AnyRecord).localLoop = next;
         changed = true;
       }
     }
 
     if ('deployedLoop' in patch) {
       const next = Boolean(patch.deployedLoop);
-      if (Boolean((node as any).deployedLoop) !== next) {
-        (node as any).deployedLoop = next;
+      if (Boolean((node as AnyRecord).deployedLoop) !== next) {
+        (node as AnyRecord).deployedLoop = next;
         changed = true;
       }
     }
 
     if ('deployedPatch' in patch) {
       const next = Boolean(patch.deployedPatch);
-      if (Boolean((node as any).deployedPatch) !== next) {
-        (node as any).deployedPatch = next;
+      if (Boolean((node as AnyRecord).deployedPatch) !== next) {
+        (node as AnyRecord).deployedPatch = next;
         changed = true;
       }
     }
 
     if ('stopped' in patch) {
       const next = Boolean(patch.stopped);
-      if (Boolean((node as any).stopped) !== next) {
-        (node as any).stopped = next;
+      if (Boolean((node as AnyRecord).stopped) !== next) {
+        (node as AnyRecord).stopped = next;
         changed = true;
       }
     }
 
     if ('active' in patch) {
       const next = Boolean(patch.active);
-      if (Boolean((node as any).active) !== next) {
-        (node as any).active = next;
+      if (Boolean((node as AnyRecord).active) !== next) {
+        (node as AnyRecord).active = next;
         changed = true;
       }
     }
 
     if ('activeInputs' in patch) {
       const next = normalizeStringArray(patch.activeInputs);
-      const prev = normalizeStringArray((node as any).activeInputs);
+      const prev = normalizeStringArray((node as AnyRecord).activeInputs);
       if (!arraysEqual(prev, next)) {
-        (node as any).activeInputs = next;
+        (node as AnyRecord).activeInputs = next;
         changed = true;
       }
     }
 
     if ('activeOutputs' in patch) {
       const next = normalizeStringArray(patch.activeOutputs);
-      const prev = normalizeStringArray((node as any).activeOutputs);
+      const prev = normalizeStringArray((node as AnyRecord).activeOutputs);
       if (!arraysEqual(prev, next)) {
-        (node as any).activeOutputs = next;
+        (node as AnyRecord).activeOutputs = next;
         changed = true;
       }
     }
@@ -273,10 +275,10 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
     const conn = getConnectionMap().get(String(connId));
     if (!conn) return null;
     return {
-      hidden: Boolean((conn as any).hidden),
-      localLoop: Boolean((conn as any).localLoop),
-      deployedLoop: Boolean((conn as any).deployedLoop),
-      active: Boolean((conn as any).active),
+      hidden: Boolean((conn as AnyRecord).hidden),
+      localLoop: Boolean((conn as AnyRecord).localLoop),
+      deployedLoop: Boolean((conn as AnyRecord).deployedLoop),
+      active: Boolean((conn as AnyRecord).active),
     };
   };
 
@@ -294,32 +296,32 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
 
     if ('hidden' in patch) {
       const next = Boolean(patch.hidden);
-      if (Boolean((conn as any).hidden) !== next) {
-        (conn as any).hidden = next;
+      if (Boolean((conn as AnyRecord).hidden) !== next) {
+        (conn as AnyRecord).hidden = next;
         changed = true;
       }
     }
 
     if ('localLoop' in patch) {
       const next = Boolean(patch.localLoop);
-      if (Boolean((conn as any).localLoop) !== next) {
-        (conn as any).localLoop = next;
+      if (Boolean((conn as AnyRecord).localLoop) !== next) {
+        (conn as AnyRecord).localLoop = next;
         changed = true;
       }
     }
 
     if ('deployedLoop' in patch) {
       const next = Boolean(patch.deployedLoop);
-      if (Boolean((conn as any).deployedLoop) !== next) {
-        (conn as any).deployedLoop = next;
+      if (Boolean((conn as AnyRecord).deployedLoop) !== next) {
+        (conn as AnyRecord).deployedLoop = next;
         changed = true;
       }
     }
 
     if ('active' in patch) {
       const next = Boolean(patch.active);
-      if (Boolean((conn as any).active) !== next) {
-        (conn as any).active = next;
+      if (Boolean((conn as AnyRecord).active) !== next) {
+        (conn as AnyRecord).active = next;
         changed = true;
       }
     }

@@ -15,6 +15,7 @@ import type {
   ToneOscInstance,
   TonePlayerInstance,
 } from './types.js';
+import type { LFOOptions, OscillatorType, PlayerOptions } from 'tone';
 import {
   DEFAULT_RAMP_SECONDS,
   DEFAULT_STEP_SECONDS,
@@ -47,6 +48,7 @@ import {
   toNumber,
   toToneDelayTimeSeconds,
 } from './utils.js';
+import { getToneRawContext } from './tone-guards.js';
 export function parseLoopPattern(
   raw: unknown,
   defaults: { frequency: number; amplitude: number }
@@ -211,7 +213,8 @@ export function createOscInstance(
 ): ToneOscInstance {
   if (!toneModule) throw new Error('Tone module is not loaded');
 
-  const osc = new toneModule.Oscillator({ frequency, type: waveform } as any);
+  const oscType = waveform as OscillatorType;
+  const osc = new toneModule.Oscillator({ frequency, type: oscType });
   const gain = new toneModule.Gain({ gain: amplitude });
   osc.connect(gain);
   osc.start();
@@ -241,12 +244,13 @@ export function createToneLfoInstance(
 
   const min = Math.min(params.min, params.max);
   const max = Math.max(params.min, params.max);
-  const lfo = new toneModule.LFO({
+  const lfoOptions: LFOOptions = {
     frequency: params.frequencyHz,
     min,
     max,
-    type: params.waveform,
-  } as any);
+    type: params.waveform as OscillatorType,
+  };
+  const lfo = new toneModule.LFO(lfoOptions);
 
   try {
     lfo.amplitude.value = params.amplitude;
@@ -775,12 +779,13 @@ export function createPlayerInstance(
 ): TonePlayerInstance {
   const gain = new toneModule!.Gain({ gain: params.volume as number });
   const playbackRate = toNonNegativeNumber(params.playbackRate, 1);
-  const player = new toneModule!.Player({
-    loop: params.loop as boolean,
+  const playerOptions: PlayerOptions = {
+    loop: Boolean(params.loop),
     playbackRate,
     detune: params.detune as number,
     autostart: false,
-  } as any);
+  };
+  const player = new toneModule!.Player(playerOptions);
 
   player.connect(gain);
 
@@ -881,7 +886,7 @@ export function createAudioDataInstance(
   config: AudioDataInstance['lastConfig']
 ): AudioDataInstance | null {
   if (!toneModule) return null;
-  const raw: AudioContext | null = (toneModule as any).getContext?.().rawContext ?? null;
+  const raw: AudioContext | null = getToneRawContext(toneModule);
   if (!raw) return null;
 
   const input = new toneModule.Gain({ gain: 1 });
@@ -892,7 +897,7 @@ export function createAudioDataInstance(
   analyser.fftSize = config.fftSize;
   analyser.smoothingTimeConstant = config.smoothing;
   try {
-    input.connect(analyser as any);
+    input.connect?.(analyser as AudioNode);
   } catch {
     // ignore
   }
@@ -992,7 +997,7 @@ export function analyzeAudioDataInstance(
   let centroidHz = 0;
 
   try {
-    instance.analyser.getByteFrequencyData(instance.freqData as any);
+    instance.analyser.getByteFrequencyData(instance.freqData);
     const binCount = instance.freqData.length;
     const sampleRate = instance.analyser.context?.sampleRate ?? 44100;
     const nyquist = sampleRate / 2;

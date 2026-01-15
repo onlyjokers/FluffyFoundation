@@ -19,7 +19,7 @@ export function createArrayFilterNode(): NodeDefinition {
       const a = Array.isArray(inputs.a) ? inputs.a : [];
       const b = Array.isArray(inputs.b) ? inputs.b : [];
       const bSet = new Set(b.map(String));
-      const difference = a.filter((item: any) => !bSet.has(String(item)));
+      const difference = a.filter((item) => !bSet.has(String(item)));
       return { difference };
     },
   };
@@ -745,22 +745,18 @@ export function createNumberScriptNode(): NodeDefinition {
       state.elapsedMs += context.deltaTime;
 
       let t = duration > 0 ? state.elapsedMs / duration : 1;
-      let finished = false;
-
       if (t >= 1) {
         // Cycle completed
         switch (loop) {
           case 'once':
             t = 1;
             state.running = false;
-            finished = true;
             state.justFinished = true;
             break;
           case 'one-way':
             // Restart from beginning
             state.elapsedMs = state.elapsedMs % duration;
             t = duration > 0 ? state.elapsedMs / duration : 0;
-            finished = true;
             state.justFinished = true;
             break;
           case 'around':
@@ -768,13 +764,11 @@ export function createNumberScriptNode(): NodeDefinition {
             state.elapsedMs = state.elapsedMs % duration;
             t = duration > 0 ? state.elapsedMs / duration : 0;
             state.direction = state.direction === 1 ? -1 : 1;
-            finished = true;
             state.justFinished = true;
             break;
           default:
             t = 1;
             state.running = false;
-            finished = true;
             state.justFinished = true;
         }
       }

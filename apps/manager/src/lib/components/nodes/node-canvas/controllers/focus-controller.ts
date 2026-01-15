@@ -7,6 +7,7 @@ import type { GraphViewAdapter } from '../adapters/graph-view-adapter';
 import { buildGroupPortIndex, isGroupPortNodeType } from '../utils/group-port-utils';
 
 type Bounds = { left: number; top: number; right: number; bottom: number };
+type AnyRecord = Record<string, unknown>;
 
 export interface FocusController {
   focusNodeIds(nodeIdsRaw: string[], opts?: { force?: boolean }): void;
@@ -22,8 +23,8 @@ export interface CreateFocusControllerOptions {
   adapter: GraphViewAdapter;
   requestFramesUpdate: () => void;
   requestMinimapUpdate: () => void;
-  getNodeGroups: () => any[];
-  getGroupFrames: () => any[];
+  getNodeGroups: () => AnyRecord[];
+  getGroupFrames: () => AnyRecord[];
 }
 
 export function createFocusController(opts: CreateFocusControllerOptions): FocusController {
@@ -108,8 +109,8 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
     if (!container) return;
 
     const state = getGraphState();
-    const nodeById = new Map((state.nodes ?? []).map((n) => [String((n as any).id), n]));
-    const typeByNodeId = new Map((state.nodes ?? []).map((n) => [String((n as any).id), String((n as any).type ?? '')]));
+    const nodeById = new Map((state.nodes ?? []).map((n) => [String((n as AnyRecord).id), n]));
+    const typeByNodeId = new Map((state.nodes ?? []).map((n) => [String((n as AnyRecord).id), String((n as AnyRecord).type ?? '')]));
 
     const ids = (nodeIdsRaw ?? []).map((id) => String(id)).filter(Boolean);
     const nodeIds = ids.filter((id) => {
@@ -120,7 +121,7 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
 
     const getNodeBoundsApprox = (nodeId: string): Bounds | null => {
       const node = nodeById.get(String(nodeId));
-      const pos = (node as any)?.position;
+      const pos = (node as AnyRecord)?.position;
       const x = Number(pos?.x ?? 0);
       const y = Number(pos?.y ?? 0);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -149,10 +150,10 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
     const targetId = String(groupId ?? '');
     if (!targetId) return;
 
-    const groups = getNodeGroups() as any[];
+    const groups = getNodeGroups();
     if (!Array.isArray(groups) || groups.length === 0) return;
 
-    const byId = new Map<string, any>();
+    const byId = new Map<string, AnyRecord>();
     const childrenByParentId = new Map<string, string[]>();
 
     for (const g of groups) {
@@ -178,7 +179,7 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
 
     // Prefer frame-based focus (accounts for group padding + child groups), then include Group Activate port nodes.
     let bounds: Bounds | null = null;
-    const frames = getGroupFrames() as any[];
+    const frames = getGroupFrames();
     if (Array.isArray(frames) && frames.length > 0) {
       const frame = frames.find((f) => String(f?.group?.id ?? '') === targetId) ?? null;
       const left = Number(frame?.left);
@@ -193,12 +194,12 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
     if (groupIds.size > 0) {
       const state = exportGraph();
       const index = buildGroupPortIndex(state);
-      const nodeById = new Map((state.nodes ?? []).map((n) => [String((n as any).id), n]));
+      const nodeById = new Map((state.nodes ?? []).map((n) => [String((n as AnyRecord).id), n]));
 
       const getPortBoundsApprox = (nodeId: string): Bounds | null => {
         const node = nodeById.get(String(nodeId));
-        const x = Number((node as any)?.position?.x ?? 0);
-        const y = Number((node as any)?.position?.y ?? 0);
+        const x = Number((node as AnyRecord)?.position?.x ?? 0);
+        const y = Number((node as AnyRecord)?.position?.y ?? 0);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
         const w = 80;
         const h = 44;

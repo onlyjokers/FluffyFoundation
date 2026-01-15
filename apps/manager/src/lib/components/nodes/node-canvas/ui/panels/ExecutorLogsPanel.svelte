@@ -1,8 +1,11 @@
 <!-- Purpose: Executor log panel for a loop/client. -->
 <script lang="ts">
   // @ts-nocheck
+  type ExecutorLogEntry = { at: number; event: string; error?: string };
+  type ExecutorStatus = { log: ExecutorLogEntry[] };
+
   export let clientId = '';
-  export let status: any = undefined;
+  export let status: ExecutorStatus | null = null;
   export let onClose: () => void = () => undefined;
 </script>
 

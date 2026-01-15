@@ -4,6 +4,7 @@
 import type { NodeDefinition } from '../../types.js';
 import type { NodeCommand } from '../types.js';
 import { coerceBooleanOr } from '../utils.js';
+import { getRecordString } from './node-definition-utils.js';
 
 const FLASHLIGHT_MODE_OPTIONS = [
   { value: 'off', label: 'Off' },
@@ -113,7 +114,7 @@ export function createPushImageUploadNode(): NodeDefinition {
           maxWidth,
           speed,
           seq: state.seq,
-        } as any,
+        },
       };
 
       return { cmd };
@@ -134,16 +135,13 @@ export function createShowImageProcessorNode(): NodeDefinition {
       for (let i = raw.length - 1; i >= 0; i--) {
         const item = raw[i];
         if (typeof item === 'string' && item.trim()) return item.trim();
-        if (item && typeof item === 'object' && typeof (item as any).url === 'string') {
-          const url = String((item as any).url).trim();
-          if (url) return url;
-        }
+        const url = getRecordString(item, 'url');
+        if (url) return url;
       }
       return '';
     }
-    if (raw && typeof raw === 'object' && typeof (raw as any).url === 'string') {
-      return String((raw as any).url).trim();
-    }
+    const url = getRecordString(raw, 'url');
+    if (url) return url;
     return '';
   };
 
@@ -164,7 +162,7 @@ export function createShowImageProcessorNode(): NodeDefinition {
       const cmd: NodeCommand = url
         ? {
             action: 'showImage',
-            payload: { url } as any,
+            payload: { url },
           }
         : { action: 'hideImage', payload: {} };
 

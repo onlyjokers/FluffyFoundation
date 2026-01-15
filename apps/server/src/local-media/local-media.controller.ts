@@ -14,6 +14,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
@@ -22,26 +23,18 @@ import { AssetsService } from '../assets/assets.service.js';
 import { parseByteRangeHeader } from '../assets/range.js';
 import { LocalMediaService } from './local-media.service.js';
 import type { LocalMediaKind } from './local-media.config.js';
+import type { LocalMediaFile } from './local-media.types.js';
+import { getBodyString, getQueryString } from '../utils/request-utils.js';
 
-type HeaderRequest = {
-  header: (name: string) => string | undefined;
-  get: (name: string) => string | undefined;
-  protocol: string;
-} & Record<string, unknown>;
-
-type RawResponse = any;
+type HeaderRequest = Pick<Request, 'header' | 'get' | 'protocol' | 'query'>;
 
 function toContentDispositionFilename(filePath: string): string {
   const base = path.basename(filePath || '').replace(/[\r\n"]/g, '_');
   return base || 'media';
 }
 
-function parseLocalPathQuery(req: any): string {
-  const q = (req as any)?.query ?? null;
-  const raw = q?.path ?? null;
-  if (typeof raw === 'string') return raw;
-  if (Array.isArray(raw) && typeof raw[0] === 'string') return raw[0];
-  return '';
+function parseLocalPathQuery(req: HeaderRequest): string {
+  return getQueryString(req.query, 'path') ?? '';
 }
 
 @Controller('api/local-media')
@@ -52,10 +45,9 @@ export class LocalMediaController {
   ) {}
 
   @Get()
-  async list(@Req() req: any): Promise<{ files: any[]; roots: string[] }> {
+  async list(@Req() req: Request): Promise<{ files: LocalMediaFile[]; roots: string[] }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
-    const kindRaw =
-      typeof (req as any)?.query?.kind === 'string' ? String((req as any).query.kind) : '';
+    const kindRaw = getQueryString(req.query, 'kind') ?? '';
     const kind: LocalMediaKind | null =
       kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
     const files = await this.localMedia.listFiles({ kind });
@@ -63,18 +55,26 @@ export class LocalMediaController {
   }
 
   @Post('validate')
-  async validate(@Body() body: any, @Req() req: any): Promise<{ file: any }> {
+  async validate(@Body() body: unknown, @Req() req: Request): Promise<{ file: LocalMediaFile }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
-    const rawPath = typeof body?.path === 'string' ? body.path : '';
-    const kindRaw = typeof body?.kind === 'string' ? body.kind : '';
+    const rawPath = getBodyString(body, 'path') ?? '';
+    const kindRaw = getBodyString(body, 'kind') ?? '';
     const kind: LocalMediaKind | null =
       kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
     if (!kind) throw new BadRequestException('invalid kind');
 
     const validated = await this.localMedia.validatePath(rawPath, kind);
+    let label = path.basename(validated.realPath) || validated.realPath;
+    for (const root of this.localMedia.getRoots()) {
+      const rel = path.relative(root, validated.realPath);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+      label = rel || path.basename(validated.realPath) || validated.realPath;
+      break;
+    }
     return {
       file: {
         path: validated.realPath,
+        label,
         kind: validated.kind,
         mimeType: validated.mimeType,
         sizeBytes: validated.sizeBytes,
@@ -85,11 +85,10 @@ export class LocalMediaController {
   }
 
   @Head('content')
-  async headContent(@Req() req: HeaderRequest, @Res() res: RawResponse): Promise<void> {
-    requireAssetReadAuth(req as any, this.assets.config.readToken);
+  async headContent(@Req() req: HeaderRequest, @Res() res: Response): Promise<void> {
+    requireAssetReadAuth(req, this.assets.config.readToken);
     const rawPath = parseLocalPathQuery(req);
-    const kindRaw =
-      typeof (req as any)?.query?.kind === 'string' ? String((req as any).query.kind) : '';
+    const kindRaw = getQueryString(req.query, 'kind') ?? '';
     const kind: LocalMediaKind | null =
       kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
 
@@ -121,11 +120,10 @@ export class LocalMediaController {
   }
 
   @Get('content')
-  async getContent(@Req() req: HeaderRequest, @Res() res: RawResponse): Promise<void> {
-    requireAssetReadAuth(req as any, this.assets.config.readToken);
+  async getContent(@Req() req: HeaderRequest, @Res() res: Response): Promise<void> {
+    requireAssetReadAuth(req, this.assets.config.readToken);
     const rawPath = parseLocalPathQuery(req);
-    const kindRaw =
-      typeof (req as any)?.query?.kind === 'string' ? String((req as any).query.kind) : '';
+    const kindRaw = getQueryString(req.query, 'kind') ?? '';
     const kind: LocalMediaKind | null =
       kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
 
@@ -189,4 +187,3 @@ export class LocalMediaController {
     fs.createReadStream(validated.realPath, { start, end }).pipe(res);
   }
 }
-

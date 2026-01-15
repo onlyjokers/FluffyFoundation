@@ -4,20 +4,26 @@
 
 import { get } from 'svelte/store';
 import type { Readable } from 'svelte/store';
-import type { GraphState } from '$lib/nodes/types';
+import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
 import { buildStableRandomOrder, clampInt, coerceBoolean, toFiniteNumber } from './client-utils';
 
 type AnyAreaPlugin = { update(kind: 'node', nodeId: string): Promise<void> } | null;
 
 type NodeEngineLike = {
-  getNode(nodeId: string): any;
+  getNode(nodeId: string): NodeInstance | undefined;
   getLastComputedInputs(nodeId: string): Record<string, unknown> | null;
   updateNodeConfig(nodeId: string, patch: Record<string, unknown>): void;
   updateNodeInputValue(nodeId: string, portId: string, value: unknown): void;
   tickTime: { set(value: number): void };
 };
 
-type ManagerStateLike = { clients?: any[] };
+type ManagerStateLike = { clients?: unknown[] };
+
+type AnyRecord = Record<string, unknown>;
+type InputControlLike = { min?: number; max?: number; step?: number; value?: number };
+
+const asRecord = (value: unknown): AnyRecord | null =>
+  value && typeof value === 'object' ? (value as AnyRecord) : null;
 
 export type ClientNodeSelectionPatch = {
   index?: number;
@@ -43,9 +49,9 @@ export interface CreateClientSelectionBindingOptions {
   graphStateStore: Readable<GraphState>;
   getGraphState: () => GraphState;
   managerState: Readable<ManagerStateLike>;
-  sensorData: Readable<any>;
+  sensorData: Readable<Map<string, AnyRecord>>;
   getAreaPlugin: () => AnyAreaPlugin;
-  getNodeMap: () => Map<string, any>;
+  getNodeMap: () => Map<string, AnyRecord>;
   sendNodeOverride: SendNodeOverrideFn;
 }
 
@@ -63,14 +69,24 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
 
   const audienceClientIdsInOrder = () =>
     (get(managerState).clients ?? [])
-      .filter((c: any) => c?.connected !== false)
-      .filter((c: any) => String(c?.group ?? '') !== 'display')
-      .map((c: any) => String(c?.clientId ?? ''))
+      .filter((client) => {
+        const record = asRecord(client);
+        return record?.connected !== false;
+      })
+      .filter((client) => {
+        const record = asRecord(client);
+        return String(record?.group ?? '') !== 'display';
+      })
+      .map((client) => {
+        const record = asRecord(client);
+        return record ? String(record.clientId ?? '') : '';
+      })
       .filter(Boolean);
 
   const isInputConnected = (nodeId: string, portId: string) =>
     (getGraphState().connections ?? []).some(
-      (c: any) => String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
+      (c: Connection) =>
+        String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
     );
 
   const computeClientSlice = (nodeId: string, indexRaw: number, rangeRaw: number, randomRaw: unknown) => {
@@ -106,8 +122,8 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     const updateConfig = opts?.updateConfig !== false;
 
     // Keep node config in sync so labels + loop deploy use the selected client.
-    const currentClientId =
-      typeof (node.config as any)?.clientId === 'string' ? String((node.config as any).clientId) : '';
+    const config = asRecord(node.config);
+    const currentClientId = typeof config?.clientId === 'string' ? String(config.clientId) : '';
     if (updateConfig) {
       if (slice.firstId && slice.firstId !== currentClientId) {
         nodeEngine.updateNodeConfig(nodeId, { clientId: slice.firstId });
@@ -123,28 +139,33 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     }
 
     // Keep live display outputs usable even when the engine is stopped.
-    (node.outputValues as any).indexOut = slice.index;
-    (node.outputValues as any).out = {
+    const outputValues = (node.outputValues as AnyRecord) ?? {};
+    outputValues.indexOut = slice.index;
+    outputValues.out = {
       clientId: slice.firstId,
       sensors: (() => {
-        const latest: any = slice.firstId ? get(sensorData)?.get?.(slice.firstId) : null;
+        const latest = slice.firstId ? get(sensorData)?.get?.(slice.firstId) ?? null : null;
         if (!latest) return null;
-        return {
-          sensorType: latest.sensorType,
-          payload: latest.payload,
-          serverTimestamp: latest.serverTimestamp,
-          clientTimestamp: latest.clientTimestamp,
-        };
+        const record = asRecord(latest);
+        return record
+          ? {
+              sensorType: record.sensorType,
+              payload: record.payload,
+              serverTimestamp: record.serverTimestamp,
+              clientTimestamp: record.clientTimestamp,
+            }
+          : null;
       })(),
     };
+    node.outputValues = outputValues;
     nodeEngine.tickTime.set(Date.now());
 
     const areaPlugin = getAreaPlugin();
     const reteNode = getNodeMap().get(String(nodeId));
     if (!reteNode || !areaPlugin) return;
 
-    const indexCtrl: any = reteNode?.inputs?.index?.control;
-    const rangeCtrl: any = reteNode?.inputs?.range?.control;
+    const indexCtrl = asRecord((reteNode as AnyRecord)?.inputs?.index?.control) as InputControlLike | null;
+    const rangeCtrl = asRecord((reteNode as AnyRecord)?.inputs?.range?.control) as InputControlLike | null;
 
     if (indexCtrl && updateControls) {
       indexCtrl.min = 1;
@@ -173,9 +194,10 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
       const connected = isInputConnected(nodeId, portId);
       if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
-        return (computed as any)[portId];
+        return computed[portId];
       }
-      return (node.inputValues as any)?.[portId];
+      const inputValues = node.inputValues as Record<string, unknown> | undefined;
+      return inputValues?.[portId];
     };
 
     const currentIndexRaw = toFiniteNumber(getEffectiveInput('index'), 1);
@@ -266,21 +288,22 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     const clients = audienceClientIdsInOrder();
     const engineState = get(graphStateStore);
     for (const node of engineState.nodes ?? []) {
-      if (String((node as any).type) !== 'client-object') continue;
-      const nodeId = String((node as any).id);
+      if (String(node.type ?? '') !== 'client-object') continue;
+      const nodeId = String(node.id ?? '');
       const nodeInstance = nodeEngine.getNode(nodeId);
       if (!nodeInstance) continue;
 
       if (clients.length === 0) {
+        const config = asRecord(nodeInstance?.config);
         const configuredClientId =
-          typeof (nodeInstance?.config as any)?.clientId === 'string'
-            ? String((nodeInstance?.config as any).clientId)
-            : '';
+          typeof config?.clientId === 'string' ? String(config.clientId) : '';
         if (configuredClientId) {
           nodeEngine.updateNodeConfig(nodeId, { clientId: '' });
         }
         if (nodeInstance?.outputValues) {
-          (nodeInstance.outputValues as any).out = { clientId: '', sensors: null };
+          const outputValues = (nodeInstance.outputValues as AnyRecord) ?? {};
+          outputValues.out = { clientId: '', sensors: null };
+          nodeInstance.outputValues = outputValues;
           nodeEngine.tickTime.set(Date.now());
         }
         continue;
@@ -291,20 +314,20 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
       const useComputedRandom = isInputConnected(nodeId, 'random');
       const indexRaw = toFiniteNumber(
         useComputedIndex && computed && Object.prototype.hasOwnProperty.call(computed, 'index')
-          ? (computed as any).index
-          : (nodeInstance?.inputValues as any)?.index,
+          ? computed.index
+          : (nodeInstance?.inputValues as Record<string, unknown> | undefined)?.index,
         1
       );
       const rangeRaw = toFiniteNumber(
         useComputedRange && computed && Object.prototype.hasOwnProperty.call(computed, 'range')
-          ? (computed as any).range
-          : (nodeInstance?.inputValues as any)?.range,
+          ? computed.range
+          : (nodeInstance?.inputValues as Record<string, unknown> | undefined)?.range,
         1
       );
       const randomRaw =
         useComputedRandom && computed && Object.prototype.hasOwnProperty.call(computed, 'random')
-          ? (computed as any).random
-          : (nodeInstance?.inputValues as any)?.random;
+          ? computed.random
+          : (nodeInstance?.inputValues as Record<string, unknown> | undefined)?.random;
       const slice = computeClientSlice(nodeId, indexRaw, rangeRaw, randomRaw);
       if (!slice) continue;
       void syncClientNodeUi(nodeId, slice);

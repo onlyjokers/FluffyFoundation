@@ -119,7 +119,7 @@ export function createMidiHighlightController(opts: MidiHighlightControllerOptio
           selectedInputId,
           sourceNodeTypes: midiSourceNodeTypes,
           traversalStopNodeTypes: midiTraversalStopNodeTypes,
-          midiSourceMatchesEvent: midiSourceMatchesEvent as any,
+          midiSourceMatchesEvent,
           nodeRegistry,
         });
 
@@ -192,7 +192,7 @@ export function createMidiHighlightController(opts: MidiHighlightControllerOptio
     const matched = (graph.nodes ?? [])
       .filter((n) => midiSourceNodeTypes.has(String(n.type)))
       .filter((n) => !disabledNodeIds.has(String(n.id)))
-      .some((n) => midiSourceMatchesEvent((n.config as any)?.source, event, selectedInputId));
+      .some((n) => midiSourceMatchesEvent((n.config as Record<string, unknown>)?.source, event, selectedInputId));
 
     if (!matched) return;
 

@@ -5,14 +5,13 @@ import { get, writable, type Writable } from 'svelte/store';
 import type { LocalLoop } from '$lib/nodes';
 import { sensorData } from '$lib/stores/manager';
 import type { GraphState } from '$lib/nodes/types';
+import type { NodeEngine } from '$lib/nodes/engine';
 import type { GraphViewAdapter, NodeBounds } from '../adapters';
 import {
   createLoopActions,
   loopHasDisabledNodes,
   updateExecutorStatus,
   type DeployPendingEntry,
-  type ExecutorClientStatus,
-  type ExecutorLogEntry,
   type ExecutorStatusMap,
   type LoopActions,
   type ManagerSdkLike,
@@ -21,12 +20,10 @@ import {
 export type LoopFrame = { loop: LocalLoop; left: number; top: number; width: number; height: number };
 
 type LoopControllerOptions = {
-  nodeEngine: {
-    localLoops: Writable<LocalLoop[]>;
-    deployedLoops: Writable<string[]>;
-    markLoopDeployed: (loopId: string, deployed: boolean) => void;
-    exportGraphForLoop: (loopId: string) => any;
-  };
+  nodeEngine: Pick<
+    NodeEngine,
+    'localLoops' | 'deployedLoops' | 'markLoopDeployed' | 'exportGraphForLoop'
+  >;
   getSDK: () => ManagerSdkLike | null;
   isRunning: () => boolean;
   getGraphState: () => GraphState;
@@ -395,9 +392,9 @@ export function createLoopController(opts: LoopControllerOptions): LoopControlle
 
   sensorUnsub = sensorData.subscribe((map) => {
     for (const [clientId, msg] of map.entries()) {
-      const m: any = msg as any;
+      const m = msg as Record<string, unknown>;
       if (!m || m.sensorType !== 'custom') continue;
-      const payload: any = m.payload ?? {};
+      const payload = (m.payload ?? {}) as Record<string, unknown>;
       if (payload?.kind !== 'node-executor') continue;
 
       const serverTs = Number(m.serverTimestamp ?? 0);

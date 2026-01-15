@@ -17,8 +17,8 @@ import {
     PluginId,
     PluginCommand,
     SystemAction,
-    ClientInfo,
 } from './types.js';
+export { matchesTarget } from './helpers/matches-target.js';
 
 /**
  * Get current timestamp in milliseconds
@@ -183,22 +183,6 @@ export function isPluginControlMessage(msg: Message): msg is PluginControlMessag
  */
 export function isSystemMessage(msg: Message): msg is SystemMessage {
     return msg.type === 'system';
-}
-
-/**
- * Check if a client ID matches a target selector
- */
-export function matchesTarget(clientId: string, target: TargetSelector, clientGroup?: string): boolean {
-    switch (target.mode) {
-        case 'all':
-            return true;
-        case 'clientIds':
-            return target.ids.includes(clientId);
-        case 'group':
-            return clientGroup === target.groupId;
-        default:
-            return false;
-    }
 }
 
 /**

@@ -1,3 +1,4 @@
+import { type NestApplicationOptions } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import * as fs from 'fs';
@@ -23,7 +24,7 @@ async function bootstrap() {
   ];
   const keyPath = keyCandidates.find((p) => fs.existsSync(p));
   const certPath = certCandidates.find((p) => fs.existsSync(p));
-  let httpsOptions: any = undefined;
+  let httpsOptions: { key: Buffer; cert: Buffer } | undefined = undefined;
 
   if (keyPath && certPath) {
     httpsOptions = {
@@ -35,7 +36,7 @@ async function bootstrap() {
     console.warn('⚠️ No SSL certificates found, falling back to HTTP');
   }
 
-  const appOptions: any = {
+  const appOptions: NestApplicationOptions = {
     cors: {
       origin: '*',
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',

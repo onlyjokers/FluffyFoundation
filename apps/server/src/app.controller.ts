@@ -15,7 +15,7 @@ export class AppController {
             .healthCheck()
             .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }));
         return {
-            status: assetHealth && (assetHealth as any).ok ? 'ok' : 'degraded',
+            status: assetHealth?.ok ? 'ok' : 'degraded',
             timestamp: Date.now(),
             uptime: process.uptime(),
             assets: assetHealth,

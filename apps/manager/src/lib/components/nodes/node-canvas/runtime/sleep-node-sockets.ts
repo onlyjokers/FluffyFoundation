@@ -2,13 +2,17 @@
  * Purpose: Keep the `logic-sleep` node output socket type in sync with its wired input.
  */
 
-import type { GraphState, PortType } from '$lib/nodes/types';
+import type { Connection, GraphState, PortType } from '$lib/nodes/types';
 
 type NodeRegistryLike = {
   get(type: string): { outputs?: { id: string; type?: PortType }[] } | undefined;
 };
 
 type AnyAreaPlugin = { update(kind: 'node', nodeId: string): Promise<void> } | null;
+type AnyRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): AnyRecord | null =>
+  value && typeof value === 'object' ? (value as AnyRecord) : null;
 
 export type SleepOutputType = { type: PortType; hasInput: boolean };
 
@@ -22,7 +26,7 @@ export interface CreateSleepNodeSocketSyncOptions {
   nodeRegistry: NodeRegistryLike;
   sockets: Record<string, unknown>;
   getAreaPlugin: () => AnyAreaPlugin;
-  getNodeMap: () => Map<string, any>;
+  getNodeMap: () => Map<string, AnyRecord>;
 }
 
 export function createSleepNodeSocketSync(opts: CreateSleepNodeSocketSyncOptions): SleepNodeSocketSync {
@@ -32,7 +36,7 @@ export function createSleepNodeSocketSync(opts: CreateSleepNodeSocketSyncOptions
     const state = getGraphState();
     const node = (state.nodes ?? []).find((n) => String(n.id) === String(nodeId));
     if (!node) return 'any';
-    const def = nodeRegistry.get(String((node as any).type));
+    const def = nodeRegistry.get(String(node.type));
     const port = def?.outputs?.find((p) => p.id === portId);
     return (port?.type ?? 'any') as PortType;
   };
@@ -40,11 +44,11 @@ export function createSleepNodeSocketSync(opts: CreateSleepNodeSocketSyncOptions
   const resolveSleepOutputType = (nodeId: string): SleepOutputType => {
     const state = getGraphState();
     const conn = (state.connections ?? []).find(
-      (c) => String((c as any).targetNodeId) === String(nodeId) && String((c as any).targetPortId) === 'input'
+      (c: Connection) => String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === 'input'
     );
     if (!conn) return { type: 'any', hasInput: false };
     return {
-      type: getOutputPortType(String((conn as any).sourceNodeId), String((conn as any).sourcePortId)),
+      type: getOutputPortType(String(conn.sourceNodeId), String(conn.sourcePortId)),
       hasInput: true,
     };
   };
@@ -57,13 +61,16 @@ export function createSleepNodeSocketSync(opts: CreateSleepNodeSocketSyncOptions
 
     const nodeMap = getNodeMap();
     for (const node of nodes) {
-      if (String((node as any).type) !== 'logic-sleep') continue;
-      const reteNode = nodeMap.get(String((node as any).id));
-      const output = reteNode?.outputs?.output;
+      if (String(node.type) !== 'logic-sleep') continue;
+      const reteNode = nodeMap.get(String(node.id));
+      const reteRecord = asRecord(reteNode);
+      const outputs = asRecord(reteRecord?.outputs);
+      const output = asRecord(outputs?.output);
       if (!reteNode || !output) continue;
 
-      const { type, hasInput } = resolveSleepOutputType(String((node as any).id));
-      const nextSocket = (sockets as any)[type] ?? (sockets as any).any;
+      const { type, hasInput } = resolveSleepOutputType(String(node.id));
+      const socketMap = sockets as Record<string, unknown>;
+      const nextSocket = socketMap[type] ?? socketMap.any;
       const nextDisabled = !hasInput;
       const prevSocket = output.socket;
       const prevDisabled = Boolean(output.disabled);
@@ -71,11 +78,10 @@ export function createSleepNodeSocketSync(opts: CreateSleepNodeSocketSyncOptions
       if (prevSocket !== nextSocket || prevDisabled !== nextDisabled) {
         output.socket = nextSocket;
         output.disabled = nextDisabled;
-        await areaPlugin.update('node', String((node as any).id));
+        await areaPlugin.update('node', String(node.id));
       }
     }
   };
 
   return { resolveSleepOutputType, syncSleepNodeSockets };
 }
-

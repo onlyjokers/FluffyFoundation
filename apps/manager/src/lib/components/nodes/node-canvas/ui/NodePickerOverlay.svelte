@@ -9,15 +9,21 @@
   export let query = '';
   export let categories: string[] = [];
   export let selectedCategory = '';
-  export let items: any[] = [];
-  export let initialSocket: any = null;
+  type PickerItem = {
+    type?: string;
+    label?: string;
+    matchPort?: { side?: string; label?: string };
+  };
+
+  export let items: PickerItem[] = [];
+  export let initialSocket: unknown = null;
   export let connectTypeLabel = 'any';
 
   let overlayElement: HTMLDivElement | null = null;
   export let pickerElement: HTMLDivElement | null = null;
 
   export let onClose: () => void = () => undefined;
-  export let onPick: (item: any) => void = () => undefined;
+  export let onPick: (item: PickerItem) => void = () => undefined;
 
   let position = { x: 0, y: 0 };
   let hasUserMoved = false;

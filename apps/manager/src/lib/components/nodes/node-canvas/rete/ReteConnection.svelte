@@ -32,11 +32,6 @@
   export let end: Position = { x: 0, y: 0 };
   export let path: string = '';
 
-  // Keep props "used" to avoid svelte-check warnings (the values are still useful for debugging).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let _debugProps: unknown;
-  $: _debugProps = { source, target, sourceOutput, targetInput, isLoop, isPseudo };
-
   // Compute whether shadows should be applied
   $: shadowsEnabled = $nodeGraphEdgeShadows;
 

@@ -4,7 +4,7 @@
 
 import type { Connection, NodeInstance, NodeRegistry } from '@shugu/node-core';
 import { toneAudioEngine } from '@shugu/multimedia-core';
-import type { ToneAdapterDeps, ToneNodeKind } from './types.js';
+import type { ToneAdapterDeps, ToneConnectable, ToneNodeKind, ToneParamLike } from './types.js';
 import {
   AUDIO_INPUT_PORTS,
   AUDIO_NODE_KINDS,
@@ -110,7 +110,7 @@ export function updateAudioGraphSnapshot(
   }
 }
 
-function getAudioOutputNode(nodeId: string): any | null {
+function getAudioOutputNode(nodeId: string): ToneConnectable | null {
   const osc = oscInstances.get(nodeId);
   if (osc?.gain) return osc.gain;
   const audioData = audioDataInstances.get(nodeId);
@@ -124,7 +124,7 @@ function getAudioOutputNode(nodeId: string): any | null {
   return null;
 }
 
-function getAudioInputNode(nodeId: string): any | null {
+function getAudioInputNode(nodeId: string): ToneConnectable | null {
   const audioData = audioDataInstances.get(nodeId);
   if (audioData?.input) return audioData.input;
   const effect = effectInstances.get(nodeId);
@@ -132,7 +132,10 @@ function getAudioInputNode(nodeId: string): any | null {
   return null;
 }
 
-function resolveToneLfoDestination(targetNodeId: string, targetPortId: string): any | null {
+function resolveToneLfoDestination(
+  targetNodeId: string,
+  targetPortId: string
+): ToneParamLike | null {
   const target = latestGraphNodesById.get(targetNodeId);
   if (!target) return null;
 

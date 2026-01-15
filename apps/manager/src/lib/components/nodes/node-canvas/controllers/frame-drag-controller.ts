@@ -3,6 +3,8 @@
  */
 
 import { get } from 'svelte/store';
+import type { BaseSchemes } from 'rete';
+import type { AreaPlugin } from 'rete-area-plugin';
 import type { GroupController } from './group-controller';
 import type { LoopController } from './loop-controller';
 import { readAreaTransform } from '../utils/view-utils';
@@ -14,10 +16,12 @@ export type FrameDragController = {
 };
 
 export type CreateFrameDragControllerOptions = {
-  getAreaPlugin: () => any;
+  getAreaPlugin: () => AnyAreaPlugin | null;
   groupController: GroupController;
   getLoopController: () => LoopController | null;
 };
+
+type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
 
 export function createFrameDragController(opts: CreateFrameDragControllerOptions): FrameDragController {
   const { getAreaPlugin, groupController, getLoopController } = opts;
@@ -34,10 +38,10 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
     if (groupHeaderDragMoveHandler)
       window.removeEventListener('pointermove', groupHeaderDragMoveHandler, {
         capture: true,
-      } as any);
+      });
     if (groupHeaderDragUpHandler) {
-      window.removeEventListener('pointerup', groupHeaderDragUpHandler, { capture: true } as any);
-      window.removeEventListener('pointercancel', groupHeaderDragUpHandler, { capture: true } as any);
+      window.removeEventListener('pointerup', groupHeaderDragUpHandler, { capture: true });
+      window.removeEventListener('pointercancel', groupHeaderDragUpHandler, { capture: true });
     }
   };
 
@@ -45,10 +49,10 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
     if (loopHeaderDragMoveHandler)
       window.removeEventListener('pointermove', loopHeaderDragMoveHandler, {
         capture: true,
-      } as any);
+      });
     if (loopHeaderDragUpHandler) {
-      window.removeEventListener('pointerup', loopHeaderDragUpHandler, { capture: true } as any);
-      window.removeEventListener('pointercancel', loopHeaderDragUpHandler, { capture: true } as any);
+      window.removeEventListener('pointerup', loopHeaderDragUpHandler, { capture: true });
+      window.removeEventListener('pointercancel', loopHeaderDragUpHandler, { capture: true });
     }
   };
 
@@ -129,7 +133,7 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
     const loopController = getLoopController();
     const effectiveLoops =
       loopController?.getEffectiveLoops?.() ?? (loopController ? get(loopController.localLoops) : []);
-    const loop = (effectiveLoops ?? []).find((l: any) => String(l?.id ?? '') === String(loopId));
+    const loop = (effectiveLoops ?? []).find((l) => String(l?.id ?? '') === String(loopId));
     if (!loop?.nodeIds?.length) return;
     if (!areaPlugin?.nodeViews) return;
 
@@ -203,4 +207,3 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
 
   return { startGroupHeaderDrag, startLoopHeaderDrag, destroy };
 }
-

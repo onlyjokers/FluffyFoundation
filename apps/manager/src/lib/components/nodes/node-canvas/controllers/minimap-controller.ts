@@ -5,6 +5,7 @@ import { get, writable, type Writable } from 'svelte/store';
 import type { MinimapPreferences } from '$lib/project/uiState';
 import { minimapPreferences } from '$lib/project/uiState';
 import type { GraphViewAdapter } from '../adapters';
+import type { GraphState, NodeInstance } from '$lib/nodes/types';
 
 type MiniNode = {
   id: string;
@@ -62,7 +63,7 @@ export type MinimapController = {
 type MinimapControllerOptions = {
   getContainer: () => HTMLDivElement | null;
   getAdapter: () => GraphViewAdapter | null;
-  getGraphState: () => { nodes: any[]; connections: any[] };
+  getGraphState: () => GraphState;
   getSelectedNodeId: () => string;
   getLocalLoopConnIds: () => Set<string>;
   getDeployedConnIds: () => Set<string>;
@@ -169,14 +170,15 @@ export function createMinimapController(opts: MinimapControllerOptions): Minimap
     const nodes: MiniNode[] = [];
     const graphState = opts.getGraphState();
     for (const n of graphState.nodes ?? []) {
-      const id = String((n as any)?.id ?? '');
+      const node = n as NodeInstance;
+      const id = String(node?.id ?? '');
       if (!id) continue;
 
       const bounds = adapter.getNodeBounds(id);
       const width = bounds ? Math.max(1, bounds.right - bounds.left) : 230;
       const height = bounds ? Math.max(1, bounds.bottom - bounds.top) : 100;
-      const x = bounds ? bounds.left : Number((n as any)?.position?.x ?? 0) || 0;
-      const y = bounds ? bounds.top : Number((n as any)?.position?.y ?? 0) || 0;
+      const x = bounds ? bounds.left : Number(node?.position?.x ?? 0) || 0;
+      const y = bounds ? bounds.top : Number(node?.position?.y ?? 0) || 0;
 
       nodes.push({
         id,

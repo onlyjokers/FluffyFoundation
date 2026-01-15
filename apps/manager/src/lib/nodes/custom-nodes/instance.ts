@@ -5,6 +5,7 @@
  * undo/redo and project persistence naturally work like normal nodes.
  */
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
+import { asRecord, getBoolean, getString } from '$lib/utils/value-guards';
 
 export type CustomNodeRole = 'mother' | 'child';
 
@@ -22,17 +23,18 @@ export type CustomNodeInstanceState = {
 const CONFIG_KEY = 'customNode';
 
 export function readCustomNodeState(config: Record<string, unknown>): CustomNodeInstanceState | null {
-  const raw = (config as any)?.[CONFIG_KEY];
-  if (!raw || typeof raw !== 'object') return null;
+  const raw = asRecord(config)[CONFIG_KEY];
+  const rawRecord = asRecord(raw);
 
-  const definitionId = typeof (raw as any).definitionId === 'string' ? String((raw as any).definitionId) : '';
-  const groupId = typeof (raw as any).groupId === 'string' ? String((raw as any).groupId) : '';
-  const role = (raw as any).role === 'mother' ? 'mother' : (raw as any).role === 'child' ? 'child' : null;
-  const manualGate = typeof (raw as any).manualGate === 'boolean' ? Boolean((raw as any).manualGate) : true;
-  const internalRaw = (raw as any).internal as any;
+  const definitionId = getString(rawRecord.definitionId, '');
+  const groupId = getString(rawRecord.groupId, '');
+  const roleRaw = getString(rawRecord.role, '');
+  const role = roleRaw === 'mother' ? 'mother' : roleRaw === 'child' ? 'child' : null;
+  const manualGate = getBoolean(rawRecord.manualGate, true);
+  const internalRaw = asRecord(rawRecord.internal);
   const internal =
-    internalRaw && Array.isArray(internalRaw.nodes) && Array.isArray(internalRaw.connections)
-      ? (internalRaw as GraphState)
+    Array.isArray(internalRaw.nodes) && Array.isArray(internalRaw.connections)
+      ? ({ nodes: internalRaw.nodes, connections: internalRaw.connections } as GraphState)
       : null;
 
   if (!definitionId || !groupId || !role || !internal) return null;

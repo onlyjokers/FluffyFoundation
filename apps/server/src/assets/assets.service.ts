@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { readAssetServiceConfig, type AssetServiceConfig } from './assets.config.js';
 import type { AssetIndexFile, AssetKind, AssetRecord, StoredAssetRecord } from './assets.types.js';
+import { getErrorCode } from '../utils/error-utils.js';
 
 type UploadResult = { asset: AssetRecord; deduped: boolean };
 
@@ -45,7 +46,7 @@ async function moveFile(from: string, to: string): Promise<void> {
     await fsp.rename(from, to);
     return;
   } catch (err: unknown) {
-    const code = (err as any)?.code;
+    const code = getErrorCode(err);
     if (code !== 'EXDEV') throw err;
   }
 
@@ -154,7 +155,7 @@ export class AssetsService {
       try {
         await fsp.access(dbPath, fs.constants.R_OK | fs.constants.W_OK);
       } catch (err: unknown) {
-        const code = (err as any)?.code;
+        const code = getErrorCode(err);
         // If the index doesn't exist yet, that's fine as long as the dir is writable.
         if (code !== 'ENOENT') throw err;
       }
@@ -207,7 +208,7 @@ export class AssetsService {
       }
       this.index = { byId, bySha256 };
     } catch (err: unknown) {
-      const code = (err as any)?.code;
+      const code = getErrorCode(err);
       if (code === 'ENOENT') return;
       console.warn('[asset-service] failed to load index', err);
     }
@@ -227,13 +228,17 @@ export class AssetsService {
   getAssetRecord(id: string): AssetRecord | null {
     const stored = this.index.byId.get(id);
     if (!stored) return null;
-    const { storageBackend: _backend, storageKey: _key, ...record } = stored;
+    const { storageBackend, storageKey, ...record } = stored;
+    void storageBackend;
+    void storageKey;
     return record;
   }
 
   listAssets(): AssetRecord[] {
     return Array.from(this.index.byId.values()).map((stored) => {
-      const { storageBackend: _backend, storageKey: _key, ...record } = stored;
+      const { storageBackend, storageKey, ...record } = stored;
+      void storageBackend;
+      void storageKey;
       return record;
     });
   }
@@ -330,7 +335,9 @@ export class AssetsService {
       }
 
       if (!changed) {
-        const { storageBackend: _backend, storageKey: _key, ...record } = next;
+        const { storageBackend, storageKey, ...record } = next;
+        void storageBackend;
+        void storageKey;
         return record;
       }
 
@@ -338,7 +345,9 @@ export class AssetsService {
       this.index.byId.set(safeId, next);
       this.enqueuePersist();
 
-      const { storageBackend: _backend, storageKey: _key, ...record } = next;
+      const { storageBackend, storageKey, ...record } = next;
+      void storageBackend;
+      void storageKey;
       return record;
     });
   }
@@ -410,7 +419,7 @@ export class AssetsService {
       try {
         await moveFile(opts.tempPath, finalPath);
       } catch (err: unknown) {
-        const code = (err as any)?.code;
+        const code = getErrorCode(err);
         if (code === 'EEXIST') {
           // Another concurrent upload won the race; treat as deduped.
           try {
@@ -431,7 +440,9 @@ export class AssetsService {
       this.index.bySha256.set(sha256, id);
       this.enqueuePersist();
 
-      const { storageBackend: _backend, storageKey: _key, ...record } = stored;
+      const { storageBackend, storageKey, ...record } = stored;
+      void storageBackend;
+      void storageKey;
       return { asset: record, deduped: false };
     });
   }

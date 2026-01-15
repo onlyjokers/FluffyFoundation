@@ -2,7 +2,7 @@
 <script lang="ts">
   // @ts-nocheck
   export let minimapUi: { x: number; y: number } = { x: 0, y: 0 };
-  export let minimap: any = null;
+  export let minimap: unknown = null;
   export let zoomStep = 30;
 
   export let toMiniX: (value: number) => number = (value) => value;

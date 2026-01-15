@@ -4,8 +4,10 @@
 
 import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
+import type { Request } from 'express';
+import { getQueryString } from '../utils/request-utils.js';
 
-type HeaderRequest = { header: (name: string) => string | undefined } & Record<string, unknown>;
+type HeaderRequest = Pick<Request, 'header' | 'query'>;
 
 function parseBearerToken(req: HeaderRequest): string | null {
   const header = req.header('authorization') ?? req.header('Authorization');
@@ -17,12 +19,7 @@ function parseBearerToken(req: HeaderRequest): string | null {
 }
 
 function parseQueryToken(req: HeaderRequest): string | null {
-  const query: any = (req as any).query ?? null;
-  if (!query || typeof query !== 'object') return null;
-  const raw = query.token ?? query.access_token ?? null;
-  if (typeof raw === 'string' && raw.trim()) return raw.trim();
-  if (Array.isArray(raw) && typeof raw[0] === 'string' && raw[0].trim()) return raw[0].trim();
-  return null;
+  return getQueryString(req.query, 'token') ?? getQueryString(req.query, 'access_token');
 }
 
 function constantTimeEqual(a: string, b: string): boolean {

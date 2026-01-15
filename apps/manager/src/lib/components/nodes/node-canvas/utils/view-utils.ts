@@ -1,14 +1,16 @@
 /**
  * Purpose: Node graph view utilities shared across overlays and controllers.
  */
+import type { BaseSchemes } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 
 export type AreaTransform = { k: number; tx: number; ty: number };
 export type NodeBounds = { left: number; top: number; right: number; bottom: number };
 
-type AnyAreaPlugin = AreaPlugin<any, any>;
+type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
+type AreaTransformTarget = { transform: { k?: number; x?: number; y?: number } };
 
-export function normalizeAreaTransform(area: any) {
+export function normalizeAreaTransform(area: AreaTransformTarget) {
   const k = Number(area?.transform?.k);
   const x = Number(area?.transform?.x);
   const y = Number(area?.transform?.y);

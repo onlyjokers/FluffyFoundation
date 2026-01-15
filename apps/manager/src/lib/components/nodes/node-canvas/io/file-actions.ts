@@ -28,7 +28,6 @@ type FileActionsOptions = {
   getViewportCenterGraphPos: () => { x: number; y: number };
 };
 
-type NodeGraphFileV1 = { version: 1; kind: 'node-graph'; graph: GraphState };
 type NodeGraphUiV1 = { collapsedNodeIds?: string[] };
 type NodeGraphFileV2 = {
   version: 2;
@@ -88,24 +87,30 @@ function parseCollapsedNodeIds(value: unknown): string[] {
 type ParsedNodeGraphFile = { graph: GraphState; groups: NodeGroup[]; collapsedNodeIds: string[] };
 
 const parseNodeGraphFile = (payload: unknown): ParsedNodeGraphFile | null => {
-  if (!payload || typeof payload !== 'object') return null;
-  const wrapped = payload as any;
-  if (wrapped.kind === 'node-graph' && (wrapped.version === 1 || wrapped.version === 2) && wrapped.graph) {
-    const graph = wrapped.graph as any;
-    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.connections)) return null;
+  if (!isRecord(payload)) return null;
+  const wrapped = payload;
+  const kind = wrapped.kind;
+  const version = wrapped.version;
+  const graphValue = wrapped.graph;
+  if (
+    kind === 'node-graph' &&
+    (version === 1 || version === 2) &&
+    isRecord(graphValue) &&
+    Array.isArray(graphValue.nodes) &&
+    Array.isArray(graphValue.connections)
+  ) {
     return {
-      graph: graph as GraphState,
+      graph: graphValue as GraphState,
       groups: parseNodeGroups(wrapped.groups),
       collapsedNodeIds: parseCollapsedNodeIds(wrapped.ui),
     };
   }
 
-  const raw = payload as any;
-  if (Array.isArray(raw.nodes) && Array.isArray(raw.connections)) {
+  if (Array.isArray(wrapped.nodes) && Array.isArray(wrapped.connections)) {
     return {
-      graph: raw as GraphState,
-      groups: parseNodeGroups(raw.groups),
-      collapsedNodeIds: parseCollapsedNodeIds(raw.ui),
+      graph: wrapped as GraphState,
+      groups: parseNodeGroups(wrapped.groups),
+      collapsedNodeIds: parseCollapsedNodeIds(wrapped.ui),
     };
   }
 
@@ -199,10 +204,14 @@ function remapImportedGroups(sourceGroups: NodeGroup[], nodeIdMap: Map<string, s
 
 function computeTemplateOffset(nodes: GraphState['nodes'], anchor: { x: number; y: number }) {
   const positions = (nodes ?? [])
-    .map((n) => ({
-      x: coerceGraphNumber((n as any)?.position?.x, 0),
-      y: coerceGraphNumber((n as any)?.position?.y, 0),
-    }))
+    .map((node) => {
+      const record = isRecord(node) ? node : {};
+      const position = isRecord(record.position) ? record.position : {};
+      return {
+        x: coerceGraphNumber(position.x, 0),
+        y: coerceGraphNumber(position.y, 0),
+      };
+    })
     .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
   if (positions.length === 0) return { dx: 0, dy: 0 };
 
@@ -219,14 +228,14 @@ export function createFileActions(opts: FileActionsOptions) {
   const exportGraph = () => {
     const raw = opts.nodeEngine.exportGraph();
     const collapsedNodeIds = (raw.nodes ?? [])
-      .map((n) => String((n as any)?.id ?? ''))
+      .map((node) => String(node.id ?? ''))
       .filter((id) => id && Boolean(opts.getNodeCollapsed?.(id)));
     const graph: GraphState = {
       nodes: (raw.nodes ?? []).map((n) => {
-        const nodeId = String((n as any)?.id ?? '');
+        const nodeId = String(n.id ?? '');
         const viewPos = nodeId ? opts.getNodePosition?.(nodeId) : null;
-        const x = coerceGraphNumber(viewPos?.x, coerceGraphNumber((n as any)?.position?.x, 0));
-        const y = coerceGraphNumber(viewPos?.y, coerceGraphNumber((n as any)?.position?.y, 0));
+        const x = coerceGraphNumber(viewPos?.x, coerceGraphNumber(n.position?.x, 0));
+        const y = coerceGraphNumber(viewPos?.y, coerceGraphNumber(n.position?.y, 0));
         return { ...n, position: { x, y }, outputValues: {} };
       }),
       connections: (raw.connections ?? []).map((c) => ({ ...c })),
@@ -282,7 +291,7 @@ export function createFileActions(opts: FileActionsOptions) {
     // Compute the import offset from nodes we can actually import. Otherwise a single invalid/outlier node
     // (unknown type) can skew the bounds and push imported nodes far away from the viewport.
     const importableNodes = sourceNodes.filter((node) => {
-      const type = String((node as any)?.type ?? '');
+      const type = String(node?.type ?? '');
       return Boolean(type && nodeRegistry.get(type));
     });
     const { dx, dy } = computeTemplateOffset(importableNodes, anchor);
@@ -293,20 +302,20 @@ export function createFileActions(opts: FileActionsOptions) {
     let skippedNodes = 0;
 
     for (const node of sourceNodes) {
-      const oldId = String((node as any)?.id ?? '');
-      const type = String((node as any)?.type ?? '');
+      const oldId = String(node?.id ?? '');
+      const type = String(node?.type ?? '');
       if (!type || !nodeRegistry.get(type)) {
         skippedNodes += 1;
         continue;
       }
 
       const newId = generateId('node');
-      const x = coerceGraphNumber((node as any)?.position?.x, 0) + dx;
-      const y = coerceGraphNumber((node as any)?.position?.y, 0) + dy;
+      const x = coerceGraphNumber(node?.position?.x, 0) + dx;
+      const y = coerceGraphNumber(node?.position?.y, 0) + dy;
 
-      const cfg = isRecord((node as any)?.config) ? ((node as any).config as Record<string, unknown>) : {};
-      const inputValues = isRecord((node as any)?.inputValues)
-        ? ({ ...(node as any).inputValues } as Record<string, unknown>)
+      const cfg = isRecord(node?.config) ? (node?.config as Record<string, unknown>) : {};
+      const inputValues = isRecord(node?.inputValues)
+        ? ({ ...(node?.inputValues as Record<string, unknown>) } as Record<string, unknown>)
         : {};
 
       const instance: NodeInstance = {
@@ -334,8 +343,9 @@ export function createFileActions(opts: FileActionsOptions) {
     let skippedConnections = 0;
 
     for (const c of sourceConnections) {
-      const sourceNodeId = nodeIdMap.get(String((c as any)?.sourceNodeId ?? ''));
-      const targetNodeId = nodeIdMap.get(String((c as any)?.targetNodeId ?? ''));
+      const record = isRecord(c) ? c : {};
+      const sourceNodeId = nodeIdMap.get(String(record.sourceNodeId ?? ''));
+      const targetNodeId = nodeIdMap.get(String(record.targetNodeId ?? ''));
       if (!sourceNodeId || !targetNodeId) {
         skippedConnections += 1;
         continue;
@@ -344,9 +354,9 @@ export function createFileActions(opts: FileActionsOptions) {
       const conn: Connection = {
         id: generateId('conn'),
         sourceNodeId,
-        sourcePortId: String((c as any)?.sourcePortId ?? ''),
+        sourcePortId: String(record.sourcePortId ?? ''),
         targetNodeId,
-        targetPortId: String((c as any)?.targetPortId ?? ''),
+        targetPortId: String(record.targetPortId ?? ''),
       };
 
       const ok = opts.nodeEngine.addConnection(conn);
@@ -360,12 +370,13 @@ export function createFileActions(opts: FileActionsOptions) {
     // "ensureGroupPortNodes" hook doesn't create duplicates.
     if (groupIdMap.size > 0) {
       for (const node of sourceNodes) {
-        const type = String((node as any)?.type ?? '');
+        const type = String(node?.type ?? '');
         if (!['group-activate', 'group-gate', 'group-proxy'].includes(type)) continue;
-        const oldNodeId = String((node as any)?.id ?? '');
+        const oldNodeId = String(node?.id ?? '');
         const newNodeId = nodeIdMap.get(oldNodeId);
         if (!newNodeId) continue;
-        const oldGroupId = String(((node as any)?.config as any)?.groupId ?? '');
+        const config = isRecord(node?.config) ? node?.config : {};
+        const oldGroupId = String((config as Record<string, unknown>).groupId ?? '');
         const nextGroupId = groupIdMap.get(oldGroupId);
         if (!nextGroupId) continue;
         opts.nodeEngine.updateNodeConfig(newNodeId, { groupId: nextGroupId });

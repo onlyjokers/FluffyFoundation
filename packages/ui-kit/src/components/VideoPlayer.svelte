@@ -6,6 +6,13 @@ Purpose: Shared video overlay player used by Client and Display apps.
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import { reportNodeMediaFinish, toneAudioEngine } from '@shugu/multimedia-core';
+  import {
+    asPromiseLike,
+    getAudioContextCtor,
+    resolveToneRawContext,
+    toErrorName,
+    unwrapDefaultExport,
+  } from './video-player-audio';
 
   export let url: string;
   export let playing = true;
@@ -94,16 +101,15 @@ Purpose: Shared video overlay player used by Client and Display apps.
     if (toneAudioEngine.isEnabled()) {
       try {
         const mod = await toneAudioEngine.ensureLoaded();
-        const Tone: any = (mod as any).default ?? mod;
-        const ctx: AudioContext | null = Tone.getContext?.().rawContext ?? null;
-        return ctx;
+        const toneModule = unwrapDefaultExport(mod);
+        return resolveToneRawContext(toneModule);
       } catch {
         return null;
       }
     }
 
     if (typeof window === 'undefined') return null;
-    const Ctor = (window as any).AudioContext ?? (window as any).webkitAudioContext;
+    const Ctor = getAudioContextCtor(window);
     if (!Ctor) return null;
 
     let ctx = ownedAudioContext;
@@ -395,9 +401,10 @@ Purpose: Shared video overlay player used by Client and Display apps.
       visible = true;
       if (!reverse) {
         const attempt = videoElement.play();
-        if (attempt && typeof (attempt as any).catch === 'function') {
-          attempt.catch((err: any) => {
-            const name = typeof err?.name === 'string' ? err.name : '';
+        const promise = asPromiseLike<void>(attempt);
+        if (promise) {
+          promise.catch((err) => {
+            const name = toErrorName(err);
             if (!autoplayForcedMute && (name === 'NotAllowedError' || name === 'SecurityError')) {
               autoplayForcedMute = true;
               applyAudioParams();

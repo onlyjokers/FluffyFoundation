@@ -198,6 +198,18 @@
     - `pnpm build:all` ✅（通过；vite/sass warnings 仍在）
   - [x] 5B 回归：Phase 1 checklist 全绿（用户手动验证）。
     - 结果（2026-01-10）：Registry MIDI 模板导入/导出 ✅；Node Graph 基本操作/Deploy ✅；控制链路 ✅。
+
+### 2026-01-15
+
+- [x] Node Graph 架构收敛（worktree：node-graph-architecture）：
+  - [x] 结构拆分：renderer registry、lifecycle cleanup、custom-node handlers、group domain handlers、runtime init（保持行为不变，仅拆分/集中 wiring）。
+  - [x] Server 修复以便回归：补 `@types/express`；`LocalMediaFile` 增补 `etag`；validate 返回补 `label`；assets auth HeaderRequest 类型修正。
+  - [x] 手动回归（用户验证）：
+    - add/connect/disconnect ✅
+    - group collapse/expand ✅
+    - nodalize/denodalize ✅
+    - loop deploy ✅
+    - display routing ✅
   - [x] 5C Console 功能拔除：移除 Console 卡片与相关状态（仅保留 Node Graph）。
     - 删除 `apps/manager/src/lib/features/**` 下 Console 卡片（Synth/Media/Flashlight/ScreenColor/Vibration/Scene）。
     - 删除 `apps/manager/src/lib/stores/controlState.ts`、`apps/manager/src/lib/streaming/streaming.ts`。

@@ -2,14 +2,16 @@
  * Purpose: Bind Rete editor/area pipes to the NodeEngine + UI helpers.
  */
 import { get, type Writable } from 'svelte/store';
-import type { NodeEditor } from 'rete';
+import type { BaseSchemes, NodeEditor } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 import type { Connection as EngineConnection } from '$lib/nodes/types';
 
-type AnyAreaPlugin = AreaPlugin<any, any>;
+type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
+type AnyRecord = Record<string, unknown>;
+type ControlLike = { readonly?: boolean };
 
 type RetePipeOptions = {
-  editor: NodeEditor<any>;
+  editor: NodeEditor<BaseSchemes>;
   areaPlugin: AnyAreaPlugin | null;
   nodeEngine: {
     addConnection: (conn: EngineConnection) => boolean;
@@ -17,8 +19,8 @@ type RetePipeOptions = {
     removeNode: (id: string) => void;
     updateNodePosition: (id: string, pos: { x: number; y: number }) => void;
   };
-  nodeMap: Map<string, any>;
-  connectionMap: Map<string, any>;
+  nodeMap: Map<string, AnyRecord>;
+  connectionMap: Map<string, AnyRecord>;
   isSyncing: () => boolean;
   setSelectedNode: (id: string) => void;
   groupSelectionNodeIds: Writable<Set<string>>;
@@ -54,7 +56,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     if (isSyncing()) return ctx;
 
     if (ctx.type === 'connectioncreated') {
-      const c = ctx.data as any;
+      const c = ctx.data as AnyRecord;
       const engineConn: EngineConnection = {
         id: String(c.id),
         sourceNodeId: String(c.source),
@@ -66,8 +68,9 @@ export function bindRetePipes(opts: RetePipeOptions) {
       if (accepted) {
         connectionMap.set(engineConn.id, c);
         const targetNode = nodeMap.get(engineConn.targetNodeId);
-        const input = targetNode?.inputs?.[engineConn.targetPortId];
-        const control = input?.control as any;
+        const targetRecord = (targetNode ?? {}) as AnyRecord;
+        const input = (targetRecord.inputs as Record<string, AnyRecord> | undefined)?.[engineConn.targetPortId];
+        const control = input?.control as ControlLike | undefined;
         if (control && Boolean(control.readonly) !== true) {
           control.readonly = true;
           await areaPlugin?.update?.('node', engineConn.targetNodeId);
@@ -84,18 +87,19 @@ export function bindRetePipes(opts: RetePipeOptions) {
     }
 
     if (ctx.type === 'connectionremoved') {
-      const raw = ctx.data as any;
+      const raw = ctx.data as AnyRecord;
       const id = String(raw.id);
       const targetId = String(raw.target);
       const portId = String(raw.targetInput);
       connectionMap.delete(id);
       nodeEngine.removeConnection(id);
       const targetNode = nodeMap.get(targetId);
-      const input = targetNode?.inputs?.[portId];
-      const control = input?.control as any;
+      const targetRecord = (targetNode ?? {}) as AnyRecord;
+      const input = (targetRecord.inputs as Record<string, AnyRecord> | undefined)?.[portId];
+      const control = input?.control as ControlLike | undefined;
       if (control) {
         const stillConnected = Array.from(connectionMap.values()).some(
-          (conn: any) => String(conn.target) === targetId && String(conn.targetInput) === portId
+          (conn) => String((conn as AnyRecord).target) === targetId && String((conn as AnyRecord).targetInput) === portId
         );
         if (Boolean(control.readonly) !== stillConnected) {
           control.readonly = stillConnected;
@@ -105,7 +109,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     }
 
     if (ctx.type === 'noderemoved') {
-      const id = String((ctx.data as any).id);
+      const id = String((ctx.data as AnyRecord).id);
       nodeMap.delete(id);
       nodeEngine.removeNode(id);
     }
@@ -114,7 +118,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
   });
 
   if (!areaPlugin) return;
-  areaPlugin.addPipe(async (ctx: any) => {
+  areaPlugin.addPipe(async (ctx: AnyRecord) => {
     // During graph sync we translate nodes programmatically (engine -> view). Rete also emits an initial
     // `nodetranslated` from NodeView construction (0,0), which must NOT be treated as a user move,
     // otherwise it overwrites engine positions and makes import/paste layouts "fly" to the top-left.

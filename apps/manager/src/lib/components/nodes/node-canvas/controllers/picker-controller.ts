@@ -4,7 +4,7 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import { tick } from 'svelte';
 import type { NodeRegistry } from '@shugu/node-core';
-import type { Connection as EngineConnection, GraphState, NodePort, PortType } from '$lib/nodes/types';
+import type { Connection as EngineConnection, GraphState, NodeInstance, NodePort, PortType } from '$lib/nodes/types';
 import { CUSTOM_NODE_TYPE_PREFIX } from '$lib/nodes/custom-nodes/store';
 import { readCustomNodeState } from '$lib/nodes/custom-nodes/instance';
 
@@ -82,10 +82,10 @@ export function createPickerController(opts: PickerControllerOptions) {
     ([$mode, $query, $initialSocket, $graphState]) => {
     const map = new Map<string, PickerItem[]>();
     const q = normalizeSearchQuery($query);
-    const nodes = Array.isArray($graphState?.nodes) ? $graphState.nodes : [];
+    const nodes = Array.isArray($graphState?.nodes) ? ($graphState.nodes as NodeInstance[]) : [];
     const motherDefinitions = new Set<string>();
     for (const node of nodes) {
-      const state = readCustomNodeState((node as any)?.config ?? {});
+      const state = readCustomNodeState(node?.config ?? {});
       if (state?.role === 'mother') motherDefinitions.add(String(state.definitionId));
     }
     const isCustomNodeAvailable = (type: string): boolean => {
@@ -167,7 +167,7 @@ export function createPickerController(opts: PickerControllerOptions) {
     const normalized = cats.filter((c) => c && typeof c === 'string');
     const ordered = CATEGORY_ORDER.filter((c) => normalized.includes(c));
     const rest = normalized
-      .filter((c) => !ordered.includes(c as any))
+      .filter((c) => !ordered.includes(c))
       .sort((a, b) => a.localeCompare(b));
     return [...ordered, ...rest];
   });

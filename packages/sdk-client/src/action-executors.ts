@@ -10,6 +10,18 @@ import type {
     PlaySoundPayload,
     ModulateSoundPayload,
 } from '@shugu/protocol';
+import type {
+    ToneGainLike,
+    ToneLfoLike,
+    ToneModule,
+    ToneOscillatorLike,
+    TonePlayerLike,
+} from './tone-adapter/types.js';
+import { getToneRawContext, unwrapDefaultExport } from './tone-adapter/tone-guards.js';
+import type { LFOOptions, OscillatorType, PlayerOptions } from 'tone';
+
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
+type TorchConstraintSet = MediaTrackConstraintSet & { torch?: boolean };
 
 /**
  * Flashlight controller using MediaStream torch capability
@@ -35,7 +47,7 @@ export class FlashlightController {
                 video: { facingMode: 'environment' },
             });
             const track = stream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities() as any;
+            const capabilities = track.getCapabilities() as TorchCapabilities;
             stream.getTracks().forEach(t => t.stop());
             return 'torch' in capabilities;
         } catch {
@@ -125,9 +137,8 @@ export class FlashlightController {
         }
 
         try {
-            await this.track!.applyConstraints({
-                advanced: [{ torch: on } as any],
-            });
+            const advanced: TorchConstraintSet[] = [{ torch: on }];
+            await this.track!.applyConstraints({ advanced });
             this.isOn = on;
             return true;
         } catch {
@@ -822,9 +833,9 @@ export class SoundPlayer {
  * Fallback: If Tone isn't enabled, will fall back to HTMLAudio + MediaElementSource (best-effort).
  */
 export class ToneSoundPlayer {
-    private tone: any | null = null;
-    private player: any | null = null;
-    private gain: any | null = null;
+    private tone: ToneModule | null = null;
+    private player: TonePlayerLike | null = null;
+    private gain: ToneGainLike | null = null;
 
     private htmlAudio: HTMLAudioElement | null = null;
     private htmlSource: MediaElementAudioSourceNode | null = null;
@@ -865,7 +876,11 @@ export class ToneSoundPlayer {
      * Update parameters without restarting when possible.
      * Returns true if updated in-place, false if caller should do a fresh play().
      */
-    async update(payload: Partial<PlaySoundPayload> & { url?: string; fadeIn?: number }, delaySeconds = 0): Promise<boolean> {
+    async update(
+        payload: Partial<PlaySoundPayload> & { url?: string; fadeIn?: number },
+        delaySeconds = 0
+    ): Promise<boolean> {
+        void delaySeconds;
         const url = typeof payload.url === 'string' ? payload.url : this.lastUrl ?? '';
         if (!url) return false;
 
@@ -920,7 +935,7 @@ export class ToneSoundPlayer {
         if (this.tone) return;
         const { toneAudioEngine } = await import('@shugu/multimedia-core');
         const mod = await toneAudioEngine.ensureLoaded();
-        this.tone = (mod as any).default ?? mod;
+        this.tone = unwrapDefaultExport(mod) as ToneModule;
     }
 
     private async playTone(
@@ -931,8 +946,10 @@ export class ToneSoundPlayer {
         this.stopTone();
 
         const Tone = this.tone;
+        if (!Tone) return;
         const gain = new Tone.Gain(0).toDestination();
-        const player = new Tone.Player({ url, loop: opts.loop, autostart: false } as any);
+        const playerOptions: PlayerOptions = { url, loop: opts.loop, autostart: false };
+        const player = new Tone.Player(playerOptions);
         player.connect(gain);
 
         this.gain = gain;
@@ -988,12 +1005,14 @@ export class ToneSoundPlayer {
         try {
             const { toneAudioEngine } = await import('@shugu/multimedia-core');
             const mod = await toneAudioEngine.ensureLoaded();
-            const Tone: any = (mod as any).default ?? mod;
-            const raw: AudioContext | null = Tone.getContext?.().rawContext ?? null;
+            const Tone = unwrapDefaultExport(mod) as ToneModule;
+            const raw: AudioContext | null = getToneRawContext(Tone);
             if (raw && raw.createMediaElementSource) {
                 this.htmlSource = raw.createMediaElementSource(audio);
                 // Try to connect into Tone destination graph when possible.
-                const destInput = Tone.Destination?.input ?? null;
+                const destInput =
+                    (Tone as { Destination?: { input?: { connect?: (dest: unknown) => void } } })
+                        .Destination?.input ?? null;
                 if (destInput && typeof destInput.connect === 'function') {
                     this.htmlSource.connect(destInput);
                 } else {
@@ -1051,9 +1070,9 @@ export class ToneSoundPlayer {
  * This replaces ModulatedSoundPlayer's custom AudioContext path to avoid multiple audio systems.
  */
 export class ToneModulatedSoundPlayer {
-    private carrier: any | null = null;
-    private gain: any | null = null;
-    private lfo: any | null = null;
+    private carrier: ToneOscillatorLike | null = null;
+    private gain: ToneGainLike | null = null;
+    private lfo: ToneLfoLike | null = null;
     private stopTimer: ReturnType<typeof setTimeout> | null = null;
     private startAtSeconds: number | null = null;
     private durationSeconds: number | null = null;
@@ -1064,7 +1083,7 @@ export class ToneModulatedSoundPlayer {
         if (!toneAudioEngine.isEnabled()) return;
 
         const tone = await toneAudioEngine.ensureLoaded();
-        const Tone: any = (tone as any).default ?? tone;
+        const Tone = unwrapDefaultExport(tone) as ToneModule;
 
         this.stop();
 
@@ -1085,7 +1104,8 @@ export class ToneModulatedSoundPlayer {
         this.releaseSeconds = release;
 
         this.gain = new Tone.Gain(0).toDestination();
-        this.carrier = new Tone.Oscillator({ frequency: freq, type: waveform as any });
+        const oscOptions = { frequency: freq, type: waveform as OscillatorType };
+        this.carrier = new Tone.Oscillator(oscOptions);
         this.carrier.connect(this.gain);
 
         // Envelope on gain (Tone Param supports setValueAtTime/linearRampToValueAtTime).
@@ -1098,11 +1118,13 @@ export class ToneModulatedSoundPlayer {
 
         if (modDepth > 0) {
             const depthHz = modDepth * freq;
-            this.lfo = new Tone.LFO({
+            const lfoOptions: LFOOptions = {
                 frequency: modFreq,
                 min: Math.max(0, freq - depthHz),
                 max: freq + depthHz,
-            });
+                type: 'sine',
+            };
+            this.lfo = new Tone.LFO(lfoOptions);
             this.lfo.connect(this.carrier.frequency);
             this.lfo.start(now);
         }
@@ -1174,17 +1196,18 @@ export class ToneModulatedSoundPlayer {
         const { toneAudioEngine } = await import('@shugu/multimedia-core');
         if (!toneAudioEngine.isEnabled()) return;
         const tone = await toneAudioEngine.ensureLoaded();
-        const Tone: any = (tone as any).default ?? tone;
+        const Tone = unwrapDefaultExport(tone) as ToneModule;
 
         if (!this.carrier || !this.gain) {
-            await this.play({
+            const nextPayload: ModulateSoundPayload = {
                 frequency: payload.frequency,
                 volume: payload.volume,
                 duration: payload.durationMs ?? 200,
-                waveform: (payload.waveform as any) ?? 'square',
+                waveform: payload.waveform ?? 'square',
                 modFrequency: payload.modFrequency,
                 modDepth: payload.modDepth,
-            } as any);
+            };
+            await this.play(nextPayload);
             return;
         }
 
@@ -1198,7 +1221,7 @@ export class ToneModulatedSoundPlayer {
             }
         }
         if (payload.waveform) {
-            this.carrier.type = payload.waveform as any;
+            this.carrier.type = payload.waveform;
         }
         if (payload.volume !== undefined) {
             try {
@@ -1215,11 +1238,13 @@ export class ToneModulatedSoundPlayer {
 
             if (!this.lfo && modDepth !== null && modDepth > 0) {
                 const depthHz = modDepth * currentFreq;
-                this.lfo = new (Tone as any).LFO({
+                const lfoOptions: LFOOptions = {
                     frequency: payload.modFrequency ?? 12,
                     min: Math.max(0, currentFreq - depthHz),
                     max: currentFreq + depthHz,
-                });
+                    type: 'sine',
+                };
+                this.lfo = new Tone.LFO(lfoOptions);
                 this.lfo.connect(this.carrier.frequency);
                 this.lfo.start(now);
             }

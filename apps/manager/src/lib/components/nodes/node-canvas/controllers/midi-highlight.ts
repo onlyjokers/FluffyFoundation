@@ -73,7 +73,7 @@ export function computeMidiHighlightState(opts: MidiHighlightOptions): MidiHighl
   const nodeTypeById = new Map((graph.nodes ?? []).map((n) => [String(n.id), String(n.type)]));
   const sourceNodeIds = (graph.nodes ?? [])
     .filter((n) => sourceNodeTypes.has(String(n.type)))
-    .filter((n) => midiSourceMatchesEvent((n.config as any)?.source, event, selectedInputId))
+    .filter((n) => midiSourceMatchesEvent((n.config as Record<string, unknown>)?.source, event, selectedInputId))
     .map((n) => String(n.id))
     .filter((id) => !disabledNodeIds.has(id));
 

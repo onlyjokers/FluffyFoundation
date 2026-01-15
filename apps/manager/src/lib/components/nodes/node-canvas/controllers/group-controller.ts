@@ -7,10 +7,10 @@ import type { GraphState, NodeInstance } from '$lib/nodes/types';
 import { nodeRegistry } from '$lib/nodes';
 import { audienceClients } from '$lib/stores/manager';
 import type { GraphViewAdapter, NodeBounds } from '../adapters';
+import { normalizeGroupList } from '../groups/normalize-group-list';
+import { isGroupDecorationNodeType } from '../groups/group-node-types';
 import { groupIdFromNode, isGroupPortNodeType } from '../utils/group-port-utils';
 
-const GROUP_FRAME_NODE_TYPE = 'group-frame';
-const isGroupDecorationNodeType = (type: string) => isGroupPortNodeType(type) || type === GROUP_FRAME_NODE_TYPE;
 
 export type NodeGroup = {
   id: string;
@@ -24,39 +24,6 @@ export type NodeGroup = {
   runtimeActive?: boolean;
 };
 
-const normalizeGroupList = (groups: NodeGroup[]): NodeGroup[] => {
-  const order: string[] = [];
-  const byId = new Map<string, NodeGroup>();
-
-  for (const group of Array.isArray(groups) ? groups : []) {
-    const id = String(group?.id ?? '');
-    if (!id) continue;
-
-    const next: NodeGroup = {
-      id,
-      parentId: group?.parentId ? String(group.parentId) : null,
-      name: String(group?.name ?? ''),
-      nodeIds: Array.from(new Set((group?.nodeIds ?? []).map((nid) => String(nid)).filter(Boolean))),
-      disabled: Boolean(group?.disabled),
-      minimized: Boolean(group?.minimized),
-      runtimeActive: typeof group?.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
-    };
-
-    if (!byId.has(id)) order.push(id);
-
-    const prev = byId.get(id);
-    if (prev) {
-      next.nodeIds = Array.from(new Set([...(prev.nodeIds ?? []), ...next.nodeIds]));
-      if (typeof next.runtimeActive !== 'boolean' && typeof prev.runtimeActive === 'boolean') {
-        next.runtimeActive = prev.runtimeActive;
-      }
-    }
-
-    byId.set(id, next);
-  }
-
-  return order.map((id) => byId.get(id)!).filter(Boolean);
-};
 export type GroupFrame = {
   group: NodeGroup;
   left: number;
@@ -300,13 +267,13 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       const nextHidden =
         forcedHidden.has(id) ||
         hiddenNodeIds.has(id) ||
-        (isGroupDecorationNodeType(type) && hiddenGroupIds.has(groupIdFromNode(node as any)));
+        (isGroupDecorationNodeType(type) && hiddenGroupIds.has(groupIdFromNode(node)));
       if (nextHidden) hiddenNodesEffective.add(id);
 
       const nextDisabled = disabled.has(id);
       const nextSelected = selected.has(id);
       const nextGroupMinimized =
-        isGroupPortNodeType(type) && minimizedGroupIdSet.has(groupIdFromNode(node as any));
+        isGroupPortNodeType(type) && minimizedGroupIdSet.has(groupIdFromNode(node));
       const prev = adapter.getNodeVisualState(id);
 
       const patch: { hidden?: boolean; groupDisabled?: boolean; groupSelected?: boolean; groupMinimized?: boolean } = {};
@@ -371,7 +338,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
         id,
         parentId,
         nodeIds: (group.nodeIds ?? []).map((nodeId) => String(nodeId)),
-        minimized: Boolean((group as any).minimized),
+        minimized: Boolean(group.minimized),
       };
       byId.set(id, normalized);
       if (!parentId) continue;
@@ -431,7 +398,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
 
       for (const nodeId of nodeIds) {
         if (isDecorationNodeId(nodeId)) continue;
-        const node = nodeById.get(String(nodeId)) as any;
+        const node = nodeById.get(String(nodeId));
         if (!node) continue;
         const x = Number(node.position?.x ?? 0);
         const y = Number(node.position?.y ?? 0);
@@ -458,10 +425,10 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
 
       const proxyNodes = (graph.nodes ?? []).filter(
         (n) =>
-          String((n as any).type ?? '') === 'group-proxy' &&
-          String(((n as any).config as any)?.groupId ?? '') === groupId
+          String(n?.type ?? '') === 'group-proxy' &&
+          String((n?.config as Record<string, unknown>)?.groupId ?? '') === groupId
       );
-      const inputProxyCount = proxyNodes.filter((n) => String(((n as any).config as any)?.direction ?? 'output') === 'input').length;
+      const inputProxyCount = proxyNodes.filter((n) => String((n?.config as Record<string, unknown>)?.direction ?? 'output') === 'input').length;
       const outputProxyCount = Math.max(0, proxyNodes.length - inputProxyCount);
       const portRows = Math.max(1, Math.max(inputProxyCount, outputProxyCount));
 
@@ -666,7 +633,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       const id = String(node.id ?? '');
       if (!id) continue;
       if (skipNodeIds.has(id)) continue;
-      const type = String((node as any).type ?? '');
+      const type = String(node?.type ?? '');
       if (isGroupDecorationNodeType(type)) continue;
       const b = adapter.getNodeBounds(id);
       if (!b) continue;
@@ -1815,10 +1782,10 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       marqueePointerId = null;
 
       if (marqueeMoveHandler)
-        window.removeEventListener('pointermove', marqueeMoveHandler, { capture: true } as any);
+        window.removeEventListener('pointermove', marqueeMoveHandler, { capture: true });
       if (marqueeUpHandler) {
-        window.removeEventListener('pointerup', marqueeUpHandler, { capture: true } as any);
-        window.removeEventListener('pointercancel', marqueeUpHandler, { capture: true } as any);
+        window.removeEventListener('pointerup', marqueeUpHandler, { capture: true });
+        window.removeEventListener('pointercancel', marqueeUpHandler, { capture: true });
       }
       marqueeMoveHandler = null;
       marqueeUpHandler = null;
@@ -1886,10 +1853,10 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       if (framesRaf && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(framesRaf);
       framesRaf = 0;
       if (marqueeMoveHandler)
-        window.removeEventListener('pointermove', marqueeMoveHandler, { capture: true } as any);
+        window.removeEventListener('pointermove', marqueeMoveHandler, { capture: true });
       if (marqueeUpHandler) {
-        window.removeEventListener('pointerup', marqueeUpHandler, { capture: true } as any);
-        window.removeEventListener('pointercancel', marqueeUpHandler, { capture: true } as any);
+        window.removeEventListener('pointerup', marqueeUpHandler, { capture: true });
+        window.removeEventListener('pointercancel', marqueeUpHandler, { capture: true });
       }
       marqueeMoveHandler = null;
       marqueeUpHandler = null;

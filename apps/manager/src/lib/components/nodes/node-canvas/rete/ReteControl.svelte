@@ -20,7 +20,8 @@
   import { nodeEngine, nodeRegistry } from '$lib/nodes';
   import type { ClientInfo } from '@shugu/protocol';
   import { midiService, type MidiEvent } from '$lib/features/midi/midi-service';
-  import { midiNodeBridge, formatMidiSource } from '$lib/features/midi/midi-node-bridge';
+  import { midiNodeBridge, formatMidiSource, type MidiSource } from '$lib/features/midi/midi-node-bridge';
+  import type { Connection, NodeInstance } from '$lib/nodes/types';
   import {
     getAudioSpectrogramDataUrl,
     getMediaDurationSec,
@@ -28,22 +29,24 @@
   import { renderMarkdownToHtml } from '../utils/markdown';
   import CurveEditor from '../ui/CurveEditor.svelte';
 
-  export let data: any;
-  $: isInline = Boolean((data as any)?.inline);
+  type AnyRecord = Record<string, unknown>;
+
+  export let data: AnyRecord;
+  $: isInline = Boolean((data as AnyRecord)?.inline);
   $: inputControlLabel =
-    data instanceof ClassicPreset.InputControl ? (data as any).controlLabel : undefined;
+    data instanceof ClassicPreset.InputControl ? (data as AnyRecord).controlLabel : undefined;
   type NumberBounds = { min?: number; max?: number; step?: number };
   const resolveNumberBounds = (ctrl: unknown): NumberBounds => {
     if (!(ctrl instanceof ClassicPreset.InputControl)) return {};
-    if ((ctrl as any).type !== 'number') return {};
+    if ((ctrl as AnyRecord).type !== 'number') return {};
 
     const isFiniteNumber = (value: unknown): value is number =>
       typeof value === 'number' && Number.isFinite(value);
 
     const fromControl: NumberBounds = {
-      min: isFiniteNumber((ctrl as any).min) ? (ctrl as any).min : undefined,
-      max: isFiniteNumber((ctrl as any).max) ? (ctrl as any).max : undefined,
-      step: isFiniteNumber((ctrl as any).step) ? (ctrl as any).step : undefined,
+      min: isFiniteNumber((ctrl as AnyRecord).min) ? (ctrl as AnyRecord).min : undefined,
+      max: isFiniteNumber((ctrl as AnyRecord).max) ? (ctrl as AnyRecord).max : undefined,
+      step: isFiniteNumber((ctrl as AnyRecord).step) ? (ctrl as AnyRecord).step : undefined,
     };
     if (
       fromControl.min !== undefined ||
@@ -56,10 +59,10 @@
     // Safety: some legacy graphs/controls may miss `min/max` hints. Resolve them from the node registry so
     // critical constraints (e.g. non-negative playback rate) still apply at the UI layer.
     const nodeType =
-      typeof (ctrl as any).nodeType === 'string' ? String((ctrl as any).nodeType) : '';
-    const portId = typeof (ctrl as any).portId === 'string' ? String((ctrl as any).portId) : '';
+      typeof (ctrl as AnyRecord).nodeType === 'string' ? String((ctrl as AnyRecord).nodeType) : '';
+    const portId = typeof (ctrl as AnyRecord).portId === 'string' ? String((ctrl as AnyRecord).portId) : '';
     const configKey =
-      typeof (ctrl as any).configKey === 'string' ? String((ctrl as any).configKey) : '';
+      typeof (ctrl as AnyRecord).configKey === 'string' ? String((ctrl as AnyRecord).configKey) : '';
     const key = portId || configKey;
     if (!nodeType || !key) return {};
 
@@ -94,12 +97,12 @@
   $: numberInputMax = numberBounds.max;
   $: numberInputStep =
     data instanceof ClassicPreset.InputControl && data.type === 'number'
-      ? (numberBounds.step ?? (data as any).step ?? 'any')
+      ? (numberBounds.step ?? (data as AnyRecord).step ?? 'any')
       : undefined;
   $: isMomentaryButton =
-    data instanceof ClassicPreset.InputControl && Boolean((data as any).button);
+    data instanceof ClassicPreset.InputControl && Boolean((data as AnyRecord).button);
   $: momentaryButtonLabel = isMomentaryButton
-    ? String((data as any).buttonLabel ?? data?.label ?? 'Push')
+    ? String((data as AnyRecord).buttonLabel ?? data?.label ?? 'Push')
     : 'Push';
   const graphStateStore = nodeEngine.graphState;
   const isRunningStore = nodeEngine.isRunning;
@@ -129,14 +132,14 @@
   function normalizeNumberInput(event: Event) {
     if (!(data instanceof ClassicPreset.InputControl)) return;
     if (data.type !== 'number') return;
-    if ((data as any).readonly) return;
+    if ((data as AnyRecord).readonly) return;
 
     const target = event.target as HTMLInputElement;
     const raw = target.value;
     if (raw === '') return;
 
     const num = Number(raw);
-    const current = typeof (data as any).value === 'number' ? (data as any).value : 0;
+    const current = typeof (data as AnyRecord).value === 'number' ? (data as AnyRecord).value : 0;
 
     if (!Number.isFinite(num)) {
       target.value = String(current);
@@ -162,8 +165,8 @@
 
   function pressMomentaryInput(): void {
     if (!(data instanceof ClassicPreset.InputControl)) return;
-    if (!(data as any).button) return;
-    if ((data as any).readonly) return;
+    if (!(data as AnyRecord).button) return;
+    if ((data as AnyRecord).readonly) return;
 
     if (momentaryInputResetTimer) clearTimeout(momentaryInputResetTimer);
     data.setValue(1);
@@ -262,7 +265,7 @@
   $: isLocalDisplayConnected = $displayBridgeState?.status === 'connected';
 
   function buildAssetOptions(kind: string): { value: string; label: string }[] {
-    const list = ($assetsStore?.assets ?? []) as any[];
+    const list = ($assetsStore?.assets ?? []) as AnyRecord[];
     const k = kind && typeof kind === 'string' ? kind : 'any';
     const filtered = k === 'any' ? list : list.filter((a) => String(a?.kind ?? '') === k);
     return filtered.map((a) => ({
@@ -272,7 +275,7 @@
   }
 
   function buildLocalMediaOptions(kind: string): { value: string; label: string }[] {
-    const list = ($localMediaStore?.files ?? []) as any[];
+    const list = ($localMediaStore?.files ?? []) as AnyRecord[];
     const k = kind && typeof kind === 'string' ? kind : 'any';
     const filtered = k === 'any' ? list : list.filter((f) => String(f?.kind ?? '') === k);
     return filtered.map((f) => ({
@@ -315,7 +318,7 @@
   $: if (data?.controlType === 'local-asset-picker') {
     const current = typeof data?.value === 'string' ? String(data.value) : '';
     const currentTrimmed = current.trim();
-    localAssetPickerKind = localAssetKindFromControl((data as any)?.assetKind, '') ?? null;
+    localAssetPickerKind = localAssetKindFromControl((data as AnyRecord)?.assetKind, '') ?? null;
 
     if (isDisplayFileRef(currentTrimmed)) lastDisplayFileRef = currentTrimmed;
     else if (currentTrimmed) lastServerLocalAssetPath = currentTrimmed;
@@ -357,7 +360,7 @@
   }
 
   function buildDisplayLocalMediaOptions(kind: string): { value: string; label: string }[] {
-    const list = ($localDisplayMediaStore?.files ?? []) as any[];
+    const list = ($localDisplayMediaStore?.files ?? []) as AnyRecord[];
     const k = kind && typeof kind === 'string' ? kind : 'any';
     const filtered = k === 'any' ? list : list.filter((f) => String(f?.kind ?? '') === k);
     return filtered.map((f) => {
@@ -435,7 +438,7 @@
     if (!file) return;
 
     const fallbackKind = inferLocalKindFromPath(file.name);
-    const kind = localAssetKindFromControl((data as any)?.assetKind, file.name) ?? fallbackKind;
+    const kind = localAssetKindFromControl((data as AnyRecord)?.assetKind, file.name) ?? fallbackKind;
     if (!kind) {
       displayLocalError = 'Unsupported file type for this node.';
       return;
@@ -481,7 +484,7 @@
       return;
     }
 
-    const kind = localAssetKindFromControl((data as any)?.assetKind, draft);
+    const kind = localAssetKindFromControl((data as AnyRecord)?.assetKind, draft);
     if (!kind) {
       localAssetError = 'Unsupported file type for this node.';
       return;
@@ -523,7 +526,7 @@
   }
 
   function clientLabel(c: ClientInfo): string {
-    return String((c as any).clientId ?? '');
+    return String((c as AnyRecord).clientId ?? '');
   }
 
   function readinessClass(clientId: string, connected?: boolean): string {
@@ -590,12 +593,12 @@
     const nodeId = String(data?.nodeId ?? '');
     if (!nodeId) return [];
 
-    const rawClients = ($audienceClients ?? []) as any[];
+    const rawClients = ($audienceClients ?? []) as AnyRecord[];
     const clients = rawClients.map((c) => String(c?.clientId ?? '')).filter(Boolean);
     if (clients.length === 0) return [];
     const clientById = new Map<string, ClientInfo>();
     for (const c of rawClients) {
-      const id = String((c as any)?.clientId ?? '');
+      const id = String((c as AnyRecord)?.clientId ?? '');
       if (!id) continue;
       clientById.set(id, c as ClientInfo);
     }
@@ -615,9 +618,9 @@
     const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
       const connected = isPortConnected(portId);
       if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
-        return (computed as any)[portId];
+        return (computed as AnyRecord)[portId];
       }
-      return (node.inputValues as any)?.[portId];
+      return (node.inputValues as AnyRecord)?.[portId];
     };
 
     const total = clients.length;
@@ -637,12 +640,12 @@
     const orderedClients = ordered.map((id) => clientById.get(id)).filter(Boolean) as ClientInfo[];
     return orderedClients.map((c) => ({
       client: c,
-      selected: selectedIdSet.has(String((c as any)?.clientId ?? '')),
-      primary: String((c as any)?.clientId ?? '') === selectedFirstId,
+      selected: selectedIdSet.has(String((c as AnyRecord)?.clientId ?? '')),
+      primary: String((c as AnyRecord)?.clientId ?? '') === selectedFirstId,
     }));
   })();
 
-  function formatValue(val: number | null | undefined): string {
+  function formatValue(val: unknown): string {
     if (val === null || val === undefined) return '0.00';
     const num = Number(val);
     if (!Number.isFinite(num)) return '0.00';
@@ -650,8 +653,8 @@
   }
 
   let sensorsClientId = '';
-  let sensorsData: any = null;
-  let sensorsPayload: any = {};
+  let sensorsData: AnyRecord | null = null;
+  let sensorsPayload: AnyRecord = {};
   let sensorValueText = '--';
 
   function formatBpm(val: unknown): string {
@@ -661,30 +664,31 @@
     return String(Math.round(num));
   }
 
-  function computeSensorValue(portId: string, msg: any, payload: any): string {
+  function computeSensorValue(portId: string, msg: AnyRecord | null, payload: AnyRecord): string {
     const fallbackNumber = formatValue(0);
     const fallbackBpm = formatBpm(0);
     if (!msg || typeof msg !== 'object') return portId === 'micBpm' ? fallbackBpm : fallbackNumber;
+    const sensorType = typeof msg.sensorType === 'string' ? msg.sensorType : '';
 
     if (portId === 'accelX')
-      return msg.sensorType === 'accel' ? formatValue(payload.x) : fallbackNumber;
+      return sensorType === 'accel' ? formatValue(payload.x) : fallbackNumber;
     if (portId === 'accelY')
-      return msg.sensorType === 'accel' ? formatValue(payload.y) : fallbackNumber;
+      return sensorType === 'accel' ? formatValue(payload.y) : fallbackNumber;
     if (portId === 'accelZ')
-      return msg.sensorType === 'accel' ? formatValue(payload.z) : fallbackNumber;
+      return sensorType === 'accel' ? formatValue(payload.z) : fallbackNumber;
 
-    const isAngle = msg.sensorType === 'gyro' || msg.sensorType === 'orientation';
+    const isAngle = sensorType === 'gyro' || sensorType === 'orientation';
     if (portId === 'gyroA') return isAngle ? formatValue(payload.alpha) : fallbackNumber;
     if (portId === 'gyroB') return isAngle ? formatValue(payload.beta) : fallbackNumber;
     if (portId === 'gyroG') return isAngle ? formatValue(payload.gamma) : fallbackNumber;
 
     if (portId === 'micVol')
-      return msg.sensorType === 'mic' ? formatValue(payload.volume) : fallbackNumber;
+      return sensorType === 'mic' ? formatValue(payload.volume) : fallbackNumber;
     if (portId === 'micLow')
-      return msg.sensorType === 'mic' ? formatValue(payload.lowEnergy) : fallbackNumber;
+      return sensorType === 'mic' ? formatValue(payload.lowEnergy) : fallbackNumber;
     if (portId === 'micHigh')
-      return msg.sensorType === 'mic' ? formatValue(payload.highEnergy) : fallbackNumber;
-    if (portId === 'micBpm') return msg.sensorType === 'mic' ? formatBpm(payload.bpm) : fallbackBpm;
+      return sensorType === 'mic' ? formatValue(payload.highEnergy) : fallbackNumber;
+    if (portId === 'micBpm') return sensorType === 'mic' ? formatBpm(payload.bpm) : fallbackBpm;
 
     return fallbackNumber;
   }
@@ -693,19 +697,23 @@
     const nodeId = String(data?.nodeId ?? '');
     const portId = String(data?.portId ?? '');
     const conn = ($graphStateStore.connections ?? []).find(
-      (c: any) => c.targetNodeId === nodeId && c.targetPortId === 'client'
+      (c: Connection) => c.targetNodeId === nodeId && c.targetPortId === 'client'
     );
     const srcNode = conn
-      ? ($graphStateStore.nodes ?? []).find((n: any) => n.id === conn.sourceNodeId)
+      ? ($graphStateStore.nodes ?? []).find((n: NodeInstance) => n.id === conn.sourceNodeId)
       : null;
     sensorsClientId = srcNode?.config?.clientId ? String(srcNode.config.clientId) : '';
-    sensorsData = sensorsClientId ? $sensorData.get(sensorsClientId) : null;
-    sensorsPayload = sensorsData?.payload ?? {};
+    sensorsData = sensorsClientId ? (($sensorData.get(sensorsClientId) as AnyRecord) ?? null) : null;
+    const nextPayload =
+      sensorsData && typeof sensorsData.payload === 'object'
+        ? (sensorsData.payload as AnyRecord)
+        : null;
+    sensorsPayload = nextPayload ?? {};
     sensorValueText = computeSensorValue(portId, sensorsData, sensorsPayload);
   }
 
   let midiNodeId = '';
-  let midiSource: any = null;
+  let midiSource: MidiSource | null = null;
   let midiIsLearning = false;
 
   let fileInput: HTMLInputElement | null = null;
@@ -786,7 +794,7 @@
       return null;
     }
 
-    const json = (await res.json().catch(() => null)) as any;
+    const json = (await res.json().catch(() => null)) as AnyRecord;
     const assetId = String(json?.asset?.id ?? '');
     if (!assetId) {
       fileUploadError = 'Upload failed: invalid response (missing asset.id)';
@@ -835,7 +843,9 @@
 
   $: if (data?.controlType === 'midi-learn') {
     midiNodeId = String(data?.nodeId ?? '');
-    const node = ($graphStateStore.nodes ?? []).find((n: any) => String(n.id) === midiNodeId);
+    const node = ($graphStateStore.nodes ?? []).find(
+      (n: NodeInstance) => String(n.id) === midiNodeId
+    );
     midiSource = node?.config?.source ?? null;
     midiIsLearning = Boolean(
       $midiLearnModeStore.active && $midiLearnModeStore.nodeId === midiNodeId
@@ -882,9 +892,6 @@
   let timeRangeSliderStart = 0;
   let timeRangeSliderEnd = 0;
   let timeRangeSliderCursor = 0;
-  let timeRangeStartPct = 0;
-  let timeRangeEndPct = 100;
-  let timeRangeCursorPct = 0;
   let timeRangeStartFrac = 0;
   let timeRangeEndFrac = 1;
   let timeRangeCursorFrac = 0;
@@ -939,7 +946,7 @@
 
   const resolveConnectedNumber = (nodeId: string, portId: string): number | null => {
     const conn = ($graphStateStore.connections ?? []).find(
-      (c: any) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === portId
+      (c: Connection) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === portId
     );
     if (!conn) return null;
     const src = nodeEngine.getNode(String(conn.sourceNodeId));
@@ -950,10 +957,10 @@
 
   const isInputConnected = (nodeId: string, portId: string): boolean =>
     ($graphStateStore.connections ?? []).some(
-      (c: any) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === portId
+      (c: Connection) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === portId
     );
 
-  const readLocalNumber = (node: any, key: string): number | null => {
+  const readLocalNumber = (node: NodeInstance | undefined, key: string): number | null => {
     const raw = node?.inputValues?.[key];
     const num = typeof raw === 'number' ? raw : Number(raw);
     return Number.isFinite(num) ? num : null;
@@ -961,7 +968,7 @@
 
   const resolveConnectedBoolean = (nodeId: string, portId: string): boolean | null => {
     const conn = ($graphStateStore.connections ?? []).find(
-      (c: any) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === portId
+      (c: Connection) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === portId
     );
     if (!conn) return null;
     const src = nodeEngine.getNode(String(conn.sourceNodeId));
@@ -1041,7 +1048,7 @@
     timeRangeCursorSec = values.cursorSec;
 
     const maxFromAsset = timeRangeDurationSec;
-    const maxFromField = isFiniteNumber((data as any).max) ? Number((data as any).max) : null;
+    const maxFromField = isFiniteNumber((data as AnyRecord).max) ? Number((data as AnyRecord).max) : null;
     const maxFallback = Math.max(
       10,
       timeRangeStartSec,
@@ -1074,9 +1081,6 @@
     timeRangeEndFrac = span > 0 ? (timeRangeSliderEnd - timeRangeMin) / span : 1;
     timeRangeCursorFrac = span > 0 ? (timeRangeSliderCursor - timeRangeMin) / span : 0;
 
-    timeRangeStartPct = timeRangeStartFrac * 100;
-    timeRangeEndPct = timeRangeEndFrac * 100;
-    timeRangeCursorPct = timeRangeCursorFrac * 100;
   };
 
   function stopTimeRangePlayback(): void {
@@ -1121,7 +1125,6 @@
       );
       const fullSpan = timeRangeMax - timeRangeMin;
       timeRangeCursorFrac = fullSpan > 0 ? (timeRangeSliderCursor - timeRangeMin) / fullSpan : 0;
-      timeRangeCursorPct = timeRangeCursorFrac * 100;
       reportTimeRangePlayhead(timeRangeSliderCursor, nowMs);
 
       if (timeRangeIsPlaying) {
@@ -1175,19 +1178,19 @@
 
     const { startSec, endSec, cursorSec } = computeEffectiveRange(timeRangeNodeId);
 
-    timeRangeMin = isFiniteNumber((data as any).min) ? Number((data as any).min) : 0;
-    timeRangeStep = isFiniteNumber((data as any).step) ? Number((data as any).step) : 0.01;
+    timeRangeMin = isFiniteNumber((data as AnyRecord).min) ? Number((data as AnyRecord).min) : 0;
+    timeRangeStep = isFiniteNumber((data as AnyRecord).step) ? Number((data as AnyRecord).step) : 0.01;
 
     const runtimeNode = timeRangeNodeId ? nodeEngine.getNode(timeRangeNodeId) : null;
     const assetIdRaw =
-      typeof (runtimeNode as any)?.config?.assetId === 'string'
-        ? String((runtimeNode as any).config.assetId)
+      typeof (runtimeNode as AnyRecord)?.config?.assetId === 'string'
+        ? String((runtimeNode as AnyRecord).config.assetId)
         : '';
     const assetId = assetIdRaw.trim();
 
     const localAssetPathRaw =
-      typeof (runtimeNode as any)?.config?.assetPath === 'string'
-        ? String((runtimeNode as any).config.assetPath)
+      typeof (runtimeNode as AnyRecord)?.config?.assetPath === 'string'
+        ? String((runtimeNode as AnyRecord).config.assetPath)
         : '';
     const localAssetPath = localAssetPathRaw.trim();
 
@@ -1254,7 +1257,7 @@
     if (contentUrl && contentUrl !== lastTimelineUrl) {
       lastTimelineUrl = contentUrl;
       void (async () => {
-        const kind: any =
+        const kind: 'video' | 'audio' =
           timeRangeNodeType === 'load-video-from-assets' ||
           timeRangeNodeType === 'load-video-from-local'
             ? 'video'
@@ -1295,7 +1298,7 @@
     const playRaw =
       resolveConnectedBoolean(timeRangeNodeId, 'play') ??
       (() => {
-        const raw = (runtimeNode as any)?.inputValues?.play;
+        const raw = (runtimeNode as AnyRecord)?.inputValues?.play;
         if (typeof raw === 'boolean') return raw;
         const num = typeof raw === 'number' ? raw : Number(raw);
         return Number.isFinite(num) ? num >= 0.5 : false;
@@ -1303,7 +1306,7 @@
     const loopRaw =
       resolveConnectedBoolean(timeRangeNodeId, 'loop') ??
       (() => {
-        const raw = (runtimeNode as any)?.inputValues?.loop;
+        const raw = (runtimeNode as AnyRecord)?.inputValues?.loop;
         if (typeof raw === 'boolean') return raw;
         const num = typeof raw === 'number' ? raw : Number(raw);
         return Number.isFinite(num) ? num >= 0.5 : false;
@@ -1311,7 +1314,7 @@
     const reverseRaw =
       resolveConnectedBoolean(timeRangeNodeId, 'reverse') ??
       (() => {
-        const raw = (runtimeNode as any)?.inputValues?.reverse;
+        const raw = (runtimeNode as AnyRecord)?.inputValues?.reverse;
         if (typeof raw === 'boolean') return raw;
         const num = typeof raw === 'number' ? raw : Number(raw);
         return Number.isFinite(num) ? num >= 0.5 : false;
@@ -1327,11 +1330,12 @@
       timeRangeNodeType === 'load-video-from-local'
     ) {
       const inputHasAsset = ($graphStateStore.connections ?? []).some(
-        (c: any) => String(c.targetNodeId) === timeRangeNodeId && String(c.targetPortId) === 'asset'
+        (c: Connection) =>
+          String(c.targetNodeId) === timeRangeNodeId && String(c.targetPortId) === 'asset'
       );
       const localInputValue =
-        typeof (runtimeNode as any)?.inputValues?.asset === 'string'
-          ? String((runtimeNode as any).inputValues.asset).trim()
+        typeof (runtimeNode as AnyRecord)?.inputValues?.asset === 'string'
+          ? String((runtimeNode as AnyRecord).inputValues.asset).trim()
           : '';
 
       const hasAsset =
@@ -1380,7 +1384,7 @@
     const start = Math.max(timeRangeMin, startSec);
     const end = endSec >= 0 ? Math.max(start, endSec) : -1;
     const cursor = cursorSec >= 0 ? Math.max(start, cursorSec) : -1;
-    (data as any)?.setValue?.({ startSec: start, endSec: end, cursorSec: cursor });
+    (data as AnyRecord)?.setValue?.({ startSec: start, endSec: end, cursorSec: cursor });
   };
 
   const handleTimeRangeStartSlider = (event: Event) => {
@@ -1423,7 +1427,6 @@
     timeRangeSliderCursor = next;
     const span = timeRangeMax - timeRangeMin;
     timeRangeCursorFrac = span > 0 ? (timeRangeSliderCursor - timeRangeMin) / span : 0;
-    timeRangeCursorPct = timeRangeCursorFrac * 100;
     setTimeRange(timeRangeStartSec, timeRangeEndSec, next);
   };
 </script>

@@ -3,20 +3,27 @@
   // @ts-nocheck
   import Button from '$lib/components/ui/Button.svelte';
 
-  export let frames: any[] = [];
+  type LoopModel = {
+    id: string;
+    requiredCapabilities?: string[];
+  };
+  type LoopFrame = { loop: LoopModel; left: number; top: number; width: number; height: number };
+  type ExecutorStatus = { running?: boolean; lastEvent?: string; lastError?: string };
+
+  export let frames: LoopFrame[] = [];
   export let areaTransform: { k: number; tx: number; ty: number } | null = null;
   export let deployedLoopIds: Set<string> = new Set();
-  export let getLoopClientId: (loop: any) => string = () => '';
-  export let executorStatusByClient: Map<string, any> = new Map();
+  export let getLoopClientId: (loop: LoopModel) => string = () => '';
+  export let executorStatusByClient: Map<string, ExecutorStatus> = new Map();
   export let showExecutorLogs = false;
   export let logsClientId = '';
   export let isRunning = false;
 
-  export let onToggleLogs: (loop: any) => void = () => undefined;
-  export let onStop: (loop: any) => void = () => undefined;
-  export let onDeploy: (loop: any) => void = () => undefined;
+  export let onToggleLogs: (loop: LoopModel) => void = () => undefined;
+  export let onStop: (loop: LoopModel) => void = () => undefined;
+  export let onDeploy: (loop: LoopModel) => void = () => undefined;
   export let isLoopDeploying: (loopId: string) => boolean = () => false;
-  export let loopHasDisabledNodes: (loop: any) => boolean = () => false;
+  export let loopHasDisabledNodes: (loop: LoopModel) => boolean = () => false;
   export let onHeaderPointerDown: (loopId: string, event: PointerEvent) => void = () => undefined;
 
   let k = 1;

@@ -4,7 +4,22 @@
   import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
 
-  export let frames: any[] = [];
+  type GroupFrame = {
+    group: {
+      id: string;
+      name?: string;
+      disabled?: boolean;
+      minimized?: boolean;
+      runtimeActive?: boolean;
+    };
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    effectiveDisabled?: boolean;
+  };
+
+  export let frames: GroupFrame[] = [];
   export let areaTransform: { k: number; tx: number; ty: number } | null = null;
   export let isRunning = false;
   export let editModeGroupId: string | null = null;
@@ -36,9 +51,8 @@
   $: tx = Number(areaTransform?.tx ?? 0) || 0;
   $: ty = Number(areaTransform?.ty ?? 0) || 0;
 
-  $: isTiny = k < 0.55;
 
-  async function startEdit(group: any) {
+  async function startEdit(group: GroupFrame['group']) {
     editingGroupId = String(group?.id ?? '');
     draftName = String(group?.name ?? 'Group');
     await tick();
@@ -159,8 +173,9 @@
     return {
       update(nextId: string) {
         if (currentId && currentId !== nextId) {
-          const { [currentId]: _removed, ...rest } = actionCompactByGroupId;
-          actionCompactByGroupId = rest;
+          const next = { ...actionCompactByGroupId };
+          delete next[currentId];
+          actionCompactByGroupId = next;
         }
         currentId = String(nextId);
         scheduleCheck();
@@ -170,8 +185,9 @@
         ro?.disconnect();
         mo?.disconnect();
         if (currentId && currentId in actionCompactByGroupId) {
-          const { [currentId]: _removed, ...rest } = actionCompactByGroupId;
-          actionCompactByGroupId = rest;
+          const next = { ...actionCompactByGroupId };
+          delete next[currentId];
+          actionCompactByGroupId = next;
         }
       },
     };
@@ -186,7 +202,6 @@
       {@const toastMessage = toast?.groupId === group.id ? toast.message : ''}
       {@const runtimeGateClosed = group.runtimeActive === false}
       {@const gateClosed = !isRunning || frame.effectiveDisabled}
-      {@const isGateMode = Boolean(gateModeGroupIds?.has?.(group.id))}
       {@const isMinimized = Boolean(group.minimized)}
       {@const isCustomNodeGroup = Boolean(customNodeGroupIds?.has?.(group.id))}
       {@const isActionsCompact = Boolean(actionCompactByGroupId[String(group.id)])}

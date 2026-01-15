@@ -6,6 +6,7 @@ import { get } from 'svelte/store';
 import type { Connection as EngineConnection, GraphState, NodeInstance } from '$lib/nodes/types';
 import type { GraphViewAdapter } from '../adapters';
 import type { GroupController, NodeGroup } from './group-controller';
+import type { NodeEngine } from '$lib/nodes/engine';
 import { groupIdFromNode, isGroupPortNodeType } from '../utils/group-port-utils';
 import {
   cloneInternalGraphForNewInstance,
@@ -21,7 +22,7 @@ export type ClipboardController = {
 
 export type CreateClipboardControllerOptions = {
   getContainer: () => HTMLDivElement | null;
-  nodeEngine: any;
+  nodeEngine: NodeEngine;
   adapter: GraphViewAdapter;
   getGraphState: () => GraphState;
   getNodeCount: () => number;
@@ -156,7 +157,7 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
         name: String(g!.name ?? ''),
         nodeIds: (g!.nodeIds ?? []).map((nid) => String(nid)).filter(Boolean),
         disabled: Boolean(g!.disabled),
-        minimized: Boolean((g! as any).minimized),
+        minimized: Boolean(g!.minimized),
       }));
 
     const graphState = getGraphState();
@@ -336,7 +337,7 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
           name: String(g.name ?? ''),
           nodeIds,
           disabled: Boolean(g.disabled),
-          minimized: Boolean((g as any).minimized),
+          minimized: Boolean(g.minimized),
           runtimeActive: true,
         };
       });

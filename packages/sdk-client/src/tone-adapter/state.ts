@@ -11,6 +11,7 @@ import type {
   AudioDataInstance,
   ToneAdapterDeps,
   ToneEffectInstance,
+  ToneGainLike,
   ToneGranularInstance,
   ToneLfoInstance,
   ToneModule,
@@ -62,7 +63,7 @@ export const AUDIO_OUTPUT_PORTS = new Map<ToneNodeKind, string[]>([
 ]);
 
 export let toneModule: ToneModule | null = null;
-export let masterGain: any | null = null;
+export let masterGain: ToneGainLike | null = null;
 export const transportState: TransportStartState = { started: false, scheduledAtMs: null };
 
 export const oscInstances = new Map<string, ToneOscInstance>();
@@ -82,8 +83,8 @@ export const latestToneLfoActiveTargets = new Set<string>();
 export const latestDeps: ToneAdapterDeps = {};
 
 export function setLatestDeps(deps: ToneAdapterDeps): void {
-  for (const key of Object.keys(latestDeps)) {
-    delete (latestDeps as any)[key];
+  for (const key of Object.keys(latestDeps) as Array<keyof ToneAdapterDeps>) {
+    delete latestDeps[key];
   }
   Object.assign(latestDeps, deps);
 }

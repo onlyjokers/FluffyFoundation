@@ -45,11 +45,65 @@ export type TransportStartState = {
   cancel?: () => void;
 };
 
+export type ToneParamLike = {
+  value?: number;
+  rampTo?: (value: number, seconds: number) => void;
+  setValueAtTime?: (value: number, time: number) => void;
+  linearRampToValueAtTime?: (value: number, time: number) => void;
+  cancelScheduledValues?: (time: number) => void;
+};
+
+export type ToneConnectable = {
+  connect?: (destination: unknown) => void;
+  disconnect?: (...args: unknown[]) => void;
+};
+
+export type ToneGainLike = ToneConnectable & {
+  gain?: ToneParamLike;
+  toDestination?: () => ToneGainLike;
+};
+
+export type ToneOscillatorLike = ToneConnectable & {
+  frequency?: ToneParamLike;
+  type?: string;
+  start?: (...args: unknown[]) => void;
+  stop?: (...args: unknown[]) => void;
+  dispose?: () => void;
+};
+
+export type TonePlayerLike = ToneConnectable & {
+  buffer?: AudioBuffer | null;
+  loop?: boolean;
+  playbackRate?: number;
+  detune?: number;
+  start?: (...args: unknown[]) => void;
+  stop?: (...args: unknown[]) => void;
+  dispose?: () => void;
+  onstop?: (() => void) | null;
+};
+
+export type ToneLfoLike = ToneConnectable & {
+  frequency?: ToneParamLike;
+  amplitude?: ToneParamLike;
+  min?: number;
+  max?: number;
+  type?: string;
+  start?: (...args: unknown[]) => void;
+  stop?: (...args: unknown[]) => void;
+  dispose?: () => void;
+};
+
+export type ToneEffectLike = ToneConnectable & {
+  delayTime?: ToneParamLike;
+  feedback?: ToneParamLike;
+  wet?: ToneParamLike;
+};
+
 export type EffectWrapper = {
-  input: any;
-  output: any;
-  effect: any;
-  wetParam?: any;
+  input: ToneConnectable;
+  output: ToneConnectable;
+  effect: ToneEffectLike;
+  wetParam?: ToneParamLike;
   setWet?: (value: number) => void;
   dispose: () => void;
 };
@@ -72,9 +126,9 @@ export type ToneEffectInstance = {
 };
 
 export type ToneOscInstance = {
-  osc: any;
-  gain: any;
-  loop: any | null;
+  osc: ToneOscillatorLike;
+  gain: ToneGainLike;
+  loop: ToneConnectable | null;
   loopKey: string | null;
   loopDefaults: { frequency: number; amplitude: number } | null;
   lastFrequency: number | null;
@@ -85,8 +139,8 @@ export type ToneOscInstance = {
 
 export type ToneGranularInstance = {
   nodeId: string;
-  player: any;
-  gain: any;
+  player: TonePlayerLike;
+  gain: ToneGainLike;
   playing: boolean;
   lastUrl: string | null;
   lastParams: Record<string, number | string | boolean | null>;
@@ -94,8 +148,8 @@ export type ToneGranularInstance = {
 
 export type TonePlayerInstance = {
   nodeId: string;
-  player: any;
-  gain: any;
+  player: TonePlayerLike;
+  gain: ToneGainLike;
   playing: boolean;
   started: boolean;
   startedAt: number;
@@ -126,15 +180,15 @@ export type TonePlayerInstance = {
 
 export type ToneLfoInstance = {
   nodeId: string;
-  lfo: any;
+  lfo: ToneLfoLike;
   started: boolean;
   lastParams: Record<string, number | string | boolean | null>;
 };
 
 export type AudioDataInstance = {
   nodeId: string;
-  input: any;
-  output: any;
+  input: ToneConnectable;
+  output: ToneConnectable;
   analyser: AnalyserNode;
   timeData: Float32Array<ArrayBuffer>;
   freqData: Uint8Array;

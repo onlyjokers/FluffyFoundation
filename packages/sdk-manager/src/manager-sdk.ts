@@ -20,6 +20,7 @@ import {
     TimePongData,
     TargetSelector,
     ControlAction,
+    BaseControlPayload,
     ControlPayload,
     ControlBatchPayload,
     type ControlBatchItem,
@@ -31,6 +32,7 @@ import {
     targetAll,
     targetClients,
 } from '@shugu/protocol';
+import { mergeControlPayload } from './payload-merge.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -46,6 +48,9 @@ export interface ManagerState {
 export type MessageHandler<T = Message> = (message: T) => void;
 
 export type SocketTransport = 'polling' | 'websocket';
+
+const isControlBatchPayload = (payload: ControlPayload): payload is ControlBatchPayload =>
+    typeof payload === 'object' && payload !== null && 'kind' in payload && (payload as ControlBatchPayload).kind === 'control-batch';
 
 /**
  * Configuration for ManagerSDK
@@ -244,8 +249,7 @@ export class ManagerSDK {
 
         // Avoid wrapping custom payloads (unknown semantics) unless it is already a control-batch.
         if (action === 'custom') {
-            const kind = (payload as any)?.kind;
-            if (kind === 'control-batch') {
+            if (isControlBatchPayload(payload)) {
                 const message = createControlMessage(target, action, payload, executeAt);
                 this.socket.emit(SOCKET_EVENTS.MSG, message);
                 return;
@@ -256,7 +260,7 @@ export class ManagerSDK {
             return;
         }
 
-        this.queueControl(target, { action, payload: payload as any, executeAt });
+        this.queueControl(target, { action, payload: payload as BaseControlPayload, executeAt });
     }
 
     /**
@@ -321,7 +325,7 @@ export class ManagerSDK {
                 const prev = existing.items[idx];
                 existing.items[idx] = {
                     action: 'modulateSoundUpdate',
-                    payload: { ...(prev.payload as any), ...(item.payload as any) },
+                    payload: mergeControlPayload(prev.payload, item.payload),
                     executeAt: item.executeAt ?? prev.executeAt,
                 };
             } else {

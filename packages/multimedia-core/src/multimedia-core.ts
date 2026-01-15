@@ -5,6 +5,7 @@
  */
 
 import { AssetMetaStore } from './indexeddb.js';
+import { parseAssetMetaResponse, parseAssetShaResponse, parseStoredManifest } from './asset-meta-parsing.js';
 import { parseAssetIdFromRef, resolveAssetRefToUrl } from './asset-url-resolver.js';
 import { MediaEngine } from './media-engine.js';
 
@@ -242,9 +243,8 @@ export class MultimediaCore {
     try {
       const res = await fetch(url, { method: 'GET', signal });
       if (!res.ok) return null;
-      const json = (await res.json()) as any;
-      const sha = typeof json?.sha256 === 'string' ? json.sha256.trim() : '';
-      return sha || null;
+      const json = (await res.json()) as unknown;
+      return parseAssetShaResponse(json);
     } catch {
       return null;
     }
@@ -256,16 +256,8 @@ export class MultimediaCore {
     try {
       const res = await fetch(url, { method: 'GET', signal });
       if (!res.ok) return { sha256: null, mimeType: null, sizeBytes: null };
-      const json = (await res.json()) as any;
-      const sha = typeof json?.sha256 === 'string' ? json.sha256.trim() : '';
-      const mimeType = typeof json?.mimeType === 'string' ? json.mimeType.trim() : '';
-      const sizeBytesRaw = json?.sizeBytes ?? null;
-      const sizeBytes = typeof sizeBytesRaw === 'number' && Number.isFinite(sizeBytesRaw) ? Math.max(0, sizeBytesRaw) : null;
-      return {
-        sha256: sha || null,
-        mimeType: mimeType || null,
-        sizeBytes,
-      };
+      const json = (await res.json()) as unknown;
+      return parseAssetMetaResponse(json);
     } catch {
       return { sha256: null, mimeType: null, sizeBytes: null };
     }
@@ -471,11 +463,9 @@ export class MultimediaCore {
     const raw = localStorage.getItem(LAST_MANIFEST_KEY);
     if (!raw) return;
     try {
-      const parsed = JSON.parse(raw) as any;
-      const manifestId = typeof parsed?.manifestId === 'string' ? parsed.manifestId : '';
-      const assets = Array.isArray(parsed?.assets) ? parsed.assets.map(String) : [];
-      if (!manifestId) return;
-      this.manifest = { manifestId, assets, updatedAt: Number(parsed?.updatedAt ?? Date.now()) };
+      const parsed = parseStoredManifest(JSON.parse(raw));
+      if (!parsed) return;
+      this.manifest = { manifestId: parsed.manifestId, assets: parsed.assets, updatedAt: parsed.updatedAt };
     } catch {
       // ignore
     }

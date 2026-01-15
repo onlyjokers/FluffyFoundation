@@ -12,7 +12,7 @@ export class GeoController {
 
   @Post('fence')
   setFence(@Body() body: unknown): { fence: GeoFenceConfig | null } {
-    if (body && typeof body === 'object' && (body as any).enabled === false) {
+    if (body && typeof body === 'object' && (body as Record<string, unknown>).enabled === false) {
       this.geoService.clearGeoFence();
       return { fence: null };
     }
@@ -21,12 +21,14 @@ export class GeoController {
       throw new BadRequestException('Invalid body');
     }
 
-    const center = (body as any).center;
-    const rangeM = (body as any).rangeM;
-    const address = (body as any).address;
+    const record = body as Record<string, unknown>;
+    const center = record.center;
+    const rangeM = record.rangeM;
+    const address = record.address;
 
-    const lat = center?.lat;
-    const lng = center?.lng;
+    const centerRecord = center && typeof center === 'object' ? (center as Record<string, unknown>) : null;
+    const lat = centerRecord?.lat;
+    const lng = centerRecord?.lng;
 
     if (typeof lat !== 'number' || !Number.isFinite(lat) || lat < -90 || lat > 90) {
       throw new BadRequestException('Invalid body.center.lat');

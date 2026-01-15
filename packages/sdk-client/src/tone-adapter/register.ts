@@ -2,7 +2,14 @@
  * Purpose: Register Tone adapter node definitions into a NodeRegistry.
  */
 
-import type { Connection, NodeInstance, NodeRegistry, ProcessContext } from '@shugu/node-core';
+import type {
+  ConfigField,
+  Connection,
+  NodeInstance,
+  NodePort,
+  NodeRegistry,
+  ProcessContext,
+} from '@shugu/node-core';
 import { consumeNodeMediaFinishPulse, toneAudioEngine } from '@shugu/multimedia-core';
 import type { ToneAdapterDeps, ToneAdapterHandle, ToneEffectKind } from './types.js';
 import {
@@ -232,7 +239,7 @@ export function registerToneClientDefinitions(
         if (loopKey !== instance.loopKey || defaultsChanged) {
           const parsed = parseLoopPattern(loopPattern, { frequency, amplitude });
           if (parsed) {
-            updateLoop(instance, parsed, deps, toNumber((config as any).loopStartAt, NaN));
+            updateLoop(instance, parsed, deps, toNumber(config.loopStartAt, NaN));
             instance.loopKey = loopKey;
             instance.loopDefaults = { frequency, amplitude };
           }
@@ -733,25 +740,8 @@ export function registerToneClientDefinitions(
   const registerLoadAudioNode = (opts: {
     type: string;
     label: string;
-    inputs: {
-      id: string;
-      label: string;
-      type: string;
-      defaultValue?: unknown;
-      min?: number;
-      max?: number;
-      step?: number;
-    }[];
-    configSchema: {
-      key: string;
-      label: string;
-      type: string;
-      defaultValue?: unknown;
-      assetKind?: string;
-      min?: number;
-      max?: number;
-      step?: number;
-    }[];
+    inputs: NodePort[];
+    configSchema: ConfigField[];
     resolveBaseUrlRaw: (inputs: Record<string, unknown>, config: Record<string, unknown>) => string;
     sensorNodeType: string;
   }) => {
@@ -759,12 +749,12 @@ export function registerToneClientDefinitions(
       type: opts.type,
       label: opts.label,
       category: 'Assets',
-      inputs: opts.inputs as any,
+      inputs: opts.inputs,
       outputs: [
         { id: 'ref', label: 'Audio Out', type: 'audio', kind: 'sink' },
         { id: 'ended', label: 'Finish', type: 'boolean' },
       ],
-      configSchema: opts.configSchema as any,
+      configSchema: opts.configSchema,
       process: (inputs, config, context) => {
         const baseUrlRaw = opts.resolveBaseUrlRaw(inputs, config);
         const url = deps.resolveAssetRef ? deps.resolveAssetRef(baseUrlRaw) : baseUrlRaw;
@@ -1109,16 +1099,13 @@ export function registerToneClientDefinitions(
 
             if (!wasStarted && deps.sdk) {
               try {
-                deps.sdk.sendSensorData(
-                  'custom',
-                  {
-                    kind: 'node-media',
-                    event: 'started',
-                    nodeId: context.nodeId,
-                    nodeType: opts.sensorNodeType,
-                  } as any,
-                  { trackLatest: false }
-                );
+                const sensorPayload: Record<string, unknown> = {
+                  kind: 'node-media',
+                  event: 'started',
+                  nodeId: context.nodeId,
+                  nodeType: opts.sensorNodeType,
+                };
+                deps.sdk.sendSensorData('custom', sensorPayload, { trackLatest: false });
               } catch {
                 // ignore
               }
@@ -1251,16 +1238,13 @@ export function registerToneClientDefinitions(
 
         if (playing && !loop && instance.ended && !instance.endedReported && deps.sdk) {
           try {
-            deps.sdk.sendSensorData(
-              'custom',
-              {
-                kind: 'node-media',
-                event: 'ended',
-                nodeId: context.nodeId,
-                nodeType: opts.sensorNodeType,
-              } as any,
-              { trackLatest: false }
-            );
+            const sensorPayload: Record<string, unknown> = {
+              kind: 'node-media',
+              event: 'ended',
+              nodeId: context.nodeId,
+              nodeType: opts.sensorNodeType,
+            };
+            deps.sdk.sendSensorData('custom', sensorPayload, { trackLatest: false });
             instance.endedReported = true;
           } catch {
             // ignore
@@ -1314,7 +1298,7 @@ export function registerToneClientDefinitions(
       },
     ],
     resolveBaseUrlRaw: (_inputs, config) => {
-      const assetRaw = toString((config as any).assetId, '');
+      const assetRaw = toString(config.assetId, '');
       const trimmed = assetRaw.trim();
       if (!trimmed) return '';
       if (trimmed.startsWith('asset:') || trimmed.startsWith('shugu://asset/')) return trimmed;
@@ -1366,8 +1350,8 @@ export function registerToneClientDefinitions(
       },
     ],
     resolveBaseUrlRaw: (inputs, config) => {
-      const fromInput = toString((inputs as any).asset, '').trim();
-      const raw = fromInput || toString((config as any).assetPath, '').trim();
+      const fromInput = toString(inputs.asset, '').trim();
+      const raw = fromInput || toString(config.assetPath, '').trim();
       return raw ? normalizeLocalMediaRef(raw, 'audio') : '';
     },
     sensorNodeType: 'load-audio-from-local',
@@ -1402,7 +1386,7 @@ export function registerToneClientDefinitions(
           updatedAt: now,
         };
 
-        const playActive = toBoolean((inputs as any).play, true);
+        const playActive = toBoolean(inputs.play, true);
         const playRising = playActive && !existing.lastPlay;
 
         const finished = (() => {

@@ -11,6 +11,7 @@
     "e2e:node-executor": "node scripts/e2e/node-executor.mjs",
     "e2e:node-executor:offline": "pnpm --filter @shugu/sdk-client exec node scripts/e2e/node-executor.offline.mjs",
     "validate:node-specs": "node scripts/validate-node-specs.mjs",
+    "test:node-canvas": "pnpm tsx --test \"apps/manager/src/lib/components/nodes/node-canvas/groups/**/*.spec.ts\"",
     "guard:deps": "node scripts/guard-deps.mjs && node scripts/guard-server-messages.mjs",
     "guard:server-messages": "node scripts/guard-server-messages.mjs",
     "build:all": "pnpm -r run build",
@@ -40,6 +41,7 @@
     "prettier": "^3.7.4",
     "prettier-plugin-svelte": "^3.4.1",
     "socket.io-client": "^4.7.2",
-    "svelte-eslint-parser": "^1.4.1"
+    "svelte-eslint-parser": "^1.4.1",
+    "tsx": "^4.21.0"
   }
 }

@@ -7,7 +7,8 @@
   } from 'rete-svelte-plugin/svelte/presets/classic/types';
   import { onDestroy, tick } from 'svelte';
   import { nodeEngine, nodeRegistry } from '$lib/nodes';
-  import { readCustomNodeState, writeCustomNodeState } from '$lib/nodes/custom-nodes/instance';
+  import { readCustomNodeState } from '$lib/nodes/custom-nodes/instance';
+  import type { NodeInstance } from '$lib/nodes/types';
 
   type NodeExtraData = {
     width?: number;
@@ -19,6 +20,7 @@
     groupDisabled?: boolean;
     groupSelected?: boolean;
   };
+  type AnyRecord = Record<string, unknown>;
 
   function sortByIndex<K, I extends undefined | { index?: number }>(entries: [K, I][]) {
     entries.sort((a, b) => ((a[1] && a[1].index) || 0) - ((b[1] && b[1].index) || 0));
@@ -36,30 +38,30 @@
   const toggleCollapsed = (event: Event) => {
     event.stopPropagation();
     // Important: derive next state from `data.collapsed` to avoid Svelte reactive cycles.
-    const next = !(data as any)?.collapsed;
-    (data as any).collapsed = next;
+    const next = !(data as AnyRecord)?.collapsed;
+    (data as AnyRecord).collapsed = next;
   };
 
-  $: isCollapsed = isGroupPortNode ? true : Boolean((data as any)?.collapsed);
+  $: isCollapsed = isGroupPortNode ? true : Boolean((data as AnyRecord)?.collapsed);
 
   $: inputs = sortByIndex(Object.entries(data.inputs));
   $: controls = sortByIndex(Object.entries(data.controls));
   $: outputs = sortByIndex(Object.entries(data.outputs));
 
-  function any<T>(arg: T): any {
+  function any<T>(arg: T): T {
     return arg;
   }
 
   // MIDI activity highlight state (set by NodeCanvas).
-  $: isActive = Boolean((data as any).active);
-  $: activeInputs = new Set<string>((((data as any).activeInputs ?? []) as string[]).map(String));
-  $: activeOutputs = new Set<string>((((data as any).activeOutputs ?? []) as string[]).map(String));
-  $: isDeployedPatch = Boolean((data as any).deployedPatch);
-  $: isStopped = Boolean((data as any).stopped);
-  $: isGroupDisabled = Boolean((data as any).groupDisabled);
-  $: isGroupSelected = Boolean((data as any).groupSelected);
-  $: isGroupMinimized = Boolean((data as any).groupMinimized);
-  $: isHidden = Boolean((data as any).hidden);
+  $: isActive = Boolean((data as AnyRecord).active);
+  $: activeInputs = new Set<string>((((data as AnyRecord).activeInputs ?? []) as string[]).map(String));
+  $: activeOutputs = new Set<string>((((data as AnyRecord).activeOutputs ?? []) as string[]).map(String));
+  $: isDeployedPatch = Boolean((data as AnyRecord).deployedPatch);
+  $: isStopped = Boolean((data as AnyRecord).stopped);
+  $: isGroupDisabled = Boolean((data as AnyRecord).groupDisabled);
+  $: isGroupSelected = Boolean((data as AnyRecord).groupSelected);
+  $: isGroupMinimized = Boolean((data as AnyRecord).groupMinimized);
+  $: isHidden = Boolean((data as AnyRecord).hidden);
 
   // Live Port Values
   // Values are derived from NodeEngine runtime outputs and graph connections.
@@ -78,7 +80,7 @@
   $: isGroupPortNode = ['group-activate', 'group-gate', 'group-proxy'].includes(instanceType);
   $: isGroupFrameNode = instanceType === 'group-frame';
   $: proxyDirection =
-    instanceType === 'group-proxy' ? String((nodeEngine.getNode(nodeId)?.config as any)?.direction ?? 'output') : '';
+    instanceType === 'group-proxy' ? String((nodeEngine.getNode(nodeId)?.config as AnyRecord)?.direction ?? 'output') : '';
 
   $: {
     // Keep in sync with runtime config changes (e.g. Uncouple promotes child → mother).
@@ -87,12 +89,11 @@
   }
   $: isCustomNode = Boolean(customNodeState);
   $: customRole = customNodeState?.role ?? null;
-  $: customManualGate = Boolean(customNodeState?.manualGate);
 
   let groupFrameDisabled = false;
   $: groupFrameDisabled = (() => {
     if (!isGroupFrameNode) return false;
-    const instance = nodeEngine.getNode(nodeId) as any;
+    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
     return Boolean(instance?.config?.disabled);
   })();
 
@@ -152,9 +153,9 @@
 
     for (const c of $graphStateStore.connections ?? []) {
       if (String(c.targetNodeId) !== nodeId) continue;
-      const targetPortId = String((c as any).targetPortId ?? '');
+      const targetPortId = String((c as AnyRecord).targetPortId ?? '');
       if (!removedPorts.has(targetPortId)) continue;
-      const id = String((c as any).id ?? '');
+      const id = String((c as AnyRecord).id ?? '');
       if (!id) continue;
       nodeEngine.removeConnection(id);
     }
@@ -163,7 +164,7 @@
   };
 
   const toggleGroupMinimized = () => {
-    const instance = nodeEngine.getNode(nodeId) as any;
+    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
     const raw = instance?.config?.groupId;
     const groupId = typeof raw === 'string' ? raw : raw ? String(raw) : '';
     if (!groupId) return;
@@ -172,24 +173,12 @@
   };
 
   const toggleGroupDisabled = () => {
-    const instance = nodeEngine.getNode(nodeId) as any;
+    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
     const raw = instance?.config?.groupId;
     const groupId = typeof raw === 'string' ? raw : raw ? String(raw) : '';
     if (!groupId) return;
     if (typeof window === 'undefined') return;
     window.dispatchEvent(new CustomEvent('shugu:toggle-group-disabled', { detail: { groupId } }));
-  };
-
-  const toggleCustomManualGate = (event: Event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!nodeId) return;
-    const instance = nodeEngine.getNode(nodeId);
-    if (!instance) return;
-    const state = readCustomNodeState(instance.config ?? {});
-    if (!state) return;
-    const next = !state.manualGate;
-    nodeEngine.updateNodeConfig(nodeId, writeCustomNodeState(instance.config ?? {}, { ...state, manualGate: next }));
   };
 
   const requestCustomUncouple = (event: Event) => {
@@ -263,7 +252,7 @@
     if (portType === 'string' || portType === 'asset') return typeof value === 'string' ? value : null;
     if (portType === 'color') return typeof value === 'string' ? value : null;
     if (portType === 'client' && typeof value === 'object' && value) {
-      const clientId = (value as any).clientId;
+      const clientId = (value as AnyRecord).clientId;
       return clientId ? String(clientId) : null;
     }
 
@@ -274,7 +263,7 @@
     const instance = nodeEngine.getNode(nodeId);
     if (!instance) return 'any';
     if (instance.type === 'group-proxy') {
-      const raw = (instance.config as any)?.portType;
+      const raw = (instance.config as AnyRecord)?.portType;
       return typeof raw === 'string' && raw ? raw : raw ? String(raw) : 'any';
     }
     const def = nodeRegistry.get(instance.type);
@@ -296,31 +285,33 @@
   let groupFramePortAreaHeight = 0;
 
   $: if (isGroupFrameNode && nodeId) {
-    const instance = nodeEngine.getNode(nodeId) as any;
+    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
     const rawGroupId = instance?.config?.groupId;
     const groupId = typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
     const groupTop = Number(instance?.position?.y ?? 0);
     const proxyHalfHeight = 10;
 
-    const nodeById = new Map(($graphStateStore.nodes ?? []).map((n: any) => [String(n.id), n] as const));
+    const nodeById = new Map(
+      ($graphStateStore.nodes ?? []).map((n: NodeInstance) => [String(n.id), n] as const)
+    );
     const connections = Array.isArray($graphStateStore.connections) ? $graphStateStore.connections : [];
 
-    const incomingToProxy = new Map<string, any>();
-    const outgoingFromProxy = new Map<string, any[]>();
+    const incomingToProxy = new Map<string, AnyRecord>();
+    const outgoingFromProxy = new Map<string, AnyRecord[]>();
     for (const c of connections) {
-      const targetId = String((c as any).targetNodeId ?? '');
-      const sourceId = String((c as any).sourceNodeId ?? '');
-      const targetPortId = String((c as any).targetPortId ?? '');
-      const sourcePortId = String((c as any).sourcePortId ?? '');
+      const targetId = String((c as AnyRecord).targetNodeId ?? '');
+      const sourceId = String((c as AnyRecord).sourceNodeId ?? '');
+      const targetPortId = String((c as AnyRecord).targetPortId ?? '');
+      const sourcePortId = String((c as AnyRecord).sourcePortId ?? '');
       if (!targetId || !sourceId || !targetPortId || !sourcePortId) continue;
 
       const targetNode = nodeById.get(targetId);
       const sourceNode = nodeById.get(sourceId);
 
-      if (String((targetNode as any)?.type ?? '') === 'group-proxy' && targetPortId === 'in') {
+      if (String((targetNode as AnyRecord)?.type ?? '') === 'group-proxy' && targetPortId === 'in') {
         incomingToProxy.set(targetId, c);
       }
-      if (String((sourceNode as any)?.type ?? '') === 'group-proxy' && sourcePortId === 'out') {
+      if (String((sourceNode as AnyRecord)?.type ?? '') === 'group-proxy' && sourcePortId === 'out') {
         const list = outgoingFromProxy.get(sourceId) ?? [];
         list.push(c);
         outgoingFromProxy.set(sourceId, list);
@@ -330,10 +321,10 @@
     const portLabelFor = (nodeId: string, side: 'input' | 'output', portId: string): string => {
       const node = nodeById.get(String(nodeId));
       if (!node) return String(portId);
-      const def = nodeRegistry.get(String((node as any).type ?? ''));
+      const def = nodeRegistry.get(String((node as AnyRecord).type ?? ''));
       const ports = side === 'input' ? def?.inputs : def?.outputs;
-      const port = (ports ?? []).find((p: any) => String(p.id) === String(portId)) ?? null;
-      return String((port as any)?.label ?? (port as any)?.id ?? portId);
+      const port = (ports ?? []).find((p: AnyRecord) => String(p.id) === String(portId)) ?? null;
+      return String((port as AnyRecord)?.label ?? (port as AnyRecord)?.id ?? portId);
     };
 
     const validPortTypes = new Set([
@@ -354,7 +345,7 @@
       'any',
     ]);
 
-    const resolveProxyPortType = (node: any): string => {
+    const resolveProxyPortType = (node: AnyRecord): string => {
       const raw = node?.config?.portType;
       const t = typeof raw === 'string' ? raw : raw ? String(raw) : '';
       return validPortTypes.has(t) ? t : 'any';
@@ -363,16 +354,16 @@
     const ports: GroupFrameProxyPort[] = [];
 
     for (const node of $graphStateStore.nodes ?? []) {
-      if (String((node as any).type ?? '') !== 'group-proxy') continue;
-      const proxyId = String((node as any).id ?? '');
+      if (String((node as AnyRecord).type ?? '') !== 'group-proxy') continue;
+      const proxyId = String((node as AnyRecord).id ?? '');
       if (!proxyId) continue;
-      const proxyGroupId = String(((node as any).config as any)?.groupId ?? '');
+      const proxyGroupId = String(((node as AnyRecord).config as AnyRecord)?.groupId ?? '');
       if (!proxyGroupId || proxyGroupId !== groupId) continue;
 
       const direction =
-        String(((node as any).config as any)?.direction ?? 'output') === 'input' ? 'input' : 'output';
+        String(((node as AnyRecord).config as AnyRecord)?.direction ?? 'output') === 'input' ? 'input' : 'output';
       const portType = resolveProxyPortType(node);
-      const centerY = Number((node as any).position?.y ?? 0) + proxyHalfHeight;
+      const centerY = Number((node as AnyRecord).position?.y ?? 0) + proxyHalfHeight;
 
       let label = '';
       if (direction === 'input') {
@@ -380,18 +371,18 @@
         const first = internal[0] ?? null;
         if (first) {
           label = portLabelFor(
-            String((first as any).targetNodeId),
+            String((first as AnyRecord).targetNodeId),
             'input',
-            String((first as any).targetPortId)
+            String((first as AnyRecord).targetPortId)
           );
         }
       } else {
         const internal = incomingToProxy.get(proxyId) ?? null;
         if (internal) {
           label = portLabelFor(
-            String((internal as any).sourceNodeId),
+            String((internal as AnyRecord).sourceNodeId),
             'output',
-            String((internal as any).sourcePortId)
+            String((internal as AnyRecord).sourcePortId)
           );
         }
       }
@@ -435,7 +426,7 @@
       if (port?.defaultValue !== undefined) return port.defaultValue;
 
       // Many nodes (especially processors) treat config fields as fallback values for unconnected inputs.
-      const fromConfig = (instance.config as any)?.[portId];
+      const fromConfig = (instance.config as AnyRecord)?.[portId];
       if (fromConfig !== undefined) return fromConfig;
       return undefined;
     }
@@ -600,7 +591,7 @@
   let portValueText: PortValueText = { inputs: {}, outputs: {} };
 
   $: if (nodeId) {
-    if (Boolean((data as any).deployedLoop) || isDeployedPatch) {
+    if (Boolean((data as AnyRecord).deployedLoop) || isDeployedPatch) {
       portValueText = { inputs: {}, outputs: {} };
     } else {
       // Depend on tickTimeStore to refresh live values (MIDI/sensors/etc).

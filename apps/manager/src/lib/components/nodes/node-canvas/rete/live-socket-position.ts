@@ -1,9 +1,10 @@
 /**
  * Purpose: Socket position watcher that keeps DOM sockets aligned after layout changes.
  */
+import type { BaseSchemes, Scope } from 'rete';
 import { DOMSocketPosition } from 'rete-render-utils';
 
-export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
+export class LiveDOMSocketPosition extends DOMSocketPosition<BaseSchemes, unknown> {
   private ro: ResizeObserver | null = null;
   private observed = new WeakSet<HTMLElement>();
   private elementToNodeId = new WeakMap<HTMLElement, string>();
@@ -14,7 +15,7 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
     super();
   }
 
-  override attach(scope: any) {
+  override attach(scope: Scope<never, [unknown]>) {
     super.attach(scope);
     if (typeof ResizeObserver === 'undefined') return;
     if (this.ro) return;
@@ -26,7 +27,7 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
       }
     });
 
-    const area = (this as any).area;
+    const area = this.area;
     if (!area) return;
 
     const observeAll = () => {
@@ -46,7 +47,7 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
     };
 
     observeAll();
-    area.addPipe((ctx: any) => {
+    area.addPipe((ctx) => {
       if (ctx?.type === 'rendered' && ctx.data?.type === 'node') {
         observeAll();
       }
@@ -74,20 +75,20 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
   }
 
   private async flush() {
-    const area = (this as any).area;
+    const area = this.area;
     if (!area) return;
     const ids = Array.from(this.pending);
     this.pending.clear();
 
     for (const nodeId of ids) {
-      const items = (this as any).sockets
+      const items = this.sockets
         ?.snapshot?.()
-        ?.filter((item: any) => String(item.nodeId) === String(nodeId));
+        ?.filter((item) => String(item.nodeId) === String(nodeId));
       if (!items || items.length === 0) continue;
 
       await Promise.all(
-        items.map(async (item: any) => {
-          const position = await (this as any).calculatePosition(
+        items.map(async (item) => {
+          const position = await this.calculatePosition(
             String(nodeId),
             item.side,
             String(item.key),
@@ -97,7 +98,7 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
         })
       );
 
-      (this as any).emitter?.emit?.({ nodeId: String(nodeId) });
+      this.emitter?.emit?.({ nodeId: String(nodeId) });
     }
   }
 
@@ -107,7 +108,7 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
     key: string,
     element: HTMLElement
   ) {
-    const area = (this as any).area;
+    const area = this.area;
     const view = area?.nodeViews?.get?.(String(nodeId));
     const nodeEl = view?.element as HTMLElement | undefined;
     const isHeaderSocket = Boolean(element.closest?.('.group-frame-gate-sockets'));
@@ -128,7 +129,7 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<any, any> {
       y: (rect.top - nodeRect.top + rect.height / 2) / k,
     };
 
-    const props = (this as any).props;
+    const props = (this as { props?: { offset?: (pos: { x: number; y: number }, nodeId: string, side: string, key: string) => { x: number; y: number } } }).props;
     if (props?.offset) return props.offset(local, nodeId, side, key);
 
     return { x: local.x, y: local.y };

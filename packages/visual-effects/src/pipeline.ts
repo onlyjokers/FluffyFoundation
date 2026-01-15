@@ -8,6 +8,12 @@ import type { AsciiEffectRuntime } from './ascii.js';
 import { applyAsciiEffect } from './ascii.js';
 import type { ConvolutionEffectRuntime } from './convolution.js';
 import { applyConvolutionEffect } from './convolution.js';
+import {
+  asVisualEffect,
+  getAsciiCellSize,
+  getConvolutionScale,
+  getEffectType,
+} from './effect-guards.js';
 
 export type VisualEffectPipeline = AsciiEffectRuntime &
   ConvolutionEffectRuntime & {
@@ -77,10 +83,10 @@ function computeEffectTargetFps(
 
   for (const effect of effects) {
     if (!effect || typeof effect !== 'object') continue;
-    const type = typeof (effect as any).type === 'string' ? String((effect as any).type) : '';
+    const type = getEffectType(effect);
 
     if (type === 'convolution') {
-      const scale = clampNumber(Number((effect as any).scale ?? 0.5), 0.1, 1);
+      const scale = clampNumber(getConvolutionScale(effect) ?? 0.5, 0.1, 1);
       let procW = Math.max(48, Math.floor(width * scale));
       let procH = Math.max(48, Math.floor(height * scale));
 
@@ -98,7 +104,7 @@ function computeEffectTargetFps(
     }
 
     if (type === 'ascii') {
-      const cellSize = Math.max(1, Math.min(100, Math.round(Number((effect as any).cellSize ?? 11))));
+      const cellSize = Math.max(1, Math.min(100, Math.round(getAsciiCellSize(effect) ?? 11)));
       const cols = Math.max(24, Math.floor(width / cellSize));
       const rows = Math.max(18, Math.floor(height / (cellSize * 1.05)));
 
@@ -185,14 +191,32 @@ export function renderVisualEffects(
 
   for (const effect of Array.isArray(effects) ? effects : []) {
     if (!effect || typeof effect !== 'object') continue;
-    const type = typeof (effect as any).type === 'string' ? String((effect as any).type) : '';
+    const type = getEffectType(effect);
+    const visualEffect = asVisualEffect(effect);
+    if (!visualEffect) continue;
 
     const applied = (() => {
       if (type === 'convolution') {
-        return applyConvolutionEffect(pipeline, srcCanvas, dstCtx, width, height, dpr, effect as any);
+        return applyConvolutionEffect(
+          pipeline,
+          srcCanvas,
+          dstCtx,
+          width,
+          height,
+          dpr,
+          visualEffect
+        );
       }
       if (type === 'ascii') {
-        const result = applyAsciiEffect(pipeline, srcCanvas, dstCtx, width, height, dpr, effect as any);
+        const result = applyAsciiEffect(
+          pipeline,
+          srcCanvas,
+          dstCtx,
+          width,
+          height,
+          dpr,
+          visualEffect
+        );
         if (result && asciiOverlay) {
           asciiOverlay(dstCtx, width, height, result.cols, result.rows);
         }

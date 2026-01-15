@@ -20,15 +20,17 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request, Response } from 'express';
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { AssetKind } from './assets.types.js';
+import type { AssetKind, AssetRecord } from './assets.types.js';
 import { AssetsService } from './assets.service.js';
 import { requireAssetReadAuth, requireAssetWriteAuth } from './assets.auth.js';
 import { parseByteRangeHeader } from './range.js';
 import { readAssetServiceConfig } from './assets.config.js';
+import { getBodyString } from '../utils/request-utils.js';
 
 const UPLOAD_TMP_DIR = path.join(os.tmpdir(), 'shugu-assets-upload');
 try {
@@ -48,13 +50,13 @@ function normalizeEtag(value: string | null | undefined): string | null {
   return unquoted || null;
 }
 
-type HeaderRequest = {
-  header: (name: string) => string | undefined;
-  get: (name: string) => string | undefined;
-  protocol: string;
-} & Record<string, unknown>;
+type HeaderRequest = Pick<Request, 'header' | 'get' | 'protocol'> & { query?: unknown; body?: unknown };
 
-type RawResponse = any;
+type UploadFile = {
+  path: string;
+  mimetype?: string;
+  originalname?: string;
+};
 
 function buildPublicBaseUrl(req: HeaderRequest, configuredBaseUrl: string | null): string {
   if (configuredBaseUrl) return configuredBaseUrl;
@@ -90,7 +92,7 @@ export class AssetsController {
   constructor(private readonly assets: AssetsService) {}
 
   @Get()
-  async list(@Req() req: any): Promise<{ assets: any[] }> {
+  async list(@Req() req: Request): Promise<{ assets: AssetRecord[] }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
     return { assets: this.assets.listAssets() };
   }
@@ -103,25 +105,22 @@ export class AssetsController {
     })
   )
   async upload(
-    @UploadedFile() file: any,
-    @Req() req: any
-  ): Promise<{ asset: any; contentUrl: string; deduped: boolean }> {
+    @UploadedFile() file: UploadFile | undefined,
+    @Req() req: Request
+  ): Promise<{ asset: AssetRecord; contentUrl: string; deduped: boolean }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
 
     if (!file) throw new BadRequestException('missing file');
     const mimeType = typeof file.mimetype === 'string' ? file.mimetype : 'application/octet-stream';
     const originalName =
-      typeof (req.body as any)?.originalName === 'string'
-        ? String((req.body as any).originalName)
-        : typeof file.originalname === 'string'
-          ? file.originalname
-          : 'asset';
+      getBodyString(req.body, 'originalName') ??
+      (typeof file.originalname === 'string' ? file.originalname : 'asset');
 
-    const kindRaw = typeof (req.body as any)?.kind === 'string' ? String((req.body as any).kind) : '';
+    const kindRaw = getBodyString(req.body, 'kind') ?? '';
     const kind: AssetKind | null =
       kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
 
-    let result: { asset: any; deduped: boolean };
+    let result: { asset: AssetRecord; deduped: boolean };
     try {
       result = await this.assets.uploadFromTempFile({
         tempPath: file.path,
@@ -143,13 +142,13 @@ export class AssetsController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string, @Req() req: any): Promise<{ deleted: boolean }> {
+  async delete(@Param('id') id: string, @Req() req: Request): Promise<{ deleted: boolean }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
     return await this.assets.deleteAsset(id);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: any, @Req() req: any): Promise<{ asset: any }> {
+  async update(@Param('id') id: string, @Body() body: unknown, @Req() req: Request): Promise<{ asset: AssetRecord }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
     const asset = await this.assets.updateAsset(id, body ?? {});
     if (!asset) throw new NotFoundException('asset not found');
@@ -157,7 +156,7 @@ export class AssetsController {
   }
 
   @Get(':id')
-  async getMeta(@Param('id') id: string, @Req() req: any): Promise<any> {
+  async getMeta(@Param('id') id: string, @Req() req: Request): Promise<AssetRecord> {
     requireAssetReadAuth(req, this.assets.config.readToken);
     const asset = this.assets.getAssetRecord(id);
     if (!asset) throw new NotFoundException('asset not found');
@@ -167,8 +166,8 @@ export class AssetsController {
   @Head(':id/content')
   async headContent(
     @Param('id') id: string,
-    @Req() req: any,
-    @Res() res: RawResponse
+    @Req() req: Request,
+    @Res() res: Response
   ): Promise<void> {
     requireAssetReadAuth(req, this.assets.config.readToken);
     const info = this.assets.getContentHeaders(id);
@@ -202,8 +201,8 @@ export class AssetsController {
   @Get(':id/content')
   async getContent(
     @Param('id') id: string,
-    @Req() req: any,
-    @Res() res: RawResponse
+    @Req() req: Request,
+    @Res() res: Response
   ): Promise<void> {
     requireAssetReadAuth(req, this.assets.config.readToken);
     const info = this.assets.getContentHeaders(id);

@@ -2,9 +2,15 @@
  * Purpose: Build Rete nodes and apply dynamic port constraints.
  */
 import { get } from 'svelte/store';
-import { ClassicPreset } from 'rete';
+import { ClassicPreset, type BaseSchemes } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
-import type { NodeInstance, NodePort, PortType, Connection as EngineConnection } from '$lib/nodes/types';
+import type {
+  ConfigField,
+  NodeInstance,
+  NodePort,
+  PortType,
+  Connection as EngineConnection,
+} from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
 import { audienceClients } from '$lib/stores/manager';
 import { CUSTOM_NODE_TYPE_PREFIX } from '$lib/nodes/custom-nodes/store';
@@ -24,7 +30,7 @@ import {
 } from './rete-controls';
 
 type ReteSocketMap = Record<string, ClassicPreset.Socket>;
-type AnyAreaPlugin = AreaPlugin<any, any>;
+type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
 
 type ReteBuilderOptions = {
   nodeRegistry: NodeRegistry;
@@ -44,11 +50,11 @@ type ReteBuilderOptions = {
 export type ReteBuilder = {
   nodeLabel: (node: NodeInstance) => string;
   socketFor: (type?: string) => ClassicPreset.Socket;
-  buildReteNode: (instance: NodeInstance) => any;
+  buildReteNode: (instance: NodeInstance) => ClassicPreset.Node;
   applyMidiMapRangeConstraints: (
     state: { nodes: NodeInstance[]; connections: EngineConnection[] },
     areaPlugin: AnyAreaPlugin | null | undefined,
-    nodeMap: Map<string, any>
+    nodeMap: Map<string, ClassicPreset.Node>
   ) => Promise<void>;
   isCompatible: (sourceType: PortType, targetType: PortType) => boolean;
   getPortDefForSocket: (socket: { nodeId: string; side: 'input' | 'output'; key: string }) => NodePort | null;
@@ -80,7 +86,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       return `Client: ${onlineCount} online`;
     }
     if (node.type === 'group-frame') {
-      const raw = (node.config as any)?.name;
+      const raw = (node.config as Record<string, unknown>)?.name;
       const name = typeof raw === 'string' && raw.trim() ? raw.trim() : raw ? String(raw) : 'Group';
       return name;
     }
@@ -92,11 +98,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     return sockets.any;
   };
 
-  const buildReteNode = (instance: NodeInstance): any => {
+  const buildReteNode = (instance: NodeInstance): ClassicPreset.Node => {
     const def = nodeRegistry.get(instance.type);
-    const node: any = new ClassicPreset.Node(nodeLabel(instance));
+    const node = new ClassicPreset.Node(nodeLabel(instance));
     const configFields = def?.configSchema ?? [];
-    const configFieldByKey = new Map<string, any>();
+    const configFieldByKey = new Map<string, ConfigField>();
     for (const field of configFields) configFieldByKey.set(field.key, field);
     const inputControlKeys = new Set<string>();
     node.id = instance.id;
@@ -105,14 +111,14 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     const proxyPortType =
       instance.type === 'group-proxy'
         ? (() => {
-            const raw = (instance.config as any)?.portType;
+            const raw = (instance.config as Record<string, unknown>)?.portType;
             return typeof raw === 'string' && raw ? raw : raw ? String(raw) : 'any';
           })()
         : null;
 
     const cmdAggInputCount = (() => {
       if (instance.type !== 'cmd-aggregator') return null;
-      const raw = (instance.config as any)?.inCount;
+      const raw = (instance.config as Record<string, unknown>)?.inCount;
       const n = typeof raw === 'number' ? raw : Number(raw);
       return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
     })();
@@ -185,7 +191,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
           inp.addControl(
             (() => {
-              const control: any = new ClassicPreset.InputControl('number', {
+              const control = new ClassicPreset.InputControl('number', {
                 initial: clamp(initial),
                 change: (value) => {
                   const next = typeof value === 'number' ? clamp(value) : value;
@@ -220,7 +226,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               : typeof configValue === 'string'
                 ? configValue
                 : String(derivedDefault ?? '');
-          const control: any = new ClassicPreset.InputControl('text', {
+          const control = new ClassicPreset.InputControl('text', {
             initial,
             change: (value) => {
               nodeEngine.updateNodeInputValue(instance.id, input.id, value);
@@ -238,7 +244,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 : forceInlineInput
                   ? false
                   : Boolean(derivedDefault);
-          const control: any = new BooleanControl({
+          const control = new BooleanControl({
             initial,
             change: (value) => {
               nodeEngine.updateNodeInputValue(instance.id, input.id, value);
@@ -251,7 +257,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 if (state) {
                   nodeEngine.updateNodeConfig(
                     instance.id,
-                    writeCustomNodeState(instance.config ?? {}, { ...state, manualGate: Boolean(value) } as any)
+                    writeCustomNodeState(instance.config ?? {}, { ...state, manualGate: Boolean(value) })
                   );
                 }
               }
@@ -273,7 +279,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               : String(derivedDefault ?? '#ffffff');
         inp.addControl(
           (() => {
-            const control: any = new ClassicPreset.InputControl('text', {
+            const control = new ClassicPreset.InputControl('text', {
               initial,
               change: (value) => {
                 nodeEngine.updateNodeInputValue(instance.id, input.id, value);
@@ -295,7 +301,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             : typeof instance.config?.[input.id] === 'string'
               ? String(instance.config[input.id])
               : String(configField.defaultValue ?? '');
-        const control: any = new SelectControl({
+        const control = new SelectControl({
           initial,
           options: configField.options ?? [],
           change: (value) => {
@@ -313,7 +319,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     }
 
     for (const output of def?.outputs ?? []) {
-      const out: any = new ClassicPreset.Output(socketFor(proxyPortType ?? output.type), output.label ?? output.id);
+      const out = new ClassicPreset.Output(socketFor(proxyPortType ?? output.type), output.label ?? output.id);
       if (instance.type === 'proc-client-sensors') {
         out.control = new ClientSensorValueControl({ nodeId: instance.id, portId: output.id });
       }
@@ -379,7 +385,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           return next;
         };
 
-        const control: any = new ClassicPreset.InputControl('number', {
+        const control = new ClassicPreset.InputControl('number', {
           initial: clamp(Number(current ?? 0)),
           change: (value) => {
             const next = typeof value === 'number' ? clamp(value) : value;
@@ -393,7 +399,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         control.step = field.step;
         node.addControl(key, control);
       } else if (field.type === 'client-picker') {
-        const control: any = new ClientPickerControl({
+        const control = new ClientPickerControl({
           label: field.label,
           initial: String(current ?? ''),
           change: (value) => {
@@ -407,10 +413,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         control.nodeType = instance.type;
         node.addControl(key, control);
       } else if (field.type === 'asset-picker') {
-        const control: any = new AssetPickerControl({
+        const assetKindRaw = (field as Record<string, unknown>).assetKind;
+        const control = new AssetPickerControl({
           label: field.label,
           initial: String(current ?? ''),
-          assetKind: (field as any).assetKind ?? 'any',
+          assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
@@ -418,10 +425,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         });
         node.addControl(key, control);
       } else if (field.type === 'local-asset-picker') {
-        const control: any = new LocalAssetPickerControl({
+        const assetKindRaw = (field as Record<string, unknown>).assetKind;
+        const control = new LocalAssetPickerControl({
           label: field.label,
           initial: String(current ?? ''),
-          assetKind: (field as any).assetKind ?? 'any',
+          assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
@@ -462,14 +470,14 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       } else if (field.type === 'midi-source') {
         node.addControl(key, new MidiLearnControl({ nodeId: instance.id, label: field.label }));
       } else if (field.type === 'time-range') {
-        const raw = current as any;
+        const raw = current as Record<string, unknown>;
         const startSec =
           typeof raw?.startSec === 'number' && Number.isFinite(raw.startSec) ? raw.startSec : 0;
         const endSec = typeof raw?.endSec === 'number' && Number.isFinite(raw.endSec) ? raw.endSec : -1;
 
-        const control: any = new TimeRangeControl({
+        const control = new TimeRangeControl({
           label: field.label,
-          initial: { startSec, endSec, cursorSec: typeof raw?.cursorSec === 'number' ? raw.cursorSec : -1 } as any,
+          initial: { startSec, endSec, cursorSec: typeof raw?.cursorSec === 'number' ? raw.cursorSec : -1 },
           min: field.min,
           max: field.max,
           step: field.step,
@@ -482,9 +490,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               'load-video-from-local',
             ]);
             if (timelineNodeTypes.has(instance.type)) {
-              const nextStart = typeof (value as any)?.startSec === 'number' ? (value as any).startSec : 0;
-              const nextEnd = typeof (value as any)?.endSec === 'number' ? (value as any).endSec : -1;
-              const nextCursor = (value as any)?.cursorSec;
+              const valueRecord = value as Record<string, unknown>;
+              const nextStart = typeof valueRecord?.startSec === 'number' ? valueRecord.startSec : 0;
+              const nextEnd = typeof valueRecord?.endSec === 'number' ? valueRecord.endSec : -1;
+              const nextCursor = valueRecord?.cursorSec;
 
               nodeEngine.updateNodeInputValue(instance.id, 'startSec', nextStart);
               sendNodeOverride(instance.id, 'input', 'startSec', nextStart);
@@ -511,12 +520,12 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         control.configKey = key;
         node.addControl(key, control);
       } else if (field.type === 'curve') {
-        const rawCurve = current as any;
+        const rawCurve = current;
         // Cubic bezier: [x1, y1, x2, y2]
         const initial: [number, number, number, number] = Array.isArray(rawCurve) && rawCurve.length === 4
           ? rawCurve as [number, number, number, number]
           : [0.25, 0.1, 0.25, 1.0];
-        const curveControl: any = new CurveControl({
+        const curveControl = new CurveControl({
           label: field.label,
           initial,
           nodeId: instance.id,
@@ -540,7 +549,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         noteControl.nodeId = instance.id;
         node.addControl(key, noteControl);
       } else {
-        const control: any = new ClassicPreset.InputControl('text', {
+        const control = new ClassicPreset.InputControl('text', {
           initial: String(current ?? ''),
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
@@ -559,7 +568,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const applyMidiMapRangeConstraints = async (
     state: { nodes: NodeInstance[]; connections: EngineConnection[] },
     areaPlugin: AnyAreaPlugin | null | undefined,
-    nodeMap: Map<string, any>
+    nodeMap: Map<string, ClassicPreset.Node>
   ) => {
     if (!areaPlugin) return;
 
@@ -609,8 +618,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         baseMax !== undefined && downMax !== undefined ? Math.min(baseMax, downMax) : (baseMax ?? downMax);
 
       const reteNode = nodeMap.get(String(node.id));
-      const minCtrl: any = reteNode?.controls?.min;
-      const maxCtrl: any = reteNode?.controls?.max;
+      const minCtrl = reteNode?.controls?.min;
+      const maxCtrl = reteNode?.controls?.max;
       let needsNodeUpdate = false;
 
       if (minCtrl) {

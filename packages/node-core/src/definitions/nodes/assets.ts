@@ -4,6 +4,7 @@
 import type { NodeDefinition } from '../../types.js';
 import { normalizeLocalMediaRef } from '../media-utils.js';
 import { clampNumber, coerceAssetVolumeGain, coerceBoolean, coerceNumber } from '../utils.js';
+import { getRecordString } from './node-definition-utils.js';
 
 type LoadAudioTimelineState = {
   signature: string;
@@ -337,9 +338,7 @@ export function createLoadAudioFromLocalNode(): NodeDefinition {
       const asset =
         typeof inputs.asset === 'string' && inputs.asset.trim()
           ? inputs.asset.trim()
-          : typeof (config as any).assetPath === 'string'
-            ? String((config as any).assetPath).trim()
-            : '';
+          : getRecordString(config, 'assetPath') ?? '';
       const play = coerceBoolean(inputs.play);
       const loop = coerceBoolean(inputs.loop);
       const reverse = coerceBoolean(inputs.reverse);
@@ -429,9 +428,7 @@ export function createLoadImageFromLocalNode(): NodeDefinition {
       const baseUrl =
         typeof inputs.asset === 'string' && inputs.asset.trim()
           ? inputs.asset.trim()
-          : typeof (config as any).assetPath === 'string'
-            ? String((config as any).assetPath).trim()
-            : '';
+          : getRecordString(config, 'assetPath') ?? '';
       return { ref: baseUrl ? normalizeLocalMediaRef(baseUrl, 'image') : '' };
     },
   };
@@ -706,9 +703,7 @@ export function createLoadVideoFromLocalNode(): NodeDefinition {
       const assetUrl =
         typeof inputs.asset === 'string' && inputs.asset.trim()
           ? inputs.asset.trim()
-          : typeof (config as any).assetPath === 'string'
-            ? String((config as any).assetPath).trim()
-            : '';
+          : getRecordString(config, 'assetPath') ?? '';
       const localRef = assetUrl ? normalizeLocalMediaRef(assetUrl, 'video') : '';
       const fitRaw = typeof config.fit === 'string' ? config.fit.trim().toLowerCase() : '';
       const fit =

@@ -5,11 +5,12 @@
  * Import: treat as "copy import" (generate new IDs), rewrite nested references,
  * and regenerate instance-level groupIds inside templates to avoid collisions.
  */
-import type { GraphState, NodeInstance } from '$lib/nodes/types';
+import type { GraphState, NodeInstance, PortType } from '$lib/nodes/types';
+import { asRecord, getBoolean, getNumber, getString } from '$lib/utils/value-guards';
 import { generateCustomNodeGroupId, readCustomNodeState, writeCustomNodeState } from './instance';
 import type { CustomNodeInstanceState } from './instance';
 import type { CustomNodeDefinition } from './types';
-import { customNodeType } from './store';
+import { customNodeType } from './custom-node-type';
 import { dependenciesForDefinition } from './deps';
 
 export type CustomNodeFileV1 = {
@@ -25,9 +26,47 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function cloneGraphForFile(graph: GraphState): GraphState {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  const connections = Array.isArray(graph.connections) ? graph.connections : [];
   return {
-    nodes: (graph.nodes ?? []).map((n: any) => ({ ...n, outputValues: {} })),
-    connections: (graph.connections ?? []).map((c: any) => ({ ...c })),
+    nodes: nodes.flatMap((node) => {
+      const record = asRecord(node);
+      const id = getString(record.id, '');
+      const type = getString(record.type, '');
+      if (!id || !type) return [];
+      const position = asRecord(record.position);
+      return [
+        {
+          id,
+          type,
+          position: {
+            x: getNumber(position.x, 0),
+            y: getNumber(position.y, 0),
+          },
+          config: { ...asRecord(record.config) },
+          inputValues: { ...asRecord(record.inputValues) },
+          outputValues: {},
+        },
+      ];
+    }),
+    connections: connections.flatMap((conn) => {
+      const record = asRecord(conn);
+      const id = getString(record.id, '');
+      const sourceNodeId = getString(record.sourceNodeId, '');
+      const sourcePortId = getString(record.sourcePortId, '');
+      const targetNodeId = getString(record.targetNodeId, '');
+      const targetPortId = getString(record.targetPortId, '');
+      if (!id || !sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) return [];
+      return [
+        {
+          id,
+          sourceNodeId,
+          sourcePortId,
+          targetNodeId,
+          targetPortId,
+        },
+      ];
+    }),
   };
 }
 
@@ -70,14 +109,17 @@ export function buildCustomNodeFile(definitions: CustomNodeDefinition[], rootDef
       definitionId: String(def.definitionId),
       name: String(def.name ?? ''),
       template: cloneGraphForFile(def.template),
-      ports: (def.ports ?? []).map((p: any) => ({
+      ports: (def.ports ?? []).map((p) => ({
         portKey: String(p?.portKey ?? ''),
         side: String(p?.side) === 'input' ? 'input' : ('output' as const),
         label: String(p?.label ?? ''),
-        type: String(p?.type ?? 'any') as any,
-        pinned: Boolean(p?.pinned),
+        type: getString(p?.type, 'any') as PortType,
+        pinned: getBoolean(p?.pinned, false),
         y: typeof p?.y === 'number' ? p.y : Number(p?.y ?? 0),
-        binding: { nodeId: String(p?.binding?.nodeId ?? ''), portId: String(p?.binding?.portId ?? '') },
+        binding: {
+          nodeId: String(p?.binding?.nodeId ?? ''),
+          portId: String(p?.binding?.portId ?? ''),
+        },
       })),
     })),
   };
@@ -104,44 +146,63 @@ export function parseCustomNodeFile(payload: unknown): CustomNodeFileV1 | null {
     const nodesRaw = Array.isArray(templateRaw?.nodes) ? templateRaw?.nodes : [];
     const connectionsRaw = Array.isArray(templateRaw?.connections) ? templateRaw?.connections : [];
     const template: GraphState = {
-      nodes: nodesRaw
-        .map((n: any) => ({
-          ...n,
-          id: String(n?.id ?? ''),
-          type: String(n?.type ?? ''),
-          position: {
-            x: typeof n?.position?.x === 'number' ? n.position.x : Number(n?.position?.x ?? 0),
-            y: typeof n?.position?.y === 'number' ? n.position.y : Number(n?.position?.y ?? 0),
+      nodes: nodesRaw.flatMap((entry) => {
+        const record = asRecord(entry);
+        const id = getString(record.id, '');
+        const type = getString(record.type, '');
+        if (!id || !type) return [];
+        const position = asRecord(record.position);
+        return [
+          {
+            id,
+            type,
+            position: {
+              x: getNumber(position.x, 0),
+              y: getNumber(position.y, 0),
+            },
+            config: isRecord(record.config) ? (record.config as Record<string, unknown>) : {},
+            inputValues: isRecord(record.inputValues)
+              ? (record.inputValues as Record<string, unknown>)
+              : {},
+            outputValues: {},
           },
-          config: isRecord(n?.config) ? (n.config as Record<string, unknown>) : {},
-          inputValues: isRecord(n?.inputValues) ? (n.inputValues as Record<string, unknown>) : {},
-          outputValues: {},
-        }))
-        .filter((n: any) => Boolean(n.id && n.type)),
-      connections: connectionsRaw
-        .map((c: any) => ({
-          ...c,
-          id: String(c?.id ?? ''),
-          sourceNodeId: String(c?.sourceNodeId ?? ''),
-          sourcePortId: String(c?.sourcePortId ?? ''),
-          targetNodeId: String(c?.targetNodeId ?? ''),
-          targetPortId: String(c?.targetPortId ?? ''),
-        }))
-        .filter((c: any) => Boolean(c.id && c.sourceNodeId && c.targetNodeId && c.sourcePortId && c.targetPortId)),
+        ];
+      }),
+      connections: connectionsRaw.flatMap((entry) => {
+        const record = asRecord(entry);
+        const id = getString(record.id, '');
+        const sourceNodeId = getString(record.sourceNodeId, '');
+        const sourcePortId = getString(record.sourcePortId, '');
+        const targetNodeId = getString(record.targetNodeId, '');
+        const targetPortId = getString(record.targetPortId, '');
+        if (!id || !sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) return [];
+        return [
+          {
+            id,
+            sourceNodeId,
+            sourcePortId,
+            targetNodeId,
+            targetPortId,
+          },
+        ];
+      }),
     };
 
     const portsRaw = Array.isArray(item.ports) ? item.ports : [];
     const ports = portsRaw
-      .map((p: any) => ({
+      .map((p) => ({
         portKey: String(p?.portKey ?? ''),
         side: String(p?.side) === 'input' ? 'input' : ('output' as const),
         label: String(p?.label ?? ''),
-        type: String(p?.type ?? 'any') as any,
-        pinned: Boolean(p?.pinned),
+        type: getString(p?.type, 'any') as PortType,
+        pinned: getBoolean(p?.pinned, false),
         y: typeof p?.y === 'number' ? p.y : Number(p?.y ?? 0),
-        binding: { nodeId: String(p?.binding?.nodeId ?? ''), portId: String(p?.binding?.portId ?? '') },
+        binding: {
+          nodeId: String(p?.binding?.nodeId ?? ''),
+          portId: String(p?.binding?.portId ?? ''),
+        },
       }))
-      .filter((p: any) => Boolean(p.portKey && p.binding?.nodeId && p.binding?.portId));
+      .filter((p) => Boolean(p.portKey && p.binding?.nodeId && p.binding?.portId));
 
     defs.push({ definitionId, name, template, ports });
   }
@@ -191,7 +252,7 @@ function rewriteGraphDeep(graph: GraphState, idMap: Map<string, string>): GraphS
 
   return {
     nodes: nextNodes,
-    connections: connections.map((c: any) => ({ ...c })),
+    connections: connections.map((c) => ({ ...c })),
   };
 }
 
@@ -212,7 +273,7 @@ export function remapImportedDefinitions(definitions: CustomNodeDefinition[]): {
     if (!nextId) throw new Error(`[custom-node-io] missing id mapping for ${oldId}`);
 
     const template = rewriteGraphDeep(cloneGraphForFile(def.template), idMap);
-    const ports = (def.ports ?? []).map((p: any) => ({ ...p, binding: { ...p.binding } }));
+    const ports = (def.ports ?? []).map((p) => ({ ...p, binding: { ...p.binding } }));
 
     return {
       definitionId: nextId,
@@ -224,4 +285,3 @@ export function remapImportedDefinitions(definitions: CustomNodeDefinition[]): {
 
   return { definitions: next, idMap };
 }
-

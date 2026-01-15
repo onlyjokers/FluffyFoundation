@@ -6,21 +6,54 @@
  * boundary nodes (e.g. `group-proxy`) so the resulting graph contains only standard node types.
  */
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
+import { asRecord, getString } from '$lib/utils/value-guards';
 import { readCustomNodeState } from './instance';
 import type { CustomNodeDefinition } from './types';
 
 type Connection = GraphState['connections'][number];
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
 const cloneGraphForCompile = (graph: GraphState): GraphState => {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
   return {
-    nodes: nodes.map((n: any) => ({ ...n, outputValues: {} })),
-    connections: connections.map((c: any) => ({ ...c })),
+    nodes: nodes.flatMap((node) => {
+      const record = asRecord(node);
+      const id = getString(record.id, '');
+      const type = getString(record.type, '');
+      if (!id || !type) return [];
+      const position = asRecord(record.position);
+      return [
+        {
+          id,
+          type,
+          position: {
+            x: Number(position.x ?? 0),
+            y: Number(position.y ?? 0),
+          },
+          config: { ...asRecord(record.config) },
+          inputValues: { ...asRecord(record.inputValues) },
+          outputValues: {},
+        },
+      ];
+    }),
+    connections: connections.flatMap((conn) => {
+      const record = asRecord(conn);
+      const id = getString(record.id, '');
+      const sourceNodeId = getString(record.sourceNodeId, '');
+      const sourcePortId = getString(record.sourcePortId, '');
+      const targetNodeId = getString(record.targetNodeId, '');
+      const targetPortId = getString(record.targetPortId, '');
+      if (!id || !sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) return [];
+      return [
+        {
+          id,
+          sourceNodeId,
+          sourcePortId,
+          targetNodeId,
+          targetPortId,
+        },
+      ];
+    }),
   };
 };
 
@@ -49,7 +82,7 @@ const materializeInternalNodeId = (customNodeId: string, internalNodeId: string)
 
 const isCustomNodeInstance = (node: NodeInstance): boolean => {
   if (!node) return false;
-  const cfg = isRecord(node.config) ? node.config : {};
+  const cfg = asRecord(node.config);
   return Boolean(readCustomNodeState(cfg));
 };
 
@@ -73,33 +106,33 @@ export function expandCustomNodesForCompile(graph: GraphState, definitions: Cust
     const customNodes = nodes.filter(isCustomNodeInstance);
     if (customNodes.length === 0) return current;
 
-    const customIds = new Set(customNodes.map((n) => String((n as any).id ?? '')).filter(Boolean));
-    const remainingNodes = nodes.filter((n) => !customIds.has(String((n as any).id ?? '')));
+    const customIds = new Set(customNodes.map((n) => String(n.id ?? '')).filter(Boolean));
+    const remainingNodes = nodes.filter((n) => !customIds.has(String(n.id ?? '')));
 
     const incomingByTarget = new Map<string, Connection[]>();
     const outgoingBySource = new Map<string, Connection[]>();
     for (const c of connections) {
-      const src = String((c as any).sourceNodeId ?? '');
-      const tgt = String((c as any).targetNodeId ?? '');
+      const src = String(c.sourceNodeId ?? '');
+      const tgt = String(c.targetNodeId ?? '');
       if (!src || !tgt) continue;
       const inc = incomingByTarget.get(tgt) ?? [];
-      inc.push(c as any);
+      inc.push(c);
       incomingByTarget.set(tgt, inc);
       const out = outgoingBySource.get(src) ?? [];
-      out.push(c as any);
+      out.push(c);
       outgoingBySource.set(src, out);
     }
 
     const nextNodes: GraphState['nodes'] = [...remainingNodes];
     const nextConnections: GraphState['connections'] = connections.filter((c) => {
-      const src = String((c as any).sourceNodeId ?? '');
-      const tgt = String((c as any).targetNodeId ?? '');
+      const src = String(c.sourceNodeId ?? '');
+      const tgt = String(c.targetNodeId ?? '');
       return !(customIds.has(src) || customIds.has(tgt));
     });
 
     for (const node of customNodes) {
-      const instanceId = String((node as any).id ?? '');
-      const state = readCustomNodeState((node as any)?.config ?? {}) as any;
+      const instanceId = String(node.id ?? '');
+      const state = readCustomNodeState(asRecord(node.config));
       if (!instanceId || !state) continue;
       const def = byId.get(String(state.definitionId ?? '')) ?? null;
       if (!def) {
@@ -112,51 +145,61 @@ export function expandCustomNodesForCompile(graph: GraphState, definitions: Cust
       const internalNodes = Array.isArray(internalGraph?.nodes) ? internalGraph.nodes : [];
       const internalConnections = Array.isArray(internalGraph?.connections) ? internalGraph.connections : [];
 
-      for (const inner of internalNodes as any[]) {
-        const innerId = String((inner as any).id ?? '');
-        const type = String((inner as any).type ?? '');
+      for (const inner of internalNodes) {
+        const record = asRecord(inner);
+        const innerId = getString(record.id, '');
+        const type = getString(record.type, '');
         if (!innerId || !type) continue;
+        const position = asRecord(record.position);
         nextNodes.push({
-          ...inner,
+          ...record,
           id: materializeInternalNodeId(instanceId, innerId),
+          type,
+          position: {
+            x: Number(position.x ?? 0),
+            y: Number(position.y ?? 0),
+          },
+          config: { ...asRecord(record.config) },
+          inputValues: { ...asRecord(record.inputValues) },
           outputValues: {},
-        } as any);
+        });
       }
 
-      for (const c of internalConnections as any[]) {
-        const src = String((c as any).sourceNodeId ?? '');
-        const srcPort = String((c as any).sourcePortId ?? '');
-        const tgt = String((c as any).targetNodeId ?? '');
-        const tgtPort = String((c as any).targetPortId ?? '');
+      for (const c of internalConnections) {
+        const record = asRecord(c);
+        const src = getString(record.sourceNodeId, '');
+        const srcPort = getString(record.sourcePortId, '');
+        const tgt = getString(record.targetNodeId, '');
+        const tgtPort = getString(record.targetPortId, '');
         if (!src || !srcPort || !tgt || !tgtPort) continue;
         nextConnections.push({
-          ...c,
+          ...record,
           id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
           sourceNodeId: materializeInternalNodeId(instanceId, src),
           targetNodeId: materializeInternalNodeId(instanceId, tgt),
           sourcePortId: srcPort,
           targetPortId: tgtPort,
-        } as any);
+        });
       }
 
-      const portByKey = new Map<string, any>();
+      const portByKey = new Map<string, CustomNodeDefinition['ports'][number]>();
       for (const p of def.ports ?? []) {
-        const key = String((p as any)?.portKey ?? '');
+        const key = getString(p?.portKey, '');
         if (!key) continue;
         portByKey.set(key, p);
       }
 
       for (const c of incomingByTarget.get(instanceId) ?? []) {
-        const src = String((c as any).sourceNodeId ?? '');
-        const srcPort = String((c as any).sourcePortId ?? '');
-        const tgtPort = String((c as any).targetPortId ?? '');
+        const src = String(c.sourceNodeId ?? '');
+        const srcPort = String(c.sourcePortId ?? '');
+        const tgtPort = String(c.targetPortId ?? '');
         if (!src || !srcPort || !tgtPort) continue;
         if (tgtPort === 'gate') continue; // manager-only gate signal
 
         const port = portByKey.get(tgtPort) ?? null;
-        if (!port || String((port as any).side) !== 'input') continue;
-        const bindingNodeId = String((port as any)?.binding?.nodeId ?? '');
-        const bindingPortId = String((port as any)?.binding?.portId ?? '');
+        if (!port || String(port.side) !== 'input') continue;
+        const bindingNodeId = getString(port.binding?.nodeId, '');
+        const bindingPortId = getString(port.binding?.portId, '');
         if (!bindingNodeId || !bindingPortId) continue;
 
         nextConnections.push({
@@ -165,19 +208,19 @@ export function expandCustomNodesForCompile(graph: GraphState, definitions: Cust
           sourcePortId: srcPort,
           targetNodeId: materializeInternalNodeId(instanceId, bindingNodeId),
           targetPortId: bindingPortId,
-        } as any);
+        });
       }
 
       for (const c of outgoingBySource.get(instanceId) ?? []) {
-        const tgt = String((c as any).targetNodeId ?? '');
-        const tgtPort = String((c as any).targetPortId ?? '');
-        const srcPort = String((c as any).sourcePortId ?? '');
+        const tgt = String(c.targetNodeId ?? '');
+        const tgtPort = String(c.targetPortId ?? '');
+        const srcPort = String(c.sourcePortId ?? '');
         if (!tgt || !tgtPort || !srcPort) continue;
 
         const port = portByKey.get(srcPort) ?? null;
-        if (!port || String((port as any).side) !== 'output') continue;
-        const bindingNodeId = String((port as any)?.binding?.nodeId ?? '');
-        const bindingPortId = String((port as any)?.binding?.portId ?? '');
+        if (!port || String(port.side) !== 'output') continue;
+        const bindingNodeId = getString(port.binding?.nodeId, '');
+        const bindingPortId = getString(port.binding?.portId, '');
         if (!bindingNodeId || !bindingPortId) continue;
 
         nextConnections.push({
@@ -186,13 +229,13 @@ export function expandCustomNodesForCompile(graph: GraphState, definitions: Cust
           sourcePortId: bindingPortId,
           targetNodeId: tgt,
           targetPortId: tgtPort,
-        } as any);
+        });
       }
     }
 
     current = {
       nodes: nextNodes,
-      connections: dedupeConnections(nextConnections as any),
+      connections: dedupeConnections(nextConnections),
     };
   }
 
@@ -206,63 +249,63 @@ export function stripGroupProxyNodes(graph: GraphState): GraphState {
 
   const proxyIds = new Set(
     nodes
-      .filter((n: any) => String((n as any).type ?? '') === 'group-proxy')
-      .map((n: any) => String((n as any).id ?? ''))
+      .filter((n) => String(n.type ?? '') === 'group-proxy')
+      .map((n) => String(n.id ?? ''))
       .filter(Boolean)
   );
   if (proxyIds.size === 0) return graph;
 
   const incomingByTarget = new Map<string, Connection[]>();
   const outgoingBySource = new Map<string, Connection[]>();
-  for (const c of connections as any[]) {
-    const src = String((c as any).sourceNodeId ?? '');
-    const tgt = String((c as any).targetNodeId ?? '');
+  for (const c of connections) {
+    const src = String(c.sourceNodeId ?? '');
+    const tgt = String(c.targetNodeId ?? '');
     if (!src || !tgt) continue;
     const inc = incomingByTarget.get(tgt) ?? [];
-    inc.push(c as any);
+    inc.push(c);
     incomingByTarget.set(tgt, inc);
     const out = outgoingBySource.get(src) ?? [];
-    out.push(c as any);
+    out.push(c);
     outgoingBySource.set(src, out);
   }
 
-  const nextNodes = nodes.filter((n: any) => !proxyIds.has(String((n as any).id ?? '')));
-  const keptConnections = connections.filter((c: any) => {
-    const src = String((c as any).sourceNodeId ?? '');
-    const tgt = String((c as any).targetNodeId ?? '');
+  const nextNodes = nodes.filter((n) => !proxyIds.has(String(n.id ?? '')));
+  const keptConnections = connections.filter((c) => {
+    const src = String(c.sourceNodeId ?? '');
+    const tgt = String(c.targetNodeId ?? '');
     return !(proxyIds.has(src) || proxyIds.has(tgt));
   });
 
-  const rewired: Connection[] = [...keptConnections] as any;
+  const rewired: Connection[] = [...keptConnections];
 
   for (const proxyId of proxyIds) {
     const incoming = (incomingByTarget.get(proxyId) ?? []).filter(
-      (c) => String((c as any).targetPortId ?? '') === 'in'
+      (c) => String(c.targetPortId ?? '') === 'in'
     );
     const outgoing = (outgoingBySource.get(proxyId) ?? []).filter(
-      (c) => String((c as any).sourcePortId ?? '') === 'out'
+      (c) => String(c.sourcePortId ?? '') === 'out'
     );
 
     for (const inc of incoming) {
-      const srcNodeId = String((inc as any).sourceNodeId ?? '');
-      const srcPortId = String((inc as any).sourcePortId ?? '');
+      const srcNodeId = String(inc.sourceNodeId ?? '');
+      const srcPortId = String(inc.sourcePortId ?? '');
       if (!srcNodeId || !srcPortId) continue;
       for (const out of outgoing) {
-        const tgtNodeId = String((out as any).targetNodeId ?? '');
-        const tgtPortId = String((out as any).targetPortId ?? '');
+        const tgtNodeId = String(out.targetNodeId ?? '');
+        const tgtPortId = String(out.targetPortId ?? '');
         if (!tgtNodeId || !tgtPortId) continue;
         rewired.push({
-          id: `bypass:${proxyId}:${String((inc as any).id ?? '')}->${String((out as any).id ?? '')}`,
+          id: `bypass:${proxyId}:${String(inc.id ?? '')}->${String(out.id ?? '')}`,
           sourceNodeId: srcNodeId,
           sourcePortId: srcPortId,
           targetNodeId: tgtNodeId,
           targetPortId: tgtPortId,
-        } as any);
+        });
       }
     }
   }
 
-  return { nodes: nextNodes as any, connections: dedupeConnections(rewired) as any };
+  return { nodes: nextNodes, connections: dedupeConnections(rewired) };
 }
 
 export function compileGraphForPatch(state: GraphState, definitions: CustomNodeDefinition[]): GraphState {

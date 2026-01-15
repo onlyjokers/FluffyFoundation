@@ -3,6 +3,7 @@
  */
 
 import type { GyroData, AccelData, OrientationData } from '@shugu/protocol';
+import { getDeviceMotionEventCtor } from './browser/device-motion.js';
 
 export type SensorCallback<T> = (data: T) => void;
 
@@ -41,7 +42,9 @@ export class SensorManager {
      * Request motion sensor permissions (required on iOS 13+)
      */
     async requestPermissions(): Promise<SensorPermissionResult> {
-        const deviceMotionEvent = (window as any).DeviceMotionEvent;
+        const deviceMotionEvent = getDeviceMotionEventCtor(
+            typeof window !== 'undefined' ? window : undefined
+        );
         const requestMotionPermission = deviceMotionEvent?.requestPermission;
 
         // iOS 13+ requires user gesture and explicit permission request.

@@ -6,12 +6,10 @@
   import { AreaPlugin, AreaExtensions } from 'rete-area-plugin';
   import { ConnectionPlugin, Presets as ConnectionPresets } from 'rete-connection-plugin';
   import { HistoryPlugin } from 'rete-history-plugin';
-  import { SveltePlugin, Presets as SveltePresets } from 'rete-svelte-plugin';
+  import { SveltePlugin } from 'rete-svelte-plugin';
 
   import NodeCanvasLayout from './node-canvas/ui/NodeCanvasLayout.svelte';
-  import ReteNode from './node-canvas/rete/ReteNode.svelte';
-  import ReteControl from './node-canvas/rete/ReteControl.svelte';
-  import ReteConnection from './node-canvas/rete/ReteConnection.svelte';
+  import { reteRenderers } from './node-canvas/registry/renderers';
   import ExecutorLogsPanel from './node-canvas/ui/panels/ExecutorLogsPanel.svelte';
   import GroupFramesOverlay from './node-canvas/ui/overlays/GroupFramesOverlay.svelte';
   import LoopFramesOverlay from './node-canvas/ui/overlays/LoopFramesOverlay.svelte';
@@ -55,6 +53,7 @@
     displayBridgeState,
     ensureDisplayLocalFilesRegisteredFromValue,
   } from '$lib/display/display-bridge';
+  import { asRecord, getBoolean, getString } from '$lib/utils/value-guards';
   import type { NodeInstance, Connection as EngineConnection, GraphState } from '$lib/nodes/types';
   import type { LocalLoop } from '$lib/nodes';
   import { midiService } from '$lib/features/midi/midi-service';
@@ -62,7 +61,7 @@
   import { LiveDOMSocketPosition } from './node-canvas/rete/live-socket-position';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
-  import { createGroupController } from './node-canvas/controllers/group-controller';
+  import { createGroupController, type GroupFrame, type NodeGroup } from './node-canvas/controllers/group-controller';
   import { createFocusController } from './node-canvas/controllers/focus-controller';
   import { createGroupPortNodesController } from './node-canvas/controllers/group-port-nodes-controller';
   import { createClipboardController } from './node-canvas/controllers/clipboard-controller';
@@ -79,20 +78,39 @@
   import { createReteBuilder } from './node-canvas/rete/rete-builder';
   import { createGraphSync, type GraphSyncController } from './node-canvas/rete/rete-sync';
   import { bindRetePipes } from './node-canvas/rete/rete-pipes';
+  import { setupReteRenderPreset } from './node-canvas/rete/setup-rete-render';
   import { normalizeAreaTransform, readAreaTransform } from './node-canvas/utils/view-utils';
+  import {
+    customNodeIdFromMaterializedNodeId,
+    internalNodeIdFromMaterialized,
+    isMaterializedInternalNodeId,
+    materializeInternalNodeId,
+  } from './node-canvas/custom-nodes/custom-node-ids';
+  import {
+    createCustomNodeExpansion,
+    type ExpandedCustomNodeFrame,
+  } from './node-canvas/custom-nodes/custom-node-expansion';
+  import { bindCustomNodeEvents } from './node-canvas/custom-nodes/custom-node-events';
+  import { createCustomNodeHandlers } from './node-canvas/custom-nodes/custom-node-handlers';
+  import { createCustomNodeActions } from './node-canvas/custom-nodes/custom-node-actions';
+  import { deepestGroupIdContainingNode } from './node-canvas/groups/group-tree';
+  import { bindGroupFrameEvents } from './node-canvas/groups/group-frame-events';
+  import { createGroupEdgeFinder } from './node-canvas/groups/group-edge-finder';
+  import { createGroupFrameHeaderHandlers } from './node-canvas/groups/group-frame-header';
+  import { registerGroupFrameTranslatePipe } from './node-canvas/groups/group-frame-translate';
   import {
     buildGroupPortIndex,
     groupIdFromNode,
     isGroupPortNodeType,
   } from './node-canvas/utils/group-port-utils';
-  import { createPatchRuntime } from './node-canvas/runtime/patch-runtime';
-  import { createClientSelectionBinding } from './node-canvas/runtime/client-selection-binding';
-  import { createSleepNodeSocketSync } from './node-canvas/runtime/sleep-node-sockets';
+  import { initNodeCanvasRuntime } from './node-canvas/runtime/runtime-init';
+  import { destroyNodeCanvasResources } from './node-canvas/lifecycle/cleanup';
+
+  type ReteSchemes = ClassicPreset.Schemes;
 
   let container: HTMLDivElement | null = null;
-  let editor: NodeEditor<any> | null = null;
-  let areaPlugin: any = null;
-  let connectionPlugin: any = null;
+  let editor: NodeEditor<ReteSchemes> | null = null;
+  let areaPlugin: AreaPlugin<ReteSchemes> | null = null;
   let graphUnsub: (() => void) | null = null;
   let paramsUnsub: (() => void) | null = null;
   let tickUnsub: (() => void) | null = null;
@@ -118,7 +136,6 @@
   let groupFrameDisabledHandler: ((event: Event) => void) | null = null;
   let customNodeUncoupleHandler: ((event: Event) => void) | null = null;
   let customNodeExpandHandler: ((event: Event) => void) | null = null;
-  let groupFrameTranslateDepth = 0;
   let resizeObserver: ResizeObserver | null = null;
   let socketPositionWatcher: LiveDOMSocketPosition | null = null;
   let managerUnsub: (() => void) | null = null;
@@ -143,8 +160,8 @@
     any: new ClassicPreset.Socket('any'),
   } as const;
 
-  const nodeMap = new Map<string, any>();
-  const connectionMap = new Map<string, any>();
+  const nodeMap = new Map<string, NodeInstance>();
+  const connectionMap = new Map<string, EngineConnection>();
   const isSyncingRef = { value: false };
 
   let graphState: GraphState = { nodes: [], connections: [] };
@@ -212,6 +229,7 @@
     await flushPendingCollapsedNodes();
   };
 
+  // Invariant: NodeCanvas is composition-only. Keep behavior unchanged; delegate logic to modules.
   const groupController = createGroupController({
     getContainer: () => container,
     getAdapter: () => viewAdapter,
@@ -267,8 +285,6 @@
     executorStatusByClient,
     showExecutorLogs,
     logsClientId,
-    localLoopConnIds,
-    deployedConnIds,
   } = loopController;
 
   const {
@@ -291,20 +307,16 @@
 
     const incomingTargetKeys = new Set<string>();
     for (const c of connections) {
-      incomingTargetKeys.add(
-        `${String((c as any).targetNodeId ?? '')}:${String((c as any).targetPortId ?? '')}`
-      );
+      incomingTargetKeys.add(`${String(c.targetNodeId ?? '')}:${String(c.targetPortId ?? '')}`);
     }
 
     const result = new Set<string>();
     for (const node of nodes) {
-      if (String((node as any).type ?? '') !== 'group-gate') continue;
-      const nodeId = String((node as any).id ?? '');
+      if (String(node.type ?? '') !== 'group-gate') continue;
+      const nodeId = String(node.id ?? '');
       if (!nodeId) continue;
       if (!incomingTargetKeys.has(`${nodeId}:active`)) continue;
-      const rawGroupId = ((node as any).config as any)?.groupId;
-      const groupId =
-        typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
+      const groupId = getString(asRecord(node.config).groupId, '');
       if (groupId) result.add(groupId);
     }
 
@@ -316,12 +328,10 @@
     const map = new Map<string, string>();
 
     for (const node of nodes) {
-      if (String((node as any).type ?? '') !== 'group-gate') continue;
-      const nodeId = String((node as any).id ?? '');
+      if (String(node.type ?? '') !== 'group-gate') continue;
+      const nodeId = String(node.id ?? '');
       if (!nodeId) continue;
-      const rawGroupId = ((node as any).config as any)?.groupId;
-      const groupId =
-        typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
+      const groupId = getString(asRecord(node.config).groupId, '');
       if (!groupId) continue;
       if (!map.has(groupId)) map.set(groupId, nodeId);
     }
@@ -356,20 +366,13 @@
     groupController.requestFramesUpdate();
   };
 
-  const sleepNodeSockets = createSleepNodeSocketSync({
-    getGraphState: () => graphState,
-    nodeRegistry,
-    sockets,
-    getAreaPlugin: () => areaPlugin,
-    getNodeMap: () => nodeMap,
-  });
-
-  const patchRuntime = createPatchRuntime({
+  const { sleepNodeSockets, patchRuntime, clientSelectionBinding } = initNodeCanvasRuntime({
     nodeEngine,
     nodeRegistry,
     adapter: viewAdapter,
-    isRunningStore,
     getGraphState: () => graphState,
+    graphStateStore,
+    isRunningStore,
     groupDisabledNodeIds: groupController.groupDisabledNodeIds,
     executorStatusByClient,
     showExecutorLogs,
@@ -379,17 +382,10 @@
     displayTransport,
     getSDK,
     ensureDisplayLocalFilesRegisteredFromValue,
-  });
-
-  const clientSelectionBinding = createClientSelectionBinding({
-    nodeEngine,
-    graphStateStore,
-    getGraphState: () => graphState,
-    managerState,
     sensorData,
     getAreaPlugin: () => areaPlugin,
     getNodeMap: () => nodeMap,
-    sendNodeOverride: patchRuntime.sendNodeOverride,
+    sockets,
   });
 
   const syncSleepNodeSockets = (state: GraphState) => sleepNodeSockets.syncSleepNodeSockets(state);
@@ -397,7 +393,7 @@
   const resolveSleepOutputType = (nodeId: string) =>
     sleepNodeSockets.resolveSleepOutputType(nodeId);
 
-  const applyClientNodeSelection = (nodeId: string, next: any) =>
+  const applyClientNodeSelection = (nodeId: string, next: Record<string, unknown>) =>
     clientSelectionBinding.applyClientNodeSelection(nodeId, next);
 
   const syncClientNodesFromInputs = () => clientSelectionBinding.syncClientNodesFromInputs();
@@ -422,7 +418,7 @@
     sendNodeOverride,
     onClientNodePick: (nodeId, clientId) => void applyClientNodeSelection(nodeId, { clientId }),
     onClientNodeSelectInput: (nodeId, portId, value) =>
-      void applyClientNodeSelection(nodeId, { [portId]: value } as any),
+      void applyClientNodeSelection(nodeId, { [portId]: value }),
     onClientNodeRandom: (nodeId, value) => void applyClientNodeSelection(nodeId, { random: value }),
   });
 
@@ -541,7 +537,7 @@
     const node = nodeEngine.getNode(id);
     if (!node) return;
 
-    const state = readCustomNodeState((node as any)?.config ?? {});
+    const state = readCustomNodeState(asRecord(node.config));
     if (!state || state.role !== 'mother') {
       nodeEngine.removeNode(id);
       return;
@@ -552,11 +548,11 @@
 
     const graph = nodeEngine.exportGraph();
     const coupledChildren = (graph.nodes ?? [])
-      .map((n: any) => ({
+      .map((n) => ({
         id: String(n.id ?? ''),
-        state: readCustomNodeState((n as any)?.config ?? {}),
+        state: readCustomNodeState(asRecord(n.config)),
       }))
-      .filter((n: any) =>
+      .filter((n) =>
         Boolean(
           n.id &&
           n.state &&
@@ -564,7 +560,7 @@
           n.state.role === 'child'
         )
       )
-      .map((n: any) => String(n.id))
+      .map((n) => String(n.id))
       .filter((cid: string) => cid !== id);
 
     const ok = confirm(
@@ -586,686 +582,36 @@
 
   const expandedCustomByGroupId = new Map<string, ExpandedCustomNodeFrame>();
   let expandedCustomGroupIds: Set<string> = new Set();
+  let customNodeExpansion: ReturnType<typeof createCustomNodeExpansion> | null = null;
+  let customNodeActions: ReturnType<typeof createCustomNodeActions> | null = null;
+
+  const customNodeHandlers = createCustomNodeHandlers({
+    groupController,
+    nodeEngine,
+    expandedCustomByGroupId,
+    readCustomNodeState,
+    writeCustomNodeState,
+    getCustomNodeDefinition,
+    upsertCustomNodeDefinition,
+    getCustomNodeActions: () => customNodeActions,
+  });
+
   const refreshExpandedCustomGroupIds = () => {
-    expandedCustomGroupIds = new Set(Array.from(expandedCustomByGroupId.keys()));
-  };
-
-  const handleGroupHeaderPointerDown = (groupId: string, event: PointerEvent) => {
-    const id = String(groupId ?? '');
-    if (id) selectedGroupId.set(id);
-
-    if (get(groupSelectionNodeIds).size > 0) {
-      groupSelectionNodeIds.set(new Set());
-      groupSelectionBounds.set(null);
-      groupController.scheduleHighlight();
-    }
-
-    setSelectedNode('');
-    frameDragController.startGroupHeaderDrag(id, event);
-  };
-
-  const materializeInternalNodeId = (customNodeId: string, internalNodeId: string): string => {
-    const cid = String(customNodeId ?? '');
-    const iid = String(internalNodeId ?? '');
-    return `cn:${cid}:${iid}`;
-  };
-
-  const isMaterializedInternalNodeId = (customNodeId: string, nodeId: string): boolean => {
-    const cid = String(customNodeId ?? '');
-    const id = String(nodeId ?? '');
-    return Boolean(cid && id && id.startsWith(`cn:${cid}:`));
-  };
-
-  const internalNodeIdFromMaterialized = (customNodeId: string, nodeId: string): string => {
-    const cid = String(customNodeId ?? '');
-    const id = String(nodeId ?? '');
-    const prefix = `cn:${cid}:`;
-    return id.startsWith(prefix) ? id.slice(prefix.length) : id;
-  };
-
-  const customNodeIdFromMaterializedNodeId = (nodeId: string): string | null => {
-    const id = String(nodeId ?? '');
-    if (!id.startsWith('cn:')) return null;
-    const rest = id.slice(3);
-    // Support nested materialization where the customNodeId itself may contain ':' (e.g. nested mothers),
-    // assuming the internal node id (template id) never contains ':'.
-    const idx = rest.lastIndexOf(':');
-    if (idx <= 0 || idx >= rest.length - 1) return null;
-    return rest.slice(0, idx);
-  };
-
-  const deepestGroupIdContainingNode = (nodeId: string, groups: any[]): string | null => {
-    const byId = new Map(groups.map((g: any) => [String(g?.id ?? ''), g] as const));
-    const depthCache = new Map<string, number>();
-
-    const depthOf = (groupId: string, visiting = new Set<string>()): number => {
-      const cached = depthCache.get(groupId);
-      if (cached !== undefined) return cached;
-      if (visiting.has(groupId)) return 0;
-      visiting.add(groupId);
-      const g = byId.get(String(groupId));
-      const parentId = g?.parentId ? String(g.parentId) : null;
-      const depth = parentId && byId.has(parentId) ? depthOf(parentId, visiting) + 1 : 0;
-      visiting.delete(groupId);
-      depthCache.set(groupId, depth);
-      return depth;
-    };
-
-    let best: { id: string; depth: number } | null = null;
-    for (const g of groups) {
-      const id = String(g?.id ?? '');
-      if (!id) continue;
-      const nodeIds = Array.isArray(g?.nodeIds) ? g.nodeIds.map(String) : [];
-      if (!nodeIds.includes(String(nodeId))) continue;
-      const depth = depthOf(id);
-      if (!best || depth > best.depth) best = { id, depth };
-    }
-    return best?.id ?? null;
+    customNodeExpansion?.refreshExpandedCustomGroupIds();
   };
 
   const rehydrateExpandedCustomFrames = (state: GraphState) => {
-    const nodes = Array.isArray(state?.nodes) ? state.nodes : [];
-    const customNodeIds = new Set<string>();
-    for (const n of nodes) {
-      const id = String((n as any)?.id ?? '');
-      const customId = customNodeIdFromMaterializedNodeId(id);
-      if (customId) customNodeIds.add(customId);
-    }
-    if (customNodeIds.size === 0) return;
-
-    const groups = get(groupController.nodeGroups) ?? [];
-    let nextGroups = groups;
-    let groupsChanged = false;
-    let expandedChanged = false;
-
-    const decorationTypes = new Set(['group-activate', 'group-gate', 'group-proxy', 'group-frame']);
-
-    for (const customId of customNodeIds) {
-      const node = nodeEngine.getNode(String(customId)) as any;
-      if (!node) continue;
-      const state = readCustomNodeState(node?.config ?? {});
-      if (!state || state.role !== 'mother') continue;
-
-      const groupId = String(state.groupId ?? '');
-      if (!groupId) continue;
-
-      // Mark as expanded so the Group frame shows the Custom Node actions (Collapse only).
-      if (!expandedCustomByGroupId.has(groupId)) {
-        expandedCustomByGroupId.set(groupId, { groupId, nodeId: String(customId) });
-        forcedHiddenNodeIds.add(String(customId));
-        expandedChanged = true;
-      }
-
-      if (!nextGroups.some((g: any) => String(g?.id ?? '') === groupId)) {
-        const def = getCustomNodeDefinition(state.definitionId);
-        const parentId = deepestGroupIdContainingNode(String(customId), nextGroups);
-        const nodeIdsInGroup = nodes
-          .filter(
-            (n: any) =>
-              isMaterializedInternalNodeId(String(customId), String(n?.id ?? '')) &&
-              !decorationTypes.has(String(n?.type ?? ''))
-          )
-          .map((n: any) => String(n.id));
-
-        nextGroups = [
-          ...nextGroups,
-          {
-            id: groupId,
-            parentId: parentId ? String(parentId) : null,
-            name: String(def?.name ?? 'Custom Node'),
-            nodeIds: nodeIdsInGroup,
-            disabled: !state.manualGate,
-            minimized: false,
-          },
-        ];
-        groupsChanged = true;
-      }
-    }
-
-    if (!groupsChanged && !expandedChanged) return;
-
-    if (groupsChanged) {
-      groupController.setGroups(nextGroups as any);
-    }
-
-    refreshExpandedCustomGroupIds();
-    groupController.scheduleHighlight();
-    requestFramesUpdate();
+    customNodeExpansion?.rehydrateExpandedCustomFrames(state);
   };
 
   const handleExpandCustomNode = (nodeId: string) => {
-    const id = String(nodeId ?? '');
-    if (!id) return;
-
-    const node = nodeEngine.getNode(id) as any;
-    if (!node) return;
-
-    const state = readCustomNodeState(node?.config ?? {});
-    if (!state || state.role !== 'mother') return;
-
-    const groupId = String(state.groupId ?? '');
-    if (!groupId) return;
-    if (expandedCustomByGroupId.has(groupId)) return;
-
-    const def = getCustomNodeDefinition(state.definitionId);
-    if (!def) return;
-
-    const baseX = Number(node.position?.x ?? 0);
-    const baseY = Number(node.position?.y ?? 0);
-
-    const internal = state.internal ?? { nodes: [], connections: [] };
-    const internalNodes: any[] = Array.isArray((internal as any).nodes)
-      ? (internal as any).nodes
-      : [];
-    const internalConnections: any[] = Array.isArray((internal as any).connections)
-      ? (internal as any).connections
-      : [];
-
-    const decorationTypes = new Set(['group-activate', 'group-gate', 'group-proxy', 'group-frame']);
-    const materializedIdsInGroup: string[] = [];
-
-    for (const n of internalNodes) {
-      const internalId = String((n as any).id ?? '');
-      if (!internalId) continue;
-      const matId = materializeInternalNodeId(id, internalId);
-      const pos = (n as any).position ?? { x: 0, y: 0 };
-      const x = baseX + Number(pos?.x ?? 0);
-      const y = baseY + Number(pos?.y ?? 0);
-
-      nodeEngine.addNode({
-        id: matId,
-        type: String((n as any).type ?? ''),
-        position: { x, y },
-        config: { ...((n as any).config ?? {}) },
-        inputValues: { ...((n as any).inputValues ?? {}) },
-        outputValues: {},
-      } as any);
-
-      const t = String((n as any).type ?? '');
-      if (!decorationTypes.has(t)) materializedIdsInGroup.push(matId);
-    }
-
-    for (const c of internalConnections) {
-      const sourceNodeId = String((c as any).sourceNodeId ?? '');
-      const sourcePortId = String((c as any).sourcePortId ?? '');
-      const targetNodeId = String((c as any).targetNodeId ?? '');
-      const targetPortId = String((c as any).targetPortId ?? '');
-      if (!sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) continue;
-
-      nodeEngine.addConnection({
-        id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-        sourceNodeId: materializeInternalNodeId(id, sourceNodeId),
-        sourcePortId,
-        targetNodeId: materializeInternalNodeId(id, targetNodeId),
-        targetPortId,
-      } as any);
-    }
-
-    const prevGroups = get(groupController.nodeGroups) ?? [];
-    const parentId = deepestGroupIdContainingNode(id, prevGroups);
-
-    groupController.setGroups([
-      ...(prevGroups ?? []),
-      {
-        id: groupId,
-        parentId: parentId ? String(parentId) : null,
-        name: String(def.name ?? 'Custom Node'),
-        nodeIds: materializedIdsInGroup,
-        disabled: !state.manualGate,
-        minimized: false,
-      },
-    ] as any);
-
-    groupPortNodesController.ensureGroupPortNodes();
-    groupPortNodesController.scheduleAlign();
-
-    // Rewire external connections from the collapsed Custom Node ports to the group boundary proxy nodes.
-    const graph = nodeEngine.exportGraph();
-    const allConnections = Array.isArray(graph.connections) ? graph.connections : [];
-
-    const portByKey = new Map(
-      (def.ports ?? []).map((p: any) => [String(p.portKey ?? ''), p] as const)
-    );
-
-    const removed: any[] = [];
-    for (const c of allConnections) {
-      const connId = String((c as any).id ?? '');
-      if (!connId) continue;
-      const src = String((c as any).sourceNodeId ?? '');
-      const tgt = String((c as any).targetNodeId ?? '');
-      if (src !== id && tgt !== id) continue;
-      removed.push(c);
-      nodeEngine.removeConnection(connId);
-    }
-
-    const index = buildGroupPortIndex(nodeEngine.exportGraph());
-    const gateId = index.get(groupId)?.gateId ? String(index.get(groupId)?.gateId) : '';
-
-    for (const c of removed) {
-      const src = String((c as any).sourceNodeId ?? '');
-      const srcPort = String((c as any).sourcePortId ?? '');
-      const tgt = String((c as any).targetNodeId ?? '');
-      const tgtPort = String((c as any).targetPortId ?? '');
-
-      if (tgt === id && tgtPort === 'gate') {
-        if (gateId) {
-          nodeEngine.addConnection({
-            id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-            sourceNodeId: src,
-            sourcePortId: srcPort,
-            targetNodeId: gateId,
-            targetPortId: 'active',
-          } as any);
-        }
-        continue;
-      }
-
-      if (tgt === id) {
-        const port = portByKey.get(tgtPort);
-        if (!port) continue;
-        const boundInternalId = String(port?.binding?.nodeId ?? '');
-        const boundPortId = String(port?.binding?.portId ?? '');
-        if (!boundInternalId || !boundPortId) continue;
-        const proxyNodeId = materializeInternalNodeId(id, boundInternalId);
-        nodeEngine.addConnection({
-          id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-          sourceNodeId: src,
-          sourcePortId: srcPort,
-          targetNodeId: proxyNodeId,
-          targetPortId: boundPortId,
-        } as any);
-        continue;
-      }
-
-      if (src === id) {
-        const port = portByKey.get(srcPort);
-        if (!port) continue;
-        const boundInternalId = String(port?.binding?.nodeId ?? '');
-        const boundPortId = String(port?.binding?.portId ?? '');
-        if (!boundInternalId || !boundPortId) continue;
-        const proxyNodeId = materializeInternalNodeId(id, boundInternalId);
-        nodeEngine.addConnection({
-          id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-          sourceNodeId: proxyNodeId,
-          sourcePortId: boundPortId,
-          targetNodeId: tgt,
-          targetPortId: tgtPort,
-        } as any);
-        continue;
-      }
-    }
-
-    expandedCustomByGroupId.set(groupId, { groupId, nodeId: id });
-    forcedHiddenNodeIds.add(id);
-    refreshExpandedCustomGroupIds();
-
-    groupController.scheduleHighlight();
-    requestFramesUpdate();
-    groupPortNodesController.scheduleNormalizeProxies();
+    customNodeExpansion?.handleExpandCustomNode(nodeId);
   };
 
   const handleCollapseCustomNodeFrame = (groupId: string) => {
-    const rootGroupId = String(groupId ?? '');
-    if (!rootGroupId) return;
-
-    const expanded = expandedCustomByGroupId.get(rootGroupId) ?? null;
-    if (!expanded) return;
-
-    const motherNodeId = String(expanded.nodeId ?? '');
-    if (!motherNodeId) return;
-
-    const motherNode = nodeEngine.getNode(motherNodeId) as any;
-    if (!motherNode) return;
-
-    const motherState = readCustomNodeState(motherNode?.config ?? {});
-    if (!motherState || motherState.role !== 'mother') return;
-
-    const def = getCustomNodeDefinition(motherState.definitionId);
-    if (!def) return;
-
-    // Ensure boundary proxies are normalized before snapshotting ports.
-    groupPortNodesController.scheduleNormalizeProxies();
-    groupPortNodesController.ensureGroupPortNodes();
-    groupPortNodesController.scheduleAlign();
-
-    const frames = get(groupFrames) ?? [];
-    const frame = frames.find((f: any) => String(f?.group?.id ?? '') === rootGroupId) ?? null;
-    const originX = frame ? Number(frame.left ?? 0) : Number(motherNode.position?.x ?? 0);
-    const originY = frame ? Number(frame.top ?? 0) : Number(motherNode.position?.y ?? 0);
-
-    const graph = nodeEngine.exportGraph();
-    const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
-    const connections = Array.isArray(graph.connections) ? graph.connections : [];
-    const nodeById = new Map(nodes.map((n: any) => [String(n.id), n] as const));
-
-    const groupsSnapshot = get(groupController.nodeGroups) ?? [];
-    const subtreeGroupIds = new Set<string>();
-    const stack = [rootGroupId];
-    while (stack.length > 0) {
-      const gid = String(stack.pop() ?? '');
-      if (!gid || subtreeGroupIds.has(gid)) continue;
-      subtreeGroupIds.add(gid);
-      for (const g of groupsSnapshot) {
-        if (String(g?.parentId ?? '') !== gid) continue;
-        stack.push(String(g?.id ?? ''));
-      }
-    }
-
-    const nodeIdsInSubtree = new Set<string>();
-    for (const g of groupsSnapshot) {
-      const gid = String(g?.id ?? '');
-      if (!gid || !subtreeGroupIds.has(gid)) continue;
-      for (const nid of g?.nodeIds ?? []) nodeIdsInSubtree.add(String(nid));
-    }
-
-    for (const n of nodes) {
-      const type = String((n as any).type ?? '');
-      if (!isGroupPortNodeType(type) && type !== 'group-frame') continue;
-      const gid = groupIdFromNode(n as any);
-      if (!gid || !subtreeGroupIds.has(String(gid))) continue;
-      nodeIdsInSubtree.add(String((n as any).id ?? ''));
-    }
-
-    const internalNodeIdsForTemplate = new Set<string>();
-    for (const id of nodeIdsInSubtree) {
-      const node = nodeById.get(String(id)) as any;
-      if (!node) continue;
-      const type = String(node.type ?? '');
-      if (type === 'group-gate' || type === 'group-frame' || type === 'group-activate') continue;
-      internalNodeIdsForTemplate.add(String(id));
-    }
-
-    const internalIdForMain = (mainId: string): string => {
-      return isMaterializedInternalNodeId(motherNodeId, mainId)
-        ? internalNodeIdFromMaterialized(motherNodeId, mainId)
-        : String(mainId);
-    };
-
-    const packedNodes: any[] = [];
-    for (const id of internalNodeIdsForTemplate) {
-      const node = nodeById.get(String(id)) as any;
-      if (!node) continue;
-      const internalId = internalIdForMain(String(id));
-      const pos = node.position ?? { x: 0, y: 0 };
-      packedNodes.push({
-        ...node,
-        id: internalId,
-        position: { x: Number(pos?.x ?? 0) - originX, y: Number(pos?.y ?? 0) - originY },
-        outputValues: {},
-      });
-    }
-
-    const packedNodeIdSet = new Set(packedNodes.map((n) => String(n.id)));
-    const packedConnections: any[] = connections
-      .filter(
-        (c: any) =>
-          internalNodeIdsForTemplate.has(String(c.sourceNodeId)) &&
-          internalNodeIdsForTemplate.has(String(c.targetNodeId)) &&
-          Boolean(String(c.sourcePortId ?? '')) &&
-          Boolean(String(c.targetPortId ?? ''))
-      )
-      .map((c: any) => ({
-        ...c,
-        sourceNodeId: internalIdForMain(String(c.sourceNodeId)),
-        targetNodeId: internalIdForMain(String(c.targetNodeId)),
-      }));
-
-    // Derive Custom Node ports from root-level group-proxy nodes.
-    const resolvePortLabel = (
-      nodeType: string,
-      side: 'input' | 'output',
-      portId: string
-    ): string => {
-      const def = nodeRegistry.get(String(nodeType ?? ''));
-      const ports = side === 'input' ? def?.inputs : def?.outputs;
-      const port = (ports ?? []).find((p: any) => String(p.id) === String(portId)) ?? null;
-      return String((port as any)?.label ?? portId);
-    };
-
-    const validPortTypes = new Set([
-      'number',
-      'boolean',
-      'string',
-      'asset',
-      'color',
-      'audio',
-      'image',
-      'video',
-      'scene',
-      'effect',
-      'client',
-      'command',
-      'fuzzy',
-      'array',
-      'any',
-    ]);
-
-    const ports: any[] = [];
-    const rootProxyNodes = nodes.filter((n: any) => {
-      if (String((n as any).type ?? '') !== 'group-proxy') return false;
-      const gid = groupIdFromNode(n as any);
-      return String(gid ?? '') === rootGroupId;
-    });
-
-    for (const proxy of rootProxyNodes) {
-      const proxyMainId = String((proxy as any).id ?? '');
-      if (!proxyMainId) continue;
-      if (
-        !internalNodeIdsForTemplate.has(proxyMainId) &&
-        !isMaterializedInternalNodeId(motherNodeId, proxyMainId)
-      ) {
-        // It should still be removed as a group decoration node, but won't be part of the template.
-      }
-
-      const internalProxyId = internalIdForMain(proxyMainId);
-      const directionRaw = String(((proxy as any).config as any)?.direction ?? 'output');
-      const side: 'input' | 'output' = directionRaw === 'input' ? 'input' : 'output';
-      const bindingPortId = side === 'input' ? 'in' : 'out';
-      const portKey = `p:${internalProxyId}`;
-
-      const portTypeRaw = String(((proxy as any).config as any)?.portType ?? 'any');
-      const type = validPortTypes.has(portTypeRaw) ? portTypeRaw : 'any';
-      const pinned = Boolean(((proxy as any).config as any)?.pinned);
-
-      const pos = (proxy as any).position ?? { x: 0, y: 0 };
-      const y = Number(pos?.y ?? 0) - originY;
-
-      const label = (() => {
-        if (side === 'input') {
-          const inner = packedConnections.find(
-            (c: any) =>
-              String(c.sourceNodeId) === internalProxyId && String(c.sourcePortId) === 'out'
-          );
-          if (!inner) return 'In';
-          const targetNode = packedNodes.find((n) => String(n.id) === String(inner.targetNodeId));
-          if (!targetNode) return String(inner.targetPortId ?? 'In');
-          return resolvePortLabel(
-            String((targetNode as any).type),
-            'input',
-            String(inner.targetPortId)
-          );
-        }
-        const inner = packedConnections.find(
-          (c: any) => String(c.targetNodeId) === internalProxyId && String(c.targetPortId) === 'in'
-        );
-        if (!inner) return 'Out';
-        const sourceNode = packedNodes.find((n) => String(n.id) === String(inner.sourceNodeId));
-        if (!sourceNode) return String(inner.sourcePortId ?? 'Out');
-        return resolvePortLabel(
-          String((sourceNode as any).type),
-          'output',
-          String(inner.sourcePortId)
-        );
-      })();
-
-      ports.push({
-        portKey,
-        side,
-        label,
-        type,
-        pinned,
-        y: Number.isFinite(y) ? y : 0,
-        binding: { nodeId: internalProxyId, portId: bindingPortId },
-      });
-    }
-
-    // Capture external wiring from boundary proxies (so we can reconnect to collapsed Custom Node ports).
-    const mainInternalNodeIdSet = new Set<string>();
-    for (const id of internalNodeIdsForTemplate) mainInternalNodeIdSet.add(String(id));
-    for (const n of rootProxyNodes) {
-      const id = String((n as any).id ?? '');
-      if (id) mainInternalNodeIdSet.add(id);
-    }
-
-    const proxyPortKeyByMainId = new Map<string, string>();
-    for (const n of rootProxyNodes) {
-      const pid = String((n as any).id ?? '');
-      if (!pid) continue;
-      const internalProxyId = internalIdForMain(pid);
-      proxyPortKeyByMainId.set(pid, `p:${internalProxyId}`);
-    }
-
-    const externalInputs: any[] = [];
-    const externalOutputs: any[] = [];
-
-    for (const c of connections) {
-      const connId = String((c as any).id ?? '');
-      const src = String((c as any).sourceNodeId ?? '');
-      const srcPort = String((c as any).sourcePortId ?? '');
-      const tgt = String((c as any).targetNodeId ?? '');
-      const tgtPort = String((c as any).targetPortId ?? '');
-      if (!connId || !src || !srcPort || !tgt || !tgtPort) continue;
-
-      const portKey = proxyPortKeyByMainId.get(tgt);
-      if (portKey && tgtPort === 'in' && !mainInternalNodeIdSet.has(src)) {
-        externalInputs.push({ sourceNodeId: src, sourcePortId: srcPort, portKey });
-        continue;
-      }
-
-      const outKey = proxyPortKeyByMainId.get(src);
-      if (outKey && srcPort === 'out' && !mainInternalNodeIdSet.has(tgt)) {
-        externalOutputs.push({ targetNodeId: tgt, targetPortId: tgtPort, portKey: outKey });
-        continue;
-      }
-    }
-
-    const gateNodeId =
-      nodes.find(
-        (n: any) =>
-          String((n as any).type ?? '') === 'group-gate' &&
-          String(((n as any).config as any)?.groupId ?? '') === rootGroupId
-      )?.id ?? '';
-
-    const gateConn = (() => {
-      if (!gateNodeId) return null;
-      const c = connections.find(
-        (c: any) =>
-          String((c as any).targetNodeId ?? '') === String(gateNodeId) &&
-          String((c as any).targetPortId ?? '') === 'active' &&
-          !mainInternalNodeIdSet.has(String((c as any).sourceNodeId ?? ''))
-      );
-      return c
-        ? {
-            sourceNodeId: String((c as any).sourceNodeId),
-            sourcePortId: String((c as any).sourcePortId),
-          }
-        : null;
-    })();
-
-    // Update definition + mother internal state; children sync happens in Phase 2.5.7.
-    const nextDefinition = {
-      ...def,
-      name: String(
-        groupsSnapshot.find((g: any) => String(g?.id ?? '') === rootGroupId)?.name ??
-          def.name ??
-          def.name
-      ),
-      template: { nodes: packedNodes as any, connections: packedConnections as any },
-      ports,
-    } as any;
-
-    {
-      const defs = get(customNodeDefinitions) ?? [];
-      const nextDefs = defs.map((d: any) =>
-        String(d?.definitionId ?? '') === String(nextDefinition.definitionId) ? nextDefinition : d
-      );
-      const inCycle = definitionsInCycles(nextDefs as any);
-      if (inCycle.size > 0) {
-        const ids = Array.from(inCycle).map(String).filter(Boolean);
-        const msg = `Cyclic Custom Node nesting is not allowed.\n\nCycle detected: ${ids.join(' → ')}`;
-        nodeEngine.lastError?.set?.(msg);
-        alert(msg);
-        return;
-      }
-    }
-    upsertCustomNodeDefinition(nextDefinition);
-
-    nodeEngine.updateNodePosition(motherNodeId, { x: originX, y: originY });
-    nodeEngine.updateNodeConfig(
-      motherNodeId,
-      writeCustomNodeState(motherNode?.config ?? {}, {
-        ...motherState,
-        manualGate: !groupsSnapshot.find((g: any) => String(g?.id ?? '') === rootGroupId)?.disabled,
-        internal: { nodes: packedNodes as any, connections: packedConnections as any },
-      } as any)
-    );
-    nodeEngine.updateNodeInputValue(
-      motherNodeId,
-      'gate',
-      !groupsSnapshot.find((g: any) => String(g?.id ?? '') === rootGroupId)?.disabled
-    );
-
-    syncCoupledCustomNodesForDefinition(nextDefinition.definitionId);
-
-    // Remove the expanded frame group subtree.
-    groupController.setGroups(
-      (groupsSnapshot ?? []).filter((g: any) => !subtreeGroupIds.has(String(g?.id ?? ''))) as any
-    );
-
-    // Remove all materialized/internal nodes + group decoration nodes for this subtree.
-    for (const id of Array.from(nodeIdsInSubtree)) {
-      if (!id) continue;
-      if (id === motherNodeId) continue;
-      nodeEngine.removeNode(String(id));
-    }
-
-    // Reconnect external wiring back to the collapsed Custom Node ports.
-    for (const entry of externalInputs) {
-      nodeEngine.addConnection({
-        id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-        sourceNodeId: entry.sourceNodeId,
-        sourcePortId: entry.sourcePortId,
-        targetNodeId: motherNodeId,
-        targetPortId: entry.portKey,
-      } as any);
-    }
-    for (const entry of externalOutputs) {
-      nodeEngine.addConnection({
-        id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-        sourceNodeId: motherNodeId,
-        sourcePortId: entry.portKey,
-        targetNodeId: entry.targetNodeId,
-        targetPortId: entry.targetPortId,
-      } as any);
-    }
-    if (gateConn) {
-      nodeEngine.addConnection({
-        id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-        sourceNodeId: gateConn.sourceNodeId,
-        sourcePortId: gateConn.sourcePortId,
-        targetNodeId: motherNodeId,
-        targetPortId: 'gate',
-      } as any);
-    }
-
-    expandedCustomByGroupId.delete(rootGroupId);
-    forcedHiddenNodeIds.delete(motherNodeId);
-    refreshExpandedCustomGroupIds();
-
-    groupController.scheduleHighlight();
-    requestFramesUpdate();
-    groupPortNodesController.scheduleNormalizeProxies();
+    customNodeExpansion?.handleCollapseCustomNodeFrame(groupId);
   };
+
 
   const syncCoupledCustomNodesForDefinition = (definitionId: string) => {
     const id = String(definitionId ?? '');
@@ -1281,23 +627,23 @@
     const type = customNodeType(id);
     const instanceNodeIds = new Set<string>();
     for (const node of nodes) {
-      if (String((node as any).type ?? '') !== type) continue;
-      instanceNodeIds.add(String((node as any).id ?? ''));
+      if (String(node.type ?? '') !== type) continue;
+      instanceNodeIds.add(String(node.id ?? ''));
     }
 
     const validPortIds = new Set<string>([
       'gate',
-      ...(def.ports ?? []).map((p: any) => String(p?.portKey ?? '')).filter(Boolean),
+      ...(def.ports ?? []).map((p) => String(p?.portKey ?? '')).filter(Boolean),
     ]);
 
     for (const c of connections) {
-      const connId = String((c as any).id ?? '');
+      const connId = String(c.id ?? '');
       if (!connId) continue;
 
-      const sourceNodeId = String((c as any).sourceNodeId ?? '');
-      const sourcePortId = String((c as any).sourcePortId ?? '');
-      const targetNodeId = String((c as any).targetNodeId ?? '');
-      const targetPortId = String((c as any).targetPortId ?? '');
+      const sourceNodeId = String(c.sourceNodeId ?? '');
+      const sourcePortId = String(c.sourcePortId ?? '');
+      const targetNodeId = String(c.targetNodeId ?? '');
+      const targetPortId = String(c.targetPortId ?? '');
 
       const invalidSource = instanceNodeIds.has(sourceNodeId) && !validPortIds.has(sourcePortId);
       const invalidTarget = instanceNodeIds.has(targetNodeId) && !validPortIds.has(targetPortId);
@@ -1305,9 +651,9 @@
     }
 
     for (const nodeId of instanceNodeIds) {
-      const node = nodeEngine.getNode(String(nodeId)) as any;
+      const node = nodeEngine.getNode(String(nodeId));
       if (!node) continue;
-      const state = readCustomNodeState(node.config ?? {});
+      const state = readCustomNodeState(asRecord(node.config));
       if (!state || state.role !== 'child') continue;
 
       const nextInternal = syncCustomNodeInternalGraph({
@@ -1318,17 +664,17 @@
 
       nodeEngine.updateNodeConfig(
         nodeId,
-        writeCustomNodeState(node.config ?? {}, { ...state, internal: nextInternal } as any)
+        writeCustomNodeState(node.config ?? {}, { ...state, internal: nextInternal })
       );
     }
 
     // Also sync nested occurrences inside other Custom Node instances' internal graphs.
     for (const node of nodes) {
-      const nodeId = String((node as any).id ?? '');
+      const nodeId = String(node.id ?? '');
       if (!nodeId) continue;
-      const instance = nodeEngine.getNode(nodeId) as any;
+      const instance = nodeEngine.getNode(nodeId);
       if (!instance) continue;
-      const state = readCustomNodeState(instance.config ?? {});
+      const state = readCustomNodeState(asRecord(instance.config));
       if (!state) continue;
 
       const nested = syncNestedCustomNodesToDefinition({
@@ -1340,552 +686,19 @@
 
       nodeEngine.updateNodeConfig(
         nodeId,
-        writeCustomNodeState(instance.config ?? {}, { ...state, internal: nested.graph } as any)
+        writeCustomNodeState(instance.config ?? {}, { ...state, internal: nested.graph })
       );
     }
   };
 
-  const handleToggleGroupDisabled = (groupId: string) => {
-    const id = String(groupId ?? '');
-    if (!id) return;
-    groupController.toggleGroupDisabled(id);
-
-    const expanded = expandedCustomByGroupId.get(id) ?? null;
-    if (!expanded) return;
-    const nodeId = String(expanded.nodeId ?? '');
-    const node = nodeId ? (nodeEngine.getNode(nodeId) as any) : null;
-    const state = node ? readCustomNodeState(node.config ?? {}) : null;
-    if (!node || !state) return;
-
-    const group =
-      get(groupController.nodeGroups).find((g: any) => String(g?.id ?? '') === id) ?? null;
-    const manualGate = group ? !(group as any).disabled : state.manualGate;
-    nodeEngine.updateNodeConfig(
-      nodeId,
-      writeCustomNodeState(node.config ?? {}, { ...state, manualGate } as any)
-    );
-    nodeEngine.updateNodeInputValue(nodeId, 'gate', manualGate);
-  };
-
-  const handleRenameGroup = (groupId: string, name: string) => {
-    const id = String(groupId ?? '');
-    const nextName = String(name ?? '').trim();
-    if (!id || !nextName) return;
-
-    const expanded = expandedCustomByGroupId.get(id) ?? null;
-    if (expanded) {
-      const node = nodeEngine.getNode(String(expanded.nodeId ?? '')) as any;
-      const state = node ? readCustomNodeState(node.config ?? {}) : null;
-      const def = state ? getCustomNodeDefinition(state.definitionId) : null;
-      if (def) upsertCustomNodeDefinition({ ...def, name: nextName } as any);
-    }
-
-    groupController.renameGroup(id, nextName);
-  };
-
-  const syncCustomGateInputs = (state: GraphState) => {
-    const nodes = Array.isArray(state.nodes) ? state.nodes : [];
-    const connections = Array.isArray(state.connections) ? state.connections : [];
-    if (nodes.length === 0) return;
-
-    const connectedGateIds = new Set<string>();
-    for (const c of connections) {
-      if (String((c as any).targetPortId ?? '') !== 'gate') continue;
-      connectedGateIds.add(String((c as any).targetNodeId ?? ''));
-    }
-
-    for (const node of nodes) {
-      const nodeId = String((node as any).id ?? '');
-      if (!nodeId) continue;
-      if (!String((node as any).type ?? '').startsWith(CUSTOM_NODE_TYPE_PREFIX)) continue;
-      if (connectedGateIds.has(nodeId)) continue;
-      const state = readCustomNodeState((node as any).config ?? {});
-      if (!state) continue;
-      const desired = Boolean(state.manualGate);
-      const current = (node as any).inputValues?.gate;
-      if (current === desired) continue;
-      nodeEngine.updateNodeInputValue(nodeId, 'gate', desired);
-    }
-  };
-
-  const handleNodalizeGroup = (groupId: string) => {
-    const rootId = String(groupId ?? '');
-    if (!rootId) return;
-
-    const groupsSnapshot = get(groupController.nodeGroups);
-    const group = groupsSnapshot.find((g) => String(g.id) === rootId) ?? null;
-    if (!group) return;
-
-    const ok = confirm(
-      `Nodalize "${String(group.name ?? 'Group')}"?\n\nThis will replace the Group with a real Custom Node (mother instance).`
-    );
-    if (!ok) return;
-
-    // Ensure the latest group port nodes exist before snapshotting proxies.
-    groupPortNodesController.ensureGroupPortNodes();
-
-    const state = nodeEngine.exportGraph();
-    const nodes = Array.isArray(state.nodes) ? state.nodes : [];
-    const connections = Array.isArray(state.connections) ? state.connections : [];
-
-    // Collect subtree group ids so we can remove all group metadata + port nodes.
-    const subtreeGroupIds = new Set<string>();
-    const stack = [rootId];
-    while (stack.length > 0) {
-      const current = String(stack.pop() ?? '');
-      if (!current || subtreeGroupIds.has(current)) continue;
-      subtreeGroupIds.add(current);
-      for (const g of groupsSnapshot) {
-        if (String(g.parentId ?? '') !== current) continue;
-        stack.push(String(g.id));
-      }
-    }
-
-    const portIndex = buildGroupPortIndex(state);
-
-    const toRemove = new Set<string>();
-    const groupById = new Map(groupsSnapshot.map((g) => [String(g.id), g] as const));
-    for (const gid of subtreeGroupIds) {
-      const g = groupById.get(String(gid));
-      if (!g) continue;
-      for (const nodeId of g.nodeIds ?? []) toRemove.add(String(nodeId));
-    }
-
-    // Also remove group port nodes (gate/proxy/legacy activate) for the whole subtree.
-    for (const gid of subtreeGroupIds) {
-      const entry = portIndex.get(String(gid));
-      if (!entry) continue;
-      if (entry.gateId) toRemove.add(String(entry.gateId));
-      for (const id of entry.proxyIds ?? []) toRemove.add(String(id));
-      for (const id of entry.legacyActivateIds ?? []) toRemove.add(String(id));
-    }
-
-    // Remove group-frame nodes (minimized UI) for the subtree.
-    for (const node of nodes) {
-      if (String(node.type) !== 'group-frame') continue;
-      const gid = groupIdFromNode(node as any);
-      if (!gid || !subtreeGroupIds.has(String(gid))) continue;
-      toRemove.add(String(node.id));
-    }
-
-    // Template includes all nodes we remove except group frames + group gate/activate nodes (editor affordances).
-    const excludedTypes = new Set(['group-frame', 'group-gate', 'group-activate']);
-    const templateNodeIds = new Set<string>();
-    for (const nodeId of Array.from(toRemove)) {
-      const node = nodes.find((n) => String(n.id) === String(nodeId)) as any;
-      if (!node) continue;
-      if (excludedTypes.has(String(node.type))) continue;
-      templateNodeIds.add(String(nodeId));
-    }
-
-    const frame =
-      (get(groupFrames) ?? []).find((f: any) => String(f?.group?.id ?? '') === rootId) ?? null;
-    const originX = frame ? Number(frame.left ?? 0) : 0;
-    const originY = frame ? Number(frame.top ?? 0) : 0;
-
-    const nodeById = new Map(nodes.map((n: any) => [String(n.id), n]));
-
-    const positionFor = (nodeId: string) => {
-      const viewPos = viewAdapter.getNodePosition(String(nodeId));
-      if (viewPos && Number.isFinite(viewPos.x) && Number.isFinite(viewPos.y)) return viewPos;
-      const instance = nodeById.get(String(nodeId));
-      return instance?.position ?? { x: originX, y: originY };
-    };
-
-    const templateNodes = Array.from(templateNodeIds)
-      .map((id) => {
-        const node = nodeById.get(String(id)) as any;
-        if (!node) return null;
-        const pos = positionFor(String(id));
-        return {
-          ...node,
-          position: { x: Number(pos.x) - originX, y: Number(pos.y) - originY },
-          outputValues: {},
-        };
-      })
-      .filter(Boolean) as any[];
-
-    const templateConnections = connections.filter(
-      (c: any) =>
-        templateNodeIds.has(String(c.sourceNodeId)) &&
-        templateNodeIds.has(String(c.targetNodeId)) &&
-        Boolean(String(c.sourcePortId ?? '')) &&
-        Boolean(String(c.targetPortId ?? ''))
-    );
-
-    const resolvePortLabel = (
-      nodeType: string,
-      side: 'input' | 'output',
-      portId: string
-    ): string => {
-      const def = nodeRegistry.get(String(nodeType ?? ''));
-      const ports = side === 'input' ? def?.inputs : def?.outputs;
-      const port = (ports ?? []).find((p) => String(p.id) === String(portId)) ?? null;
-      return String(port?.label ?? portId);
-    };
-
-    // Build Custom Node ports from the root group's boundary proxy nodes.
-    const rootEntry = portIndex.get(rootId) ?? { legacyActivateIds: [], proxyIds: [] };
-    const portKeyByProxyId = new Map<string, string>();
-
-    const ports = (rootEntry.proxyIds ?? [])
-      .map((proxyId) => {
-        const id = String(proxyId ?? '');
-        if (!id) return null;
-        const node = nodeById.get(id) as any;
-        if (!node || String(node.type) !== 'group-proxy') return null;
-
-        const directionRaw = String(node?.config?.direction ?? 'output');
-        const side: 'input' | 'output' = directionRaw === 'input' ? 'input' : 'output';
-        const bindingPortId = side === 'input' ? 'in' : 'out';
-        const portKey = `p:${id}`;
-        portKeyByProxyId.set(id, portKey);
-
-        const portTypeRaw = String(node?.config?.portType ?? 'any');
-        const type = portTypeRaw ? portTypeRaw : 'any';
-        const pinned = Boolean(node?.config?.pinned);
-
-        const pos = positionFor(id);
-        const y = Number(pos.y) - originY;
-
-        const label = (() => {
-          if (side === 'input') {
-            const inner = connections.find(
-              (c: any) => String(c.sourceNodeId) === id && String(c.sourcePortId) === 'out'
-            );
-            if (!inner) return 'In';
-            const targetNode = nodeById.get(String(inner.targetNodeId));
-            if (!targetNode) return String(inner.targetPortId ?? 'In');
-            return resolvePortLabel(
-              String((targetNode as any).type),
-              'input',
-              String(inner.targetPortId)
-            );
-          }
-          const inner = connections.find(
-            (c: any) => String(c.targetNodeId) === id && String(c.targetPortId) === 'in'
-          );
-          if (!inner) return 'Out';
-          const sourceNode = nodeById.get(String(inner.sourceNodeId));
-          if (!sourceNode) return String(inner.sourcePortId ?? 'Out');
-          return resolvePortLabel(
-            String((sourceNode as any).type),
-            'output',
-            String(inner.sourcePortId)
-          );
-        })();
-
-        return {
-          portKey,
-          side,
-          label,
-          type,
-          pinned,
-          y: Number.isFinite(y) ? y : 0,
-          binding: { nodeId: id, portId: bindingPortId },
-        };
-      })
-      .filter(Boolean) as any[];
-
-    // Capture external wiring so we can reconnect it to the new Custom Node ports.
-    const externalConnections: any[] = [];
-
-    const isRemoved = (nodeId: string) => toRemove.has(String(nodeId));
-
-    for (const proxyId of rootEntry.proxyIds ?? []) {
-      const id = String(proxyId ?? '');
-      if (!id) continue;
-      const node = nodeById.get(id) as any;
-      if (!node || String(node.type) !== 'group-proxy') continue;
-
-      const portKey = portKeyByProxyId.get(id);
-      if (!portKey) continue;
-
-      const directionRaw = String(node?.config?.direction ?? 'output');
-      if (directionRaw === 'input') {
-        const incoming = connections.find(
-          (c: any) =>
-            String(c.targetNodeId) === id &&
-            String(c.targetPortId) === 'in' &&
-            !isRemoved(String(c.sourceNodeId))
-        );
-        if (incoming) {
-          externalConnections.push({
-            sourceNodeId: String(incoming.sourceNodeId),
-            sourcePortId: String(incoming.sourcePortId),
-            targetPortId: portKey,
-            kind: 'input',
-          });
-        }
-      } else {
-        for (const c of connections) {
-          if (String(c.sourceNodeId) !== id) continue;
-          if (String(c.sourcePortId) !== 'out') continue;
-          if (isRemoved(String(c.targetNodeId))) continue;
-          externalConnections.push({
-            targetNodeId: String(c.targetNodeId),
-            targetPortId: String(c.targetPortId),
-            sourcePortId: portKey,
-            kind: 'output',
-          });
-        }
-      }
-    }
-
-    const gateConn = (() => {
-      const gateId = rootEntry.gateId ? String(rootEntry.gateId) : '';
-      if (!gateId) return null;
-      const c = connections.find(
-        (c: any) =>
-          String(c.targetNodeId) === gateId &&
-          String(c.targetPortId) === 'active' &&
-          !isRemoved(String(c.sourceNodeId))
-      );
-      return c
-        ? { sourceNodeId: String(c.sourceNodeId), sourcePortId: String(c.sourcePortId) }
-        : null;
-    })();
-
-    const definitionId = crypto.randomUUID?.() ?? `${Date.now()}`;
-    addCustomNodeDefinition({
-      definitionId,
-      name: String(group.name ?? 'Group'),
-      template: { nodes: templateNodes as any, connections: templateConnections as any },
-      ports,
-    } as any);
-
-    // Remove group metadata first so the frame disappears immediately.
-    groupController.disassembleGroup(rootId);
-
-    // Remove all nodes in the group subtree (including boundary proxies).
-    for (const id of Array.from(toRemove)) {
-      if (!id) continue;
-      nodeEngine.removeNode(String(id));
-    }
-
-    const motherNodeId = generateId();
-    const motherType = customNodeType(definitionId);
-    const motherPos = frame ? { x: originX, y: originY } : { x: originX, y: originY };
-
-    const motherInternal = {
-      nodes: (templateNodes ?? []).map((n: any) => ({ ...n, outputValues: {} })),
-      connections: (templateConnections ?? []).map((c: any) => ({ ...c })),
-    };
-
-    const initialGate = !group.disabled;
-    const motherConfig = writeCustomNodeState({}, {
-      definitionId,
-      groupId: rootId,
-      role: 'mother',
-      manualGate: initialGate,
-      internal: motherInternal as any,
-    } as any);
-
-    nodeEngine.addNode({
-      id: motherNodeId,
-      type: motherType,
-      position: motherPos,
-      config: motherConfig,
-      inputValues: { gate: initialGate },
-      outputValues: {},
-    } as any);
-
-    // Reconnect gate input (wiredGateInput) if present.
-    if (gateConn) {
-      nodeEngine.addConnection({
-        id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-        sourceNodeId: gateConn.sourceNodeId,
-        sourcePortId: gateConn.sourcePortId,
-        targetNodeId: motherNodeId,
-        targetPortId: 'gate',
-      });
-    }
-
-    // Reconnect proxy ports.
-    for (const entry of externalConnections) {
-      if (entry.kind === 'input') {
-        nodeEngine.addConnection({
-          id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-          sourceNodeId: entry.sourceNodeId,
-          sourcePortId: entry.sourcePortId,
-          targetNodeId: motherNodeId,
-          targetPortId: entry.targetPortId,
-        });
-      } else {
-        nodeEngine.addConnection({
-          id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-          sourceNodeId: motherNodeId,
-          sourcePortId: entry.sourcePortId,
-          targetNodeId: entry.targetNodeId,
-          targetPortId: entry.targetPortId,
-        });
-      }
-    }
-
-    setSelectedNode(motherNodeId);
-  };
-
-  const handleUncoupleCustomNode = (nodeId: string) => {
-    const id = String(nodeId ?? '');
-    if (!id) return;
-
-    const node = nodeEngine.getNode(id);
-    if (!node) return;
-
-    const state = readCustomNodeState((node as any)?.config ?? {});
-    if (!state || state.role !== 'child') return;
-
-    const baseDef = getCustomNodeDefinition(state.definitionId);
-    if (!baseDef) return;
-
-    const ok = confirm(
-      `Uncouple "${String(baseDef.name ?? 'Custom Node')}"?\n\nThis will fork a new Custom Node definition and turn this instance into the mother.`
-    );
-    if (!ok) return;
-
-    const definitionId = crypto.randomUUID?.() ?? `${Date.now()}`;
-    const name = `${String(baseDef.name ?? 'Custom Node')} (Uncoupled)`;
-
-    const template: GraphState = {
-      nodes: (state.internal?.nodes ?? []).map((n: any) => ({ ...n, outputValues: {} })),
-      connections: (state.internal?.connections ?? []).map((c: any) => ({ ...c })),
-    };
-
-    const ports = (baseDef.ports ?? []).map((p: any) => ({
-      ...p,
-      binding: { ...p.binding },
-    }));
-
-    addCustomNodeDefinition({
-      definitionId,
-      name,
-      template,
-      ports,
-    } as any);
-
-    nodeEngine.updateNodeType(id, customNodeType(definitionId));
-    nodeEngine.updateNodeConfig(
-      id,
-      writeCustomNodeState((node as any)?.config ?? {}, {
-        ...state,
-        definitionId,
-        role: 'mother',
-      } as any)
-    );
-    nodeEngine.updateNodeInputValue(id, 'gate', state.manualGate);
-  };
-
-  const handleDenodalizeGroup = (groupId: string) => {
-    const id = String(groupId ?? '');
-    if (!id) return;
-
-    const expanded = expandedCustomByGroupId.get(id) ?? null;
-    if (!expanded) return;
-
-    const motherNodeId = String(expanded.nodeId ?? '');
-    if (!motherNodeId) return;
-
-    const motherNode = nodeEngine.getNode(motherNodeId) as any;
-    if (!motherNode) return;
-
-    const state = readCustomNodeState(motherNode?.config ?? {});
-    if (!state || state.role !== 'mother') return;
-
-    const def = getCustomNodeDefinition(state.definitionId);
-    const name = String(def?.name ?? 'Custom Node');
-
-    const graph = nodeEngine.exportGraph();
-    const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
-    const connections = Array.isArray(graph.connections) ? graph.connections : [];
-
-    const ok = confirm(
-      `Denodalize "${name}"?\n\nThis will remove the Custom Node (all instances) and restore a normal Group frame. Internal nodes will remain as regular nodes.`
-    );
-    if (!ok) return;
-
-    const instanceNodes = nodes
-      .map((n: any) => ({ id: String(n.id ?? ''), state: readCustomNodeState((n as any)?.config ?? {}) }))
-      .filter((n: any) => n.id && n.state && String(n.state.definitionId) === String(state.definitionId));
-    const instanceIds = instanceNodes.map((n: any) => String(n.id));
-    const motherInstances = instanceNodes.filter((n: any) => n.state?.role === 'mother');
-
-    for (const inst of motherInstances) {
-      const gid = String(inst.state?.groupId ?? '');
-      if (!gid || gid === id) continue;
-      if (expandedCustomByGroupId.has(gid)) {
-        expandedCustomByGroupId.delete(gid);
-        forcedHiddenNodeIds.delete(String(inst.id ?? ''));
-      }
-      groupPortNodesController.disassembleGroupAndPorts(gid);
-
-      const prefixOther = `cn:${String(inst.id ?? '')}:`;
-      for (const n of nodes) {
-        const nid = String((n as any)?.id ?? '');
-        if (nid.startsWith(prefixOther)) nodeEngine.removeNode(nid);
-      }
-    }
-
-    const prefix = `cn:${motherNodeId}:`;
-    const materialized = nodes.filter((n: any) => String(n?.id ?? '').startsWith(prefix));
-
-    const idMap = new Map<string, string>();
-    for (const node of materialized) {
-      const oldId = String(node.id ?? '');
-      const newId = generateId();
-      idMap.set(oldId, newId);
-      nodeEngine.addNode({
-        ...node,
-        id: newId,
-        config: { ...(node as any).config },
-        inputValues: { ...((node as any).inputValues ?? {}) },
-        outputValues: {},
-      } as any);
-    }
-
-    for (const c of connections) {
-      const connId = String((c as any)?.id ?? '');
-      if (!connId) continue;
-      const src = String((c as any).sourceNodeId ?? '');
-      const tgt = String((c as any).targetNodeId ?? '');
-      const nextSrc = idMap.get(src) ?? src;
-      const nextTgt = idMap.get(tgt) ?? tgt;
-      if (nextSrc === src && nextTgt === tgt) continue;
-      nodeEngine.removeConnection(connId);
-      nodeEngine.addConnection({
-        id: `conn-${crypto.randomUUID?.() ?? Date.now()}`,
-        sourceNodeId: nextSrc,
-        sourcePortId: String((c as any).sourcePortId ?? ''),
-        targetNodeId: nextTgt,
-        targetPortId: String((c as any).targetPortId ?? ''),
-      } as any);
-    }
-
-    const groups = get(groupController.nodeGroups) ?? [];
-    const nextGroups = groups.map((g: any) => {
-      if (String(g?.id ?? '') !== id) return g;
-      const nextNodeIds = (g.nodeIds ?? []).map((nid: any) => idMap.get(String(nid)) ?? String(nid));
-      return { ...g, nodeIds: nextNodeIds };
-    });
-    groupController.setGroups(nextGroups as any);
-
-    for (const oldId of idMap.keys()) {
-      nodeEngine.removeNode(oldId);
-    }
-
-    for (const instId of instanceIds) {
-      nodeEngine.removeNode(instId);
-    }
-
-    removeCustomNodeDefinition(state.definitionId);
-
-    expandedCustomByGroupId.delete(id);
-    forcedHiddenNodeIds.delete(motherNodeId);
-    refreshExpandedCustomGroupIds();
-
-    groupController.scheduleHighlight();
-    requestFramesUpdate();
-    groupPortNodesController.scheduleNormalizeProxies();
-  };
+  const {
+    handleToggleGroupDisabled,
+    handleRenameGroup,
+    syncCustomGateInputs,
+    handleNodalizeGroup,
+    handleUncoupleCustomNode,
+    handleDenodalizeGroup,
+  } = customNodeHandlers;
 
   const generateId = () => `node-${crypto.randomUUID?.() ?? Date.now()}`;
 
@@ -1898,11 +711,71 @@
     generateId,
   });
 
+  customNodeActions = createCustomNodeActions({
+    nodeEngine,
+    nodeRegistry,
+    groupController,
+    groupPortNodesController,
+    groupFrames,
+    viewAdapter,
+    buildGroupPortIndex,
+    groupIdFromNode,
+    customNodeType,
+    addCustomNodeDefinition,
+    removeCustomNodeDefinition,
+    getCustomNodeDefinition,
+    readCustomNodeState,
+    writeCustomNodeState,
+    expandedCustomByGroupId,
+    forcedHiddenNodeIds,
+    refreshExpandedCustomGroupIds,
+    requestFramesUpdate,
+    setSelectedNode,
+  });
+
+
+  customNodeExpansion = createCustomNodeExpansion({
+    expandedCustomByGroupId,
+    onExpandedGroupIdsChange: (next) => {
+      expandedCustomGroupIds = next;
+    },
+    forcedHiddenNodeIds,
+    nodeEngine,
+    groupController,
+    groupPortNodesController,
+    groupFrames,
+    nodeRegistry,
+    requestFramesUpdate,
+    readCustomNodeState,
+    writeCustomNodeState,
+    getCustomNodeDefinition,
+    upsertCustomNodeDefinition,
+    customNodeDefinitions,
+    definitionsInCycles,
+    buildGroupPortIndex,
+    groupIdFromNode,
+    isGroupPortNodeType,
+    deepestGroupIdContainingNode,
+    syncCoupledCustomNodesForDefinition,
+    materializeInternalNodeId,
+    isMaterializedInternalNodeId,
+    internalNodeIdFromMaterialized,
+    customNodeIdFromMaterializedNodeId,
+  });
+  expandedCustomGroupIds = customNodeExpansion.getExpandedGroupIds();
+
+
   function computeGraphPosition(clientX: number, clientY: number) {
     const pos = viewAdapter.clientToGraph(clientX, clientY);
     if (Number.isFinite(pos.x) && Number.isFinite(pos.y)) return pos;
     return { x: 120 + nodeCount * 10, y: 120 + nodeCount * 6 };
   }
+
+  const groupEdgeFinder = createGroupEdgeFinder({
+    getFrames: () => get(groupFrames) ?? [],
+    clientToGraph: (x, y) => viewAdapter.clientToGraph(x, y),
+    getScale: () => Number(canvasTransform?.k ?? 1) || 1,
+  });
 
   const findPortRowSocketAt = (
     clientX: number,
@@ -1926,119 +799,6 @@
       return { nodeId, side, key };
     }
     return null;
-  };
-
-  const findGroupGateTargetAt = (clientX: number, clientY: number): { groupId: string } | null => {
-    const frames = get(groupFrames) ?? [];
-    if (frames.length === 0) return null;
-
-    const pos = viewAdapter.clientToGraph(clientX, clientY);
-    const k = Number(canvasTransform?.k ?? 1) || 1;
-    const radius = 22 / k;
-
-    let best: { groupId: string; dist: number; depth: number; area: number } | null = null;
-
-    for (const frame of frames) {
-      const groupId = String(frame?.group?.id ?? '');
-      if (!groupId) continue;
-      const left = Number(frame.left ?? 0);
-      const top = Number(frame.top ?? 0);
-      const width = Number(frame.width ?? 0);
-      const height = Number(frame.height ?? 0);
-      if (
-        !Number.isFinite(left) ||
-        !Number.isFinite(top) ||
-        !Number.isFinite(width) ||
-        !Number.isFinite(height)
-      )
-        continue;
-
-      // Must stay in sync with Group Gate node placement offsets in `group-port-nodes-controller.ts`.
-      const isMinimized = Boolean((frame as any)?.group?.minimized);
-      const gateCenterX = left + (isMinimized ? 12 : 18) + 7;
-      const gateCenterY = top + 12 + 4 + 7;
-      const dx = pos.x - gateCenterX;
-      const dy = pos.y - gateCenterY;
-      const dist = Math.hypot(dx, dy);
-      if (dist > radius) continue;
-
-      const depth = Number(frame.depth ?? 0) || 0;
-      const area = Math.max(0, width) * Math.max(0, height);
-
-      if (
-        !best ||
-        dist < best.dist - 0.001 ||
-        (Math.abs(dist - best.dist) <= 0.001 &&
-          (depth > best.depth || (depth === best.depth && area < best.area)))
-      ) {
-        best = { groupId, dist, depth, area };
-      }
-    }
-
-    return best ? { groupId: best.groupId } : null;
-  };
-
-  const findGroupProxyEdgeTargetAt = (
-    clientX: number,
-    clientY: number
-  ): { groupId: string; side: 'input' | 'output'; frame: any } | null => {
-    const frames = get(groupFrames) ?? [];
-    if (frames.length === 0) return null;
-
-    const pos = viewAdapter.clientToGraph(clientX, clientY);
-    const k = Number(canvasTransform?.k ?? 1) || 1;
-    const threshold = 18 / k;
-    const yMargin = 14 / k;
-
-    let best: {
-      groupId: string;
-      side: 'input' | 'output';
-      dist: number;
-      depth: number;
-      area: number;
-      frame: any;
-    } | null = null;
-
-    for (const frame of frames) {
-      const groupId = String(frame?.group?.id ?? '');
-      if (!groupId) continue;
-      const left = Number(frame.left ?? 0);
-      const top = Number(frame.top ?? 0);
-      const width = Number(frame.width ?? 0);
-      const height = Number(frame.height ?? 0);
-      const right = left + width;
-      const bottom = top + height;
-
-      if (
-        !Number.isFinite(left) ||
-        !Number.isFinite(top) ||
-        !Number.isFinite(right) ||
-        !Number.isFinite(bottom)
-      )
-        continue;
-
-      if (pos.y < top - yMargin || pos.y > bottom + yMargin) continue;
-
-      const dl = Math.abs(pos.x - left);
-      const dr = Math.abs(pos.x - right);
-      if (dl > threshold && dr > threshold) continue;
-
-      const side: 'input' | 'output' = dl <= dr ? 'input' : 'output';
-      const dist = side === 'input' ? dl : dr;
-      const depth = Number(frame.depth ?? 0) || 0;
-      const area = Math.max(0, width) * Math.max(0, height);
-
-      if (
-        !best ||
-        dist < best.dist - 0.001 ||
-        (Math.abs(dist - best.dist) <= 0.001 &&
-          (depth > best.depth || (depth === best.depth && area < best.area)))
-      ) {
-        best = { groupId, side, dist, depth, area, frame };
-      }
-    }
-
-    return best ? { groupId: best.groupId, side: best.side, frame: best.frame } : null;
   };
 
   function addNode(
@@ -2080,8 +840,8 @@
         }
 
         if (host) {
-          const hostNode = nodeEngine.getNode(String(host.nodeId)) as any;
-          const hostState = hostNode ? readCustomNodeState(hostNode.config ?? {}) : null;
+          const hostNode = nodeEngine.getNode(String(host.nodeId));
+          const hostState = hostNode ? readCustomNodeState(asRecord(hostNode.config)) : null;
           if (hostState) {
             const defs = get(customNodeDefinitions) ?? [];
             if (wouldCreateCycle(defs, hostState.definitionId, definitionId)) {
@@ -2106,7 +866,7 @@
         id: generateId(),
         type,
         position: position ?? fallback,
-        config: writeCustomNodeState({ ...(configPatch ?? {}) }, state as any),
+        config: writeCustomNodeState({ ...(configPatch ?? {}) }, state),
         inputValues: {},
         outputValues: {},
       };
@@ -2150,6 +910,15 @@
     getAreaPlugin: () => areaPlugin,
     groupController,
     getLoopController: () => loopController,
+  });
+
+  const groupFrameHeaderHandlers = createGroupFrameHeaderHandlers({
+    selectedGroupId,
+    groupSelectionNodeIds,
+    groupSelectionBounds,
+    groupController,
+    frameDragController,
+    setSelectedNode,
   });
 
   const handleToggleEngine = () => {
@@ -2235,8 +1004,8 @@
       nodeEngine.lastError?.set?.('Select a Custom Node mother instance to export.');
       return;
     }
-    const node = nodeEngine.getNode(String(selectedNodeId)) as any;
-    const state = node ? readCustomNodeState(node.config ?? {}) : null;
+    const node = nodeEngine.getNode(String(selectedNodeId));
+    const state = node ? readCustomNodeState(asRecord(node.config)) : null;
     if (!state || state.role !== 'mother') {
       nodeEngine.lastError?.set?.('Only a Custom Node mother instance can be exported.');
       return;
@@ -2256,15 +1025,12 @@
     importCustomNodeInputEl?.click?.();
   };
 
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    Boolean(value && typeof value === 'object' && !Array.isArray(value));
-
   const cloneInternalGraphForMotherInstance = (graph: GraphState, groupId: string): GraphState => {
     const gid = String(groupId ?? '');
     const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
     const connections = Array.isArray(graph?.connections) ? graph.connections : [];
     return {
-      nodes: nodes.map((node: any) => {
+      nodes: nodes.map((node) => {
         let config = { ...(node.config ?? {}) };
         const inputValues = { ...(node.inputValues ?? {}) };
         if (gid && (node.type === 'group-proxy' || node.type === 'group-gate')) {
@@ -2272,7 +1038,7 @@
         }
         return { ...node, config, inputValues, outputValues: {} };
       }),
-      connections: connections.map((c: any) => ({ ...c })),
+      connections: connections.map((c) => ({ ...c })),
     };
   };
 
@@ -2303,7 +1069,7 @@
       const importedDefs = parsedFile.definitions ?? [];
       const remapped = remapImportedDefinitions(importedDefs);
 
-      const inCycleImported = definitionsInCycles(remapped.definitions as any);
+      const inCycleImported = definitionsInCycles(remapped.definitions);
       if (inCycleImported.size > 0) {
         const ids = Array.from(inCycleImported).map(String).filter(Boolean);
         alert(`Import rejected: cyclic Custom Node nesting detected.\n\n${ids.join(' → ')}`);
@@ -2312,7 +1078,7 @@
 
       const existing = get(customNodeDefinitions) ?? [];
       const merged = [...existing, ...remapped.definitions];
-      const inCycleMerged = definitionsInCycles(merged as any);
+      const inCycleMerged = definitionsInCycles(merged);
       if (inCycleMerged.size > 0) {
         const ids = Array.from(inCycleMerged).map(String).filter(Boolean);
         alert(`Import rejected: would introduce cyclic nesting.\n\n${ids.join(' → ')}`);
@@ -2320,7 +1086,7 @@
       }
 
       for (const def of remapped.definitions) {
-        addCustomNodeDefinition(def as any);
+        addCustomNodeDefinition(def);
       }
 
       const rootOld = String(parsedFile.rootDefinitionId ?? '');
@@ -2337,9 +1103,8 @@
       const nestedMothers = new Set<string>();
       for (const def of remapped.definitions) {
         const nodes = Array.isArray(def.template?.nodes) ? def.template.nodes : [];
-        for (const node of nodes as any[]) {
-          const cfg = isRecord((node as any)?.config) ? ((node as any).config as any) : {};
-          const st = readCustomNodeState(cfg);
+        for (const node of nodes) {
+          const st = readCustomNodeState(asRecord(node.config));
           if (st && st.role === 'mother') nestedMothers.add(String(st.definitionId));
         }
       }
@@ -2395,10 +1160,10 @@
             role: 'mother',
             manualGate: true,
             internal,
-          } as any),
+          }),
           inputValues: {},
           outputValues: {},
-        } as any);
+        });
         createdNodeIds.push(nodeId);
       }
 
@@ -2434,25 +1199,25 @@
     setSelectedNode('');
   }
 
-  const groupSnapshotKey = (groups: any[]): string => {
+  const groupSnapshotKey = (groups: NodeGroup[]): string => {
     const sorted = Array.isArray(groups)
-      ? [...groups].sort((a: any, b: any) => String(a?.id ?? '').localeCompare(String(b?.id ?? '')))
+      ? [...groups].sort((a, b) => String(a.id ?? '').localeCompare(String(b.id ?? '')))
       : [];
     return sorted
-      .map((g: any) => {
-        const nodeIds = Array.isArray(g?.nodeIds)
-          ? Array.from(new Set(g.nodeIds.map((id: any) => String(id)).filter(Boolean)))
+      .map((g) => {
+        const nodeIds = Array.isArray(g.nodeIds)
+          ? Array.from(new Set(g.nodeIds.map((id) => String(id)).filter(Boolean)))
               .sort()
               .join(',')
           : '';
         const runtimeActive =
-          typeof g?.runtimeActive === 'boolean' ? (g.runtimeActive ? '1' : '0') : '';
+          typeof g.runtimeActive === 'boolean' ? (g.runtimeActive ? '1' : '0') : '';
         return [
-          String(g?.id ?? ''),
-          String(g?.parentId ?? ''),
-          String(g?.name ?? ''),
-          g?.disabled ? '1' : '0',
-          g?.minimized ? '1' : '0',
+          String(g.id ?? ''),
+          String(g.parentId ?? ''),
+          String(g.name ?? ''),
+          g.disabled ? '1' : '0',
+          g.minimized ? '1' : '0',
           runtimeActive,
           nodeIds,
         ].join(':');
@@ -2460,22 +1225,30 @@
       .join('|');
   };
 
-  const normalizeGroupsForSnapshot = (groups: any[]) =>
-    (Array.isArray(groups) ? groups : []).map((g: any) => ({
-      id: String(g?.id ?? ''),
-      parentId: g?.parentId ? String(g.parentId) : null,
-      name: String(g?.name ?? ''),
-      nodeIds: Array.from(new Set((g?.nodeIds ?? []).map((id: any) => String(id)).filter(Boolean))),
-      disabled: Boolean(g?.disabled),
-      minimized: Boolean(g?.minimized),
-      runtimeActive: typeof g?.runtimeActive === 'boolean' ? Boolean(g.runtimeActive) : undefined,
-    }));
+  const normalizeGroupsForSnapshot = (
+    groups: Array<Record<string, unknown>> | null | undefined
+  ): NodeGroup[] =>
+    (Array.isArray(groups) ? groups : []).map((g) => {
+      const record = asRecord(g);
+      const nodeIds = Array.isArray(record.nodeIds) ? record.nodeIds : [];
+      return {
+        id: getString(record.id, ''),
+        parentId: getString(record.parentId, '') || null,
+        name: getString(record.name, ''),
+        nodeIds: Array.from(new Set(nodeIds.map((id) => String(id)).filter(Boolean))),
+        disabled: getBoolean(record.disabled, false),
+        minimized: getBoolean(record.minimized, false),
+        runtimeActive:
+          typeof record.runtimeActive === 'boolean' ? Boolean(record.runtimeActive) : undefined,
+      };
+    });
 
   onMount(async () => {
     if (!container) return;
 
     if (import.meta.env.DEV && typeof window !== 'undefined') {
-      (window as any).__shuguNodeEngine = nodeEngine;
+      const windowWithEngine = window as Window & { __shuguNodeEngine?: typeof nodeEngine };
+      windowWithEngine.__shuguNodeEngine = nodeEngine;
     }
 
     midiController.start();
@@ -2508,20 +1281,21 @@
     groupUiStateUnsub?.();
     groupUiStateUnsub = nodeGroupsState.subscribe((groups) => {
       if (syncingGroupsToProject) return;
-      const nextKey = groupSnapshotKey(groups as any);
+      const nextKey = groupSnapshotKey(groups ?? []);
       if (nextKey === lastGroupsKeyFromProject || nextKey === lastGroupsKeyFromCanvas) return;
       lastGroupsKeyFromProject = nextKey;
 
       syncingGroupsFromProject = true;
-      groupController.setGroups(normalizeGroupsForSnapshot(groups as any) as any);
+      groupController.setGroups(
+        normalizeGroupsForSnapshot(groups as Array<Record<string, unknown>>)
+      );
       syncingGroupsFromProject = false;
     });
 
     editor = new NodeEditor('fluffy-rete');
     areaPlugin = new AreaPlugin(container);
-    const connection: any = new ConnectionPlugin();
-    connectionPlugin = connection;
-    const render: any = new SveltePlugin();
+    const connection = new ConnectionPlugin();
+    const render = new SveltePlugin();
     const history = new HistoryPlugin();
 
     areaPlugin?.area?.setZoomHandler?.(null);
@@ -2532,16 +1306,23 @@
     areaPlugin.use(history);
 
     connection.addPreset(ConnectionPresets.classic.setup());
-    connection.addPipe((ctx: any) => {
+    connection.addPipe((ctx: { type?: string; data?: unknown }) => {
+      const ctxData = asRecord(ctx.data);
       if (ctx?.type === 'connectionpick') {
-        const sock = (ctx.data as any)?.socket;
-        if (sock) {
+        const sock = asRecord(ctxData.socket);
+        const nodeId = getString(sock.nodeId, '');
+        const sideRaw = getString(sock.side, '');
+        const key = getString(sock.key, '');
+        if (nodeId && key && (sideRaw === 'input' || sideRaw === 'output')) {
           connectDraggingSocket = {
-            nodeId: String(sock.nodeId),
-            side: sock.side,
-            key: String(sock.key),
+            nodeId,
+            side: sideRaw,
+            key,
           };
-          const edge = findGroupProxyEdgeTargetAt(lastPointerClient.x, lastPointerClient.y);
+          const edge = groupEdgeFinder.findGroupProxyEdgeTargetAt(
+            lastPointerClient.x,
+            lastPointerClient.y
+          );
           groupEdgeHighlight = edge ? { groupId: edge.groupId, side: edge.side } : null;
         }
       }
@@ -2549,18 +1330,30 @@
         connectDraggingSocket = null;
         groupEdgeHighlight = null;
 
-        const data = ctx.data as any;
-        const initial = data?.initial as any;
-        const socket = data?.socket as any;
-        const created = Boolean(data?.created);
-        if (initial && !socket && !created) {
+        const initial = asRecord(ctxData.initial);
+        const socket = asRecord(ctxData.socket);
+        const created = Boolean(ctxData.created);
+        const initialNodeId = getString(initial.nodeId, '');
+        const initialSide = getString(initial.side, '');
+        const initialKey = getString(initial.key, '');
+        const socketProvided = Object.keys(socket).length > 0;
+        if (
+          initialNodeId &&
+          initialKey &&
+          (initialSide === 'input' || initialSide === 'output') &&
+          !socketProvided &&
+          !created
+        ) {
           const initialSocket: SocketData = {
-            nodeId: String(initial.nodeId),
-            side: initial.side,
-            key: String(initial.key),
+            nodeId: initialNodeId,
+            side: initialSide,
+            key: initialKey,
           };
 
-          const gateTarget = findGroupGateTargetAt(lastPointerClient.x, lastPointerClient.y);
+          const gateTarget = groupEdgeFinder.findGroupGateTargetAt(
+            lastPointerClient.x,
+            lastPointerClient.y
+          );
           if (gateTarget && initialSocket.side === 'output') {
             const group =
               get(groupController.nodeGroups).find((g) => String(g.id) === gateTarget.groupId) ??
@@ -2575,7 +1368,7 @@
               state.nodes.find(
                 (n) =>
                   String(n.type) === 'group-gate' &&
-                  String((n as any)?.config?.groupId ?? '') === gateTarget.groupId
+                  getString(asRecord(n.config).groupId, '') === gateTarget.groupId
               )?.id ?? '';
             if (gateNodeId) {
               const connId = `conn-${crypto.randomUUID?.() ?? Date.now()}`;
@@ -2591,7 +1384,10 @@
             }
           }
 
-          const edgeTarget = findGroupProxyEdgeTargetAt(lastPointerClient.x, lastPointerClient.y);
+          const edgeTarget = groupEdgeFinder.findGroupProxyEdgeTargetAt(
+            lastPointerClient.x,
+            lastPointerClient.y
+          );
           if (edgeTarget) {
             const validTypes = new Set([
               'number',
@@ -2614,14 +1410,14 @@
               const node = nodeEngine.getNode(String(sock.nodeId));
               if (!node) return 'any';
               if (node.type === 'group-proxy') {
-                const raw = (node.config as any)?.portType;
-                const t = typeof raw === 'string' && raw ? raw : raw ? String(raw) : '';
+                const raw = getString(asRecord(node.config).portType, '');
+                const t = raw ? raw : '';
                 return validTypes.has(t) ? t : 'any';
               }
               const def = nodeRegistry.get(String(node.type ?? ''));
               const ports = sock.side === 'input' ? def?.inputs : def?.outputs;
               const port = (ports ?? []).find((p) => String(p.id) === String(sock.key));
-              const t = String((port as any)?.type ?? 'any');
+              const t = String(port?.type ?? 'any');
               return validTypes.has(t) ? t : 'any';
             };
 
@@ -2637,7 +1433,7 @@
             const bottom = top + height;
 
             const clampY = (y: number) => {
-              const isMinimized = Boolean((frame as any)?.group?.minimized);
+              const isMinimized = Boolean(frame.group?.minimized);
               const topPad = isMinimized ? 44 + 6 + 28 / 2 : 56;
               const bottomPad = isMinimized ? 6 + 28 / 2 : 56;
               const minY = top + topPad;
@@ -2651,7 +1447,7 @@
             const proxyWidth = 48;
             const proxyOutset = 10;
             const proxyEdgeNudge = 12;
-            const isMinimized = Boolean((frame as any)?.group?.minimized);
+            const isMinimized = Boolean(frame.group?.minimized);
             const x = isMinimized
               ? direction === 'input'
                 ? left - proxyOutset
@@ -2726,18 +1522,13 @@
       return ctx;
     });
 
-    render.addPreset(
-      SveltePresets.classic.setup({
-        socketPositionWatcher:
-          socketPositionWatcher ??
-          (socketPositionWatcher = new LiveDOMSocketPosition(requestFramesUpdate)),
-        customize: {
-          node: () => ReteNode,
-          connection: () => ReteConnection,
-          control: () => ReteControl,
-        },
-      })
-    );
+    socketPositionWatcher = setupReteRenderPreset({
+      render,
+      requestFramesUpdate,
+      socketPositionWatcher,
+      createSocketPositionWatcher: () => new LiveDOMSocketPosition(requestFramesUpdate),
+      renderers: reteRenderers,
+    });
 
     graphSync = createGraphSync({
       editor,
@@ -2803,11 +1594,11 @@
     });
 
     groupNodesUnsub = groupController.nodeGroups.subscribe((groups) => {
-      const nextKey = groupSnapshotKey(groups as any);
+      const nextKey = groupSnapshotKey(groups ?? []);
       lastGroupsKeyFromCanvas = nextKey;
       if (!syncingGroupsFromProject && nextKey !== lastGroupsKeyFromProject) {
         syncingGroupsToProject = true;
-        nodeGroupsState.set(normalizeGroupsForSnapshot(groups as any) as any);
+        nodeGroupsState.set(normalizeGroupsForSnapshot(groups as Array<Record<string, unknown>>));
         syncingGroupsToProject = false;
       }
       groupPortNodesController.ensureGroupPortNodes();
@@ -2821,25 +1612,31 @@
 
     let lastClientKey = '';
     managerUnsub = managerState.subscribe(($state) => {
-      const clientsWithGroups = ($state.clients ?? [])
-        .filter((c: any) => c?.connected !== false)
-        .map((c: any) => ({
-          id: String(c?.clientId ?? ''),
-          group: String(c?.group ?? ''),
-        }))
-        .filter((c: any) => Boolean(c.id));
+      const clients = Array.isArray($state.clients) ? $state.clients : [];
+      const clientsWithGroups = clients
+        .map((client) => {
+          const record = asRecord(client);
+          return {
+            connected: getBoolean(record.connected, true),
+            id: getString(record.clientId, ''),
+            group: getString(record.group, ''),
+          };
+        })
+        .filter((c) => c.connected)
+        .map(({ id, group }) => ({ id, group }))
+        .filter((c) => Boolean(c.id));
 
       const audience = clientsWithGroups
-        .filter((c: any) => String(c.group) !== 'display')
-        .map((c: any) => String(c.id));
+        .filter((c) => String(c.group) !== 'display')
+        .map((c) => String(c.id));
 
       const displayIdSet = new Set(
         clientsWithGroups
-          .filter((c: any) => String(c.group) === 'display')
-          .map((c: any) => String(c.id))
+          .filter((c) => String(c.group) === 'display')
+          .map((c) => String(c.id))
       );
 
-      const nextClientKey = clientsWithGroups.map((c: any) => `${c.id}:${c.group}`).join('|');
+      const nextClientKey = clientsWithGroups.map((c) => `${c.id}:${c.group}`).join('|');
       if (nextClientKey === lastClientKey) return;
       lastClientKey = nextClientKey;
 
@@ -2854,14 +1651,11 @@
           if (String(node.type) !== 'client-object') continue;
           const nodeId = String(node.id);
           const nodeInstance = nodeEngine.getNode(nodeId);
-          const configuredClientId =
-            typeof (nodeInstance?.config as any)?.clientId === 'string'
-              ? String((nodeInstance?.config as any).clientId)
-              : '';
+          const configuredClientId = getString(asRecord(nodeInstance?.config).clientId, '');
           if (configuredClientId && displayIdSet.has(configuredClientId)) {
             nodeEngine.updateNodeConfig(nodeId, { clientId: '' });
             if (nodeInstance?.outputValues) {
-              (nodeInstance.outputValues as any).out = { clientId: '', sensors: null };
+              nodeInstance.outputValues.out = { clientId: '', sensors: null };
               nodeEngine.tickTime.set(Date.now());
             }
           }
@@ -2900,151 +1694,30 @@
       requestMinimapUpdate: minimapController.requestUpdate,
     });
 
-    // UI: Group minimized node expand toggle (from ReteNode's group-frame nodes).
-    const onGroupFrameToggle = (event: Event) => {
-      const detail = (event as any)?.detail ?? null;
-      const rawGroupId = detail?.groupId;
-      const groupId =
-        typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
-      if (!groupId) return;
-      groupController.toggleGroupMinimized(groupId);
-    };
-    window.addEventListener('shugu:toggle-group-minimized', onGroupFrameToggle as any);
-    groupFrameToggleHandler = onGroupFrameToggle;
+    const groupEvents = bindGroupFrameEvents({
+      groupController,
+      windowRef: window,
+    });
+    groupFrameToggleHandler = groupEvents.onGroupFrameToggle;
+    groupFrameDisabledHandler = groupEvents.onGroupFrameToggleDisabled;
 
-    // UI: Minimized Group node active toggle (manually activate/deactivate the group).
-    const onGroupFrameToggleDisabled = (event: Event) => {
-      const detail = (event as any)?.detail ?? null;
-      const rawGroupId = detail?.groupId;
-      const groupId =
-        typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
-      if (!groupId) return;
-      groupController.toggleGroupDisabled(groupId);
-    };
-    window.addEventListener('shugu:toggle-group-disabled', onGroupFrameToggleDisabled as any);
-    groupFrameDisabledHandler = onGroupFrameToggleDisabled;
+    const customNodeEvents = bindCustomNodeEvents({
+      onUncouple: handleUncoupleCustomNode,
+      onExpand: handleExpandCustomNode,
+      windowRef: window,
+    });
+    customNodeUncoupleHandler = customNodeEvents.onCustomNodeUncouple;
+    customNodeExpandHandler = customNodeEvents.onCustomNodeExpand;
 
-    const onCustomNodeUncouple = (event: Event) => {
-      const detail = (event as any)?.detail ?? null;
-      const rawNodeId = detail?.nodeId;
-      const nodeId = typeof rawNodeId === 'string' ? rawNodeId : rawNodeId ? String(rawNodeId) : '';
-      if (!nodeId) return;
-      handleUncoupleCustomNode(nodeId);
-    };
-    window.addEventListener('shugu:custom-node-uncouple', onCustomNodeUncouple as any);
-    customNodeUncoupleHandler = onCustomNodeUncouple;
-
-    const onCustomNodeExpand = (event: Event) => {
-      const detail = (event as any)?.detail ?? null;
-      const rawNodeId = detail?.nodeId;
-      const nodeId = typeof rawNodeId === 'string' ? rawNodeId : rawNodeId ? String(rawNodeId) : '';
-      if (!nodeId) return;
-      handleExpandCustomNode(nodeId);
-    };
-    window.addEventListener('shugu:custom-node-expand', onCustomNodeExpand as any);
-    customNodeExpandHandler = onCustomNodeExpand;
-
-
-    // UX: Dragging the minimized Group node should move the entire group (incl. nested frames/ports).
-    if (areaPlugin) {
-      areaPlugin.addPipe(async (ctx: any) => {
-        if (ctx?.type !== 'nodetranslated') return ctx;
-        if (isSyncingRef.value) return ctx;
-        if (groupController.isProgrammaticTranslate()) return ctx;
-        if (groupFrameTranslateDepth > 0) return ctx;
-
-        const data = ctx.data ?? {};
-        const nodeId = String(data.id ?? '');
-        const pos = data.position as { x: number; y: number } | undefined;
-        const prev = data.previous as { x: number; y: number } | undefined;
-        if (!nodeId || !pos || !prev) return ctx;
-
-        const node = nodeEngine.getNode(nodeId);
-        if (!node || String(node.type) !== 'group-frame') return ctx;
-
-        const rawGroupId = (node.config as any)?.groupId;
-        const groupId =
-          typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
-        if (!groupId) return ctx;
-
-        const dx = Number(pos.x ?? 0) - Number(prev.x ?? 0);
-        const dy = Number(pos.y ?? 0) - Number(prev.y ?? 0);
-        if (!dx && !dy) return ctx;
-
-        const groups = get(groupController.nodeGroups) ?? [];
-        const subtreeGroupIds = new Set<string>();
-        const stack = [groupId];
-        while (stack.length > 0) {
-          const gid = String(stack.pop() ?? '');
-          if (!gid || subtreeGroupIds.has(gid)) continue;
-          subtreeGroupIds.add(gid);
-          for (const g of groups) {
-            if (String((g as any)?.parentId ?? '') === gid)
-              stack.push(String((g as any)?.id ?? ''));
-          }
-        }
-
-        const nodeIdsToMove = new Set<string>();
-        for (const g of groups) {
-          const gid = String((g as any)?.id ?? '');
-          if (!gid || !subtreeGroupIds.has(gid)) continue;
-          for (const id of (g as any)?.nodeIds ?? []) nodeIdsToMove.add(String(id));
-        }
-
-        const state: GraphState = nodeEngine.exportGraph();
-        for (const n of state.nodes ?? []) {
-          const type = String((n as any)?.type ?? '');
-          if (type !== 'group-gate' && type !== 'group-proxy' && type !== 'group-frame') continue;
-          const gid = String(((n as any)?.config as any)?.groupId ?? '');
-          if (!gid || !subtreeGroupIds.has(gid)) continue;
-          nodeIdsToMove.add(String((n as any).id ?? ''));
-        }
-        nodeIdsToMove.delete(nodeId);
-
-        if (nodeIdsToMove.size === 0) return ctx;
-
-        groupFrameTranslateDepth += 1;
-        groupController.beginProgrammaticTranslate();
-        try {
-          const promises: Promise<unknown>[] = [];
-          for (const id of nodeIdsToMove) {
-            const view = areaPlugin?.nodeViews?.get?.(String(id));
-            const viewPos = view?.position as { x: number; y: number } | undefined;
-            if (viewPos && Number.isFinite(viewPos.x) && Number.isFinite(viewPos.y)) {
-              promises.push(
-                areaPlugin.translate(String(id), { x: viewPos.x + dx, y: viewPos.y + dy })
-              );
-            } else {
-              const instance = nodeEngine.getNode(String(id));
-              if (!instance) continue;
-              const cx = Number((instance as any).position?.x ?? 0);
-              const cy = Number((instance as any).position?.y ?? 0);
-              if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
-              nodeEngine.updateNodePosition(String(id), { x: cx + dx, y: cy + dy });
-            }
-          }
-          await Promise.all(promises);
-        } finally {
-          groupController.endProgrammaticTranslate();
-          groupFrameTranslateDepth = Math.max(0, groupFrameTranslateDepth - 1);
-        }
-
-        // Persist translated positions for nodes that were moved programmatically via the view.
-        for (const id of nodeIdsToMove) {
-          const view = areaPlugin?.nodeViews?.get?.(String(id));
-          const viewPos = view?.position as { x: number; y: number } | undefined;
-          if (viewPos && Number.isFinite(viewPos.x) && Number.isFinite(viewPos.y)) {
-            nodeEngine.updateNodePosition(String(id), { x: viewPos.x, y: viewPos.y });
-          }
-        }
-
-        groupPortNodesController.scheduleAlign();
-        requestFramesUpdate();
-        minimapController.requestUpdate();
-
-        return ctx;
-      });
-    }
+    registerGroupFrameTranslatePipe({
+      areaPlugin,
+      nodeEngine,
+      groupController,
+      isSyncing: () => isSyncingRef.value,
+      groupPortNodesController,
+      requestFramesUpdate,
+      requestMinimapUpdate: minimapController.requestUpdate,
+    });
 
     if (areaPlugin) {
       await AreaExtensions.zoomAt(areaPlugin, Array.from(nodeMap.values()));
@@ -3131,7 +1804,7 @@
         tag === 'input' ||
         tag === 'textarea' ||
         tag === 'select' ||
-        Boolean((target as any)?.isContentEditable);
+        Boolean(target?.isContentEditable);
       if (isEditing) return;
 
       event.preventDefault();
@@ -3152,25 +1825,22 @@
         const isOnSocket = Boolean(target?.closest?.('.socket'));
         const isEditing =
           Boolean(target?.closest?.('input, textarea, select, button')) ||
-          Boolean((target as any)?.isContentEditable) ||
+          Boolean(target?.isContentEditable) ||
           Boolean(target?.closest?.('.port-control')) ||
           Boolean(target?.closest?.('.cmd-aggregator-controls'));
 
         if (nodeEl && nodeId && !isOnSocket && !isEditing) {
           const node = nodeEngine.getNode(nodeId);
           if (node?.type === 'group-proxy') {
-            const groupId =
-              typeof (node.config as any)?.groupId === 'string'
-                ? String((node.config as any).groupId)
-                : '';
+            const groupId = getString(asRecord(node.config).groupId, '');
             if (!groupId) return;
 
             const frames = get(groupFrames) ?? [];
-            const frame = frames.find((f: any) => String(f?.group?.id ?? '') === groupId) ?? null;
+            const frame = frames.find((f) => String(f.group?.id ?? '') === groupId) ?? null;
             if (!frame) return;
 
             const direction =
-              String((node.config as any)?.direction ?? 'output') === 'input' ? 'input' : 'output';
+              getString(asRecord(node.config).direction, 'output') === 'input' ? 'input' : 'output';
             const proxyWidth = 48;
             const proxyHalfHeight = 10;
             const proxyOutset = 10;
@@ -3181,7 +1851,7 @@
             const width = Number(frame.width ?? 0);
             const height = Number(frame.height ?? 0);
 
-            const isMinimized = Boolean((frame as any)?.group?.minimized);
+            const isMinimized = Boolean(frame.group?.minimized);
 
             const fixedX = isMinimized
               ? direction === 'input'
@@ -3231,15 +1901,15 @@
               if (proxyDragMoveHandler) {
                 window.removeEventListener('pointermove', proxyDragMoveHandler, {
                   capture: true,
-                } as any);
+                });
               }
               if (proxyDragUpHandler) {
                 window.removeEventListener('pointerup', proxyDragUpHandler, {
                   capture: true,
-                } as any);
+                });
                 window.removeEventListener('pointercancel', proxyDragUpHandler, {
                   capture: true,
-                } as any);
+                });
               }
               proxyDragPointerId = null;
               proxyDragMoveHandler = null;
@@ -3296,7 +1966,7 @@
           tag === 'textarea' ||
           tag === 'select' ||
           tag === 'button' ||
-          Boolean((target as any)?.isContentEditable) ||
+          Boolean(target?.isContentEditable) ||
           Boolean(target?.closest?.('input, textarea, select, button')) ||
           Boolean(target?.closest?.('.port-control')) ||
           Boolean(target?.closest?.('.cmd-aggregator-controls'));
@@ -3331,14 +2001,14 @@
             if (altDuplicateDragMoveHandler)
               window.removeEventListener('pointermove', altDuplicateDragMoveHandler, {
                 capture: true,
-              } as any);
+              });
             if (altDuplicateDragUpHandler) {
               window.removeEventListener('pointerup', altDuplicateDragUpHandler, {
                 capture: true,
-              } as any);
+              });
               window.removeEventListener('pointercancel', altDuplicateDragUpHandler, {
                 capture: true,
-              } as any);
+              });
             }
             altDuplicateDragPointerId = null;
             altDuplicateDragMoveHandler = null;
@@ -3379,7 +2049,7 @@
                   groupId,
                   role: 'child',
                   internal: cloneInternalGraphForNewInstance(state.internal, groupId),
-                } as any);
+                });
               }
               const clone: NodeInstance = {
                 id: newId,
@@ -3444,7 +2114,7 @@
     const onPointerMove = (event: PointerEvent) => {
       lastPointerClient = { x: event.clientX, y: event.clientY };
       if (connectDraggingSocket) {
-        const edge = findGroupProxyEdgeTargetAt(event.clientX, event.clientY);
+        const edge = groupEdgeFinder.findGroupProxyEdgeTargetAt(event.clientX, event.clientY);
         groupEdgeHighlight = edge ? { groupId: edge.groupId, side: edge.side } : null;
       } else if (groupEdgeHighlight) {
         groupEdgeHighlight = null;
@@ -3477,7 +2147,7 @@
       const gy = (y - t.ty) / t.k;
 
       const frames = get(groupFrames) ?? [];
-      let picked: any = null;
+      let picked: GroupFrame | null = null;
       let bestDepth = -1;
       let bestArea = Number.POSITIVE_INFINITY;
 
@@ -3555,7 +2225,7 @@
         tag === 'input' ||
         tag === 'textarea' ||
         tag === 'select' ||
-        Boolean((el as any)?.isContentEditable);
+        Boolean(el?.isContentEditable);
       if (isEditing) return;
 
       if ((event.metaKey || event.ctrlKey) && lowerKey === 'c') {
@@ -3604,83 +2274,69 @@
   });
 
   onDestroy(() => {
-    graphUnsub?.();
-    groupNodesUnsub?.();
-    groupFramesUnsub?.();
-    groupUiStateUnsub?.();
-    paramsUnsub?.();
-    tickUnsub?.();
-    runningUnsub?.();
-    loopDeployUnsub?.();
-    groupDisabledUnsub?.();
-    managerUnsub?.();
-    displayBridgeUnsub?.();
-    midiController.stop();
-    patchRuntime.destroy();
-    loopController?.destroy();
-    frameDragController.destroy();
-    groupController.destroy();
-    groupPortNodesController.destroy();
-    minimapController.destroy();
-    if (wheelHandler) window.removeEventListener('wheel', wheelHandler, { capture: true } as any);
-    if (contextMenuHandler)
-      container?.removeEventListener('contextmenu', contextMenuHandler, { capture: true } as any);
-    if (pointerDownHandler)
-      container?.removeEventListener('pointerdown', pointerDownHandler, { capture: true } as any);
-    if (pointerMoveHandler)
-      container?.removeEventListener('pointermove', pointerMoveHandler, { capture: true } as any);
-    if (dblclickHandler)
-      container?.removeEventListener('dblclick', dblclickHandler, { capture: true } as any);
-    if (keydownHandler) window.removeEventListener('keydown', keydownHandler);
-    if (altDuplicateDragMoveHandler)
-      window.removeEventListener('pointermove', altDuplicateDragMoveHandler, {
-        capture: true,
-      } as any);
-    if (altDuplicateDragUpHandler) {
-      window.removeEventListener('pointerup', altDuplicateDragUpHandler, { capture: true } as any);
-      window.removeEventListener('pointercancel', altDuplicateDragUpHandler, {
-        capture: true,
-      } as any);
-    }
-    altDuplicateDragPointerId = null;
-    altDuplicateDragMoveHandler = null;
-    altDuplicateDragUpHandler = null;
-    if (proxyDragMoveHandler)
-      window.removeEventListener('pointermove', proxyDragMoveHandler, {
-        capture: true,
-      } as any);
-    if (proxyDragUpHandler) {
-      window.removeEventListener('pointerup', proxyDragUpHandler, { capture: true } as any);
-      window.removeEventListener('pointercancel', proxyDragUpHandler, { capture: true } as any);
-    }
-    proxyDragPointerId = null;
-    proxyDragMoveHandler = null;
-    proxyDragUpHandler = null;
-    if (toolbarMenuOutsideHandler)
-      window.removeEventListener('pointerdown', toolbarMenuOutsideHandler, {
-        capture: true,
-      } as any);
-    if (groupFrameToggleHandler)
-      window.removeEventListener('shugu:toggle-group-minimized', groupFrameToggleHandler as any);
-    if (groupFrameDisabledHandler)
-      window.removeEventListener('shugu:toggle-group-disabled', groupFrameDisabledHandler as any);
-    if (customNodeUncoupleHandler)
-      window.removeEventListener('shugu:custom-node-uncouple', customNodeUncoupleHandler as any);
-    if (customNodeExpandHandler)
-      window.removeEventListener('shugu:custom-node-expand', customNodeExpandHandler as any);
-    resizeObserver?.disconnect();
-    socketPositionWatcher?.destroy();
-    areaPlugin?.destroy?.();
-    editor?.clear();
-    nodeMap.clear();
-    connectionMap.clear();
-    nodeEngine.clearDisabledNodes();
-
-    if (import.meta.env.DEV && typeof window !== 'undefined') {
-      if ((window as any).__shuguNodeEngine === nodeEngine) {
-        delete (window as any).__shuguNodeEngine;
-      }
-    }
+    destroyNodeCanvasResources({
+      container,
+      graphUnsub,
+      groupNodesUnsub,
+      groupFramesUnsub,
+      groupUiStateUnsub,
+      paramsUnsub,
+      tickUnsub,
+      runningUnsub,
+      loopDeployUnsub,
+      groupDisabledUnsub,
+      managerUnsub,
+      displayBridgeUnsub,
+      midiController,
+      patchRuntime,
+      loopController,
+      frameDragController,
+      groupController,
+      groupPortNodesController,
+      minimapController,
+      keydownHandler,
+      wheelHandler,
+      contextMenuHandler,
+      pointerDownHandler,
+      pointerMoveHandler,
+      dblclickHandler,
+      toolbarMenuOutsideHandler,
+      altDuplicateDragMoveHandler,
+      altDuplicateDragUpHandler,
+      proxyDragMoveHandler,
+      proxyDragUpHandler,
+      groupFrameToggleHandler,
+      groupFrameDisabledHandler,
+      customNodeUncoupleHandler,
+      customNodeExpandHandler,
+      resizeObserver,
+      socketPositionWatcher,
+      areaPlugin,
+      editor,
+      nodeMap,
+      connectionMap,
+      nodeEngine,
+      windowRef: typeof window === 'undefined' ? undefined : window,
+      isDev: import.meta.env.DEV,
+      setAltDuplicateDragPointerId: (value) => {
+        altDuplicateDragPointerId = value;
+      },
+      setAltDuplicateDragMoveHandler: (handler) => {
+        altDuplicateDragMoveHandler = handler;
+      },
+      setAltDuplicateDragUpHandler: (handler) => {
+        altDuplicateDragUpHandler = handler;
+      },
+      setProxyDragPointerId: (value) => {
+        proxyDragPointerId = value;
+      },
+      setProxyDragMoveHandler: (handler) => {
+        proxyDragMoveHandler = handler;
+      },
+      setProxyDragUpHandler: (handler) => {
+        proxyDragUpHandler = handler;
+      },
+    });
   });
 </script>
 
@@ -3797,7 +2453,7 @@
       onCollapseCustomNode={handleCollapseCustomNodeFrame}
       onDisassemble={groupPortNodesController.disassembleGroupAndPorts}
       onRename={handleRenameGroup}
-      onHeaderPointerDown={handleGroupHeaderPointerDown}
+      onHeaderPointerDown={groupFrameHeaderHandlers.handleGroupHeaderPointerDown}
     />
 
     <LoopFramesOverlay
