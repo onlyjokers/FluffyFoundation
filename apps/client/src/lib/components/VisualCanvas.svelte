@@ -62,14 +62,15 @@
     if (!sdk) return;
     if (!nodeId) return;
     try {
+      const payload: Record<string, unknown> = {
+        kind: 'node-media',
+        event: 'started',
+        nodeId,
+        nodeType: 'load-video-from-assets',
+      };
       sdk.sendSensorData(
         'custom',
-        {
-          kind: 'node-media',
-          event: 'started',
-          nodeId,
-          nodeType: 'load-video-from-assets',
-        } as any,
+        payload,
         { trackLatest: false }
       );
     } catch {
@@ -131,8 +132,16 @@
   async function setupAudioPipeline(stream: MediaStream) {
     try {
       const mod = await toneAudioEngine.ensureLoaded();
-      const Tone: any = (mod as any).default ?? mod;
-      const raw: AudioContext | null = Tone.getContext?.().rawContext ?? null;
+      type ToneContextLike = { rawContext?: AudioContext };
+      type ToneModuleLike = { getContext?: () => ToneContextLike };
+      const toneCandidate =
+        mod && typeof mod === 'object' && 'default' in mod
+          ? (mod as { default?: unknown }).default ?? mod
+          : mod;
+      const tone = toneCandidate && typeof toneCandidate === 'object'
+        ? (toneCandidate as ToneModuleLike)
+        : null;
+      const raw: AudioContext | null = tone?.getContext?.().rawContext ?? null;
       if (!raw) {
         console.warn(
           '[VisualCanvas] Tone context not available; skipping audio analysis pipeline.'

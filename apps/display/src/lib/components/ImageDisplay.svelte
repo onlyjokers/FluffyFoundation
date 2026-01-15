@@ -15,7 +15,6 @@ Purpose: Display image overlay (full-screen) for the Display app.
   export let onHide: (() => void) | undefined = undefined;
 
   let activeUrl: string | null = null;
-  let pendingUrl: string | null = null;
   let preloadSeq = 0;
   let hideTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -55,8 +54,6 @@ Purpose: Display image overlay (full-screen) for the Display app.
       activeUrl = url;
     } else if (url !== activeUrl) {
       clearHideTimer();
-      pendingUrl = url;
-
       // Preload via JS Image() to avoid missing `on:load` when the src is a fast blob/data URL.
       const currentSeq = (preloadSeq += 1);
       const nextUrl = url;
@@ -65,13 +62,11 @@ Purpose: Display image overlay (full-screen) for the Display app.
       preloader.onload = () => {
         if (currentSeq !== preloadSeq) return;
         activeUrl = nextUrl;
-        pendingUrl = null;
         scheduleHide();
       };
       preloader.onerror = () => {
         if (currentSeq !== preloadSeq) return;
         console.error('[ImageDisplay] Failed to preload image:', nextUrl);
-        pendingUrl = null;
       };
       preloader.src = nextUrl;
     }
@@ -88,7 +83,6 @@ Purpose: Display image overlay (full-screen) for the Display app.
   export function hide() {
     clearHideTimer();
     preloadSeq += 1;
-    pendingUrl = null;
     onHide?.();
   }
 

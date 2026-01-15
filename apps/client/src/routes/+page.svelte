@@ -45,6 +45,18 @@
 
   const wheelListenerOptions: AddEventListenerOptions = { passive: false };
 
+  type StandaloneNavigator = Navigator & { standalone?: boolean };
+  type FullscreenRequestElement = Element & {
+    requestFullscreen?: () => Promise<void> | void;
+    webkitRequestFullscreen?: () => Promise<void> | void;
+    webkitRequestFullScreen?: () => Promise<void> | void;
+    webkitEnterFullscreen?: () => Promise<void> | void;
+  };
+  type WindowE2E = Window & { __SHUGU_E2E?: boolean };
+
+  const asRecord = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
   function canScrollHorizontally(element: Element | null, deltaX: number): boolean {
     let current: Element | null = element;
 
@@ -92,14 +104,14 @@
    */
   function tryFullscreen(context: 'auto' | 'click'): void {
     // If already standalone (PWA), nothing to do
-    if (typeof navigator !== 'undefined' && (navigator as any).standalone) return;
+    if (typeof navigator !== 'undefined' && (navigator as StandaloneNavigator).standalone) return;
 
     const candidates = [document.documentElement, document.body].filter(Boolean);
 
     let request: (() => Promise<void> | void) | null = null;
 
     for (const el of candidates) {
-      const anyEl = el as any;
+      const anyEl = el as FullscreenRequestElement;
       const fn =
         anyEl.requestFullscreen?.bind(el) ??
         anyEl.webkitRequestFullscreen?.bind(el) ??
@@ -183,7 +195,7 @@
     void refreshGeoFenceConfig();
 
     if (e2e) {
-      (window as any).__SHUGU_E2E = true;
+      (window as WindowE2E).__SHUGU_E2E = true;
       permissions.set({
         microphone: 'denied',
         motion: 'granted',
@@ -294,7 +306,7 @@
       const json = (await response.json()) as { fence?: GeoFenceConfig | null };
       return { fence: json?.fence ?? null };
     } catch (error) {
-      startupConfigError = (error as any)?.message ?? String(error);
+      startupConfigError = error instanceof Error ? error.message : String(error);
       return null;
     }
   }
@@ -321,11 +333,11 @@
   }
 
   function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
+    const record = asRecord(error);
     return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      typeof (error as any).code === 'number'
+      Boolean(record) &&
+      'code' in record &&
+      typeof record.code === 'number'
     );
   }
 

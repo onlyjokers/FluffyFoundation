@@ -445,3 +445,9 @@
   - `apps/manager/src/lib/components/nodes/node-canvas/rete/rete-builder.ts`：自定义节点 `gate` 变化同步到 `manualGate`。
   - `apps/manager/src/lib/nodes/custom-nodes/store.ts`：Custom Node process 以 `inputs.gate` 作为唯一 gate（连线覆盖手动）。
   - `apps/manager/src/lib/components/nodes/NodeCanvas.svelte`：Nodalize/Collapse/Group toggle 时同步 `gate` 输入值，确保手动 gate 一致。
+
+- [x] Phase 2.X 节点图渐进式解耦回归（手动）：完成（2026-01-15）
+  - `pnpm lint` ✅
+  - `pnpm --filter @shugu/node-core test` ✅
+  - `pnpm test:node-canvas` ✅
+  - Phase 1 手动回归：已执行（按 `phase1_regression_playbook.md`）

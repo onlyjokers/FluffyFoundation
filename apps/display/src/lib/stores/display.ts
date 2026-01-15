@@ -24,17 +24,22 @@ import {
   type MediaEngineState,
   type MediaFit,
 } from '@shugu/multimedia-core';
-import type {
-  ControlAction,
-  ControlPayload,
-  ControlMessage,
-  PluginControlMessage,
-  MediaMetaMessage,
-  PlayMediaPayload,
-  ScreenColorPayload,
-  ShowImagePayload,
+import {
+  PROTOCOL_VERSION,
+  type ControlAction,
+  type ControlPayload,
+  type ControlMessage,
+  type PluginControlMessage,
+  type PluginCommand,
+  type MediaMetaMessage,
+  type PlayMediaPayload,
+  type ScreenColorPayload,
+  type ShowImagePayload,
+  type TargetSelector,
 } from '@shugu/protocol';
+import type { GraphChange } from '@shugu/node-core';
 import { ClientSDK, NodeExecutor, type NodeCommand, type ClientState, type ClientIdentity } from '@shugu/sdk-client';
+import { applyGraphChangesToExecutor } from './graph-change-consumer';
 
 export type DisplayInitConfig = {
   serverUrl: string;
@@ -65,6 +70,24 @@ type MediaClipParams = {
 let activeImageObjectUrl: string | null = null;
 const IMAGE_OBJECT_URL_REVOKE_DELAY_MS = 800; // allow the fade-out transition to finish
 let lastControlLogAt = 0;
+const LOCAL_PLUGIN_TARGET: TargetSelector = { mode: 'all' };
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
+const createLocalPluginMessage = (
+  command: PluginCommand,
+  payload?: Record<string, unknown>
+): PluginControlMessage => ({
+  type: 'plugin',
+  from: 'manager',
+  target: LOCAL_PLUGIN_TARGET,
+  pluginId: 'node-executor',
+  command,
+  payload,
+  version: PROTOCOL_VERSION,
+  serverTimestamp: Date.now(),
+});
 
 function isDataImageUrl(url: string): boolean {
   return url.startsWith('data:image/');
@@ -394,12 +417,12 @@ function registerDisplayLocalMedia(payload: Record<string, unknown> | undefined)
   const kind: LocalDisplayMediaKind =
     kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? (kindRaw as LocalDisplayMediaKind) : 'video';
 
-  const fileRaw = (payload as any)?.file ?? null;
+  const fileRaw = payload?.file ?? null;
   if (!(fileRaw instanceof Blob)) return;
 
   const file = fileRaw instanceof File ? fileRaw : new File([fileRaw], `displayfile-${id}`);
   const name =
-    typeof (payload as any)?.name === 'string' && (payload as any).name.trim() ? (payload as any).name.trim() : file.name;
+    typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : file.name;
 
   const existing = displayLocalMedia.get(id);
   if (existing) {
@@ -504,7 +527,7 @@ export async function enableAudio(): Promise<{ enabled: boolean; error?: string 
   if (result.enabled) {
     const loopId = nodeExecutor?.getStatus?.().loopId ?? null;
     if (loopId) {
-      nodeExecutor?.handlePluginControl({ pluginId: 'node-executor', command: 'start', payload: { loopId } } as any);
+      nodeExecutor?.handlePluginControl(createLocalPluginMessage('start', { loopId }));
     }
   }
 
@@ -831,6 +854,13 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     // If we later pair locally (MessagePort), keep the server connection but ignore server plugin messages.
     if (transportDecision !== 'server') return;
     if (message.pluginId === 'node-executor') {
+      if (message.command === 'graph-changes') {
+        const payloadRecord = asRecord(message.payload);
+        const rawChanges = payloadRecord?.changes;
+        const changes = Array.isArray(rawChanges) ? (rawChanges as GraphChange[]) : [];
+        applyGraphChangesToExecutor(nodeExecutor, changes);
+        return;
+      }
       nodeExecutor?.handlePluginControl(message);
       return;
     }
@@ -906,11 +936,15 @@ export function initializeDisplay(config: DisplayInitConfig): void {
       const payload = (data as { payload?: unknown }).payload;
 
       if (pluginId === 'node-executor' && typeof command === 'string') {
-        nodeExecutor?.handlePluginControl({
-          pluginId: 'node-executor',
-          command: command as any,
-          payload: (payload ?? undefined) as any,
-        } as any);
+        if (command === 'graph-changes') {
+          const payloadRecord = asRecord(payload);
+          const rawChanges = payloadRecord?.changes;
+          const changes = Array.isArray(rawChanges) ? (rawChanges as GraphChange[]) : [];
+          applyGraphChangesToExecutor(nodeExecutor, changes);
+          return;
+        }
+        const pluginPayload = asRecord(payload) ?? undefined;
+        nodeExecutor?.handlePluginControl(createLocalPluginMessage(command as PluginCommand, pluginPayload));
         return;
       }
 
@@ -929,7 +963,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
         return;
       }
       if (import.meta.env.DEV) {
-        const snapshot = (payload ?? undefined) as any;
+        const snapshot = asRecord(payload);
         const manifestId = typeof snapshot?.manifestId === 'string' ? snapshot.manifestId : null;
         const assetsCount = Array.isArray(snapshot?.assets) ? snapshot.assets.length : null;
         console.info('[Display] local manifest configure', { manifestId, assetsCount });
@@ -974,7 +1008,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     if (transportDecision === 'local') return;
     if (!isAllowedManagerOrigin(event.origin)) {
       if (import.meta.env.DEV) {
-        const data = event.data as any;
+        const data = asRecord(event.data);
         if (data?.type === 'shugu:display:pair') console.warn('[Display] pair rejected (origin)', event.origin);
       }
       return;

@@ -5,8 +5,27 @@
  */
 
 import { writable, get } from 'svelte/store';
-import type { VisualEffect, VisualSceneLayerItem } from '@shugu/protocol';
+import type { ConvolutionPreset, VisualEffect, VisualSceneLayerItem } from '@shugu/protocol';
 import { clampNumber } from './client-utils';
+
+type AnyRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): AnyRecord | null =>
+  value && typeof value === 'object' ? (value as AnyRecord) : null;
+
+const convolutionPresets: ConvolutionPreset[] = [
+  'blur',
+  'gaussianBlur',
+  'sharpen',
+  'edge',
+  'emboss',
+  'sobelX',
+  'sobelY',
+  'custom',
+];
+
+const isConvolutionPreset = (value: string): value is ConvolutionPreset =>
+  convolutionPresets.includes(value as ConvolutionPreset);
 
 // Independent scene enabled states (derived from visualScenes)
 export const boxSceneEnabled = writable<boolean>(false);
@@ -19,15 +38,17 @@ export const backCameraEnabled = writable<boolean>(false);
 export const visualScenes = writable<VisualSceneLayerItem[]>([]);
 
 export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayerItem[] {
-  const raw = payload && typeof payload === 'object' ? (payload as any).scenes : null;
+  const payloadRecord = asRecord(payload);
+  const raw = payloadRecord?.scenes ?? null;
   if (!Array.isArray(raw)) return [];
 
   const limited = raw.slice(0, 12);
   const out: VisualSceneLayerItem[] = [];
 
   for (const item of limited) {
-    if (!item || typeof item !== 'object') continue;
-    const type = typeof (item as any).type === 'string' ? String((item as any).type) : '';
+    const itemRecord = asRecord(item);
+    if (!itemRecord) continue;
+    const type = typeof itemRecord.type === 'string' ? String(itemRecord.type) : '';
     if (type === 'box') {
       out.push({ type: 'box' });
       continue;
@@ -149,24 +170,28 @@ export function stopCameraStream(): void {
 export const visualEffects = writable<VisualEffect[]>([]);
 
 export function normalizeVisualEffectsPayload(payload: unknown): VisualEffect[] {
-  const raw = payload && typeof payload === 'object' ? (payload as any).effects : null;
+  const payloadRecord = asRecord(payload);
+  const raw = payloadRecord?.effects ?? null;
   if (!Array.isArray(raw)) return [];
   const limited = raw.slice(0, 12);
   const out: VisualEffect[] = [];
 
   for (const item of limited) {
-    if (!item || typeof item !== 'object') continue;
-    const type = typeof (item as any).type === 'string' ? String((item as any).type) : '';
+    const itemRecord = asRecord(item);
+    if (!itemRecord) continue;
+    const type = typeof itemRecord.type === 'string' ? String(itemRecord.type) : '';
     if (type === 'ascii') {
-      const cellSize = clampNumber((item as any).cellSize, 11, 1, 100);
+      const cellSize = clampNumber(itemRecord.cellSize, 11, 1, 100);
       out.push({ type: 'ascii', cellSize: Math.round(cellSize) });
       continue;
     }
     if (type === 'convolution') {
-      const preset =
-        typeof (item as any).preset === 'string' ? String((item as any).preset) : undefined;
-      const kernel = Array.isArray((item as any).kernel)
-        ? (item as any).kernel
+      const presetRaw =
+        typeof itemRecord.preset === 'string' ? String(itemRecord.preset) : undefined;
+      const preset = presetRaw && isConvolutionPreset(presetRaw) ? presetRaw : undefined;
+      const kernelRaw = Array.isArray(itemRecord.kernel) ? itemRecord.kernel : undefined;
+      const kernel = kernelRaw
+        ? kernelRaw
             .map((n: unknown) => (typeof n === 'number' ? n : Number(n)))
             .filter((n: number) => Number.isFinite(n))
             .slice(0, 9)
@@ -174,12 +199,12 @@ export function normalizeVisualEffectsPayload(payload: unknown): VisualEffect[] 
 
       out.push({
         type: 'convolution',
-        ...(preset ? { preset: preset as any } : {}),
+        ...(preset ? { preset } : {}),
         ...(kernel && kernel.length === 9 ? { kernel } : {}),
-        mix: clampNumber((item as any).mix, 1, 0, 1),
-        bias: clampNumber((item as any).bias, 0, -1, 1),
-        normalize: typeof (item as any).normalize === 'boolean' ? (item as any).normalize : true,
-        scale: clampNumber((item as any).scale, 0.5, 0.1, 1),
+        mix: clampNumber(itemRecord.mix, 1, 0, 1),
+        bias: clampNumber(itemRecord.bias, 0, -1, 1),
+        normalize: typeof itemRecord.normalize === 'boolean' ? itemRecord.normalize : true,
+        scale: clampNumber(itemRecord.scale, 0.5, 0.1, 1),
       });
     }
   }

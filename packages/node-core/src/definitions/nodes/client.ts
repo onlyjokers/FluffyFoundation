@@ -259,7 +259,7 @@ export function createClientSensorsProcessorNode(): NodeDefinition {
 
       if (!msg || typeof msg !== 'object') return out;
 
-      const payload = msg.payload ?? {};
+      const payload = asRecord(msg.payload) ?? {};
       switch (msg.sensorType) {
         case 'accel':
           out.accelX = toFiniteNumber(payload.x);

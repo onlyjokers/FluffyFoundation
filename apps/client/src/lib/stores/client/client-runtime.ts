@@ -126,19 +126,16 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
         reportToneReady(sdk, tonePayload);
 
         if (!snapshot) return;
-        sdk?.sendSensorData(
-          'custom',
-          {
-            kind: 'multimedia-core',
-            event: 'asset-preload',
-            status: snapshot.status,
-            manifestId: snapshot.manifestId,
-            loaded: snapshot.loaded,
-            total: snapshot.total,
-            error: snapshot.error,
-          } as any,
-          { trackLatest: false }
-        );
+        const preloadPayload: Record<string, unknown> = {
+          kind: 'multimedia-core',
+          event: 'asset-preload',
+          status: snapshot.status,
+          manifestId: snapshot.manifestId,
+          loaded: snapshot.loaded,
+          total: snapshot.total,
+          error: snapshot.error,
+        };
+        sdk?.sendSensorData('custom', preloadPayload, { trackLatest: false });
       } catch {
         // ignore
       }
@@ -179,7 +176,7 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
           : s.status === 'loading'
             ? 'loading'
             : 'idle';
-    const payload = {
+    const payload: Record<string, unknown> = {
       kind: 'multimedia-core',
       event: 'asset-preload',
       status,
@@ -196,7 +193,7 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
       if (!connected) return;
 
       if (signature === lastReported) return;
-      sdk?.sendSensorData('custom', payload as any, { trackLatest: false });
+      sdk?.sendSensorData('custom', payload, { trackLatest: false });
       lastReported = signature;
     } catch {
       // ignore
@@ -220,9 +217,11 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
         if (capability === 'flashlight') return p.camera === 'granted';
         if (capability === 'sensors') return p.motion === 'granted' || p.microphone === 'granted';
         if (capability === 'sound') {
-          const hasAudioContext =
-            typeof window !== 'undefined' &&
-            Boolean((window as any).AudioContext || (window as any).webkitAudioContext);
+          const win =
+            typeof window !== 'undefined'
+              ? (window as Window & { webkitAudioContext?: typeof AudioContext })
+              : null;
+          const hasAudioContext = Boolean(win?.AudioContext || win?.webkitAudioContext);
           return hasAudioContext;
         }
         return true;

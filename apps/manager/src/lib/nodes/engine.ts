@@ -8,15 +8,16 @@
  */
 import { get, writable, type Writable } from 'svelte/store';
 import { PROTOCOL_VERSION } from '@shugu/protocol';
-import { NodeRuntime } from '@shugu/node-core';
+import { applyGraphChanges, NodeRuntime } from '@shugu/node-core';
 
-import type { Connection, GraphState, NodeInstance, PortType } from './types';
+import type { Connection, GraphChange, GraphState, NodeInstance, PortType } from './types';
 import { nodeRegistry } from './registry';
 import { getSelectOptionsForInput } from './selection-options';
 import { parameterRegistry } from '../parameters/registry';
 import { exportGraphForPatch } from './patch-export';
 import { customNodeDefinitions } from './custom-nodes/store';
 import { compileGraphForPatch } from './custom-nodes/flatten';
+import { diffGraphState } from './graph-changes';
 
 export type LocalLoop = {
   id: string;
@@ -115,6 +116,7 @@ class NodeEngineClass {
 
   // Stores for UI observation
   public graphState: Writable<GraphState> = writable({ nodes: [], connections: [] });
+  public graphChanges: Writable<GraphChange[]> = writable([]);
   public isRunning: Writable<boolean> = writable(false);
   public lastError: Writable<string | null> = writable(null);
   // Emits on every tick so the UI can render live values without forcing full graphState updates.
@@ -203,36 +205,28 @@ class NodeEngineClass {
     const config = { ...(node.config ?? {}) };
     const inputValues = { ...(node.inputValues ?? {}) };
     stripLegacyToneFields(String(node.type), config, inputValues);
-    const next: GraphState = {
-      nodes: [
-        ...snapshot.nodes,
-        {
-          ...node,
-          config,
-          inputValues,
-          outputValues: { ...(node.outputValues ?? {}) },
-        },
-      ],
-      connections: [...snapshot.connections],
+    const sanitizedNode: NodeInstance = {
+      ...node,
+      config,
+      inputValues,
+      outputValues: { ...(node.outputValues ?? {}) },
     };
+    const next = applyGraphChanges(snapshot, [{ type: 'add-node', node: sanitizedNode }]);
 
     this.runtime.loadGraph(next);
     this.syncGraphState();
+    this.emitGraphChanges(snapshot, next);
     this.updateLocalLoops();
   }
 
   removeNode(nodeId: string): void {
     const snapshot = this.runtime.exportGraph();
-    const next: GraphState = {
-      nodes: snapshot.nodes.filter((n) => n.id !== nodeId),
-      connections: snapshot.connections.filter(
-        (c) => c.sourceNodeId !== nodeId && c.targetNodeId !== nodeId
-      ),
-    };
+    const next = applyGraphChanges(snapshot, [{ type: 'remove-node', nodeId }]);
 
     this.cleanupGraphTransition(snapshot, next, { reason: 'removeNode' });
     this.runtime.loadGraph(next);
     this.syncGraphState();
+    this.emitGraphChanges(snapshot, next);
     this.updateLocalLoops();
 
     // Clear any modulation offsets contributed by this node
@@ -243,8 +237,10 @@ class NodeEngineClass {
   updateNodeConfig(nodeId: string, config: Record<string, unknown>): void {
     const node = this.runtime.getNode(nodeId);
     if (!node) return;
-    node.config = { ...node.config, ...config };
+    const nextConfig = { ...node.config, ...config };
+    node.config = nextConfig;
     this.syncGraphState();
+    this.graphChanges.set([{ type: 'update-node-config', nodeId, config: nextConfig }]);
   }
 
   updateNodeType(nodeId: string, type: string): void {
@@ -259,6 +255,7 @@ class NodeEngineClass {
     node.type = nextType;
     stripLegacyToneFields(nextType, node.config ?? {}, node.inputValues ?? {});
     this.syncGraphState();
+    this.graphChanges.set([{ type: 'update-node-type', nodeId, nodeType: nextType }]);
     this.updateLocalLoops();
   }
 
@@ -276,6 +273,7 @@ class NodeEngineClass {
     const node = this.runtime.getNode(nodeId);
     if (!node) return;
     node.position = position;
+    this.graphChanges.set([{ type: 'update-node-position', nodeId, position }]);
     // Don't sync graph state for position-only changes (performance)
   }
 
@@ -559,10 +557,9 @@ class NodeEngineClass {
       return false;
     }
 
-    const next: GraphState = this.applySelectionMapOptions({
-      nodes: snapshot.nodes,
-      connections: [...snapshot.connections, connection],
-    });
+    const next = this.applySelectionMapOptions(
+      applyGraphChanges(snapshot, [{ type: 'add-connection', connection }])
+    );
 
     const localOnlyNodeTypes = new Set([
       'load-audio-from-local',
@@ -719,20 +716,21 @@ class NodeEngineClass {
     this.runtime.compileNow();
     this.lastError.set(null);
     this.syncGraphState();
+    this.emitGraphChanges(snapshot, next);
     this.updateLocalLoops();
     return true;
   }
 
   removeConnection(connectionId: string): void {
     const snapshot = this.runtime.exportGraph();
-    const next: GraphState = this.applySelectionMapOptions({
-      nodes: snapshot.nodes,
-      connections: snapshot.connections.filter((c) => c.id !== connectionId),
-    });
+    const next = this.applySelectionMapOptions(
+      applyGraphChanges(snapshot, [{ type: 'remove-connection', connectionId }])
+    );
 
     this.cleanupGraphTransition(snapshot, next, { reason: 'removeConnection' });
     this.runtime.loadGraph(next);
     this.syncGraphState();
+    this.emitGraphChanges(snapshot, next);
     this.updateLocalLoops();
   }
 
@@ -763,12 +761,14 @@ class NodeEngineClass {
 
   clear(): void {
     this.stop();
+    const prev = this.runtime.exportGraph();
     this.runtime.clear();
     this.offloadedNodeIds.clear();
     this.offloadedPatchNodeIds.clear();
     this.deployedLoopIds.clear();
     this.disabledNodeIds.clear();
     this.syncGraphState();
+    this.emitGraphChanges(prev, this.runtime.exportGraph());
     this.updateLocalLoops();
 
     // Reset all node-origin modulation
@@ -779,6 +779,11 @@ class NodeEngineClass {
 
   private syncGraphState(): void {
     this.graphState.set(this.runtime.getGraphRef());
+  }
+
+  private emitGraphChanges(prev: GraphState, next: GraphState): void {
+    const changes = diffGraphState(prev, next);
+    if (changes.length > 0) this.graphChanges.set(changes);
   }
 
   loadGraph(state: GraphState): void {
@@ -875,6 +880,7 @@ class NodeEngineClass {
     this.deployedLoopIds.clear();
     this.disabledNodeIds.clear();
     this.syncGraphState();
+    this.emitGraphChanges(prev, prepared);
     this.updateLocalLoops();
 
     // Existing node modulations may no longer apply to new graph; clear them

@@ -1,6 +1,6 @@
 import { PROTOCOL_VERSION, type PluginControlMessage } from '@shugu/protocol';
 import type { ClientSDK } from './client-sdk.js';
-import { NodeRegistry, NodeRuntime } from '@shugu/node-core';
+import { applyGraphChanges, type GraphChange, NodeRegistry, NodeRuntime } from '@shugu/node-core';
 import { registerDefaultNodeDefinitions, type NodeCommand } from './node-definitions.js';
 import type { GraphState } from './node-types.js';
 import { registerToneClientDefinitions, type ToneAdapterHandle } from './tone-adapter.js';
@@ -210,6 +210,13 @@ export class NodeExecutor {
         this.deploy(message.payload);
         return;
       }
+      if (message.command === 'graph-changes') {
+        const payloadRecord = isRecord(message.payload) ? message.payload : {};
+        const raw = payloadRecord.changes;
+        const changes = Array.isArray(raw) ? (raw as GraphChange[]) : [];
+        this.applyGraphChanges(changes);
+        return;
+      }
       if (message.command === 'start') {
         this.start(message.payload);
         return;
@@ -235,6 +242,36 @@ export class NodeExecutor {
       console.error('[node-executor] command failed', message.command, err);
       this.report('error', { command: message.command, error: this.lastError });
     }
+  }
+
+  applyGraphChanges(changes: GraphChange[]): void {
+    if (!changes.length) return;
+    const prev = this.runtime.exportGraph();
+    const next = applyGraphChanges(prev, changes);
+    if (next.nodes.length > this.options.limits.maxNodes) {
+      throw new Error(`graph too large (${next.nodes.length} nodes > ${this.options.limits.maxNodes})`);
+    }
+
+    const toneNodeIds = new Set(
+      next.nodes
+        .filter((node) =>
+          [
+            'load-audio-from-assets',
+            'load-audio-from-local',
+            'tone-osc',
+            'audio-data',
+            'tone-delay',
+            'tone-resonator',
+            'tone-pitch',
+            'tone-reverb',
+            'tone-granular',
+            'tone-lfo',
+          ].includes(node.type)
+        )
+        .map((node) => node.id)
+    );
+    this.toneAdapter?.syncActiveNodes(toneNodeIds, next.nodes, next.connections);
+    this.runtime.loadGraph(next);
   }
 
   private deploy(payload: unknown): void {

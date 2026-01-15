@@ -7,7 +7,9 @@
 export type {
   ConfigField,
   Connection,
+  GraphChange,
   GraphState,
+  GraphValidationResult,
   NodeDefinition,
   NodeInstance,
   NodePort,
@@ -17,4 +19,3 @@ export type {
 } from '@shugu/node-core';
 
 export type NodeMode = 'REMOTE' | 'MODULATION';
-

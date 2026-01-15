@@ -302,16 +302,17 @@ export async function handlePushImageUpload(
 
     const shot = captured.shot;
 
+    const sensorPayload: Record<string, unknown> = {
+      kind: 'client-screenshot',
+      dataUrl: shot.dataUrl,
+      mime: shot.mime,
+      width: shot.width,
+      height: shot.height,
+      createdAt: shot.createdAt,
+    };
     sdkNow.sendSensorData(
       'custom',
-      {
-        kind: 'client-screenshot',
-        dataUrl: shot.dataUrl,
-        mime: shot.mime,
-        width: shot.width,
-        height: shot.height,
-        createdAt: shot.createdAt,
-      } as any,
+      sensorPayload,
       { trackLatest: false }
     );
 
@@ -329,4 +330,3 @@ export async function handlePushImageUpload(
     screenshotUploadInFlight = false;
   }
 }
-

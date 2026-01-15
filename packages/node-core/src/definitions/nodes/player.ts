@@ -2,6 +2,7 @@
  * Purpose: Player/output nodes and command helpers.
  */
 import type {
+  ConvolutionPreset,
   VisualEffect,
   VisualEffectsPayload,
   VisualSceneLayerItem,
@@ -17,6 +18,23 @@ import {
   getRecordString,
   getStringValue,
 } from './node-definition-utils.js';
+
+const coerceConvolutionPreset = (value: unknown): ConvolutionPreset | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const raw = value.trim();
+  if (!raw) return undefined;
+  const allowed: readonly ConvolutionPreset[] = [
+    'blur',
+    'gaussianBlur',
+    'sharpen',
+    'edge',
+    'emboss',
+    'sobelX',
+    'sobelY',
+    'custom',
+  ];
+  return allowed.includes(raw as ConvolutionPreset) ? (raw as ConvolutionPreset) : undefined;
+};
 
 export function createAudioOutNode(): NodeDefinition {
   return {
@@ -194,7 +212,7 @@ export function createEffectOutNode(deps: ClientObjectDeps): NodeDefinition {
         continue;
       }
       if (type === 'convolution') {
-        const preset = getStringValue(record.preset) ?? undefined;
+        const preset = coerceConvolutionPreset(record.preset);
         const kernelRaw = getArrayValue(record.kernel);
         const kernel = kernelRaw
           ? kernelRaw

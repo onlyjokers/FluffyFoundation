@@ -1,6 +1,7 @@
 export type {
   ConfigField,
   Connection,
+  GraphChange,
   GraphState,
   NodeDefinition,
   NodeInstance,
@@ -9,4 +10,3 @@ export type {
   PortType,
   ProcessContext,
 } from '@shugu/node-core';
-

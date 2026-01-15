@@ -7,3 +7,5 @@ export * from './types.js';
 export * from './registry.js';
 export * from './runtime.js';
 export * from './definitions.js';
+export * from './graph-state/changes.js';
+export * from './graph-state/validate.js';

@@ -16,6 +16,7 @@ import type {
   VibrationController,
 } from '@shugu/sdk-client';
 import type { MultimediaCore } from '@shugu/multimedia-core';
+import type { GraphChange } from '@shugu/node-core';
 import type {
   ControlAction,
   ControlBatchPayload,
@@ -41,6 +42,7 @@ import {
   visualEffects,
   visualScenes,
 } from './client-visual';
+import { applyGraphChangesToExecutor } from './graph-change-consumer';
 
 export type ClientControlDeps = {
   getSDK: () => ClientSDK | null;
@@ -54,10 +56,22 @@ export type ClientControlDeps = {
   getMultimediaCore: () => MultimediaCore | null;
 };
 
+type AnyRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): AnyRecord | null =>
+  value && typeof value === 'object' ? (value as AnyRecord) : null;
+
+type WindowE2E = Window & {
+  __SHUGU_E2E?: boolean;
+  __SHUGU_E2E_LAST_COMMAND?: unknown;
+  __SHUGU_E2E_COMMANDS?: unknown[];
+};
+
 function isControlBatchPayload(payload: ControlPayload): payload is ControlBatchPayload {
-  if (!payload || typeof payload !== 'object') return false;
-  if ((payload as any).kind !== 'control-batch') return false;
-  return Array.isArray((payload as any).items);
+  const record = asRecord(payload);
+  if (!record) return false;
+  if (record.kind !== 'control-batch') return false;
+  return Array.isArray(record.items);
 }
 
 export function createClientControlHandlers(deps: ClientControlDeps): {
@@ -75,11 +89,13 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
           : executeAt;
 
       for (const raw of batch.items) {
-        if (!raw || typeof raw !== 'object') continue;
-        const itemAction = (raw as any).action as ControlAction | undefined;
-        if (!itemAction) continue;
-        const itemPayload = ((raw as any).payload ?? {}) as ControlPayload;
-        const itemExecuteAtRaw = (raw as any).executeAt;
+        const itemRecord = asRecord(raw);
+        if (!itemRecord) continue;
+        const actionRaw = itemRecord.action;
+        if (typeof actionRaw !== 'string') continue;
+        const itemAction = actionRaw as ControlAction;
+        const itemPayload = (asRecord(itemRecord.payload) ?? {}) as ControlPayload;
+        const itemExecuteAtRaw = itemRecord.executeAt;
         const itemExecuteAt =
           typeof itemExecuteAtRaw === 'number' && Number.isFinite(itemExecuteAtRaw)
             ? itemExecuteAtRaw
@@ -90,10 +106,11 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
     }
 
     const executeAction = (delaySeconds = 0) => {
-      if (import.meta.env.DEV && typeof window !== 'undefined' && (window as any).__SHUGU_E2E) {
+      if (import.meta.env.DEV && typeof window !== 'undefined' && (window as WindowE2E).__SHUGU_E2E) {
         const entry = { at: Date.now(), action, payload, executeAt };
-        (window as any).__SHUGU_E2E_LAST_COMMAND = entry;
-        const list = ((window as any).__SHUGU_E2E_COMMANDS ??= []) as any[];
+        const win = window as WindowE2E;
+        win.__SHUGU_E2E_LAST_COMMAND = entry;
+        const list = (win.__SHUGU_E2E_COMMANDS ??= []);
         list.push(entry);
         if (list.length > 200) list.splice(0, list.length - 200);
       }
@@ -122,14 +139,20 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
           deps.getToneModulatedSoundPlayer()?.play(payload as ModulateSoundPayload, delaySeconds);
           break;
         case 'modulateSoundUpdate':
-          deps.getToneModulatedSoundPlayer()?.update({
-            frequency: (payload as ModulateSoundPayload).frequency,
-            volume: (payload as ModulateSoundPayload).volume,
-            waveform: (payload as ModulateSoundPayload).waveform,
-            modFrequency: (payload as ModulateSoundPayload).modFrequency,
-            modDepth: (payload as ModulateSoundPayload).modDepth,
-            durationMs: (payload as any).durationMs ?? (payload as ModulateSoundPayload).duration,
-          });
+          {
+            const modPayload = payload as ModulateSoundPayload;
+            const payloadRecord = asRecord(payload);
+            const durationMs =
+              typeof payloadRecord?.durationMs === 'number' ? payloadRecord.durationMs : modPayload.duration;
+            deps.getToneModulatedSoundPlayer()?.update({
+              frequency: modPayload.frequency,
+              volume: modPayload.volume,
+              waveform: modPayload.waveform,
+              modFrequency: modPayload.modFrequency,
+              modDepth: modPayload.modDepth,
+              durationMs,
+            });
+          }
           break;
 
         case 'playSound':
@@ -185,18 +208,18 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
             });
           } else {
             // Audio path: prefer ToneSoundPlayer when enabled; fallback to legacy SoundPlayer otherwise.
-            const audioPayload = {
-              url: resolvedUrl,
+            const audioPayload: PlaySoundPayload = {
+              url: resolvedUrl as PlaySoundPayload['url'],
               volume: mediaPayload.volume,
               loop: mediaPayload.loop,
               fadeIn: mediaPayload.fadeIn,
             };
             void deps
               .getToneSoundPlayer()
-              ?.update(audioPayload as any, delaySeconds)
+              ?.update(audioPayload, delaySeconds)
               .then((updated) => {
                 if (updated) return;
-                return deps.getToneSoundPlayer()?.play(audioPayload as any, delaySeconds);
+                return deps.getToneSoundPlayer()?.play(audioPayload, delaySeconds);
               })
               .catch(() => undefined);
           }
@@ -314,17 +337,18 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
     const sdkNow = deps.getSDK();
     if (executeAt && sdkNow) {
       // Special efficient path for audio: use Web Audio scheduling
-      const shouldUseAudioScheduling =
-        action === 'modulateSound' ||
-        action === 'playSound' ||
-        (action === 'playMedia' &&
-          (() => {
-            const mediaType = (payload as any)?.mediaType;
-            if (mediaType === 'video') return false;
-            const rawUrl = (payload as any)?.url;
-            const url = typeof rawUrl === 'string' ? rawUrl : String(rawUrl ?? '');
-            return !/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(url);
-          })());
+        const shouldUseAudioScheduling =
+          action === 'modulateSound' ||
+          action === 'playSound' ||
+          (action === 'playMedia' &&
+            (() => {
+              const payloadRecord = asRecord(payload);
+              const mediaType = typeof payloadRecord?.mediaType === 'string' ? payloadRecord.mediaType : null;
+              if (mediaType === 'video') return false;
+              const rawUrl = payloadRecord?.url;
+              const url = typeof rawUrl === 'string' ? rawUrl : String(rawUrl ?? '');
+              return !/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(url);
+            })());
 
       if (shouldUseAudioScheduling) {
         const delayMs = sdkNow.getDelayUntil(executeAt);
@@ -379,16 +403,23 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
     }
 
     if (message.pluginId === 'node-executor') {
+      if (message.command === 'graph-changes') {
+        const payloadRecord = asRecord(message.payload);
+        const rawChanges = payloadRecord?.changes;
+        const changes = Array.isArray(rawChanges) ? (rawChanges as GraphChange[]) : [];
+        applyGraphChangesToExecutor(deps.getNodeExecutor(), changes);
+        return;
+      }
       deps.getNodeExecutor()?.handlePluginControl(message);
       return;
     }
     if (message.pluginId === 'multimedia-core' && message.command === 'configure') {
-      const payload: any = message.payload ?? {};
-      const manifestId = typeof payload.manifestId === 'string' ? payload.manifestId : '';
-      const assets = Array.isArray(payload.assets) ? payload.assets.map(String) : [];
+      const payloadRecord = asRecord(message.payload) ?? {};
+      const manifestId = typeof payloadRecord.manifestId === 'string' ? payloadRecord.manifestId : '';
+      const assets = Array.isArray(payloadRecord.assets) ? payloadRecord.assets.map(String) : [];
       const updatedAt =
-        typeof payload.updatedAt === 'number' && Number.isFinite(payload.updatedAt)
-          ? payload.updatedAt
+        typeof payloadRecord.updatedAt === 'number' && Number.isFinite(payloadRecord.updatedAt)
+          ? payloadRecord.updatedAt
           : undefined;
       if (!manifestId) return;
       deps.getMultimediaCore()?.setAssetManifest({ manifestId, assets, updatedAt });

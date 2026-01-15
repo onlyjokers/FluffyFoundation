@@ -39,7 +39,8 @@ export function reportToneReady(sdk: ClientSDK | null, payload: ToneReadyPayload
     const connected =
       Boolean(sdkNow?.getState?.().clientId) && sdkNow?.getState?.().status === 'connected';
     if (!connected) return;
-    sdkNow?.sendSensorData('custom', payload as any, { trackLatest: false });
+    const sensorPayload: Record<string, unknown> = payload;
+    sdkNow?.sendSensorData('custom', sensorPayload, { trackLatest: false });
   } catch {
     // ignore
   }
@@ -78,4 +79,3 @@ export async function enableToneAudio(
     return { enabled: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
-

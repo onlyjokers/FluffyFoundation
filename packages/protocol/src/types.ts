@@ -410,9 +410,17 @@ export type PluginCommand =
   | 'stop'
   | 'configure'
   | 'deploy'
+  | 'graph-changes'
   | 'remove'
   | 'override-set'
   | 'override-remove';
+
+/**
+ * Payload shape for incremental graph updates (opaque to protocol).
+ */
+export type GraphChangePayload = {
+  changes: Record<string, unknown>[];
+};
 
 /**
  * Plugin control message
