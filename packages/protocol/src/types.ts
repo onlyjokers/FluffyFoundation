@@ -6,7 +6,7 @@ export const PROTOCOL_VERSION = 2 as const;
 /**
  * Message types for categorizing different kinds of messages
  */
-export type MessageType = 'control' | 'data' | 'media' | 'system' | 'plugin';
+export type MessageType = 'control' | 'data' | 'media' | 'system' | 'plugin' | 'control-plane';
 
 /**
  * Base message structure for all messages in the system
@@ -449,6 +449,152 @@ export interface PluginControlMessage extends BaseMessage, ScopedMessageMeta {
   payload?: Record<string, unknown>;
 }
 
+export type ControlPlaneAction =
+  | 'resume'
+  | 'snapshot'
+  | 'setGroupPolicies'
+  | 'offerTransfer'
+  | 'offerTransferResult'
+  | 'transferOffered'
+  | 'acceptTransfer'
+  | 'acceptTransferResult'
+  | 'denyTransfer'
+  | 'denyTransferResult'
+  | 'reclaim'
+  | 'reclaimResult'
+  | 'release'
+  | 'releaseResult'
+  | 'ownershipChanged'
+  | 'safeModeChanged';
+
+export type ControlPlaneGroupPolicy = {
+  groupId: GroupId;
+  managerId: ActorId;
+  transferable: boolean;
+  allowPartialAccept?: boolean;
+};
+
+export type ControlPlaneGroupOwnership = {
+  groupId: GroupId;
+  ownerStack: ActorId[];
+  pendingTransfer: null | {
+    offerId: string;
+    from: ActorId;
+    to: ActorId;
+    offeredAt: number;
+  };
+  updatedAt: number;
+};
+
+export type ControlPlaneSnapshot = {
+  version: 1;
+  safeMode: boolean;
+  policies: Record<GroupId, ControlPlaneGroupPolicy>;
+  ownership: Record<GroupId, ControlPlaneGroupOwnership>;
+};
+
+export type ControlPlaneResumePayload = {
+  requestedAt?: number;
+};
+
+export type ControlPlaneSnapshotPayload = {
+  snapshot: ControlPlaneSnapshot;
+};
+
+export type ControlPlaneSetGroupPoliciesPayload = {
+  policies: ControlPlaneGroupPolicy[];
+};
+
+export type ControlPlaneOfferTransferPayload = {
+  toActorId: ActorId;
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneOfferTransferResultPayload = {
+  offerId: string;
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneTransferOfferedPayload = {
+  offerId: string;
+  fromActorId: ActorId;
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneAcceptTransferPayload = {
+  offerId: string;
+};
+
+export type ControlPlaneDenyTransferPayload = {
+  offerId: string;
+};
+
+export type ControlPlaneReclaimPayload = {
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneReleasePayload = {
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneOwnershipChangedPayload = {
+  ownership: Record<GroupId, ControlPlaneGroupOwnership>;
+};
+
+export type ControlPlaneSafeModeChangedPayload = {
+  safeMode: boolean;
+};
+
+export type ControlPlaneAcceptTransferResultPayload = {
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneDenyTransferResultPayload = {
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneReclaimResultPayload = {
+  groupIds: GroupId[];
+};
+
+export type ControlPlaneReleaseResultPayload = {
+  groupIds: GroupId[];
+};
+
+export type ControlPlanePayloadByAction = {
+  resume: ControlPlaneResumePayload;
+  snapshot: ControlPlaneSnapshotPayload;
+  setGroupPolicies: ControlPlaneSetGroupPoliciesPayload;
+
+  offerTransfer: ControlPlaneOfferTransferPayload;
+  offerTransferResult: ControlPlaneOfferTransferResultPayload;
+  transferOffered: ControlPlaneTransferOfferedPayload;
+
+  acceptTransfer: ControlPlaneAcceptTransferPayload;
+  acceptTransferResult: ControlPlaneAcceptTransferResultPayload;
+
+  denyTransfer: ControlPlaneDenyTransferPayload;
+  denyTransferResult: ControlPlaneDenyTransferResultPayload;
+
+  reclaim: ControlPlaneReclaimPayload;
+  reclaimResult: ControlPlaneReclaimResultPayload;
+
+  release: ControlPlaneReleasePayload;
+  releaseResult: ControlPlaneReleaseResultPayload;
+
+  ownershipChanged: ControlPlaneOwnershipChangedPayload;
+  safeModeChanged: ControlPlaneSafeModeChangedPayload;
+};
+
+export type ControlPlaneMessage<
+  A extends keyof ControlPlanePayloadByAction = keyof ControlPlanePayloadByAction,
+> = BaseMessage &
+  ScopedMessageMeta & {
+    type: 'control-plane';
+    action: A;
+    payload: ControlPlanePayloadByAction[A];
+  };
+
 /**
  * System message types
  */
@@ -497,6 +643,7 @@ export type Message =
   | SensorDataMessage
   | MediaMetaMessage
   | PluginControlMessage
+  | ControlPlaneMessage
   | SystemMessage;
 
 /**
@@ -509,6 +656,7 @@ export type MessageWithoutServerTimestamp =
   | Omit<SensorDataMessage, 'serverTimestamp'>
   | Omit<MediaMetaMessage, 'serverTimestamp'>
   | Omit<PluginControlMessage, 'serverTimestamp'>
+  | Omit<ControlPlaneMessage, 'serverTimestamp'>
   | Omit<SystemMessage, 'serverTimestamp'>;
 
 /**

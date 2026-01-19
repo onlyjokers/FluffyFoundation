@@ -32,6 +32,10 @@ import {
   targetAll,
   targetClients,
   SYSTEM_SCOPE_GROUP_ID,
+  ControlPlaneMessage,
+  ControlPlaneSnapshot,
+  ControlPlaneGroupPolicy as GroupPolicy,
+  ControlPlaneGroupOwnership as GroupOwnership,
 } from '@shugu/protocol';
 import { mergeControlPayload } from './payload-merge.js';
 
@@ -49,6 +53,11 @@ export interface ManagerState {
   selectedClientIds: string[];
   timeSync: TimeSyncState;
   error: string | null;
+  controlPlane: {
+    safeMode: boolean;
+    snapshot: ControlPlaneSnapshot | null;
+    ownership: Record<string, GroupOwnership>;
+  };
 }
 
 export type MessageHandler<T = Message> = (message: T) => void;
@@ -148,6 +157,7 @@ export class ManagerSDK {
       selectedClientIds: [],
       timeSync: createTimeSyncState(),
       error: null,
+      controlPlane: { safeMode: true, snapshot: null, ownership: {} },
     };
   }
 
@@ -221,6 +231,105 @@ export class ManagerSDK {
   onSensorData(handler: MessageHandler<SensorDataMessage>): () => void {
     this.sensorDataHandlers.add(handler);
     return () => this.sensorDataHandlers.delete(handler);
+  }
+
+  requestControlPlaneSnapshot(): void {
+    if (!this.socket?.connected) return;
+    if (!this.state.managerId) return;
+
+    const message: ControlPlaneMessage<'snapshot'> = {
+      type: 'control-plane',
+      version: 2,
+      serverTimestamp: 0,
+      clientTimestamp: Date.now(),
+      actorId: this.state.managerId,
+      actorRole: 'manager',
+      scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      action: 'snapshot',
+      payload: {
+        snapshot:
+          this.state.controlPlane.snapshot ??
+          ({ version: 1, safeMode: true, policies: {}, ownership: {} } as ControlPlaneSnapshot),
+      },
+    };
+
+    this.socket.emit(SOCKET_EVENTS.MSG, message);
+  }
+
+  setGroupPolicies(policies: GroupPolicy[]): void {
+    if (!this.socket?.connected) return;
+    if (!this.state.managerId) return;
+
+    const message: ControlPlaneMessage<'setGroupPolicies'> = {
+      type: 'control-plane',
+      version: 2,
+      serverTimestamp: 0,
+      clientTimestamp: Date.now(),
+      actorId: this.state.managerId,
+      actorRole: 'manager',
+      scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      action: 'setGroupPolicies',
+      payload: { policies },
+    };
+
+    this.socket.emit(SOCKET_EVENTS.MSG, message);
+  }
+
+  offerTransfer(toActorId: string, groupIds: string[]): void {
+    if (!this.socket?.connected) return;
+    if (!this.state.managerId) return;
+
+    const message: ControlPlaneMessage<'offerTransfer'> = {
+      type: 'control-plane',
+      version: 2,
+      serverTimestamp: 0,
+      clientTimestamp: Date.now(),
+      actorId: this.state.managerId,
+      actorRole: 'manager',
+      scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      action: 'offerTransfer',
+      payload: { toActorId, groupIds },
+    };
+
+    this.socket.emit(SOCKET_EVENTS.MSG, message);
+  }
+
+  reclaim(groupIds: string[]): void {
+    if (!this.socket?.connected) return;
+    if (!this.state.managerId) return;
+
+    const message: ControlPlaneMessage<'reclaim'> = {
+      type: 'control-plane',
+      version: 2,
+      serverTimestamp: 0,
+      clientTimestamp: Date.now(),
+      actorId: this.state.managerId,
+      actorRole: 'manager',
+      scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      action: 'reclaim',
+      payload: { groupIds },
+    };
+
+    this.socket.emit(SOCKET_EVENTS.MSG, message);
+  }
+
+  resumeControlPlane(): void {
+    if (!this.socket?.connected) return;
+    if (!this.state.managerId) return;
+
+    const message: ControlPlaneMessage<'resume'> = {
+      type: 'control-plane',
+      version: 2,
+      serverTimestamp: 0,
+      clientTimestamp: Date.now(),
+      actorId: this.state.managerId,
+      actorRole: 'manager',
+      scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      action: 'resume',
+      payload: { requestedAt: Date.now() },
+    };
+
+    this.socket.emit(SOCKET_EVENTS.MSG, message);
   }
 
   /**
@@ -763,8 +872,12 @@ export class ManagerSDK {
   }
 
   private handleMessage(message: Message): void {
+    if (message.type === 'control-plane') {
+      this.handleControlPlaneMessage(message as ControlPlaneMessage);
+      return;
+    }
+
     if (isSensorDataMessage(message)) {
-      // Dispatch sensor data to handlers
       this.sensorDataHandlers.forEach((handler) => {
         try {
           handler(message);
@@ -772,7 +885,10 @@ export class ManagerSDK {
           console.error('[SDK Manager] Sensor data handler error:', error);
         }
       });
-    } else if (isSystemMessage(message)) {
+      return;
+    }
+
+    if (isSystemMessage(message)) {
       this.handleSystemMessage(message as SystemMessage);
     }
   }
@@ -783,6 +899,8 @@ export class ManagerSDK {
         if (message.payload.clientId) {
           this.updateState({ managerId: message.payload.clientId });
           console.log('[SDK Manager] Registered as:', message.payload.clientId);
+
+          this.requestControlPlaneSnapshot();
         }
         break;
       case 'clientList':
@@ -816,6 +934,29 @@ export class ManagerSDK {
         console.error('[SDK Manager] State listener error:', error);
       }
     });
+  }
+
+  private handleControlPlaneMessage(message: ControlPlaneMessage): void {
+    if (message.action === 'safeModeChanged') {
+      const safeMode = Boolean((message.payload as { safeMode?: unknown }).safeMode);
+      this.updateState({ controlPlane: { ...this.state.controlPlane, safeMode } });
+      return;
+    }
+
+    if (message.action === 'snapshot') {
+      const snapshot = (message.payload as { snapshot?: ControlPlaneSnapshot }).snapshot ?? null;
+      const safeMode = snapshot ? Boolean(snapshot.safeMode) : this.state.controlPlane.safeMode;
+      const ownership = snapshot?.ownership ?? this.state.controlPlane.ownership;
+      this.updateState({ controlPlane: { safeMode, snapshot, ownership } });
+      return;
+    }
+
+    if (message.action === 'ownershipChanged') {
+      const ownership =
+        (message.payload as { ownership?: Record<string, GroupOwnership> }).ownership ??
+        this.state.controlPlane.ownership;
+      this.updateState({ controlPlane: { ...this.state.controlPlane, ownership } });
+    }
   }
 
   private startTimeSync(): void {

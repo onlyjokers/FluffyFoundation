@@ -6,6 +6,7 @@ import type {
   SensorDataMessage,
   MediaMetaMessage,
   PluginControlMessage,
+  ControlPlaneMessage,
   SystemMessage,
   Message,
   MessageWithoutServerTimestamp,
@@ -75,6 +76,8 @@ export class MessageRouterService {
         break;
       case 'plugin':
         this.routePluginMessage(timestampedMessage as PluginControlMessage);
+        break;
+      case 'control-plane':
         break;
       case 'system':
         this.routeSystemMessage(timestampedMessage as SystemMessage, _fromSocketId);

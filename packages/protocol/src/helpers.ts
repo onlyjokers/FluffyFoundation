@@ -269,7 +269,8 @@ export function isValidMessage(msg: unknown): msg is MessageWithoutServerTimesta
   if (typeof msg !== 'object' || msg === null) return false;
   const m = msg as Partial<MessageWithoutServerTimestamp>;
   if (typeof m.type !== 'string') return false;
-  if (!['control', 'data', 'media', 'system', 'plugin'].includes(m.type)) return false;
+  if (!['control', 'data', 'media', 'system', 'plugin', 'control-plane'].includes(m.type))
+    return false;
   if (m.version !== PROTOCOL_VERSION) return false;
 
   if (m.type === 'system') return true;
