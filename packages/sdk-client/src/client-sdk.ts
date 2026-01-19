@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { makePluginCommand } from '@shugu/plugin-core';
 import {
   Message,
   ControlMessage,
@@ -306,12 +307,18 @@ export class ClientSDK {
     if (!this.state.clientId) return;
     if (!scopeGroupId.trim()) return;
 
+    const cmd = makePluginCommand(pluginId, command, payload, scopeGroupId);
+
     const message = createPluginControlMessage(
-      { actorId: this.state.clientId, actorRole: 'client', scopeGroupId },
+      {
+        actorId: this.state.clientId,
+        actorRole: 'client',
+        scopeGroupId: cmd.scopeGroupId ?? scopeGroupId,
+      },
       target,
-      pluginId,
-      command,
-      payload
+      cmd.pluginId,
+      cmd.command,
+      cmd.payload
     );
 
     this.socket.emit(SOCKET_EVENTS.MSG, message);

@@ -50,6 +50,9 @@ importers:
       '@shugu/multimedia-core':
         specifier: workspace:*
         version: link:../../packages/multimedia-core
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/plugin-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -111,6 +114,9 @@ importers:
       '@shugu/multimedia-core':
         specifier: workspace:*
         version: link:../../packages/multimedia-core
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/plugin-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -160,6 +166,9 @@ importers:
       '@shugu/node-core':
         specifier: workspace:*
         version: link:../../packages/node-core
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/plugin-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -304,6 +313,12 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
+  packages/plugin-core:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/protocol:
     devDependencies:
       typescript:
@@ -318,6 +333,9 @@ importers:
       '@shugu/node-core':
         specifier: workspace:*
         version: link:../node-core
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../plugin-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -334,6 +352,9 @@ importers:
 
   packages/sdk-manager:
     dependencies:
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../plugin-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../protocol

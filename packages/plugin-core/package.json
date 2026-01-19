@@ -1,7 +1,7 @@
 {
-  "name": "@shugu/sdk-client",
+  "name": "@shugu/plugin-core",
   "version": "1.0.0",
-  "description": "Client SDK for Socket.io communication and state management",
+  "description": "Shared plugin contract helpers",
   "main": "./dist-out/index.js",
   "module": "./dist-out/index.js",
   "types": "./dist-out/index.d.ts",
@@ -10,10 +10,6 @@
     ".": {
       "types": "./dist-out/index.d.ts",
       "import": "./dist-out/index.js"
-    },
-    "./client-sdk": {
-      "types": "./dist-out/client-sdk.d.ts",
-      "import": "./dist-out/client-sdk.js"
     }
   },
   "scripts": {
@@ -25,14 +21,6 @@
   "files": [
     "dist-out"
   ],
-  "dependencies": {
-    "@shugu/multimedia-core": "workspace:*",
-    "@shugu/node-core": "workspace:*",
-    "@shugu/plugin-core": "workspace:*",
-    "@shugu/protocol": "workspace:*",
-    "socket.io-client": "^4.7.2",
-    "tone": "^14.8.49"
-  },
   "devDependencies": {
     "typescript": "^5.3.0"
   }

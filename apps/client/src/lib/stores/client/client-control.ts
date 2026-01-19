@@ -23,16 +23,19 @@ import type {
   ControlMessage,
   ControlPayload,
   FlashlightPayload,
+  MediaMetaMessage,
   ModulateSoundPayload,
   PlayMediaPayload,
   PlaySoundPayload,
   PluginControlMessage,
+  PluginCommand,
   ScreenColorPayload,
   ShowImagePayload,
   VibratePayload,
   VisualEffectsPayload,
   VisualScenesPayload,
 } from '@shugu/protocol';
+import { makePluginCommand } from '@shugu/plugin-core';
 import { parseMediaClipParams } from './client-media';
 import { handlePushImageUpload, type PushImageUploadPayload } from './client-screenshot';
 import {
@@ -425,7 +428,8 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
       return;
     }
     if (message.pluginId === 'multimedia-core' && message.command === 'configure') {
-      const payloadRecord = asRecord(message.payload) ?? {};
+      const cmd = makePluginCommand('multimedia-core', 'configure', message.payload);
+      const payloadRecord = asRecord(cmd.payload) ?? {};
       const manifestId =
         typeof payloadRecord.manifestId === 'string' ? payloadRecord.manifestId : '';
       const assets = Array.isArray(payloadRecord.assets) ? payloadRecord.assets.map(String) : [];

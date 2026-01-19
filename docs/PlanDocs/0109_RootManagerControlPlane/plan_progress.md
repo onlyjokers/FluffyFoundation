@@ -14,7 +14,7 @@
 - [x] Phase 3：Root/Manager 形态重构（同一 app：`/root` + `/manager`，强制 code-splitting）
 - [x] Phase 4：ControlPlane v2（授权/转交/回溯/收回/终止；Server 仲裁可开关）
 - [x] Phase 5：分布式执行器 v2（授权 client 运行子图并可控他端）
-- [ ] Phase 6：插件体系一致化（Tone / 多媒体 / Visual / AI 统一契约）
+- [x] Phase 6：插件体系一致化（Tone / 多媒体 / Visual / AI 统一契约）
 - [ ] Phase 7：多 Display 输出与输出路由（多屏、远程/本地通道统一）
 - [ ] Phase 8：AI 接口与模型资产化（后台下载；未启用 0 计算开销；手机本地推理）
 - [ ] Phase 9：工程化：测试、可观测性、性能预算（演出级稳定性）
@@ -502,3 +502,20 @@
   - `pnpm build:all` ✅
   - `pnpm --filter @shugu/sdk-client run build && node --test packages/sdk-client/dist-out/node-executor.spec.js packages/sdk-client/dist-out/node-executor-overrides.spec.js` ✅
   - `pnpm --filter @shugu/server run build && node --test apps/server/dist-out/message-router/message-router.service.test.js` ✅
+
+- [x] Phase 6：插件体系一致化（2026-01-20）：
+  - 新增 `packages/plugin-core/`：提供统一的插件契约与轻量 helper（`definePlugin` / `makePluginCommand`）。
+  - 迁移 plugin send/receive 相关路径：
+    - `packages/sdk-client/src/client-sdk.ts`：sendPlugin 走 `makePluginCommand(...)` 规范化。
+    - `packages/sdk-manager/src/manager-sdk.ts`：sendPluginControl 走 `makePluginCommand(...)` 规范化。
+    - `packages/sdk-client/src/node-executor.ts`：status 上报事件统一走 `makePluginCommand(...)` 做 meta 归一。
+    - `apps/manager/src/lib/nodes/asset-manifest.ts`：multimedia-core configure 走 `makePluginCommand(...)`。
+    - `apps/client/src/lib/stores/client/client-control.ts`：multimedia-core configure 解析走 `makePluginCommand(...)`。
+  - Display 本地 plugin 消息补齐协议 meta（匹配 v2 scoped message）：
+    - `apps/display/src/lib/stores/display.ts`：local node-executor plugin message 补齐 `actorId/actorRole/scopeGroupId/clientTimestamp`。
+  - 验证：
+    - `pnpm --filter @shugu/plugin-core run build` ✅
+    - `pnpm --filter @shugu/sdk-client run build` ✅
+    - `pnpm --filter @shugu/sdk-manager run build` ✅
+    - `pnpm lint` ✅（0 errors；warnings 为历史债）
+    - `pnpm build:all` ✅

@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { makePluginCommand } from '@shugu/plugin-core';
 import {
   Message,
   SystemMessage,
@@ -560,16 +561,18 @@ export class ManagerSDK {
     const nextScope = typeof scopeGroupId === 'string' ? scopeGroupId.trim() : '';
     if (!nextScope) return;
 
+    const cmd = makePluginCommand(pluginId, command, payload, nextScope);
+
     const message = createPluginControlMessage(
       {
         actorId: this.state.managerId ?? 'manager',
         actorRole: 'manager',
-        scopeGroupId: nextScope,
+        scopeGroupId: cmd.scopeGroupId ?? nextScope,
       },
       target,
-      pluginId,
-      command,
-      payload
+      cmd.pluginId,
+      cmd.command,
+      cmd.payload
     );
     this.socket.emit(SOCKET_EVENTS.MSG, message);
   }

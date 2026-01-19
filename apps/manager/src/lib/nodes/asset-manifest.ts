@@ -11,6 +11,7 @@
  */
 import { get } from 'svelte/store';
 import { targetClients } from '@shugu/protocol';
+import { makePluginCommand } from '@shugu/plugin-core';
 
 import type { GraphState } from './types';
 import { nodeEngine } from './engine';
@@ -187,8 +188,7 @@ function pushManifestToClientIds(clientIds: string[], manifest: AssetManifest): 
   const ids = clientIds.map(String).filter(Boolean);
   if (ids.length === 0) return;
 
-  sdk.sendPluginControl(
-    targetClients(ids),
+  const cmd = makePluginCommand(
     PLUGIN_ID,
     'configure',
     {
@@ -198,6 +198,8 @@ function pushManifestToClientIds(clientIds: string[], manifest: AssetManifest): 
     },
     undefined
   );
+
+  sdk.sendPluginControl(targetClients(ids), cmd.pluginId, cmd.command, cmd.payload, undefined);
 
   for (const id of ids) sentManifestIdByClient.set(id, manifest.manifestId);
 }

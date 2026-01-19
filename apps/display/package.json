@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@shugu/multimedia-core": "workspace:*",
+    "@shugu/plugin-core": "workspace:*",
     "@shugu/protocol": "workspace:*",
     "@shugu/sdk-client": "workspace:*",
     "@shugu/ui-kit": "workspace:*",

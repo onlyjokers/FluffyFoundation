@@ -28,7 +28,7 @@ Status: Draft
 - [x] Phase 3：Root/Manager 形态重构（同一 app：`/root` + `/manager`，强制 code-splitting）
 - [x] Phase 4：ControlPlane v2（授权/转交/回溯/收回/终止；Server 仲裁可开关）
 - [x] Phase 5：分布式执行器 v2（授权 client 运行子图并可控他端）
-- [ ] Phase 6：插件体系一致化（Tone / 多媒体 / Visual / AI 统一契约）
+- [x] Phase 6：插件体系一致化（Tone / 多媒体 / Visual / AI 统一契约）
 - [ ] Phase 7：多 Display 输出与输出路由（多屏、远程/本地通道统一）
 - [ ] Phase 8：AI 接口与模型资产化（后台下载；未启用 0 计算开销；手机本地推理）
 - [ ] Phase 9：工程化：测试、可观测性、性能预算（演出级稳定性）

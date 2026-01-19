@@ -26,13 +26,14 @@ import {
 } from '@shugu/multimedia-core';
 import {
   PROTOCOL_VERSION,
+  SYSTEM_SCOPE_GROUP_ID,
   type ControlAction,
-  type ControlPayload,
   type ControlMessage,
-  type PluginControlMessage,
-  type PluginCommand,
+  type ControlPayload,
   type MediaMetaMessage,
   type PlayMediaPayload,
+  type PluginControlMessage,
+  type PluginCommand,
   type ScreenColorPayload,
   type ShowImagePayload,
   type TargetSelector,
@@ -86,13 +87,17 @@ const createLocalPluginMessage = (
   payload?: Record<string, unknown>
 ): PluginControlMessage => ({
   type: 'plugin',
+  version: PROTOCOL_VERSION,
+  serverTimestamp: Date.now(),
+  clientTimestamp: Date.now(),
+  actorId: 'manager',
+  actorRole: 'manager',
+  scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
   from: 'manager',
   target: LOCAL_PLUGIN_TARGET,
   pluginId: 'node-executor',
   command,
   payload,
-  version: PROTOCOL_VERSION,
-  serverTimestamp: Date.now(),
 });
 
 function isDataImageUrl(url: string): boolean {

@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION, type PluginControlMessage } from '@shugu/protocol';
 import type { ClientSDK } from './client-sdk.js';
 import { applyGraphChanges, type GraphChange, NodeRegistry, NodeRuntime } from '@shugu/node-core';
+import { makePluginCommand } from '@shugu/plugin-core';
 import { registerDefaultNodeDefinitions, type NodeCommand } from './node-definitions.js';
 import type { GraphState } from './node-types.js';
 import { registerToneClientDefinitions, type ToneAdapterHandle } from './tone-adapter.js';
@@ -534,10 +535,18 @@ export class NodeExecutor {
 
   private report(event: string, payload: Record<string, unknown>): void {
     try {
+      const cmd = makePluginCommand(
+        'node-executor',
+        event,
+        payload,
+        this.scopeGroupId ?? undefined
+      );
       this.sdk.sendSensorData(
         'custom',
-        { kind: 'node-executor', event, ...payload },
-        { trackLatest: false }
+        { kind: cmd.pluginId, event: cmd.command, ...cmd.payload },
+        {
+          trackLatest: false,
+        }
       );
     } catch {
       // ignore
