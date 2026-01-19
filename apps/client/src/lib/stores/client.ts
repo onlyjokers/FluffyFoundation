@@ -30,3 +30,5 @@ export {
   getSDK,
   measureLatency,
 } from './client/client-runtime';
+
+export { transferOffer, controlPlaneSafeMode } from './client/client-control-plane';

@@ -43,6 +43,12 @@
   export let onHeaderPointerDown: (groupId: string, event: PointerEvent) => void = () => undefined;
   export let edgeHighlight: { groupId: string; side: 'input' | 'output' } | null = null;
 
+  // ControlPlane v2 (Manager actions)
+  export let controlPlaneSafeMode: boolean = true;
+  export let selectedClientIds: string[] = [];
+  export let onOfferTransfer: (toActorId: string, groupIds: string[]) => void = () => undefined;
+  export let onReclaim: (groupIds: string[]) => void = () => undefined;
+
   let editingGroupId: string | null = null;
   let draftName = '';
   let nameInputEl: HTMLInputElement | null = null;
@@ -330,6 +336,34 @@
               on:wheel={handleActionsWheel}
               use:observeActionOverflow={String(group.id)}
             >
+              <Button
+                variant="ghost"
+                size="sm"
+                ariaLabel="Offer transfer"
+                title={controlPlaneSafeMode
+                  ? 'ControlPlane safe mode'
+                  : selectedClientIds.length > 0
+                    ? `Offer to ${selectedClientIds.length} selected client(s)`
+                    : 'Select a target client first'}
+                disabled={controlPlaneSafeMode || selectedClientIds.length === 0}
+                on:click={() => {
+                  const toActorId = String(selectedClientIds[0] ?? '').trim();
+                  if (!toActorId) return;
+                  onOfferTransfer(toActorId, [String(group.id)]);
+                }}
+              >
+                Offer
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                ariaLabel="Reclaim"
+                title={controlPlaneSafeMode ? 'ControlPlane safe mode' : 'Reclaim to manager'}
+                disabled={controlPlaneSafeMode}
+                on:click={() => onReclaim([String(group.id)])}
+              >
+                Reclaim
+              </Button>
               {#if isCustomNodeGroup}
                 <Button
                   variant="ghost"

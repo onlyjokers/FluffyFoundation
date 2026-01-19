@@ -18,14 +18,11 @@ import {
   type NodeCommand,
   type ClientSDKConfig,
 } from '@shugu/sdk-client';
-import {
-  MultimediaCore,
-  toneAudioEngine,
-  type MediaEngineState,
-} from '@shugu/multimedia-core';
+import { MultimediaCore, toneAudioEngine, type MediaEngineState } from '@shugu/multimedia-core';
 import { permissions, state, latency } from './client-state';
 import { audioStream, imageState, videoState } from './client-media';
 import { createClientControlHandlers } from './client-control';
+import { controlPlaneSafeMode, transferOffer } from './client-control-plane';
 import {
   enableToneAudio,
   getLastToneReadyPayload,
@@ -146,6 +143,30 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
   sdk.onControl(controlHandlers.handleControlMessage);
   sdk.onPluginControl(controlHandlers.handlePluginControlMessage);
 
+  sdk.onControlPlane((message) => {
+    const cp = sdk?.getControlPlaneState?.();
+    if (!cp) return;
+
+    controlPlaneSafeMode.set(Boolean(cp.safeMode));
+
+    const offer = cp.lastTransferOffer;
+    if (offer && offer.offerId) {
+      transferOffer.set({
+        offerId: String(offer.offerId),
+        fromActorId: String(offer.fromActorId),
+        groupIds: Array.isArray(offer.groupIds) ? offer.groupIds.map(String) : [],
+      });
+    }
+
+    if (
+      message.action === 'acceptTransferResult' ||
+      message.action === 'denyTransferResult' ||
+      message.action === 'ownershipChanged'
+    ) {
+      transferOffer.set(null);
+    }
+  });
+
   // MultimediaCore: asset resolver + preload/cache + readiness reporting (no UI).
   // Reuse existing instance if startEarlyPreload was called.
   if (!multimediaCore) {
@@ -219,7 +240,7 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
         if (capability === 'sound') {
           const win =
             typeof window !== 'undefined'
-              ? (window as Window & { webkitAudioContext?: typeof AudioContext })
+              ? (window as Window & { AudioContext?: unknown; webkitAudioContext?: unknown })
               : null;
           const hasAudioContext = Boolean(win?.AudioContext || win?.webkitAudioContext);
           return hasAudioContext;

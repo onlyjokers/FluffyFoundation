@@ -11,11 +11,14 @@
     permissions,
     enableAudio,
     startEarlyPreload,
+    transferOffer,
+    controlPlaneSafeMode,
   } from '$lib/stores/client';
   import StartScreen from '$lib/components/StartScreen.svelte';
   import VisualCanvas from '$lib/components/VisualCanvas.svelte';
   import PermissionWarning from '$lib/components/PermissionWarning.svelte';
   import GeoGateOverlay from '$lib/components/GeoGateOverlay.svelte';
+  import TransferOfferOverlay from '$lib/components/TransferOfferOverlay.svelte';
   import { toneAudioEngine } from '@shugu/multimedia-core';
 
   let hasStarted = false;
@@ -334,11 +337,8 @@
 
   function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
     const record = asRecord(error);
-    return (
-      Boolean(record) &&
-      'code' in record &&
-      typeof record.code === 'number'
-    );
+    if (!record) return false;
+    return 'code' in record && typeof record.code === 'number';
   }
 
   function classifyGeolocationError(error: unknown): 'denied' | 'unavailable' | 'unsupported' {
@@ -585,6 +585,12 @@
   {:else}
     <VisualCanvas />
     <PermissionWarning />
+    <TransferOfferOverlay
+      offer={$transferOffer}
+      safeMode={$controlPlaneSafeMode}
+      on:accept={(e) => getSDK()?.acceptTransfer(e.detail.offerId)}
+      on:deny={(e) => getSDK()?.denyTransfer(e.detail.offerId)}
+    />
   {/if}
 </div>
 

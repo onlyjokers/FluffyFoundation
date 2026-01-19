@@ -38,7 +38,7 @@
   const dataRecord = data as unknown as Record<string, unknown>;
   const toggleCollapsed = (event: Event) => {
     event.stopPropagation();
-    const next = !Boolean(dataRecord.collapsed);
+    const next = !dataRecord.collapsed;
     dataRecord.collapsed = next;
   };
 
@@ -47,10 +47,6 @@
   $: inputs = sortByIndex(Object.entries(data.inputs));
   $: controls = sortByIndex(Object.entries(data.controls));
   $: outputs = sortByIndex(Object.entries(data.outputs));
-
-  function any<T>(arg: T): T {
-    return arg;
-  }
 
   type ControlPayload = Parameters<typeof emit>[0]['data'] extends {
     type: 'control';

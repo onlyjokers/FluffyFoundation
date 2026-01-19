@@ -190,7 +190,7 @@
 
   function pressMomentaryInput(): void {
     if (!(data instanceof ClassicPreset.InputControl)) return;
-    if (!Boolean(dataRecord.button)) return;
+    if (!dataRecord.button) return;
     if (readonlyFlag) return;
 
     if (momentaryInputResetTimer) clearTimeout(momentaryInputResetTimer);

@@ -8,6 +8,7 @@
 import type {
   ClientSDK,
   FlashlightController,
+  GraphChange,
   NodeExecutor,
   ScreenController,
   SensorManager,
@@ -16,7 +17,6 @@ import type {
   VibrationController,
 } from '@shugu/sdk-client';
 import type { MultimediaCore } from '@shugu/multimedia-core';
-import type { GraphChange } from '@shugu/node-core';
 import type {
   ControlAction,
   ControlBatchPayload,
@@ -79,7 +79,11 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
   handlePluginControlMessage: (message: PluginControlMessage) => void;
   executeControl: (action: ControlAction, payload: ControlPayload, executeAt?: number) => void;
 } {
-  function executeControl(action: ControlAction, payload: ControlPayload, executeAt?: number): void {
+  function executeControl(
+    action: ControlAction,
+    payload: ControlPayload,
+    executeAt?: number
+  ): void {
     // Expand control batches early so we don't schedule the wrapper message (avoid double scheduling).
     if (action === 'custom' && isControlBatchPayload(payload)) {
       const batch = payload as ControlBatchPayload;
@@ -106,7 +110,11 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
     }
 
     const executeAction = (delaySeconds = 0) => {
-      if (import.meta.env.DEV && typeof window !== 'undefined' && (window as WindowE2E).__SHUGU_E2E) {
+      if (
+        import.meta.env.DEV &&
+        typeof window !== 'undefined' &&
+        (window as WindowE2E).__SHUGU_E2E
+      ) {
         const entry = { at: Date.now(), action, payload, executeAt };
         const win = window as WindowE2E;
         win.__SHUGU_E2E_LAST_COMMAND = entry;
@@ -143,7 +151,9 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
             const modPayload = payload as ModulateSoundPayload;
             const payloadRecord = asRecord(payload);
             const durationMs =
-              typeof payloadRecord?.durationMs === 'number' ? payloadRecord.durationMs : modPayload.duration;
+              typeof payloadRecord?.durationMs === 'number'
+                ? payloadRecord.durationMs
+                : modPayload.duration;
             deps.getToneModulatedSoundPlayer()?.update({
               frequency: modPayload.frequency,
               volume: modPayload.volume,
@@ -337,18 +347,19 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
     const sdkNow = deps.getSDK();
     if (executeAt && sdkNow) {
       // Special efficient path for audio: use Web Audio scheduling
-        const shouldUseAudioScheduling =
-          action === 'modulateSound' ||
-          action === 'playSound' ||
-          (action === 'playMedia' &&
-            (() => {
-              const payloadRecord = asRecord(payload);
-              const mediaType = typeof payloadRecord?.mediaType === 'string' ? payloadRecord.mediaType : null;
-              if (mediaType === 'video') return false;
-              const rawUrl = payloadRecord?.url;
-              const url = typeof rawUrl === 'string' ? rawUrl : String(rawUrl ?? '');
-              return !/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(url);
-            })());
+      const shouldUseAudioScheduling =
+        action === 'modulateSound' ||
+        action === 'playSound' ||
+        (action === 'playMedia' &&
+          (() => {
+            const payloadRecord = asRecord(payload);
+            const mediaType =
+              typeof payloadRecord?.mediaType === 'string' ? payloadRecord.mediaType : null;
+            if (mediaType === 'video') return false;
+            const rawUrl = payloadRecord?.url;
+            const url = typeof rawUrl === 'string' ? rawUrl : String(rawUrl ?? '');
+            return !/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(url);
+          })());
 
       if (shouldUseAudioScheduling) {
         const delayMs = sdkNow.getDelayUntil(executeAt);
@@ -415,7 +426,8 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
     }
     if (message.pluginId === 'multimedia-core' && message.command === 'configure') {
       const payloadRecord = asRecord(message.payload) ?? {};
-      const manifestId = typeof payloadRecord.manifestId === 'string' ? payloadRecord.manifestId : '';
+      const manifestId =
+        typeof payloadRecord.manifestId === 'string' ? payloadRecord.manifestId : '';
       const assets = Array.isArray(payloadRecord.assets) ? payloadRecord.assets.map(String) : [];
       const updatedAt =
         typeof payloadRecord.updatedAt === 'number' && Number.isFinite(payloadRecord.updatedAt)

@@ -42,6 +42,11 @@
   export let onExportTemplates: () => void = () => undefined;
   export let onToggleExecutorLogs: () => void = () => undefined;
 
+  // ControlPlane v2 (Root UI actions)
+  export let onPublishGroupPolicies: () => void = () => undefined;
+  export let onResumeControlPlane: () => void = () => undefined;
+  export let onRequestControlPlaneSnapshot: () => void = () => undefined;
+
   // Transient toolbar error pill: show on new error, auto-hide after 5s (or dismiss via X).
   let isErrorPillVisible = false;
   let errorPillMessage: string | null = null;
@@ -232,6 +237,28 @@
               ⬆ Templates
             </button>
             <div class="toolbar-menu-sep" />
+            <button
+              type="button"
+              class="toolbar-menu-item"
+              on:click={() => onMenuPick(onPublishGroupPolicies)}
+            >
+              📤 Publish Group Policies
+            </button>
+            <button
+              type="button"
+              class="toolbar-menu-item"
+              on:click={() => onMenuPick(onResumeControlPlane)}
+            >
+              ▶ Resume ControlPlane
+            </button>
+            <button
+              type="button"
+              class="toolbar-menu-item"
+              on:click={() => onMenuPick(onRequestControlPlaneSnapshot)}
+            >
+              ↺ ControlPlane Snapshot
+            </button>
+            <div class="toolbar-menu-sep" />
             <button type="button" class="toolbar-menu-item" on:click={() => onMenuPick(onClear)}>
               🗑️ Clear
             </button>
@@ -306,7 +333,12 @@
     >
       <span aria-hidden="true">⚠️</span>
       <span class="error-text" title={errorPillMessage}>{errorPillMessage}</span>
-      <button type="button" class="error-dismiss" aria-label="Dismiss error" on:click={dismissErrorPill}>
+      <button
+        type="button"
+        class="error-dismiss"
+        aria-label="Dismiss error"
+        on:click={dismissErrorPill}
+      >
         ✕
       </button>
     </div>

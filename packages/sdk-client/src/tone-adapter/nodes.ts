@@ -265,7 +265,7 @@ export function createToneLfoInstance(
     lfo.start();
     instance.started = true;
   } catch {
-    // ignore
+    void 0;
   }
 
   lfoInstances.set(nodeId, instance);
@@ -364,9 +364,7 @@ export function updateLoop(
         instance.gain.gain?.setValueAtTime?.(event.amplitude, time);
       }
     }, []) as unknown as ToneOscInstance['loop'];
-    try {
-      instance.loop?.loop && (instance.loop.loop = true);
-    } catch {}
+    if (instance.loop) instance.loop.loop = true;
   }
 
   const loop = instance.loop;
@@ -376,7 +374,9 @@ export function updateLoop(
   try {
     loop.loopStart = 0;
     loop.loopEnd = parsed.loopLengthSeconds;
-  } catch {}
+  } catch {
+    void 0;
+  }
   instance.lastLoopLength = parsed.loopLengthSeconds;
 
   const state = (loop as unknown as { state?: unknown }).state;
@@ -653,7 +653,9 @@ export function createGranularInstance(
       if (granularInstances.get(nodeId)?.playing) {
         try {
           player.start();
-        } catch {}
+        } catch {
+          void 0;
+        }
       }
     },
   });
@@ -725,7 +727,7 @@ async function startTonePlayerLoad(instance: TonePlayerInstance, url: string): P
   try {
     instance.loadController?.abort();
   } catch {
-    // ignore
+    void 0;
   }
   const controller = new AbortController();
   instance.loadController = controller;
@@ -905,7 +907,7 @@ export function createAudioDataInstance(
   try {
     input.connect?.(analyser as AudioNode);
   } catch {
-    // ignore
+    void 0;
   }
 
   const instance: AudioDataInstance = {
@@ -996,7 +998,7 @@ export function analyzeAudioDataInstance(
     }
     rms = instance.timeData.length > 0 ? Math.sqrt(sumSquares / instance.timeData.length) : 0;
   } catch {
-    // ignore
+    void 0;
   }
 
   let low = 0;
@@ -1051,7 +1053,7 @@ export function analyzeAudioDataInstance(
     high = highCount > 0 ? highSum / highCount : 0;
     centroidHz = totalMag > 0 ? weightedSum / totalMag : 0;
   } catch {
-    // ignore
+    void 0;
   }
 
   let beat = false;
@@ -1110,17 +1112,17 @@ export function disposeOscInstance(nodeId: string): void {
   try {
     inst.osc?.stop?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.osc?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.gain?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   oscInstances.delete(nodeId);
   maybeStopTransport();
@@ -1132,7 +1134,7 @@ export function disposeEffectInstance(nodeId: string): void {
   try {
     inst.wrapper.dispose();
   } catch {
-    // ignore
+    void 0;
   }
   effectInstances.delete(nodeId);
 }
@@ -1143,17 +1145,17 @@ export function disposeGranularInstance(nodeId: string): void {
   try {
     inst.player?.stop?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.player?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.gain?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   granularInstances.delete(nodeId);
 }
@@ -1164,7 +1166,7 @@ export function disposePlayerInstance(nodeId: string): void {
   try {
     inst.loadController?.abort();
   } catch {
-    // ignore
+    void 0;
   }
   inst.loadController = null;
   try {
@@ -1176,12 +1178,12 @@ export function disposePlayerInstance(nodeId: string): void {
   try {
     inst.player?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.gain?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   playerInstances.delete(nodeId);
 }
@@ -1192,12 +1194,12 @@ export function disposeToneLfoInstance(nodeId: string): void {
   try {
     inst.lfo?.stop?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.lfo?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   lfoInstances.delete(nodeId);
   scheduleGraphWiring();
@@ -1209,27 +1211,27 @@ export function disposeAudioDataInstance(nodeId: string): void {
   try {
     inst.output?.disconnect?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.input?.disconnect?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.analyser?.disconnect?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.output?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   try {
     inst.input?.dispose?.();
   } catch {
-    // ignore
+    void 0;
   }
   audioDataInstances.delete(nodeId);
   scheduleGraphWiring();

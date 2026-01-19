@@ -24,7 +24,7 @@ export const normalizeGroupList = (groups: NodeGroup[]): NodeGroup[] => {
         typeof group?.managerId === 'string' && group.managerId ? String(group.managerId) : null,
       transferable: Boolean(group?.transferable),
       runtimeActive:
-        typeof group?.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+        typeof group?.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : true,
     };
 
     if (!byId.has(id)) order.push(id);

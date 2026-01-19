@@ -52,7 +52,10 @@
     audienceClients,
     displayTransport,
     getSDK,
+    requestControlPlaneSnapshot,
+    resumeControlPlane,
     sensorData,
+    setGroupPolicies,
     state as managerState,
   } from '$lib/stores/manager';
   import {
@@ -1198,6 +1201,37 @@
   const handleToolbarMenuPick = (action: () => void) => {
     closeToolbarMenu();
     action();
+  };
+
+  const publishGroupPolicies = () => {
+    const rawGroups = get(nodeGroupsState) ?? [];
+    const policies = rawGroups
+      .map((g) => {
+        const groupId = String(g.id ?? '').trim();
+        const managerId = typeof g.managerId === 'string' ? g.managerId.trim() : '';
+        if (!groupId || !managerId) return null;
+        return {
+          groupId,
+          managerId,
+          transferable: Boolean(g.transferable),
+        };
+      })
+      .filter(Boolean);
+
+    // Note: the SDK/service side will normalize + ignore invalid entries; we still avoid sending empty.
+    if (policies.length === 0) {
+      alert('No valid group policies found. Set group Manager first.');
+      return;
+    }
+    setGroupPolicies(policies);
+  };
+
+  const resumeControlPlaneFromRoot = () => {
+    resumeControlPlane();
+  };
+
+  const requestControlPlaneSnapshotFromRoot = () => {
+    requestControlPlaneSnapshot();
   };
 
   $: if (selectedNodeId && !graphState.nodes.some((n) => n.id === selectedNodeId)) {
@@ -2388,6 +2422,9 @@
       onExportCustomNode={exportCustomNode}
       onImportTemplates={fileActions.importTemplates}
       onExportTemplates={fileActions.exportTemplates}
+      onPublishGroupPolicies={publishGroupPolicies}
+      onResumeControlPlane={resumeControlPlaneFromRoot}
+      onRequestControlPlaneSnapshot={requestControlPlaneSnapshotFromRoot}
     />
   </svelte:fragment>
 
@@ -2445,6 +2482,10 @@
       {gateModeGroupIds}
       {groupGateNodeIdByGroupId}
       customNodeGroupIds={expandedCustomGroupIds}
+      controlPlaneSafeMode={Boolean($managerState.controlPlane?.safeMode)}
+      selectedClientIds={$managerState.selectedClientIds ?? []}
+      onOfferTransfer={(toActorId, groupIds) => getSDK()?.offerTransfer(toActorId, groupIds)}
+      onReclaim={(groupIds) => getSDK()?.reclaim(groupIds)}
       onToggleDisabled={handleToggleGroupDisabled}
       onToggleMinimized={groupController.toggleGroupMinimized}
       onToggleEditMode={groupController.toggleGroupEditMode}
