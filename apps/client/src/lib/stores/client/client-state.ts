@@ -16,6 +16,7 @@ export const state = writable<ClientState>({
     initialized: false,
     lastSyncTime: 0,
   },
+  visibleClients: [],
   error: null,
 });
 
@@ -40,4 +41,3 @@ export const latency = writable<number>(0);
 // Derived stores
 export const connectionStatus = derived(state, ($state) => $state.status);
 export const clientId = derived(state, ($state) => $state.clientId);
-

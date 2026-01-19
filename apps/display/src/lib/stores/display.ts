@@ -38,7 +38,13 @@ import {
   type TargetSelector,
 } from '@shugu/protocol';
 import type { GraphChange } from '@shugu/node-core';
-import { ClientSDK, NodeExecutor, type NodeCommand, type ClientState, type ClientIdentity } from '@shugu/sdk-client';
+import {
+  ClientSDK,
+  NodeExecutor,
+  type NodeCommand,
+  type ClientState,
+  type ClientIdentity,
+} from '@shugu/sdk-client';
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
 
 export type DisplayInitConfig = {
@@ -103,7 +109,10 @@ function dataUrlToBlob(dataUrl: string): Blob | null {
   const meta = dataUrl.slice(5, comma); // strip "data:"
   const data = dataUrl.slice(comma + 1);
 
-  const parts = meta.split(';').map((s) => s.trim()).filter(Boolean);
+  const parts = meta
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const mime = parts[0] && parts[0].includes('/') ? parts[0] : 'application/octet-stream';
   const isBase64 = parts.includes('base64');
 
@@ -243,7 +252,10 @@ function parseMediaClipParams(raw: string): MediaClipParams {
   const fitRaw = params.get('fit');
 
   const cursorParsed = cursorRaw === null ? null : toNumber(cursorRaw, -1);
-  const cursorSec = cursorParsed !== null && Number.isFinite(cursorParsed) && cursorParsed >= 0 ? cursorParsed : null;
+  const cursorSec =
+    cursorParsed !== null && Number.isFinite(cursorParsed) && cursorParsed >= 0
+      ? cursorParsed
+      : null;
 
   const fit = (() => {
     if (fitRaw === null) return null;
@@ -415,7 +427,9 @@ function registerDisplayLocalMedia(payload: Record<string, unknown> | undefined)
 
   const kindRaw = typeof payload?.kind === 'string' ? payload.kind.trim().toLowerCase() : '';
   const kind: LocalDisplayMediaKind =
-    kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? (kindRaw as LocalDisplayMediaKind) : 'video';
+    kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video'
+      ? (kindRaw as LocalDisplayMediaKind)
+      : 'video';
 
   const fileRaw = payload?.file ?? null;
   if (!(fileRaw instanceof Blob)) return;
@@ -447,7 +461,9 @@ export const runtime = writable<{
   pairToken: '',
 });
 
-export const mode = writable<'uninitialized' | 'local-pending' | 'local' | 'server'>('uninitialized');
+export const mode = writable<'uninitialized' | 'local-pending' | 'local' | 'server'>(
+  'uninitialized'
+);
 
 export const serverState = writable<ClientState>({
   status: 'disconnected',
@@ -459,6 +475,7 @@ export const serverState = writable<ClientState>({
     initialized: false,
     lastSyncTime: 0,
   },
+  visibleClients: [],
   error: null,
 });
 
@@ -557,7 +574,11 @@ function getOrCreateDisplayIdentity(): ClientIdentity | null {
   if (typeof window === 'undefined') return null;
 
   const deviceId = getOrCreateStorageId(window.localStorage, DISPLAY_DEVICE_ID_STORAGE_KEY, 'd_');
-  const instanceId = getOrCreateStorageId(window.sessionStorage, DISPLAY_INSTANCE_ID_STORAGE_KEY, 'i_');
+  const instanceId = getOrCreateStorageId(
+    window.sessionStorage,
+    DISPLAY_INSTANCE_ID_STORAGE_KEY,
+    'i_'
+  );
 
   const storedClientId = window.sessionStorage.getItem(DISPLAY_CLIENT_ID_STORAGE_KEY);
   const clientId = storedClientId && storedClientId.trim() ? storedClientId : deviceId;
@@ -603,6 +624,7 @@ function teardownServerTransport(): void {
       initialized: false,
       lastSyncTime: 0,
     },
+    visibleClients: [],
     error: null,
   });
 }
@@ -664,7 +686,12 @@ function isAllowedManagerOrigin(origin: string): boolean {
       if (sender.protocol === display.protocol && sender.hostname === display.hostname) return true;
 
       const hostPair = new Set([sender.hostname, display.hostname]);
-      if (sender.protocol === display.protocol && hostPair.has('localhost') && hostPair.has('127.0.0.1')) return true;
+      if (
+        sender.protocol === display.protocol &&
+        hostPair.has('localhost') &&
+        hostPair.has('127.0.0.1')
+      )
+        return true;
     } catch {
       // ignore
     }
@@ -680,7 +707,13 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   const pairToken = config.pairToken?.trim() ? config.pairToken.trim() : '';
   runtime.set({ serverUrl, assetReadToken, pairToken });
   mode.set(pairToken ? 'local-pending' : 'server');
-  readyOnce.set({ ready: false, at: null, manifestId: null, reportedToServer: false, reportedToLocal: false });
+  readyOnce.set({
+    ready: false,
+    at: null,
+    manifestId: null,
+    reportedToServer: false,
+    reportedToLocal: false,
+  });
   audioState.set(toneAudioEngine.getStatus());
 
   let readySent = false;
@@ -818,7 +851,9 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     if (transportDecision !== 'server') return;
     const offset = sdk?.getOffset?.() ?? 0;
     const executeAtLocal =
-      typeof message.executeAt === 'number' && Number.isFinite(message.executeAt) ? message.executeAt - offset : undefined;
+      typeof message.executeAt === 'number' && Number.isFinite(message.executeAt)
+        ? message.executeAt - offset
+        : undefined;
     executeControl(message.action, message.payload, executeAtLocal);
   });
 
@@ -828,7 +863,9 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     (cmd: NodeCommand) => {
       const offset = sdk?.getOffset?.() ?? 0;
       const executeAtLocal =
-        typeof cmd.executeAt === 'number' && Number.isFinite(cmd.executeAt) ? cmd.executeAt - offset : undefined;
+        typeof cmd.executeAt === 'number' && Number.isFinite(cmd.executeAt)
+          ? cmd.executeAt - offset
+          : undefined;
       executeControl(cmd.action, cmd.payload, executeAtLocal);
     },
     {
@@ -886,7 +923,8 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     };
 
     const offset = sdk?.getOffset?.() ?? 0;
-    const executeAtLocal = typeof message.executeAt === 'number' ? message.executeAt - offset : undefined;
+    const executeAtLocal =
+      typeof message.executeAt === 'number' ? message.executeAt - offset : undefined;
     executeControl('playMedia', payload, executeAtLocal);
   });
 
@@ -924,7 +962,9 @@ export function initializeDisplay(config: DisplayInitConfig): void {
       const payload = (data as { payload?: unknown }).payload;
       const executeAtLocalRaw = (data as { executeAtLocal?: unknown }).executeAtLocal;
       const executeAtLocal =
-        typeof executeAtLocalRaw === 'number' && Number.isFinite(executeAtLocalRaw) ? executeAtLocalRaw : undefined;
+        typeof executeAtLocalRaw === 'number' && Number.isFinite(executeAtLocalRaw)
+          ? executeAtLocalRaw
+          : undefined;
       if (typeof action !== 'string') return;
       executeControl(action as ControlAction, (payload ?? {}) as ControlPayload, executeAtLocal);
       return;
@@ -944,7 +984,9 @@ export function initializeDisplay(config: DisplayInitConfig): void {
           return;
         }
         const pluginPayload = asRecord(payload) ?? undefined;
-        nodeExecutor?.handlePluginControl(createLocalPluginMessage(command as PluginCommand, pluginPayload));
+        nodeExecutor?.handlePluginControl(
+          createLocalPluginMessage(command as PluginCommand, pluginPayload)
+        );
         return;
       }
 
@@ -1009,7 +1051,8 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     if (!isAllowedManagerOrigin(event.origin)) {
       if (import.meta.env.DEV) {
         const data = asRecord(event.data);
-        if (data?.type === 'shugu:display:pair') console.warn('[Display] pair rejected (origin)', event.origin);
+        if (data?.type === 'shugu:display:pair')
+          console.warn('[Display] pair rejected (origin)', event.origin);
       }
       return;
     }
@@ -1061,10 +1104,13 @@ export function destroyDisplay(): void {
 }
 
 function setScreenColor(payload: ScreenColorPayload): void {
-  const color = typeof payload.color === 'string' && payload.color.trim() ? payload.color.trim() : '#000000';
+  const color =
+    typeof payload.color === 'string' && payload.color.trim() ? payload.color.trim() : '#000000';
   const opacityRaw = payload.opacity ?? 1;
   const opacity =
-    typeof opacityRaw === 'number' && Number.isFinite(opacityRaw) ? Math.max(0, Math.min(1, opacityRaw)) : 1;
+    typeof opacityRaw === 'number' && Number.isFinite(opacityRaw)
+      ? Math.max(0, Math.min(1, opacityRaw))
+      : 1;
 
   screenOverlay.set({
     visible: opacity > 0,
@@ -1077,7 +1123,8 @@ function executeNow(action: ControlAction, payload: ControlPayload): void {
   switch (action) {
     case 'showImage': {
       const imagePayload = payload as ShowImagePayload;
-      const clip = typeof imagePayload.url === 'string' ? parseMediaClipParams(imagePayload.url) : null;
+      const clip =
+        typeof imagePayload.url === 'string' ? parseMediaClipParams(imagePayload.url) : null;
       const baseUrl = clip ? clip.baseUrl : String(imagePayload.url ?? '');
       const resolvedDisplayUrl = resolveDisplayFileUrl(baseUrl);
       if (parseDisplayFileId(baseUrl) && !resolvedDisplayUrl) {
@@ -1119,7 +1166,8 @@ function executeNow(action: ControlAction, payload: ControlPayload): void {
 
     case 'playMedia': {
       const mediaPayload = payload as PlayMediaPayload;
-      const clip = typeof mediaPayload.url === 'string' ? parseMediaClipParams(mediaPayload.url) : null;
+      const clip =
+        typeof mediaPayload.url === 'string' ? parseMediaClipParams(mediaPayload.url) : null;
       const baseUrl = clip ? clip.baseUrl : mediaPayload.url;
       const url = typeof baseUrl === 'string' ? baseUrl : String(baseUrl ?? '');
       const resolvedDisplayUrl = resolveDisplayFileUrl(url);
@@ -1178,7 +1226,11 @@ function executeNow(action: ControlAction, payload: ControlPayload): void {
   }
 }
 
-export function executeControl(action: ControlAction, payload: ControlPayload, executeAtLocal?: number): void {
+export function executeControl(
+  action: ControlAction,
+  payload: ControlPayload,
+  executeAtLocal?: number
+): void {
   if (typeof executeAtLocal === 'number' && Number.isFinite(executeAtLocal)) {
     const delay = executeAtLocal - Date.now();
     if (delay > 0) {

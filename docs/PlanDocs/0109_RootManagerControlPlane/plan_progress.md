@@ -11,9 +11,9 @@
 - [x] Phase 2.2：组织形式对齐（同层级能力统一入口与目录归属）
 - [x] Phase 2.3：Server 语义收敛（Protocol / 最小认证 / Presence）
 - [x] Phase 2.5：Nodalization（自定义节点 / 母子节点 / Uncoupled / 循环嵌套防止）+ Group 持久化
-- [ ] Phase 3：Root/Manager 形态重构（同一 app：`/root` + `/manager`，强制 code-splitting）
-- [ ] Phase 4：ControlPlane v2（授权/转交/回溯/收回/终止；Server 仲裁可开关）
-- [ ] Phase 5：分布式执行器 v2（授权 client 运行子图并可控他端）
+- [x] Phase 3：Root/Manager 形态重构（同一 app：`/root` + `/manager`，强制 code-splitting）
+- [x] Phase 4：ControlPlane v2（授权/转交/回溯/收回/终止；Server 仲裁可开关）
+- [x] Phase 5：分布式执行器 v2（授权 client 运行子图并可控他端）
 - [ ] Phase 6：插件体系一致化（Tone / 多媒体 / Visual / AI 统一契约）
 - [ ] Phase 7：多 Display 输出与输出路由（多屏、远程/本地通道统一）
 - [ ] Phase 8：AI 接口与模型资产化（后台下载；未启用 0 计算开销；手机本地推理）
@@ -202,7 +202,6 @@
 
 ### 2026-01-15
 
-
 - [x] Node Graph 架构收敛（worktree：node-graph-architecture）：
   - [x] 结构拆分：renderer registry、lifecycle cleanup、custom-node handlers、group domain handlers、runtime init（保持行为不变，仅拆分/集中 wiring）。
   - [x] Server 修复以便回归：补 `@types/express`；`LocalMediaFile` 增补 `etag`；validate 返回补 `label`；assets auth HeaderRequest 类型修正。
@@ -287,8 +286,8 @@
   - [x] Copy/Paste：Group 作为“特殊节点”可复制（等价于复制整个 frame/subtree），仅保留代理点，跨边界外连线不复制。
   - [x] 新节点：`logic-number-to-boolean`（`number >= trigger` → `true`）。
 - [x] 验证：
-    - `pnpm --filter @shugu/node-core test` ✅（先 `pnpm --filter @shugu/node-core clean` 清理 root-owned dist，避免 TS5033）
-    - `pnpm lint` ✅（0 errors；warnings 为历史债）
+  - `pnpm --filter @shugu/node-core test` ✅（先 `pnpm --filter @shugu/node-core clean` 清理 root-owned dist，避免 TS5033）
+  - `pnpm lint` ✅（0 errors；warnings 为历史债）
 
 ### 2026-01-13
 
@@ -448,7 +447,6 @@
   - `apps/manager/src/lib/nodes/custom-nodes/store.ts`：Custom Node process 以 `inputs.gate` 作为唯一 gate（连线覆盖手动）。
   - `apps/manager/src/lib/components/nodes/NodeCanvas.svelte`：Nodalize/Collapse/Group toggle 时同步 `gate` 输入值，确保手动 gate 一致。
 
-
 - [x] Phase 2.X 节点图渐进式解耦回归（手动）：完成（2026-01-15）
   - `pnpm lint` ✅
   - `pnpm --filter @shugu/node-core test` ✅
@@ -457,7 +455,7 @@
 
 ### 2026-01-19
 
-- [ ] Phase 3：Root/Manager 形态重构（进行中，未提交）
+- [x] Phase 3：Root/Manager 形态重构
   - [x] Routing split（同一 app 内分离 `/root` 与 `/manager`）：
     - `apps/manager/src/routes/root/+page.svelte`：Root editor（NodeCanvasRenderer）
     - `apps/manager/src/routes/manager/+page.svelte`：Manager console（轻量页面）
@@ -489,3 +487,18 @@
     - Manifest 证据：
       - `apps/manager/.svelte-kit-manager/output/client/.vite/manifest.json`
       - `apps/manager/.svelte-kit-manager/output/server/.vite/manifest.json`
+
+- [x] Phase 5.0：Target visibility feed（controller-group clients 接收 system:clientList）
+  - Server: `apps/server/src/message-router/message-router.service.ts` 现在把 `system:clientList` 广播给 managers + `group=controller` clients（dedupe）。
+  - ClientSDK: `packages/sdk-client/src/client-sdk.ts` 新增 `visibleClients` state + `getVisibleClients()` 并在 `system:clientList` 更新。
+
+- [x] Phase 5.1：NodeExecutor remote backend（controller -> server: control/plugin/media with scopeGroupId + ownership gating）
+  - SDK Manager: `packages/sdk-manager/src/manager-sdk.ts` 的 `sendPluginControl(...)` 增加可选 `scopeGroupId`（默认 `SYSTEM_SCOPE_GROUP_ID`）。
+  - NodeExecutor: `packages/sdk-client/src/node-executor.ts` 支持 deploy meta `scopeGroupId` + status 上报 + remote routing（通过 `executeCommandForClientId`）。
+  - Client runtime: `apps/client/src/lib/stores/client/client-runtime.ts` 注入 remote sender，满足 safeMode + ownership gating。
+
+- [x] Phase 5 验证（2026-01-19）：
+  - `pnpm lint` ✅（0 errors；warnings 为历史债）
+  - `pnpm build:all` ✅
+  - `pnpm --filter @shugu/sdk-client run build && node --test packages/sdk-client/dist-out/node-executor.spec.js packages/sdk-client/dist-out/node-executor-overrides.spec.js` ✅
+  - `pnpm --filter @shugu/server run build && node --test apps/server/dist-out/message-router/message-router.service.test.js` ✅

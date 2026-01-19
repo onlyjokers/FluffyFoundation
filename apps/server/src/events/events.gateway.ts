@@ -164,7 +164,6 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // Send registration confirmation
     this.messageRouter.sendRegistrationConfirmation(client.id, clientId);
 
-    // Notify managers if a client joined
     if (role === 'client') {
       if (isNewClient) {
         this.messageRouter.notifyClientJoined(clientId);
@@ -178,7 +177,6 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         active,
       });
     } else if (role === 'manager') {
-      // Send current client list to new manager
       this.messageRouter.broadcastClientListUpdate();
     }
   }

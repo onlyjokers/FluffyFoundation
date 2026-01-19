@@ -247,6 +247,33 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
         }
         return true;
       },
+      remote: {
+        sendControl: (targetClientId, cmd, meta) => {
+          if (!sdk) return;
+          const targetId = String(targetClientId ?? '');
+          if (!targetId) return;
+          const scope = String(meta?.scopeGroupId ?? '').trim();
+          if (!scope) return;
+
+          const cp = sdk.getControlPlaneState?.();
+          if (cp?.safeMode) return;
+          const snapshot = cp?.snapshot;
+          const ownership = snapshot?.ownership?.[scope];
+          const ownerStack = ownership?.ownerStack ?? [];
+          const currentOwner =
+            ownerStack.length > 0 ? String(ownerStack[ownerStack.length - 1]) : '';
+          const selfId = sdk.getState().clientId ?? '';
+          if (!selfId || currentOwner !== selfId) return;
+
+          sdk.sendControl(
+            { mode: 'clientIds', ids: [targetId] },
+            cmd.action,
+            cmd.payload ?? {},
+            cmd.executeAt,
+            scope
+          );
+        },
+      },
       resolveAssetRef: (ref: string) => multimediaCore?.resolveAssetRef(ref) ?? ref,
       prioritizeFetch: (url: string) => multimediaCore?.prioritizeFetch(url) ?? fetch(url),
     }

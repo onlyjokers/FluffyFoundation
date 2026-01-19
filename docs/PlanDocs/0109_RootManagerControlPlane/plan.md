@@ -25,9 +25,9 @@ Status: Draft
 - [x] Phase 2.2：组织形式对齐（同层级能力统一入口与目录归属）
 - [x] Phase 2.3：Server 语义收敛（Protocol / 最小认证 / Presence）
 - [x] Phase 2.5：Nodalization（自定义节点 / 母子节点 / Uncoupled / 循环嵌套防止）+ Group 持久化
-- [ ] Phase 3：Root/Manager 形态重构（同一 app：`/root` + `/manager`，强制 code-splitting）
-- [ ] Phase 4：ControlPlane v2（授权/转交/回溯/收回/终止；Server 仲裁可开关）
-- [ ] Phase 5：分布式执行器 v2（授权 client 运行子图并可控他端）
+- [x] Phase 3：Root/Manager 形态重构（同一 app：`/root` + `/manager`，强制 code-splitting）
+- [x] Phase 4：ControlPlane v2（授权/转交/回溯/收回/终止；Server 仲裁可开关）
+- [x] Phase 5：分布式执行器 v2（授权 client 运行子图并可控他端）
 - [ ] Phase 6：插件体系一致化（Tone / 多媒体 / Visual / AI 统一契约）
 - [ ] Phase 7：多 Display 输出与输出路由（多屏、远程/本地通道统一）
 - [ ] Phase 8：AI 接口与模型资产化（后台下载；未启用 0 计算开销；手机本地推理）
@@ -197,8 +197,8 @@ type GroupId = string;
 
 type GroupPolicy = {
   groupId: GroupId;
-  managerId: ActorId;           // 该 Group 固定归属的 Manager（开场前绑定）
-  transferable: boolean;        // group meta：允许 client 再转交
+  managerId: ActorId; // 该 Group 固定归属的 Manager（开场前绑定）
+  transferable: boolean; // group meta：允许 client 再转交
   // 可选：未来扩展
   allowPartialAccept?: boolean; // 你要求“给 B 留接口”
 };
@@ -225,13 +225,13 @@ type GroupOwnership = {
 
 ### 3.2.1 让渡（Manager → client）
 
-1) Manager 发起 offer：`offerTransfer({ groupIds, toClientId })`
-2) Server 校验：
+1. Manager 发起 offer：`offerTransfer({ groupIds, toClientId })`
+2. Server 校验：
    - 发起者必须是这些 group 的 current owner
    - 这些 group 的 managerId 必须等于该 Manager（开场前绑定的约束）
-3) Server 写入 pendingTransfer，并向目标 client 推送 `transferOffered`（带 UI 文本与 group 概览）
-4) client UI 弹窗，用户点击 accept：`acceptTransfer({ offerId })`
-5) Server 再次校验 offer 仍有效 → push ownerStack → 广播 ownership 变更给 Root/Manager（best-effort 镜像可另走）
+3. Server 写入 pendingTransfer，并向目标 client 推送 `transferOffered`（带 UI 文本与 group 概览）
+4. client UI 弹窗，用户点击 accept：`acceptTransfer({ offerId })`
+5. Server 再次校验 offer 仍有效 → push ownerStack → 广播 ownership 变更给 Root/Manager（best-effort 镜像可另走）
 
 ### 3.2.2 再转交（client → client）
 
@@ -257,10 +257,10 @@ Manager 一键 reclaim：Server 直接把该 Manager 名下 groups 的 ownerStac
 
 建议一步到位支持两级策略（满足你“可选 card”的同时未来可增强）：
 
-1) **基础强约束（推荐默认）**：按 ownership + group policy 限制
+1. **基础强约束（推荐默认）**：按 ownership + group policy 限制
    - 只有 current owner 才能发送“带 groupContext”的控制
    - `target` 限制在允许的 target group（如 audience/display/manager-client）或具体集合
-2) **高级强约束（未来）**：Graph-derived policy
+2. **高级强约束（未来）**：Graph-derived policy
    - Root 在部署 group 子图时，同时生成一份静态 policy（allowedActions/allowedTargetGroups/limits）
    - server 对 controller 外发消息做 schema 校验 + policy 校验
 
@@ -528,20 +528,20 @@ Graph 侧只看到：
 
 ## 10.1 典型闭环场景必须跑通（核心）
 
-1) Root 发布多个 Group 给多个 Manager（开场前绑定）。
-2) Manager A 将一个或多个 Group 让渡给 client X：
+1. Root 发布多个 Group 给多个 Manager（开场前绑定）。
+2. Manager A 将一个或多个 Group 让渡给 client X：
    - X 接到 offer → UI accept → 立即获得控制权；
    - Manager A 无法再操纵该 Group（直到 reclaim）。
-3) client X 在本地执行子图，用自身 sensors 调制并控制：
+3. client X 在本地执行子图，用自身 sensors 调制并控制：
    - audience clients
    - 多个 display
    - （可选）开启了 client-mode 的 manager
-4) client X 独占转交给 client Y：
+4. client X 独占转交给 client Y：
    - Y accept 后生效；
    - 若包含 non-transferable groups：这些 groups 自动回到各自 Manager。
-5) Y 刷新页面/断线：
+5. Y 刷新页面/断线：
    - ownerStack pop 回到 X（不自动恢复）；如果 X 也断线则继续回退到 Manager。
-6) Root 一键结束演出/kill：
+6. Root 一键结束演出/kill：
    - 所有 groups 停止、side-effect 清理、全端回到安全状态。
 
 ## 10.2 插件与 AI
@@ -969,7 +969,7 @@ Graph 侧只看到：
 
 - Assets Manager（Root）可定义模型分发策略（你选择 C），并把模型与其他资产纳入同一 manifest/ready 语义。
 - 运行时可插拔：local inference / remote API / hybrid（保留接口，不强行一次做全）。
- - 未启用 0 计算开销的实现策略（你选定）：AI 插件在未启用时 **完全不初始化**（不创建 WebGPU/WASM 上下文、不分配 buffer）；只有当 Root 打开对应 Group/节点并确认启用时才 init。
+- 未启用 0 计算开销的实现策略（你选定）：AI 插件在未启用时 **完全不初始化**（不创建 WebGPU/WASM 上下文、不分配 buffer）；只有当 Root 打开对应 Group/节点并确认启用时才 init。
 
 验收：
 

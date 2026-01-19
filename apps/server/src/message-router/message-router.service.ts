@@ -213,14 +213,15 @@ export class MessageRouterService {
     }
   }
 
-  /**
-   * Broadcast client list update to all managers
-   */
   broadcastClientListUpdate(): void {
     if (!this.server) return;
 
     const clients = this.clientRegistry.getAllClients();
     const managerSocketIds = this.clientRegistry.getAllManagerSocketIds();
+    const controllerSocketIds = this.clientRegistry
+      .getClientsByGroup('controller')
+      .map((c) => c.socketId);
+    const recipients = Array.from(new Set([...managerSocketIds, ...controllerSocketIds]));
 
     const message = addServerTimestamp(
       {
@@ -232,12 +233,9 @@ export class MessageRouterService {
       Date.now()
     ) as SystemMessage;
 
-    this.emitToSockets(managerSocketIds, message);
+    this.emitToSockets(recipients, message);
   }
 
-  /**
-   * Notify managers of client join
-   */
   notifyClientJoined(clientId: string): void {
     if (!this.server) return;
 

@@ -553,14 +553,18 @@ export class ManagerSDK {
     target: TargetSelector,
     pluginId: PluginId,
     command: PluginCommand,
-    payload?: Record<string, unknown>
+    payload?: Record<string, unknown>,
+    scopeGroupId: string = SYSTEM_SCOPE_GROUP_ID
   ): void {
     if (!this.socket?.connected) return;
+    const nextScope = typeof scopeGroupId === 'string' ? scopeGroupId.trim() : '';
+    if (!nextScope) return;
+
     const message = createPluginControlMessage(
       {
         actorId: this.state.managerId ?? 'manager',
         actorRole: 'manager',
-        scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+        scopeGroupId: nextScope,
       },
       target,
       pluginId,

@@ -12,6 +12,7 @@
 
 import { get, type Readable } from 'svelte/store';
 import {
+  SYSTEM_SCOPE_GROUP_ID,
   targetGroup,
   type ControlAction,
   type ControlPayload,
@@ -54,7 +55,8 @@ export type DisplayTransportSdk = {
     target: TargetSelector,
     pluginId: string,
     command: PluginCommand,
-    payload?: Record<string, unknown>
+    payload?: Record<string, unknown>,
+    scopeGroupId?: string
   ) => void;
 };
 
@@ -209,7 +211,13 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
     }
 
     if (hasRemoteDisplay && sdk) {
-      sdk.sendPluginControl(targetGroup('display'), pluginId, command, payload);
+      sdk.sendPluginControl(
+        targetGroup('display'),
+        pluginId,
+        command,
+        payload,
+        SYSTEM_SCOPE_GROUP_ID
+      );
       if (hasLocalSession) route = 'local+server';
     }
 

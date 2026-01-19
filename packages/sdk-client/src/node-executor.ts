@@ -11,6 +11,7 @@ export type NodeExecutorDeployPayload = {
   graph: Pick<GraphState, 'nodes' | 'connections'>;
   meta: {
     loopId: string;
+    scopeGroupId?: string;
     requiredCapabilities?: string[];
     tickIntervalMs?: number;
     protocolVersion?: number;
@@ -21,6 +22,7 @@ export type NodeExecutorDeployPayload = {
 export type NodeExecutorStatus = {
   running: boolean;
   loopId: string | null;
+  scopeGroupId: string | null;
   lastError: string | null;
 };
 
@@ -43,6 +45,28 @@ export type NodeExecutorOptions = {
    * Audio loading will use this to check cache and prioritize downloads.
    */
   prioritizeFetch?: (url: string) => Promise<Response>;
+  remote?: {
+    sendControl: (
+      targetClientId: string,
+      cmd: NodeCommand,
+      meta: { scopeGroupId: string; executeAt?: number }
+    ) => void;
+    sendPlugin?: (
+      targetClientId: string,
+      pluginId: string,
+      command: string,
+      payload: Record<string, unknown> | undefined,
+      meta: { scopeGroupId: string }
+    ) => void;
+    sendMedia?: (
+      targetClientId: string,
+      mediaType: 'audio' | 'video',
+      url: string,
+      executeAt: number,
+      options: Record<string, unknown> | undefined,
+      meta: { scopeGroupId: string }
+    ) => void;
+  };
   limits?: {
     maxNodes?: number;
     minTickIntervalMs?: number;
@@ -60,6 +84,29 @@ export class NodeExecutor {
   private runtime: NodeRuntime;
   private toneAdapter: ToneAdapterHandle | null = null;
   private loopId: string | null = null;
+  private scopeGroupId: string | null = null;
+  private remote: {
+    sendControl: (
+      targetClientId: string,
+      cmd: NodeCommand,
+      meta: { scopeGroupId: string; executeAt?: number }
+    ) => void;
+    sendPlugin?: (
+      targetClientId: string,
+      pluginId: string,
+      command: string,
+      payload: Record<string, unknown> | undefined,
+      meta: { scopeGroupId: string }
+    ) => void;
+    sendMedia?: (
+      targetClientId: string,
+      mediaType: 'audio' | 'video',
+      url: string,
+      executeAt: number,
+      options: Record<string, unknown> | undefined,
+      meta: { scopeGroupId: string }
+    ) => void;
+  } | null = null;
   private lastError: string | null = null;
   private running = false;
   private consecutiveSlowTicks = 0;
@@ -81,6 +128,15 @@ export class NodeExecutor {
     private executeCommand: (cmd: NodeCommand) => void,
     options?: NodeExecutorOptions
   ) {
+    const remote = options?.remote;
+    this.remote =
+      remote && typeof remote.sendControl === 'function'
+        ? {
+            sendControl: remote.sendControl,
+            sendPlugin: typeof remote.sendPlugin === 'function' ? remote.sendPlugin : undefined,
+            sendMedia: typeof remote.sendMedia === 'function' ? remote.sendMedia : undefined,
+          }
+        : null;
     const defaultCanRunCapability = (capability: string) => {
       if (capability === 'sensors') {
         return (
@@ -125,6 +181,20 @@ export class NodeExecutor {
       },
       getLatestSensor: () => this.sdk.getLatestSensorData(),
       executeCommand: (cmd) => this.executeCommand(cmd),
+      executeCommandForClientId: (clientId, cmd) => {
+        const id = String(clientId ?? '');
+        if (!id) return;
+        if (!this.remote) {
+          this.executeCommand(cmd);
+          return;
+        }
+        const scopeGroupId = this.scopeGroupId;
+        if (!scopeGroupId) {
+          this.executeCommand(cmd);
+          return;
+        }
+        this.remote.sendControl(id, cmd, { scopeGroupId, executeAt: cmd.executeAt });
+      },
     });
     // Client-only Tone.js implementations override the shared node-core definitions.
     this.toneAdapter = registerToneClientDefinitions(this.registry, {
@@ -190,7 +260,12 @@ export class NodeExecutor {
   }
 
   getStatus(): NodeExecutorStatus {
-    return { running: this.running, loopId: this.loopId, lastError: this.lastError };
+    return {
+      running: this.running,
+      loopId: this.loopId,
+      scopeGroupId: this.scopeGroupId,
+      lastError: this.lastError,
+    };
   }
 
   destroy(): void {
@@ -198,6 +273,7 @@ export class NodeExecutor {
     this.runtime.clear();
     this.clearToneNodes();
     this.loopId = null;
+    this.scopeGroupId = null;
     this.running = false;
     this.lastError = null;
     this.report('destroyed', {});
@@ -249,7 +325,9 @@ export class NodeExecutor {
     const prev = this.runtime.exportGraph();
     const next = applyGraphChanges(prev, changes);
     if (next.nodes.length > this.options.limits.maxNodes) {
-      throw new Error(`graph too large (${next.nodes.length} nodes > ${this.options.limits.maxNodes})`);
+      throw new Error(
+        `graph too large (${next.nodes.length} nodes > ${this.options.limits.maxNodes})`
+      );
     }
 
     const toneNodeIds = new Set(
@@ -279,6 +357,9 @@ export class NodeExecutor {
       throw new Error('node-executor is disabled on this client');
     }
     const parsed = this.parseDeployPayload(payload);
+
+    this.scopeGroupId =
+      typeof parsed.meta.scopeGroupId === 'string' ? parsed.meta.scopeGroupId : null;
 
     const nodeCount = parsed.graph.nodes.length;
     if (nodeCount > this.options.limits.maxNodes) {
@@ -365,6 +446,7 @@ export class NodeExecutor {
 
     this.report('deployed', {
       loopId: this.loopId,
+      scopeGroupId: this.scopeGroupId,
       tickIntervalMs: clampedTick,
       requiredCapabilities: parsed.meta.requiredCapabilities ?? [],
     });
@@ -378,7 +460,7 @@ export class NodeExecutor {
     if (loopId && this.loopId && loopId !== this.loopId) return;
     this.runtime.start();
     this.running = true;
-    this.report('started', { loopId: this.loopId });
+    this.report('started', { loopId: this.loopId, scopeGroupId: this.scopeGroupId });
   }
 
   private stop(payload: unknown): void {
@@ -386,7 +468,7 @@ export class NodeExecutor {
     if (loopId && this.loopId && loopId !== this.loopId) return;
     this.runtime.stop();
     this.running = false;
-    this.report('stopped', { loopId: this.loopId });
+    this.report('stopped', { loopId: this.loopId, scopeGroupId: this.scopeGroupId });
   }
 
   private remove(payload: unknown): void {
@@ -399,6 +481,7 @@ export class NodeExecutor {
     this.loopId = null;
     this.running = false;
     this.lastError = null;
+    this.scopeGroupId = null;
     this.report('removed', { loopId });
   }
 
@@ -436,9 +519,16 @@ export class NodeExecutor {
     }
     const loopId = typeof meta.loopId === 'string' ? meta.loopId : '';
     if (!loopId) throw new Error('invalid payload (meta.loopId)');
+
+    const scopeGroupIdRaw = typeof meta.scopeGroupId === 'string' ? meta.scopeGroupId.trim() : '';
+    const metaNormalized = {
+      ...(meta as NodeExecutorDeployPayload['meta']),
+      ...(scopeGroupIdRaw ? { scopeGroupId: scopeGroupIdRaw } : {}),
+    } satisfies NodeExecutorDeployPayload['meta'];
+
     return {
       graph: graph as Pick<GraphState, 'nodes' | 'connections'>,
-      meta: meta as NodeExecutorDeployPayload['meta'],
+      meta: metaNormalized,
     };
   }
 

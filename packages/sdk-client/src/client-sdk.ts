@@ -36,6 +36,7 @@ import {
   MediaType,
   ControlPlaneGroupPolicy as GroupPolicy,
   ControlPlaneSnapshot,
+  ClientInfo,
 } from '@shugu/protocol';
 
 export type ConnectionStatus =
@@ -49,6 +50,7 @@ export interface ClientState {
   status: ConnectionStatus;
   clientId: string | null;
   timeSync: TimeSyncState;
+  visibleClients: ClientInfo[];
   error: string | null;
 }
 
@@ -102,10 +104,6 @@ export interface ClientSDKConfig {
    * - Performance mode: `['websocket']` (less jitter, but may fail on restrictive networks)
    */
   transports?: SocketTransport[];
-  /**
-   * Optional Socket.io query parameters appended to the connection URL.
-   * Note: `role` is always forced to `client` by the SDK.
-   */
   query?: Record<string, string>;
 }
 
@@ -137,6 +135,8 @@ export class ClientSDK {
     lastTransferOffer: null | { offerId: string; fromActorId: string; groupIds: string[] };
   } = { safeMode: true, snapshot: null, lastTransferOffer: null };
 
+  private visibleClients: ClientInfo[] = [];
+
   constructor(config: ClientSDKConfig) {
     const defaultTransports: SocketTransport[] = ['polling', 'websocket'];
     const transports = (() => {
@@ -164,6 +164,7 @@ export class ClientSDK {
       status: 'disconnected',
       clientId: null,
       timeSync: createTimeSyncState(),
+      visibleClients: [],
       error: null,
     };
   }
@@ -220,7 +221,11 @@ export class ClientSDK {
    * Get current state
    */
   getState(): ClientState {
-    return { ...this.state };
+    return { ...this.state, visibleClients: [...this.visibleClients] };
+  }
+
+  getVisibleClients(): ClientInfo[] {
+    return [...this.visibleClients];
   }
 
   /**
@@ -569,6 +574,14 @@ export class ClientSDK {
           }
         }
         break;
+
+      case 'clientList': {
+        const p = message.payload as { clients?: unknown };
+        const clients = Array.isArray(p.clients) ? (p.clients as ClientInfo[]) : [];
+        this.visibleClients = clients;
+        this.updateState({ visibleClients: clients });
+        break;
+      }
     }
   }
 

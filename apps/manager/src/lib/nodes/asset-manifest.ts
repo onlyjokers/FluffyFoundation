@@ -96,7 +96,10 @@ function scanGraphForAssetRefs(graph: GraphState): string[] {
   const nodes = (graph.nodes ?? []).slice();
   const byId = new Map(nodes.map((n) => [String(n.id), n]));
 
-  const incomingByTarget = new Map<string, { sourceNodeId: string; sourcePortId: string; targetPortId: string }[]>();
+  const incomingByTarget = new Map<
+    string,
+    { sourceNodeId: string; sourcePortId: string; targetPortId: string }[]
+  >();
   for (const c of graph.connections ?? []) {
     const targetNodeId = String(c.targetNodeId);
     const list = incomingByTarget.get(targetNodeId) ?? [];
@@ -129,8 +132,14 @@ function scanGraphForAssetRefs(graph: GraphState): string[] {
 
   // Prefer a traversal rooted at sinks (Max/MSP style): start from patch roots / client routing and walk upstream.
   // Order matters for preload priority: audio-out first, then client-object, then fallback to all nodes.
-  const audioOutRoots = nodes.filter((n) => n.type === 'audio-out').map((n) => String(n.id)).sort();
-  const clientRoots = nodes.filter((n) => n.type === 'client-object').map((n) => String(n.id)).sort();
+  const audioOutRoots = nodes
+    .filter((n) => n.type === 'audio-out')
+    .map((n) => String(n.id))
+    .sort();
+  const clientRoots = nodes
+    .filter((n) => n.type === 'client-object')
+    .map((n) => String(n.id))
+    .sort();
   const roots = [...audioOutRoots, ...clientRoots];
   const startIds = roots.length > 0 ? roots : nodes.map((n) => String(n.id));
 
@@ -178,11 +187,17 @@ function pushManifestToClientIds(clientIds: string[], manifest: AssetManifest): 
   const ids = clientIds.map(String).filter(Boolean);
   if (ids.length === 0) return;
 
-  sdk.sendPluginControl(targetClients(ids), PLUGIN_ID, 'configure', {
-    manifestId: manifest.manifestId,
-    assets: manifest.assets,
-    updatedAt: manifest.updatedAt,
-  });
+  sdk.sendPluginControl(
+    targetClients(ids),
+    PLUGIN_ID,
+    'configure',
+    {
+      manifestId: manifest.manifestId,
+      assets: manifest.assets,
+      updatedAt: manifest.updatedAt,
+    },
+    undefined
+  );
 
   for (const id of ids) sentManifestIdByClient.set(id, manifest.manifestId);
 }

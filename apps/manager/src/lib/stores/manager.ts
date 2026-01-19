@@ -745,7 +745,7 @@ export function sendPluginControl(
   const target = toAll
     ? { mode: 'all' as const }
     : { mode: 'clientIds' as const, ids: currentState.selectedClientIds };
-  sdk.sendPluginControl(target, pluginId, command, payload);
+  sdk.sendPluginControl(target, pluginId, command, payload, undefined);
 }
 
 /**

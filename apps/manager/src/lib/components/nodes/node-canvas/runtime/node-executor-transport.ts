@@ -31,7 +31,8 @@ type SdkLike = {
     target: { mode: 'clientIds'; ids: string[] },
     pluginName: string,
     command: string,
-    payload: unknown
+    payload: unknown,
+    scopeGroupId?: string
   ) => void;
 };
 
@@ -80,7 +81,13 @@ export const createNodeExecutorTransport = (
 
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [id] }, 'node-executor', command, payload);
+    sdk.sendPluginControl(
+      { mode: 'clientIds', ids: [id] },
+      'node-executor',
+      command,
+      payload,
+      undefined
+    );
   };
 
   return { sendNodeExecutorPluginControl };
