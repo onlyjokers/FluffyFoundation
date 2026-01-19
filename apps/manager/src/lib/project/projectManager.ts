@@ -41,6 +41,8 @@ function buildSnapshot(): ProjectSnapshot {
     nodeIds: (g.nodeIds ?? []).map((id) => String(id)).filter(Boolean),
     disabled: Boolean(g.disabled),
     minimized: Boolean(g.minimized),
+    managerId: typeof g.managerId === 'string' && g.managerId ? g.managerId : null,
+    transferable: Boolean(g.transferable),
     runtimeActive: typeof g.runtimeActive === 'boolean' ? g.runtimeActive : undefined,
   }));
   const customNodes = (get(customNodeDefinitions) ?? []).map((def) => ({
@@ -101,6 +103,8 @@ export function loadLocalProject(): boolean {
     nodeIds: string[];
     disabled: boolean;
     minimized: boolean;
+    managerId: string | null;
+    transferable: boolean;
     runtimeActive?: boolean;
   };
 
@@ -118,9 +122,22 @@ export function loadLocalProject(): boolean {
       const nodeIds = nodeIdsRaw.map((v) => String(v)).filter(Boolean);
       const disabled = Boolean(item.disabled);
       const minimized = Boolean(item.minimized);
+      const managerIdRaw = item.managerId;
+      const managerId = typeof managerIdRaw === 'string' && managerIdRaw ? managerIdRaw : null;
+      const transferable = Boolean(item.transferable);
       const runtimeActive =
         typeof item.runtimeActive === 'boolean' ? item.runtimeActive : undefined;
-      groups.push({ id, parentId, name, nodeIds, disabled, minimized, runtimeActive });
+      groups.push({
+        id,
+        parentId,
+        name,
+        nodeIds,
+        disabled,
+        minimized,
+        managerId,
+        transferable,
+        runtimeActive,
+      });
     }
     return groups;
   };

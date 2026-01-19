@@ -16,7 +16,8 @@ test('normalizeGroupList preserves first-seen order and dedupes nodeIds', () => 
       nodeIds: ['n1', 'n2', 'n2'],
       disabled: false,
       minimized: false,
-      runtimeActive: true,
+      managerId: null,
+      transferable: false,
     },
     {
       id: 'g2',
@@ -25,6 +26,8 @@ test('normalizeGroupList preserves first-seen order and dedupes nodeIds', () => 
       nodeIds: ['n3', 'n4'],
       disabled: true,
       minimized: true,
+      managerId: null,
+      transferable: false,
       runtimeActive: false,
     },
     {
@@ -34,6 +37,8 @@ test('normalizeGroupList preserves first-seen order and dedupes nodeIds', () => 
       nodeIds: ['n2', 'n5'],
       disabled: false,
       minimized: false,
+      managerId: null,
+      transferable: false,
     },
   ];
 

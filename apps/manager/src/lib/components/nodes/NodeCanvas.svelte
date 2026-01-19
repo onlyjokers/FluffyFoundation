@@ -2453,6 +2453,8 @@
       onCollapseCustomNode={handleCollapseCustomNodeFrame}
       onDisassemble={groupPortNodesController.disassembleGroupAndPorts}
       onRename={handleRenameGroup}
+      onSetManagerId={groupController.setManagerId}
+      onSetTransferable={groupController.setTransferable}
       onHeaderPointerDown={groupFrameHeaderHandlers.handleGroupHeaderPointerDown}
     />
 

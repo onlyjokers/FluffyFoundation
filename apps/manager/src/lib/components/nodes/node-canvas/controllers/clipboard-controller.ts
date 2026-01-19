@@ -34,7 +34,9 @@ export type CreateClipboardControllerOptions = {
   generateId: () => string;
 };
 
-export function createClipboardController(opts: CreateClipboardControllerOptions): ClipboardController {
+export function createClipboardController(
+  opts: CreateClipboardControllerOptions
+): ClipboardController {
   const {
     getContainer,
     nodeEngine,
@@ -57,7 +59,9 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
   let clipboardRootGroupId: string | null = null;
   let clipboardPasteIndex = 0;
 
-  const rewriteCustomNodeConfigForPaste = (config: Record<string, unknown>): Record<string, unknown> => {
+  const rewriteCustomNodeConfigForPaste = (
+    config: Record<string, unknown>
+  ): Record<string, unknown> => {
     const state = readCustomNodeState(config);
     if (!state) return config;
 
@@ -89,11 +93,7 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
     const selected = get(groupController.groupSelectionNodeIds);
     const selectedNodeId = String(getSelectedNodeId() ?? '');
     const ids =
-      selected.size > 0
-        ? Array.from(selected).map(String)
-        : selectedNodeId
-          ? [selectedNodeId]
-          : [];
+      selected.size > 0 ? Array.from(selected).map(String) : selectedNodeId ? [selectedNodeId] : [];
     if (ids.length === 0) return { nodes: [], ids: [] };
 
     const graphState = getGraphState();
@@ -158,10 +158,14 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
         nodeIds: (g!.nodeIds ?? []).map((nid) => String(nid)).filter(Boolean),
         disabled: Boolean(g!.disabled),
         minimized: Boolean(g!.minimized),
+        managerId: typeof g!.managerId === 'string' && g!.managerId ? g!.managerId : null,
+        transferable: Boolean(g!.transferable),
       }));
 
     const graphState = getGraphState();
-    const nodeById = new Map((graphState.nodes ?? []).map((node) => [String(node.id), node] as const));
+    const nodeById = new Map(
+      (graphState.nodes ?? []).map((node) => [String(node.id), node] as const)
+    );
 
     const nodeIdSet = new Set<string>();
     for (const g of groups) {
@@ -179,7 +183,9 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
     const nodeIds = Array.from(nodeIdSet);
     const nodes = nodeIds.map((id) => nodeById.get(id)).filter(Boolean) as NodeInstance[];
 
-    const clonedNodes = nodes.map((node) => cloneNodeInstance(node, adapter.getNodePosition(String(node.id))));
+    const clonedNodes = nodes.map((node) =>
+      cloneNodeInstance(node, adapter.getNodePosition(String(node.id)))
+    );
     const connections = collectCopyConnections(nodeIds);
 
     return { rootGroupId, groups, nodes: clonedNodes, nodeIds, connections };
@@ -250,8 +256,12 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
       const newGroupId = () => `group:${crypto.randomUUID?.() ?? Date.now()}`;
       for (const g of clipboardGroups) groupIdMap.set(String(g.id), newGroupId());
 
-      const placementNodes = clipboardNodes.filter((node) => !isGroupPortNodeType(String(node.type ?? '')));
-      const positions = (placementNodes.length > 0 ? placementNodes : clipboardNodes).map((node) => node.position);
+      const placementNodes = clipboardNodes.filter(
+        (node) => !isGroupPortNodeType(String(node.type ?? ''))
+      );
+      const positions = (placementNodes.length > 0 ? placementNodes : clipboardNodes).map(
+        (node) => node.position
+      );
 
       const minX = Math.min(...positions.map((p) => p.x));
       const minY = Math.min(...positions.map((p) => p.y));
@@ -325,9 +335,7 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
 
         const nodeIds = Array.from(
           new Set(
-            (g.nodeIds ?? [])
-              .map((nid) => idMap.get(String(nid)))
-              .filter(Boolean) as string[]
+            (g.nodeIds ?? []).map((nid) => idMap.get(String(nid))).filter(Boolean) as string[]
           )
         );
 
@@ -338,6 +346,8 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
           nodeIds,
           disabled: Boolean(g.disabled),
           minimized: Boolean(g.minimized),
+          managerId: typeof g.managerId === 'string' && g.managerId ? g.managerId : null,
+          transferable: Boolean(g.transferable),
           runtimeActive: true,
         };
       });
@@ -358,7 +368,9 @@ export function createClipboardController(opts: CreateClipboardControllerOptions
         return depth;
       };
 
-      const newGroups = [...newGroupsRaw].sort((a, b) => getDepth(String(a.id)) - getDepth(String(b.id)));
+      const newGroups = [...newGroupsRaw].sort(
+        (a, b) => getDepth(String(a.id)) - getDepth(String(b.id))
+      );
       groupController.appendGroups(newGroups);
 
       const rootNewId = groupIdMap.get(groupRoot);

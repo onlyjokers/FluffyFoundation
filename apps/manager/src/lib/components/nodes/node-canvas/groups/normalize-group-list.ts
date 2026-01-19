@@ -20,6 +20,9 @@ export const normalizeGroupList = (groups: NodeGroup[]): NodeGroup[] => {
       ),
       disabled: Boolean(group?.disabled),
       minimized: Boolean(group?.minimized),
+      managerId:
+        typeof group?.managerId === 'string' && group.managerId ? String(group.managerId) : null,
+      transferable: Boolean(group?.transferable),
       runtimeActive:
         typeof group?.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
     };

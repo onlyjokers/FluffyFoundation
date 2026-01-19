@@ -72,7 +72,10 @@ function parseNodeGroups(value: unknown): NodeGroup[] {
     const nodeIds = nodeIdsRaw.map((v) => String(v)).filter(Boolean);
     const disabled = Boolean(item.disabled);
     const minimized = Boolean(item.minimized);
-    groups.push({ id, parentId, name, nodeIds, disabled, minimized });
+    const managerIdRaw = item.managerId;
+    const managerId = typeof managerIdRaw === 'string' && managerIdRaw ? managerIdRaw : null;
+    const transferable = Boolean(item.transferable);
+    groups.push({ id, parentId, name, nodeIds, disabled, minimized, managerId, transferable });
   }
   return groups;
 }
@@ -148,6 +151,8 @@ function remapImportedGroups(sourceGroups: NodeGroup[], nodeIdMap: Map<string, s
       nodeIds: uniqueNodeIds,
       disabled: Boolean(group.disabled),
       minimized: Boolean(group.minimized),
+      managerId: typeof group.managerId === 'string' && group.managerId ? group.managerId : null,
+      transferable: Boolean(group.transferable),
     });
   }
 
@@ -167,6 +172,8 @@ function remapImportedGroups(sourceGroups: NodeGroup[], nodeIdMap: Map<string, s
     nodeIds: (group.nodeIds ?? []).map(String),
     disabled: Boolean(group.disabled),
     minimized: Boolean(group.minimized),
+    managerId: typeof group.managerId === 'string' && group.managerId ? group.managerId : null,
+    transferable: Boolean(group.transferable),
   }));
 
   // Ensure parent groups include all descendant nodes so disabled propagation and bounds match expectations.
@@ -248,6 +255,8 @@ export function createFileActions(opts: FileActionsOptions) {
       nodeIds: (g.nodeIds ?? []).map((id) => String(id)).filter(Boolean),
       disabled: Boolean(g.disabled),
       minimized: Boolean(g.minimized),
+      managerId: typeof g.managerId === 'string' && g.managerId ? g.managerId : null,
+      transferable: Boolean(g.transferable),
     }));
     const ui: NodeGraphUiV1 | undefined =
       collapsedNodeIds.length > 0

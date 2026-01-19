@@ -139,6 +139,8 @@ test('handleDenodalizeGroup ignores non-object graph nodes', () => {
       nodeIds: [],
       disabled: false,
       minimized: false,
+      managerId: null,
+      transferable: false,
     },
   ] as import('../groups/types').NodeGroup[]);
 

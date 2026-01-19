@@ -130,6 +130,8 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
             nodeIds: nodeIdsInGroup,
             disabled: !state.manualGate,
             minimized: false,
+            managerId: null,
+            transferable: false,
           },
         ];
         groupsChanged = true;
@@ -230,6 +232,8 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
         nodeIds: materializedIdsInGroup,
         disabled: !state.manualGate,
         minimized: false,
+        managerId: null,
+        transferable: false,
       },
     ]);
 

@@ -41,6 +41,7 @@
   - `apps/manager/src/lib/components/nodes/node-canvas/utils/group-port-utils.ts`
 
   主文件 2295 → 1573 行。
+
 - [x] Phase 0 格式化：运行 `pnpm exec prettier --write apps/manager/src/lib/components/nodes/NodeCanvas.svelte`（修复 tab/space 混用，避免 eslint `no-mixed-spaces-and-tabs`）。
 - [x] Phase 0 验证：运行 `pnpm --filter @shugu/manager run lint`（0 errors；warnings 为历史问题 + TS 版本提示）。
 - [x] Phase 0 Transport：新增 Display transport 抽象骨架 `apps/manager/src/lib/display/display-transport.ts`（local MessagePort bridge 优先；未 ready 时 server `group=display` fallback）。
@@ -153,7 +154,7 @@
     - Manager：SceneControl 改为多场景 toggle → 发送 `visualScenes`；bootstrap 改为 `scenes[]`。
     - Client：以 `visualScenes` 为唯一输入，移除 `currentScene`/legacy handlers；启动配置改为应用 `scenes[]`。
     - Visual plugins：SceneManager 移除 `switchTo/getCurrentScene`（只保留 multi-scene）。
-    - Node/Core：删除 legacy scene processor nodes + Manager specs（proc-visual-scene-*）。
+    - Node/Core：删除 legacy scene processor nodes + Manager specs（proc-visual-scene-\*）。
   - [x] 固定动作（batch after-delete gates）：
     - `pnpm guard:deps` ✅（`[deps-guard] ok (554 files scanned)`）
     - `pnpm lint` ✅（0 errors；63 warnings 为历史债）
@@ -200,6 +201,7 @@
     - 结果（2026-01-10）：Registry MIDI 模板导入/导出 ✅；Node Graph 基本操作/Deploy ✅；控制链路 ✅。
 
 ### 2026-01-15
+
 
 - [x] Node Graph 架构收敛（worktree：node-graph-architecture）：
   - [x] 结构拆分：renderer registry、lifecycle cleanup、custom-node handlers、group domain handlers、runtime init（保持行为不变，仅拆分/集中 wiring）。
@@ -446,8 +448,44 @@
   - `apps/manager/src/lib/nodes/custom-nodes/store.ts`：Custom Node process 以 `inputs.gate` 作为唯一 gate（连线覆盖手动）。
   - `apps/manager/src/lib/components/nodes/NodeCanvas.svelte`：Nodalize/Collapse/Group toggle 时同步 `gate` 输入值，确保手动 gate 一致。
 
+
 - [x] Phase 2.X 节点图渐进式解耦回归（手动）：完成（2026-01-15）
   - `pnpm lint` ✅
   - `pnpm --filter @shugu/node-core test` ✅
   - `pnpm test:node-canvas` ✅
   - Phase 1 手动回归：已执行（按 `phase1_regression_playbook.md`）
+
+### 2026-01-19
+
+- [ ] Phase 3：Root/Manager 形态重构（进行中，未提交）
+  - [x] Routing split（同一 app 内分离 `/root` 与 `/manager`）：
+    - `apps/manager/src/routes/root/+page.svelte`：Root editor（NodeCanvasRenderer）
+    - `apps/manager/src/routes/manager/+page.svelte`：Manager console（轻量页面）
+    - `apps/manager/src/routes/+page.svelte`：`/` → `/manager` redirect
+  - [x] Layout gating：把登录/连接 gating 统一收敛到 layout
+    - `apps/manager/src/routes/+layout.svelte`：login + connect gating；连接成功后 `<slot />`
+    - `apps/manager/src/routes/+layout.ts`：`ssr = false`，`prerender = false`
+  - [x] Route options：
+    - `apps/manager/src/routes/root/+page.ts`：`ssr = false`，`prerender = false`
+    - `apps/manager/src/routes/manager/+page.ts`：`ssr = false`，`prerender = false`
+  - [x] Base path：移除 SvelteKit `paths.base='/manager'`，routes 以真实路径工作
+    - `apps/manager/svelte.config.js`：`paths.base: ''`
+  - [x] Group 元数据补齐（managerId + transferable）+ 持久化 + UI：
+    - 类型：`apps/manager/src/lib/components/nodes/node-canvas/groups/types.ts`
+    - 规范化：`apps/manager/src/lib/components/nodes/node-canvas/groups/normalize-group-list.ts`（含测试更新）
+    - 持久化：`apps/manager/src/lib/project/projectManager.ts`、`apps/manager/src/lib/components/nodes/node-canvas/io/file-actions.ts`
+    - Clipboard：`apps/manager/src/lib/components/nodes/node-canvas/controllers/clipboard-controller.ts`
+    - Expand：`apps/manager/src/lib/components/nodes/node-canvas/custom-nodes/custom-node-expansion.ts`
+    - UI + wiring：`apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte`、`apps/manager/src/lib/components/nodes/node-canvas/controllers/group-controller.ts`、`apps/manager/src/lib/components/nodes/NodeCanvas.svelte`
+  - [x] Manager performance console（Phase 3 控件面板，保持与 editor 代码隔离）：
+    - 新增：`apps/manager/src/lib/components/PerformanceConsole.svelte`
+    - `/manager` route 渲染该组件（不引入 NodeCanvas/Rete）
+
+- [x] Phase 3 验证（2026-01-19）：
+  - `pnpm --filter @shugu/manager run check` ✅（0 errors；warnings 为历史债）
+  - `pnpm --filter @shugu/manager run build` ✅
+    - Client build：存在巨大 editor chunk（`nodes/4.*.js` ~730KB），用于 Root editor
+    - Server build：`entries/pages/root/_page.svelte.js` ~1040KB；`entries/pages/manager/_page.svelte.js` ~72KB
+    - Manifest 证据：
+      - `apps/manager/.svelte-kit-manager/output/client/.vite/manifest.json`
+      - `apps/manager/.svelte-kit-manager/output/server/.vite/manifest.json`

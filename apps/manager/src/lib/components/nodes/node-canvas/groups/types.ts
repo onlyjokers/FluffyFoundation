@@ -5,5 +5,7 @@ export type NodeGroup = {
   nodeIds: string[];
   disabled: boolean;
   minimized: boolean;
+  managerId: string | null;
+  transferable: boolean;
   runtimeActive?: boolean;
 };

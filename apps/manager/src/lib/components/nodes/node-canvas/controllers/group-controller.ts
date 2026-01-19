@@ -68,6 +68,8 @@ export type GroupController = {
   disassembleGroup: (groupId: string) => void;
   renameGroup: (groupId: string, name: string) => void;
   toggleGroupEditMode: (groupId: string) => void;
+  setManagerId: (groupId: string, managerId: string | null) => void;
+  setTransferable: (groupId: string, transferable: boolean) => void;
   autoAddNodeToGroupFromPosition: (nodeId: string, graphPos: { x: number; y: number }) => void;
   autoAddNodeToGroupFromConnectDrop: (
     initialNodeId: string,
@@ -354,6 +356,8 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
         parentId,
         nodeIds: (group.nodeIds ?? []).map((nodeId) => String(nodeId)),
         minimized: Boolean(group.minimized),
+        managerId: typeof group.managerId === 'string' && group.managerId ? group.managerId : null,
+        transferable: Boolean(group.transferable),
       };
       byId.set(id, normalized);
       if (!parentId) continue;
@@ -1243,6 +1247,8 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       nodeIds: Array.from(ids),
       disabled: false,
       minimized: false,
+      managerId: null,
+      transferable: false,
       runtimeActive: true,
     };
 
@@ -1372,6 +1378,39 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
 
     editModeGroupId.set(groupId);
     clearGroupEditToast();
+    opts.requestLoopFramesUpdate();
+  };
+
+  const setManagerId = (groupId: string, managerId: string | null) => {
+    const id = String(groupId ?? '');
+    if (!id) return;
+    const nextManagerId =
+      typeof managerId === 'string' && managerId.trim() ? managerId.trim() : null;
+    const group = get(nodeGroups).find((g) => String(g.id) === id);
+    if (!group) return;
+
+    if (group.managerId === nextManagerId) return;
+
+    nodeGroups.set(
+      get(nodeGroups).map((g) => (String(g.id) === id ? { ...g, managerId: nextManagerId } : g))
+    );
+    opts.requestLoopFramesUpdate();
+  };
+
+  const setTransferable = (groupId: string, transferable: boolean) => {
+    const id = String(groupId ?? '');
+    if (!id) return;
+    const group = get(nodeGroups).find((g) => String(g.id) === id);
+    if (!group) return;
+
+    const nextTransferable = Boolean(transferable);
+    if (Boolean(group.transferable) === nextTransferable) return;
+
+    nodeGroups.set(
+      get(nodeGroups).map((g) =>
+        String(g.id) === id ? { ...g, transferable: nextTransferable } : g
+      )
+    );
     opts.requestLoopFramesUpdate();
   };
 
@@ -1898,6 +1937,8 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     disassembleGroup,
     renameGroup,
     toggleGroupEditMode,
+    setManagerId,
+    setTransferable,
     autoAddNodeToGroupFromPosition,
     autoAddNodeToGroupFromConnectDrop,
     handleDroppedNodesAfterDrag,

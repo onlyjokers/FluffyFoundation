@@ -10,6 +10,8 @@
       name?: string;
       disabled?: boolean;
       minimized?: boolean;
+      managerId?: string | null;
+      transferable?: boolean;
       runtimeActive?: boolean;
     };
     left: number;
@@ -36,12 +38,17 @@
   export let onCollapseCustomNode: (groupId: string) => void = () => undefined;
   export let onDisassemble: (groupId: string) => void = () => undefined;
   export let onRename: (groupId: string, name: string) => void = () => undefined;
+  export let onSetManagerId: (groupId: string, managerId: string | null) => void = () => undefined;
+  export let onSetTransferable: (groupId: string, transferable: boolean) => void = () => undefined;
   export let onHeaderPointerDown: (groupId: string, event: PointerEvent) => void = () => undefined;
   export let edgeHighlight: { groupId: string; side: 'input' | 'output' } | null = null;
 
   let editingGroupId: string | null = null;
   let draftName = '';
   let nameInputEl: HTMLInputElement | null = null;
+
+  let draftManagerId = '';
+
   let actionCompactByGroupId: Record<string, boolean> = {};
   let k = 1;
   let tx = 0;
@@ -51,10 +58,10 @@
   $: tx = Number(areaTransform?.tx ?? 0) || 0;
   $: ty = Number(areaTransform?.ty ?? 0) || 0;
 
-
   async function startEdit(group: GroupFrame['group']) {
     editingGroupId = String(group?.id ?? '');
     draftName = String(group?.name ?? 'Group');
+    draftManagerId = typeof group?.managerId === 'string' ? group.managerId : '';
     await tick();
     nameInputEl?.focus?.();
     nameInputEl?.select?.();
@@ -64,11 +71,26 @@
     if (!editingGroupId) return;
     const trimmed = draftName.trim();
     if (trimmed) onRename(editingGroupId, trimmed);
+
+    const managerId = draftManagerId.trim();
+    onSetManagerId(editingGroupId, managerId ? managerId : null);
+
     editingGroupId = null;
   }
 
   function cancelEdit() {
     editingGroupId = null;
+  }
+
+  function setTransferableForGroup(groupId: string, next: boolean) {
+    const id = String(groupId ?? '');
+    if (!id) return;
+    onSetTransferable(id, Boolean(next));
+  }
+
+  function handleTransferableChange(groupId: string, event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    setTransferableForGroup(groupId, Boolean(input?.checked));
   }
 
   function handleActionsWheel(event: WheelEvent) {
@@ -195,7 +217,10 @@
 </script>
 
 {#if frames.length > 0}
-  <div class="group-frame-layer" style="transform: translate({tx}px, {ty}px) scale({k}); transform-origin: 0 0;">
+  <div
+    class="group-frame-layer"
+    style="transform: translate({tx}px, {ty}px) scale({k}); transform-origin: 0 0;"
+  >
     {#each frames as frame (frame.group.id)}
       {@const group = frame.group}
       {@const isEditing = editModeGroupId === group.id}
@@ -216,57 +241,89 @@
               ? 'Input gate closed'
               : 'Parent gate closed'
           : 'Gate open'}
-        {#if !isMinimized}
-          <div
-            class="group-frame {gateClosed ? 'disabled' : ''} {isEditing ? 'editing' : ''} {isSelected ? 'selected' : ''} {highlightSide === 'input' ? 'edge-highlight-input' : ''} {highlightSide === 'output' ? 'edge-highlight-output' : ''}"
-            style="left: {frame.left}px; top: {frame.top}px; width: {frame.width}px; height: {frame.height}px;"
-          >
-            <div
-              class="group-frame-header"
-            >
-              <div class="group-frame-title-row">
-                <div
-                  class="group-frame-gate-sockets"
-                  aria-hidden="true"
-                  use:mountGateSockets={groupGateNodeIdByGroupId?.get(String(group.id)) ?? null}
-                />
-                <button
-                  type="button"
-                  class="group-frame-drag-handle"
-                  title="Drag frame"
-                  aria-label="Drag frame"
-                  on:pointerdown|stopPropagation={(event) => onHeaderPointerDown(String(group.id), event)}
-                >
-                  ::
-                </button>
-            {#if editingGroupId === group.id}
-              <div class="group-frame-title editing">
-                <input
-                  class="group-frame-title-input"
-                  bind:this={nameInputEl}
-                  bind:value={draftName}
-                  on:pointerdown|stopPropagation
-                  on:keydown={(e) => {
-                    if (e.key === 'Enter') commitEdit();
-                    if (e.key === 'Escape') cancelEdit();
-                  }}
-                  on:blur={commitEdit}
-                />
-              </div>
+      {#if !isMinimized}
+        <div
+          class="group-frame {gateClosed ? 'disabled' : ''} {isEditing ? 'editing' : ''} {isSelected
+            ? 'selected'
+            : ''} {highlightSide === 'input' ? 'edge-highlight-input' : ''} {highlightSide ===
+          'output'
+            ? 'edge-highlight-output'
+            : ''}"
+          style="left: {frame.left}px; top: {frame.top}px; width: {frame.width}px; height: {frame.height}px;"
+        >
+          <div class="group-frame-header">
+            <div class="group-frame-title-row">
+              <div
+                class="group-frame-gate-sockets"
+                aria-hidden="true"
+                use:mountGateSockets={groupGateNodeIdByGroupId?.get(String(group.id)) ?? null}
+              />
+              <button
+                type="button"
+                class="group-frame-drag-handle"
+                title="Drag frame"
+                aria-label="Drag frame"
+                on:pointerdown|stopPropagation={(event) =>
+                  onHeaderPointerDown(String(group.id), event)}
+              >
+                ::
+              </button>
+              {#if editingGroupId === group.id}
+                <div class="group-frame-title editing">
+                  <input
+                    class="group-frame-title-input"
+                    bind:this={nameInputEl}
+                    bind:value={draftName}
+                    on:pointerdown|stopPropagation
+                    on:keydown={(e) => {
+                      if (e.key === 'Enter') commitEdit();
+                      if (e.key === 'Escape') cancelEdit();
+                    }}
+                    on:blur={commitEdit}
+                  />
+                </div>
+                <div class="group-frame-policy" on:pointerdown|stopPropagation>
+                  <label
+                    class="group-frame-policy-item"
+                    title="Fixed manager assignment (pre-show)"
+                  >
+                    <span class="group-frame-policy-label">Manager</span>
+                    <input
+                      class="group-frame-policy-input"
+                      type="text"
+                      placeholder="(unassigned)"
+                      bind:value={draftManagerId}
+                      on:keydown={(e) => {
+                        if (e.key === 'Enter') commitEdit();
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                    />
+                  </label>
+
+                  <label class="group-frame-policy-item" title="Allow client transfer">
+                    <span class="group-frame-policy-label">Transfer</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(group.transferable)}
+                      on:change={(e) => handleTransferableChange(group.id, e)}
+                    />
+                  </label>
+                </div>
               {:else}
                 <button
                   type="button"
                   class="group-frame-title"
-                  on:pointerdown|stopPropagation={(event) => onHeaderPointerDown(String(group.id), event)}
+                  on:pointerdown|stopPropagation={(event) =>
+                    onHeaderPointerDown(String(group.id), event)}
                   on:click={() => startEdit(group)}
                   on:keydown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') startEdit(group);
                   }}
-                title={gateReason}
-              >
-                <span class="group-frame-title-name">{group.name ?? 'Group'}</span>
-              </button>
-            {/if}
+                  title={gateReason}
+                >
+                  <span class="group-frame-title-name">{group.name ?? 'Group'}</span>
+                </button>
+              {/if}
             </div>
             <div
               class="group-frame-actions"
@@ -337,17 +394,19 @@
                 title={group.disabled ? 'Activate group' : 'Deactivate group'}
                 on:click={() => onToggleDisabled(group.id)}
               >
-                {#if isActionsCompact}⏻{:else}{group.disabled ? 'Activate group' : 'Deactivate group'}{/if}
+                {#if isActionsCompact}⏻{:else}{group.disabled
+                    ? 'Activate group'
+                    : 'Deactivate group'}{/if}
               </Button>
             </div>
           </div>
 
-        {#if toastMessage}
-          <div class="group-frame-toast" aria-live="polite">
-            {toastMessage}
-          </div>
-        {/if}
-      </div>
+          {#if toastMessage}
+            <div class="group-frame-toast" aria-live="polite">
+              {toastMessage}
+            </div>
+          {/if}
+        </div>
       {/if}
     {/each}
   </div>
@@ -590,6 +649,46 @@
     cursor: text;
     user-select: text;
     -webkit-user-select: text;
+  }
+
+  .group-frame-policy {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 10px;
+    pointer-events: auto;
+    min-width: 0;
+  }
+
+  .group-frame-policy-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(2, 6, 23, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 0 10px;
+    height: 26px;
+    backdrop-filter: blur(12px);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .group-frame-policy-label {
+    color: rgba(148, 163, 184, 0.9);
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+
+  .group-frame-policy-input {
+    width: min(160px, 28vw);
+    border: none;
+    outline: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11px;
   }
 
   .group-frame-actions {
