@@ -1,22 +1,27 @@
 import {
-    BaseMessage,
-    ControlMessage,
-    SensorDataMessage,
-    MediaMetaMessage,
-    PluginControlMessage,
-    SystemMessage,
-    Message,
-    MessageWithoutServerTimestamp,
-    PROTOCOL_VERSION,
-    TargetSelector,
-    ControlAction,
-    ControlPayload,
-    SensorType,
-    SensorPayload,
-    MediaType,
-    PluginId,
-    PluginCommand,
-    SystemAction,
+  BaseMessage,
+  ControlMessage,
+  SensorDataMessage,
+  MediaMetaMessage,
+  PluginControlMessage,
+  SystemMessage,
+  Message,
+  MessageWithoutServerTimestamp,
+  PROTOCOL_VERSION,
+  TargetSelector,
+  ControlAction,
+  ControlPayload,
+  SensorType,
+  SensorPayload,
+  MediaType,
+  PluginId,
+  PluginCommand,
+  SystemAction,
+  SYSTEM_SCOPE_GROUP_ID,
+  ScopedMessageMeta,
+  type ActorId,
+  type ActorRole,
+  type ScopeGroupId,
 } from './types.js';
 export { matchesTarget } from './helpers/matches-target.js';
 
@@ -24,128 +29,146 @@ export { matchesTarget } from './helpers/matches-target.js';
  * Get current timestamp in milliseconds
  */
 export function now(): number {
-    return Date.now();
+  return Date.now();
 }
 
 /**
  * Create a control message
  */
 export function createControlMessage(
-    target: TargetSelector,
-    action: ControlAction,
-    payload: ControlPayload,
-    executeAt?: number
+  meta: { actorId: ActorId; actorRole: ActorRole; scopeGroupId: ScopeGroupId },
+  target: TargetSelector,
+  action: ControlAction,
+  payload: ControlPayload,
+  executeAt?: number
 ): Omit<ControlMessage, 'serverTimestamp'> {
-    return {
-        type: 'control' as const,
-        version: PROTOCOL_VERSION,
-        from: 'manager',
-        target,
-        action,
-        payload,
-        executeAt,
-        clientTimestamp: now(),
-    };
+  return {
+    type: 'control' as const,
+    version: PROTOCOL_VERSION,
+    from: meta.actorRole,
+    actorId: meta.actorId,
+    actorRole: meta.actorRole,
+    scopeGroupId: meta.scopeGroupId,
+    target,
+    action,
+    payload,
+    executeAt,
+    clientTimestamp: now(),
+  };
 }
 
 /**
  * Create a control message sent by the server (internal control/gating).
  */
 export function createServerControlMessage(
-    target: TargetSelector,
-    action: ControlAction,
-    payload: ControlPayload,
-    executeAt?: number
+  target: TargetSelector,
+  action: ControlAction,
+  payload: ControlPayload,
+  executeAt?: number
 ): Omit<ControlMessage, 'serverTimestamp'> {
-    return {
-        type: 'control' as const,
-        version: PROTOCOL_VERSION,
-        from: 'server',
-        target,
-        action,
-        payload,
-        executeAt,
-        clientTimestamp: now(),
-    };
+  return {
+    type: 'control' as const,
+    version: PROTOCOL_VERSION,
+    from: 'server',
+    actorId: 'server',
+    actorRole: 'root',
+    scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+    target,
+    action,
+    payload,
+    executeAt,
+    clientTimestamp: now(),
+  };
 }
 
 /**
  * Create a sensor data message
  */
 export function createSensorDataMessage(
-    clientId: string,
-    sensorType: SensorType,
-    payload: SensorPayload
+  clientId: string,
+  sensorType: SensorType,
+  payload: SensorPayload
 ): Omit<SensorDataMessage, 'serverTimestamp'> {
-    return {
-        type: 'data' as const,
-        version: PROTOCOL_VERSION,
-        from: 'client',
-        clientId,
-        sensorType,
-        payload,
-        clientTimestamp: now(),
-    };
+  return {
+    type: 'data' as const,
+    version: PROTOCOL_VERSION,
+    from: 'client',
+    actorId: clientId,
+    actorRole: 'client',
+    scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+    clientId,
+    sensorType,
+    payload,
+    clientTimestamp: now(),
+  };
 }
 
 /**
  * Create a media metadata message
  */
 export function createMediaMetaMessage(
-    target: TargetSelector,
-    mediaType: MediaType,
-    url: string,
-    executeAt: number,
-    options?: MediaMetaMessage['options']
+  meta: { actorId: ActorId; actorRole: ActorRole; scopeGroupId: ScopeGroupId },
+  target: TargetSelector,
+  mediaType: MediaType,
+  url: string,
+  executeAt: number,
+  options?: MediaMetaMessage['options']
 ): Omit<MediaMetaMessage, 'serverTimestamp'> {
-    return {
-        type: 'media' as const,
-        version: PROTOCOL_VERSION,
-        from: 'manager',
-        target,
-        mediaType,
-        url,
-        executeAt,
-        options,
-        clientTimestamp: now(),
-    };
+  return {
+    type: 'media' as const,
+    version: PROTOCOL_VERSION,
+    from: meta.actorRole,
+    actorId: meta.actorId,
+    actorRole: meta.actorRole,
+    scopeGroupId: meta.scopeGroupId,
+    target,
+    mediaType,
+    url,
+    executeAt,
+    options,
+    clientTimestamp: now(),
+  };
 }
 
 /**
  * Create a plugin control message
  */
 export function createPluginControlMessage(
-    target: TargetSelector,
-    pluginId: PluginId,
-    command: PluginCommand,
-    payload?: Record<string, unknown>
+  meta: { actorId: ActorId; actorRole: ActorRole; scopeGroupId: ScopeGroupId },
+  target: TargetSelector,
+  pluginId: PluginId,
+  command: PluginCommand,
+  payload?: Record<string, unknown>
 ): Omit<PluginControlMessage, 'serverTimestamp'> {
-    return {
-        type: 'plugin' as const,
-        version: PROTOCOL_VERSION,
-        from: 'manager',
-        target,
-        pluginId,
-        command,
-        payload,
-        clientTimestamp: now(),
-    };
+  return {
+    type: 'plugin' as const,
+    version: PROTOCOL_VERSION,
+    from: meta.actorRole,
+    actorId: meta.actorId,
+    actorRole: meta.actorRole,
+    scopeGroupId: meta.scopeGroupId,
+    target,
+    pluginId,
+    command,
+    payload,
+    clientTimestamp: now(),
+  };
 }
 
 /**
  * Create a system message
  */
 export function createSystemMessage(
-    action: SystemAction,
-    payload: SystemMessage['payload']
+  action: SystemAction,
+  payload: SystemMessage['payload']
 ): Omit<SystemMessage, 'serverTimestamp'> {
-    return {
-        type: 'system' as const,
-        version: PROTOCOL_VERSION,
-        action,
-        payload,
-        clientTimestamp: now(),
-    };
+  return {
+    type: 'system' as const,
+    version: PROTOCOL_VERSION,
+    action,
+    payload,
+    clientTimestamp: now(),
+  };
 }
 
 // Type guards
@@ -154,100 +177,109 @@ export function createSystemMessage(
  * Check if a message is a ControlMessage
  */
 export function isControlMessage(msg: Message): msg is ControlMessage {
-    return msg.type === 'control';
+  return msg.type === 'control';
 }
 
 /**
  * Check if a message is a SensorDataMessage
  */
 export function isSensorDataMessage(msg: Message): msg is SensorDataMessage {
-    return msg.type === 'data';
+  return msg.type === 'data';
 }
 
 /**
  * Check if a message is a MediaMetaMessage
  */
 export function isMediaMetaMessage(msg: Message): msg is MediaMetaMessage {
-    return msg.type === 'media';
+  return msg.type === 'media';
 }
 
 /**
  * Check if a message is a PluginControlMessage
  */
 export function isPluginControlMessage(msg: Message): msg is PluginControlMessage {
-    return msg.type === 'plugin';
+  return msg.type === 'plugin';
 }
 
 /**
  * Check if a message is a SystemMessage
  */
 export function isSystemMessage(msg: Message): msg is SystemMessage {
-    return msg.type === 'system';
+  return msg.type === 'system';
 }
 
 /**
  * Create target selector for all clients
  */
 export function targetAll(): TargetSelector {
-    return { mode: 'all' };
+  return { mode: 'all' };
 }
 
 /**
  * Create target selector for specific client IDs
  */
 export function targetClients(ids: string[]): TargetSelector {
-    return { mode: 'clientIds', ids };
+  return { mode: 'clientIds', ids };
 }
 
 /**
  * Create target selector for a group
  */
 export function targetGroup(groupId: string): TargetSelector {
-    return { mode: 'group', groupId };
+  return { mode: 'group', groupId };
 }
 
 /**
  * Create flashlight control payload
  */
 export function flashlightPayload(
-    mode: 'off' | 'on' | 'blink',
-    options?: { frequency?: number; dutyCycle?: number }
+  mode: 'off' | 'on' | 'blink',
+  options?: { frequency?: number; dutyCycle?: number }
 ): ControlPayload {
-    return {
-        mode,
-        ...options,
-    };
+  return {
+    mode,
+    ...options,
+  };
 }
 
 /**
  * Create vibration pattern payload
  */
 export function vibratePayload(pattern: number[], repeat?: number): ControlPayload {
-    return { pattern, repeat };
+  return { pattern, repeat };
 }
 
 /**
  * Add server timestamp to a message
  */
 export function addServerTimestamp<T extends Partial<BaseMessage>>(
-    msg: T,
-    serverTime: number
+  msg: T,
+  serverTime: number
 ): T & { serverTimestamp: number } {
-    return {
-        ...msg,
-        serverTimestamp: serverTime,
-    };
+  return {
+    ...msg,
+    serverTimestamp: serverTime,
+  };
 }
 
 /**
  * Validate message structure
  */
 export function isValidMessage(msg: unknown): msg is MessageWithoutServerTimestamp {
-    if (typeof msg !== 'object' || msg === null) return false;
-    const m = msg as Partial<MessageWithoutServerTimestamp>;
-    return (
-        typeof m.type === 'string' &&
-        ['control', 'data', 'media', 'system', 'plugin'].includes(m.type) &&
-        m.version === PROTOCOL_VERSION
-    );
+  if (typeof msg !== 'object' || msg === null) return false;
+  const m = msg as Partial<MessageWithoutServerTimestamp>;
+  if (typeof m.type !== 'string') return false;
+  if (!['control', 'data', 'media', 'system', 'plugin'].includes(m.type)) return false;
+  if (m.version !== PROTOCOL_VERSION) return false;
+
+  if (m.type === 'system') return true;
+
+  const meta = m as Partial<ScopedMessageMeta>;
+  if (typeof meta.actorId !== 'string' || !meta.actorId.trim()) return false;
+  if (meta.actorRole !== 'root' && meta.actorRole !== 'manager' && meta.actorRole !== 'client') {
+    return false;
+  }
+  if (typeof meta.scopeGroupId !== 'string' || !meta.scopeGroupId.trim()) return false;
+
+  return true;
 }

@@ -6,6 +6,8 @@
 // Export all types
 export * from './types.js';
 
+export { SYSTEM_SCOPE_GROUP_ID } from './types.js';
+
 // Export helpers
 export * from './helpers.js';
 

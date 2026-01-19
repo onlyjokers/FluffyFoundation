@@ -31,6 +31,7 @@ import {
   VisualSceneLayerItem,
   targetAll,
   targetClients,
+  SYSTEM_SCOPE_GROUP_ID,
 } from '@shugu/protocol';
 import { mergeControlPayload } from './payload-merge.js';
 
@@ -253,19 +254,32 @@ export class ManagerSDK {
     target: TargetSelector,
     action: ControlAction,
     payload: ControlPayload,
-    executeAt?: number
+    executeAt?: number,
+    scopeGroupId: string = SYSTEM_SCOPE_GROUP_ID
   ): void {
     if (!this.socket?.connected) return;
 
     // Avoid wrapping custom payloads (unknown semantics) unless it is already a control-batch.
     if (action === 'custom') {
       if (isControlBatchPayload(payload)) {
-        const message = createControlMessage(target, action, payload, executeAt);
+        const message = createControlMessage(
+          { actorId: this.state.managerId ?? 'manager', actorRole: 'manager', scopeGroupId },
+          target,
+          action,
+          payload,
+          executeAt
+        );
         this.socket.emit(SOCKET_EVENTS.MSG, message);
         return;
       }
 
-      const message = createControlMessage(target, action, payload, executeAt);
+      const message = createControlMessage(
+        { actorId: this.state.managerId ?? 'manager', actorRole: 'manager', scopeGroupId },
+        target,
+        action,
+        payload,
+        executeAt
+      );
       this.socket.emit(SOCKET_EVENTS.MSG, message);
       return;
     }
@@ -278,14 +292,25 @@ export class ManagerSDK {
    *
    * This is used to keep MIDI-driven updates in sync and reduce server message pressure.
    */
-  sendControlBatch(target: TargetSelector, items: ControlBatchItem[], executeAt?: number): void {
+  sendControlBatch(
+    target: TargetSelector,
+    items: ControlBatchItem[],
+    executeAt?: number,
+    scopeGroupId: string = SYSTEM_SCOPE_GROUP_ID
+  ): void {
     if (!this.socket?.connected) return;
     const payload: ControlBatchPayload = {
       kind: 'control-batch',
       items,
       ...(typeof executeAt === 'number' && Number.isFinite(executeAt) ? { executeAt } : {}),
     };
-    const message = createControlMessage(target, 'custom', payload, executeAt);
+    const message = createControlMessage(
+      { actorId: this.state.managerId ?? 'manager', actorRole: 'manager', scopeGroupId },
+      target,
+      'custom',
+      payload,
+      executeAt
+    );
     this.socket.emit(SOCKET_EVENTS.MSG, message);
   }
 
@@ -365,6 +390,11 @@ export class ManagerSDK {
       if (entry.items.length === 1) {
         const single = entry.items[0];
         const message = createControlMessage(
+          {
+            actorId: this.state.managerId ?? 'manager',
+            actorRole: 'manager',
+            scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+          },
           entry.target,
           single.action,
           single.payload,
@@ -417,7 +447,17 @@ export class ManagerSDK {
     payload?: Record<string, unknown>
   ): void {
     if (!this.socket?.connected) return;
-    const message = createPluginControlMessage(target, pluginId, command, payload);
+    const message = createPluginControlMessage(
+      {
+        actorId: this.state.managerId ?? 'manager',
+        actorRole: 'manager',
+        scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      },
+      target,
+      pluginId,
+      command,
+      payload
+    );
     this.socket.emit(SOCKET_EVENTS.MSG, message);
   }
 
@@ -432,7 +472,18 @@ export class ManagerSDK {
     options?: MediaMetaMessage['options']
   ): void {
     if (!this.socket?.connected) return;
-    const message = createMediaMetaMessage(target, mediaType, url, executeAt, options);
+    const message = createMediaMetaMessage(
+      {
+        actorId: this.state.managerId ?? 'manager',
+        actorRole: 'manager',
+        scopeGroupId: SYSTEM_SCOPE_GROUP_ID,
+      },
+      target,
+      mediaType,
+      url,
+      executeAt,
+      options
+    );
     this.socket.emit(SOCKET_EVENTS.MSG, message);
   }
 

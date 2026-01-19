@@ -1,7 +1,7 @@
 /**
  * Protocol Version
  */
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
 /**
  * Message types for categorizing different kinds of messages
@@ -11,6 +11,15 @@ export type MessageType = 'control' | 'data' | 'media' | 'system' | 'plugin';
 /**
  * Base message structure for all messages in the system
  */
+export type ActorRole = 'root' | 'manager' | 'client';
+
+export type ActorId = string;
+export type GroupId = string;
+
+export type ScopeGroupId = GroupId | typeof SYSTEM_SCOPE_GROUP_ID;
+
+export const SYSTEM_SCOPE_GROUP_ID = '__system__' as const;
+
 export interface BaseMessage {
   /** Server timestamp when message was processed */
   serverTimestamp: number;
@@ -21,6 +30,12 @@ export interface BaseMessage {
   /** Protocol version */
   version: typeof PROTOCOL_VERSION;
 }
+
+export type ScopedMessageMeta = {
+  actorId: ActorId;
+  actorRole: ActorRole;
+  scopeGroupId: ScopeGroupId;
+};
 
 /**
  * Target selector for specifying message recipients
@@ -289,9 +304,9 @@ export type ControlPayload = BaseControlPayload | ControlBatchPayload;
 /**
  * Control message sent from manager or server to control client behavior
  */
-export interface ControlMessage extends BaseMessage {
+export interface ControlMessage extends BaseMessage, ScopedMessageMeta {
   type: 'control';
-  from: 'manager' | 'server';
+  from: 'manager' | 'server' | 'client' | 'root';
   target: TargetSelector;
   action: ControlAction;
   /** Server timestamp when the action should be executed (for sync) */
@@ -362,7 +377,7 @@ export type SensorPayload =
 /**
  * Sensor data message from client to server/manager
  */
-export interface SensorDataMessage extends BaseMessage {
+export interface SensorDataMessage extends BaseMessage, ScopedMessageMeta {
   type: 'data';
   from: 'client';
   clientId: string;
@@ -378,9 +393,9 @@ export type MediaType = 'audio' | 'video';
 /**
  * Media metadata message for synchronized playback
  */
-export interface MediaMetaMessage extends BaseMessage {
+export interface MediaMetaMessage extends BaseMessage, ScopedMessageMeta {
   type: 'media';
-  from: 'manager';
+  from: 'manager' | 'client' | 'root';
   target: TargetSelector;
   mediaType: MediaType;
   url: string;
@@ -425,9 +440,9 @@ export type GraphChangePayload = {
 /**
  * Plugin control message
  */
-export interface PluginControlMessage extends BaseMessage {
+export interface PluginControlMessage extends BaseMessage, ScopedMessageMeta {
   type: 'plugin';
-  from: 'manager';
+  from: 'manager' | 'client' | 'root';
   target: TargetSelector;
   pluginId: PluginId;
   command: PluginCommand;

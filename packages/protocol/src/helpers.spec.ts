@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { createControlMessage } from './helpers.js';
+import { SYSTEM_SCOPE_GROUP_ID } from './types.js';
 import { matchesTarget } from './helpers/matches-target.js';
 
 test('matchesTarget returns true for all mode', () => {
@@ -17,7 +18,12 @@ test('matchesTarget matches group id', () => {
 });
 
 test('createControlMessage fills version + timestamp', () => {
-  const message = createControlMessage({ mode: 'all' }, 'vibrate', { durationMs: 100 });
-  assert.equal(message.version, 1);
+  const message = createControlMessage(
+    { actorId: 'm_test', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+    { mode: 'all' },
+    'vibrate',
+    { durationMs: 100 }
+  );
+  assert.equal(message.version, 2);
   assert.equal(typeof message.clientTimestamp, 'number');
 });
