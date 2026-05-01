@@ -11,6 +11,7 @@
   import NodeCanvasLayout from './node-canvas/ui/NodeCanvasLayout.svelte';
   import { reteRenderers } from './node-canvas/registry/renderers';
   import ExecutorLogsPanel from './node-canvas/ui/panels/ExecutorLogsPanel.svelte';
+  import ModelDistributionPanel from './node-canvas/ui/panels/ModelDistributionPanel.svelte';
   import GroupFramesOverlay from './node-canvas/ui/overlays/GroupFramesOverlay.svelte';
   import LoopFramesOverlay from './node-canvas/ui/overlays/LoopFramesOverlay.svelte';
   import MarqueeOverlay from './node-canvas/ui/overlays/MarqueeOverlay.svelte';
@@ -173,6 +174,7 @@
   let importTemplatesInputEl: HTMLInputElement | null = null;
   let importCustomNodeInputEl: HTMLInputElement | null = null;
   let isToolbarMenuOpen = false;
+  let isModelDistributionPanelOpen = false;
   let toolbarMenuWrap: HTMLDivElement | null = null;
   let numberParamOptions: { path: string; label: string }[] = [];
   let pickerElement: HTMLDivElement | null = null;
@@ -405,6 +407,9 @@
   const applyStoppedHighlights = (running: boolean) => patchRuntime.applyStoppedHighlights(running);
 
   const toggleExecutorLogs = () => patchRuntime.toggleExecutorLogs();
+  const toggleModelDistributionPanel = () => {
+    isModelDistributionPanelOpen = !isModelDistributionPanelOpen;
+  };
 
   const syncPatchVisualState = () => patchRuntime.syncPatchVisualState();
 
@@ -2388,6 +2393,7 @@
       onExportCustomNode={exportCustomNode}
       onImportTemplates={fileActions.importTemplates}
       onExportTemplates={fileActions.exportTemplates}
+      onToggleModelDistributionPanel={toggleModelDistributionPanel}
     />
   </svelte:fragment>
 
@@ -2415,6 +2421,10 @@
 
     {#if $canvasToast}
       <div class="canvas-toast" aria-live="polite">{$canvasToast}</div>
+    {/if}
+
+    {#if isModelDistributionPanelOpen}
+      <ModelDistributionPanel onClose={() => (isModelDistributionPanelOpen = false)} />
     {/if}
 
     <NodePickerOverlay

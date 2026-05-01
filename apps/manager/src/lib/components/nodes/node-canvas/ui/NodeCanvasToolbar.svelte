@@ -41,6 +41,7 @@
   export let onImportTemplates: () => void = () => undefined;
   export let onExportTemplates: () => void = () => undefined;
   export let onToggleExecutorLogs: () => void = () => undefined;
+  export let onToggleModelDistributionPanel: () => void = () => undefined;
 
   // Transient toolbar error pill: show on new error, auto-hide after 5s (or dismiss via X).
   let isErrorPillVisible = false;
@@ -242,6 +243,13 @@
               on:click={() => onMenuPick(onToggleExecutorLogs)}
             >
               📜 Executor Logs
+            </button>
+            <button
+              type="button"
+              class="toolbar-menu-item"
+              on:click={() => onMenuPick(onToggleModelDistributionPanel)}
+            >
+              🤖 Model Distribution
             </button>
             {#if showDevFlags}
               <div class="toolbar-menu-sep" />

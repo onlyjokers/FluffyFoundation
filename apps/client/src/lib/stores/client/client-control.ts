@@ -65,6 +65,8 @@ type WindowE2E = Window & {
   __SHUGU_E2E?: boolean;
   __SHUGU_E2E_LAST_COMMAND?: unknown;
   __SHUGU_E2E_COMMANDS?: unknown[];
+  __SHUGU_E2E_LAST_MANIFEST?: unknown;
+  __SHUGU_E2E_MANIFESTS?: unknown[];
 };
 
 function isControlBatchPayload(payload: ControlPayload): payload is ControlBatchPayload {
@@ -422,6 +424,20 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
           ? payloadRecord.updatedAt
           : undefined;
       if (!manifestId) return;
+
+      if (
+        import.meta.env.DEV &&
+        typeof window !== 'undefined' &&
+        (window as WindowE2E).__SHUGU_E2E
+      ) {
+        const win = window as WindowE2E;
+        const entry = { at: Date.now(), manifestId, assets, updatedAt };
+        win.__SHUGU_E2E_LAST_MANIFEST = entry;
+        const list = (win.__SHUGU_E2E_MANIFESTS ??= []);
+        list.push(entry);
+        if (list.length > 50) list.splice(0, list.length - 50);
+      }
+
       deps.getMultimediaCore()?.setAssetManifest({ manifestId, assets, updatedAt });
       return;
     }

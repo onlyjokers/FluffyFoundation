@@ -451,3 +451,34 @@
   - `pnpm --filter @shugu/node-core test` ✅
   - `pnpm test:node-canvas` ✅
   - Phase 1 手动回归：已执行（按 `phase1_regression_playbook.md`）
+
+### 2026-01-22
+
+- [x] Phase 8：AI 接口与模型资产化（Choice C：按 ownership 下发 model assets）
+  - [x] AssetKind 增加 `model`（server/manager/node graph UI）：
+    - Server Asset Service：`apps/server/src/assets/assets.types.ts` 新增 `AssetKind='model'`。
+    - Manager AssetsManager：新增 model 的 kind 推断（`mime=model/*` + 常见扩展名），并支持按 kind 过滤。
+    - Node Canvas asset picker：`asset-picker` 支持 `assetKind: 'model'`；选择值统一为 `asset:<id>`（兼容旧 bare id）。
+  - [x] Node/Core：新增 AI 节点 `ai-model-ref`（启用开关 + model asset picker；输出规范化 `asset:<id>`）。
+    - `packages/node-core/src/definitions/nodes/ai.ts`
+    - `apps/manager/src/lib/nodes/specs/ai-model-ref.json`
+  - [x] 新增 `packages/ai-core/`：AI runtime 抽象 + noop 实现（仅定义接口/状态；不引入重量依赖）。
+  - [x] Client NodeExecutor：AI runtime lifecycle（lazy create；stop/remove/destroy 时 dispose；未启用 = 0 overhead）。
+    - Telemetry：通过 custom sensor 上报 `{ kind:'node-executor', event:'ai', status:'enabled|disabled|error' }`。
+    - 注意：`ai-model-ref` 通常不连线（作为“全局开关”），因此 deploy/export 需要显式把它包含进 payload。
+  - [x] Root UI：Model Distribution 面板（Root 为每个 group 选择 model assets；localStorage 持久化）。
+    - `apps/manager/src/lib/stores/model-distribution.ts`
+    - `apps/manager/src/lib/components/nodes/node-canvas/ui/panels/ModelDistributionPanel.svelte`
+  - [x] Manifest 下发：Manager 按 client ownership 构建 per-client manifest（base manifest 排除 model；仅向当前 owner client 追加该 group 的 models）。
+    - `apps/manager/src/lib/nodes/asset-manifest.ts`
+    - Display bridge 兼容：`asset-manifest-store` 仍保留单份 global/base manifest（不含 model）。
+  - [x] Manager UI：ClientList 增加 AI pill（显示 enabled/disabled/error/unknown）。
+  - [x] 验证（2026-01-22）：
+    - `pnpm validate:node-specs` ✅（0 errors；warnings 为历史债）
+    - `pnpm test:node-canvas` ✅
+    - `pnpm lint` ✅（0 errors；warnings 为历史债）
+    - `pnpm build:all` ✅（warnings 为历史债）
+    - E2E（自动化）：`node scripts/e2e/model-distribution.mjs` ✅（连跑 2 次）
+      - 覆盖：上传 model(kind=model) → Root 分配到 group → offer/accept ownership transfer
+      - 断言：owner client manifest 包含 model；non-owner client manifest 不包含 model
+      - 覆盖：deploy 含 `ai-model-ref` 的 loop → manager AI telemetry 变为 enabled

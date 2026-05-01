@@ -50,7 +50,10 @@ function normalizeEtag(value: string | null | undefined): string | null {
   return unquoted || null;
 }
 
-type HeaderRequest = Pick<Request, 'header' | 'get' | 'protocol'> & { query?: unknown; body?: unknown };
+type HeaderRequest = Pick<Request, 'header' | 'get' | 'protocol'> & {
+  query?: unknown;
+  body?: unknown;
+};
 
 type UploadFile = {
   path: string;
@@ -75,7 +78,10 @@ function toContentDispositionFilename(originalName: string): string {
 }
 
 function toContentDispositionFilenameStar(originalName: string): string | null {
-  const base = path.basename(originalName || '').replace(/[\r\n"]/g, '_').trim();
+  const base = path
+    .basename(originalName || '')
+    .replace(/[\r\n"]/g, '_')
+    .trim();
   if (!base) return null;
   return `UTF-8''${encodeURIComponent(base)}`;
 }
@@ -118,7 +124,9 @@ export class AssetsController {
 
     const kindRaw = getBodyString(req.body, 'kind') ?? '';
     const kind: AssetKind | null =
-      kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
+      kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' || kindRaw === 'model'
+        ? kindRaw
+        : null;
 
     let result: { asset: AssetRecord; deduped: boolean };
     try {
@@ -148,7 +156,11 @@ export class AssetsController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: unknown, @Req() req: Request): Promise<{ asset: AssetRecord }> {
+  async update(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: Request
+  ): Promise<{ asset: AssetRecord }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken);
     const asset = await this.assets.updateAsset(id, body ?? {});
     if (!asset) throw new NotFoundException('asset not found');

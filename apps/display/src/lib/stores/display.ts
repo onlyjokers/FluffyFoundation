@@ -920,8 +920,15 @@ export function initializeDisplay(config: DisplayInitConfig): void {
 
     const type = (data as { type?: unknown }).type;
     if (type === 'shugu:display:control') {
-      const action = (data as { action?: unknown }).action;
-      const payload = (data as { payload?: unknown }).payload;
+      const message = (data as { message?: unknown }).message;
+      const action =
+        message && typeof message === 'object'
+          ? (message as { action?: unknown }).action
+          : (data as { action?: unknown }).action;
+      const payload =
+        message && typeof message === 'object'
+          ? (message as { payload?: unknown }).payload
+          : (data as { payload?: unknown }).payload;
       const executeAtLocalRaw = (data as { executeAtLocal?: unknown }).executeAtLocal;
       const executeAtLocal =
         typeof executeAtLocalRaw === 'number' && Number.isFinite(executeAtLocalRaw) ? executeAtLocalRaw : undefined;
@@ -931,9 +938,19 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     }
 
     if (type === 'shugu:display:plugin') {
-      const pluginId = (data as { pluginId?: unknown }).pluginId;
-      const command = (data as { command?: unknown }).command;
-      const payload = (data as { payload?: unknown }).payload;
+      const message = (data as { message?: unknown }).message;
+      const pluginId =
+        message && typeof message === 'object'
+          ? (message as { pluginId?: unknown }).pluginId
+          : (data as { pluginId?: unknown }).pluginId;
+      const command =
+        message && typeof message === 'object'
+          ? (message as { command?: unknown }).command
+          : (data as { command?: unknown }).command;
+      const payload =
+        message && typeof message === 'object'
+          ? (message as { payload?: unknown }).payload
+          : (data as { payload?: unknown }).payload;
 
       if (pluginId === 'node-executor' && typeof command === 'string') {
         if (command === 'graph-changes') {

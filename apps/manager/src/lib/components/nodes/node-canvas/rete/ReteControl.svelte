@@ -269,7 +269,7 @@
     const k = kind && typeof kind === 'string' ? kind : 'any';
     const filtered = k === 'any' ? list : list.filter((a) => String(a?.kind ?? '') === k);
     return filtered.map((a) => ({
-      value: String(a?.id ?? ''),
+      value: `asset:${String(a?.id ?? '')}`,
       label: `${String(a?.originalName ?? a?.id ?? '')}`,
     }));
   }
@@ -731,11 +731,12 @@
     fileInput?.click?.();
   }
 
-  function inferAssetKind(mimeType: string): 'audio' | 'image' | 'video' | null {
+  function inferAssetKind(mimeType: string): 'audio' | 'image' | 'video' | 'model' | null {
     const t = mimeType.toLowerCase();
     if (t.startsWith('audio/')) return 'audio';
     if (t.startsWith('image/')) return 'image';
     if (t.startsWith('video/')) return 'video';
+    if (t.startsWith('model/')) return 'model';
     return null;
   }
 

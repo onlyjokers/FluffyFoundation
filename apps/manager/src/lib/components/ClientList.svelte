@@ -1,12 +1,11 @@
 <script lang="ts">
-  import {
-    audienceClients,
-    clientReadiness,
-  } from '$lib/stores/manager';
+  import { audienceClients, clientReadiness, clientAiReadiness } from '$lib/stores/manager';
   import type { ClientInfo } from '@shugu/protocol';
   import { formatClientId } from '@shugu/ui-kit';
 
-  function readinessStatus(client: ClientInfo): 'connected' | 'loading' | 'ready' | 'error' | 'disconnected' {
+  function readinessStatus(
+    client: ClientInfo
+  ): 'connected' | 'loading' | 'ready' | 'error' | 'disconnected' {
     if (client.connected === false) return 'disconnected';
     const info = $clientReadiness.get(client.clientId);
     if (!info) return 'connected';
@@ -21,7 +20,8 @@
     const info = $clientReadiness.get(client.clientId);
     if (!info) return 'Connected (assets not verified)';
     if (info.status === 'assets-ready') return 'Assets ready';
-    if (info.status === 'assets-error') return info.error ? `Assets error: ${info.error}` : 'Assets error';
+    if (info.status === 'assets-error')
+      return info.error ? `Assets error: ${info.error}` : 'Assets error';
     if (info.status === 'assets-loading') {
       const loaded = typeof info.loaded === 'number' ? info.loaded : null;
       const total = typeof info.total === 'number' ? info.total : null;
@@ -29,6 +29,24 @@
       return 'Assets loading';
     }
     return 'Connected (assets not verified)';
+  }
+
+  function aiStatus(client: ClientInfo): 'unknown' | 'enabled' | 'disabled' | 'error' {
+    const info = $clientAiReadiness.get(client.clientId);
+    if (!info) return 'unknown';
+    if (info.error) return 'error';
+    if (info.enabled === true) return 'enabled';
+    if (info.enabled === false) return 'disabled';
+    return 'unknown';
+  }
+
+  function aiTitle(client: ClientInfo): string {
+    const info = $clientAiReadiness.get(client.clientId);
+    if (!info) return 'AI: unknown';
+    if (info.error) return `AI: error (${info.error})`;
+    if (info.enabled === true) return 'AI: enabled';
+    if (info.enabled === false) return 'AI: disabled';
+    return 'AI: unknown';
   }
 </script>
 
@@ -46,16 +64,14 @@
     {:else}
       {#each $audienceClients as client (client.clientId)}
         <div class="client-item">
-          <div
-            class="status-dot {readinessStatus(client)}"
-            title={readinessTitle(client)}
-          ></div>
+          <div class="status-dot {readinessStatus(client)}" title={readinessTitle(client)}></div>
           <div class="client-info">
             <span class="client-id">{formatClientId(client.clientId)}</span>
             <span class="client-time">
               {new Date(client.connectedAt).toLocaleTimeString()}
             </span>
           </div>
+          <div class="ai-pill {aiStatus(client)}" title={aiTitle(client)}>AI</div>
         </div>
       {/each}
     {/if}
@@ -147,6 +163,36 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+  }
+
+  .ai-pill {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.78);
+    background: rgba(2, 6, 23, 0.18);
+    user-select: none;
+  }
+
+  .ai-pill.enabled {
+    border-color: rgba(34, 197, 94, 0.5);
+    background: rgba(34, 197, 94, 0.12);
+    color: rgba(134, 239, 172, 0.95);
+  }
+
+  .ai-pill.disabled {
+    border-color: rgba(148, 163, 184, 0.5);
+    background: rgba(148, 163, 184, 0.1);
+    color: rgba(203, 213, 225, 0.9);
+  }
+
+  .ai-pill.error {
+    border-color: rgba(239, 68, 68, 0.55);
+    background: rgba(239, 68, 68, 0.12);
+    color: rgba(252, 165, 165, 0.95);
   }
 
   .client-id {

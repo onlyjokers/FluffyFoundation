@@ -229,10 +229,12 @@
     if (mime.startsWith('image/')) return 'image';
     if (mime.startsWith('video/')) return 'video';
     if (mime.startsWith('audio/')) return 'audio';
+    if (mime.startsWith('model/')) return 'model';
 
     const name = (file.name ?? '').toLowerCase();
     if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) return 'image';
     if (/\.(mp4|webm|mov|m4v|mkv|avi)$/.test(name)) return 'video';
+    if (/\.(onnx|tflite|bin|pt|pth|safetensors|mlmodel|gguf|ggml)$/.test(name)) return 'model';
     return 'audio';
   }
 
@@ -268,7 +270,8 @@
 
   function uploadOne(itemId: string, file: File): Promise<void> {
     const token = writeToken.trim();
-    if (!token) return Promise.reject(new Error('Missing Asset Write Token (set it on the connect screen).'));
+    if (!token)
+      return Promise.reject(new Error('Missing Asset Write Token (set it on the connect screen).'));
 
     const url = buildUrl('api/assets');
     const kind = inferKindFromFile(file);
@@ -287,7 +290,9 @@
       xhr.upload.onprogress = (evt) => {
         if (!evt.lengthComputable) return;
         const pct = Math.max(0, Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
-        uploadQueue = uploadQueue.map((it) => (it.id === itemId ? { ...it, progressPct: pct } : it));
+        uploadQueue = uploadQueue.map((it) =>
+          it.id === itemId ? { ...it, progressPct: pct } : it
+        );
       };
 
       xhr.onload = () => {
@@ -314,7 +319,9 @@
         const active = next;
 
         uploadQueue = uploadQueue.map((it) =>
-          it.id === active.id ? { ...it, status: 'uploading', progressPct: 0, error: undefined } : it
+          it.id === active.id
+            ? { ...it, status: 'uploading', progressPct: 0, error: undefined }
+            : it
         );
 
         try {
@@ -446,7 +453,10 @@
     const base = name.split(/[?#]/)[0] ?? '';
     const idx = base.lastIndexOf('.');
     if (idx <= 0 || idx >= base.length - 1) return '';
-    return base.slice(idx + 1).trim().toLowerCase();
+    return base
+      .slice(idx + 1)
+      .trim()
+      .toLowerCase();
   }
 
   function parseDateInputToEpochMs(raw: string, mode: 'start' | 'end'): number | null {
@@ -473,14 +483,17 @@
     return num;
   }
 
-  function matchesAdvancedFilters(asset: AssetRecord, opts: {
-    fileType: string;
-    tagTokens: string[];
-    uploadedAfterMs: number | null;
-    uploadedBeforeMs: number | null;
-    sizeMinBytes: number | null;
-    sizeMaxBytes: number | null;
-  }): boolean {
+  function matchesAdvancedFilters(
+    asset: AssetRecord,
+    opts: {
+      fileType: string;
+      tagTokens: string[];
+      uploadedAfterMs: number | null;
+      uploadedBeforeMs: number | null;
+      sizeMinBytes: number | null;
+      sizeMaxBytes: number | null;
+    }
+  ): boolean {
     if (opts.fileType !== 'all') {
       const ext = getFileExt(asset.originalName);
       if (ext !== opts.fileType) return false;
@@ -488,13 +501,27 @@
 
     if (!matchesTagFilter(asset, opts.tagTokens)) return false;
 
-    const createdAt = typeof asset.createdAt === 'number' ? asset.createdAt : Number(asset.createdAt);
-    if (opts.uploadedAfterMs !== null && Number.isFinite(createdAt) && createdAt < opts.uploadedAfterMs) return false;
-    if (opts.uploadedBeforeMs !== null && Number.isFinite(createdAt) && createdAt > opts.uploadedBeforeMs) return false;
+    const createdAt =
+      typeof asset.createdAt === 'number' ? asset.createdAt : Number(asset.createdAt);
+    if (
+      opts.uploadedAfterMs !== null &&
+      Number.isFinite(createdAt) &&
+      createdAt < opts.uploadedAfterMs
+    )
+      return false;
+    if (
+      opts.uploadedBeforeMs !== null &&
+      Number.isFinite(createdAt) &&
+      createdAt > opts.uploadedBeforeMs
+    )
+      return false;
 
-    const sizeBytes = typeof asset.sizeBytes === 'number' ? asset.sizeBytes : Number(asset.sizeBytes);
-    if (opts.sizeMinBytes !== null && Number.isFinite(sizeBytes) && sizeBytes < opts.sizeMinBytes) return false;
-    if (opts.sizeMaxBytes !== null && Number.isFinite(sizeBytes) && sizeBytes > opts.sizeMaxBytes) return false;
+    const sizeBytes =
+      typeof asset.sizeBytes === 'number' ? asset.sizeBytes : Number(asset.sizeBytes);
+    if (opts.sizeMinBytes !== null && Number.isFinite(sizeBytes) && sizeBytes < opts.sizeMinBytes)
+      return false;
+    if (opts.sizeMaxBytes !== null && Number.isFinite(sizeBytes) && sizeBytes > opts.sizeMaxBytes)
+      return false;
 
     return true;
   }
@@ -505,7 +532,7 @@
       ? (mode.slice('kind-'.length) as SortModeBase)
       : (mode as SortModeBase);
     const groupByKind = mode.startsWith('kind-');
-    const KIND_PRIORITY: Record<AssetKind, number> = { audio: 0, image: 1, video: 2 };
+    const KIND_PRIORITY: Record<AssetKind, number> = { audio: 0, image: 1, video: 2, model: 3 };
 
     next.sort((a, b) => {
       if (groupByKind) {
@@ -584,7 +611,7 @@
     sortMode
   );
 
-  $: selected = selectedId ? assets.find((a) => a.id === selectedId) ?? null : null;
+  $: selected = selectedId ? (assets.find((a) => a.id === selectedId) ?? null) : null;
   $: if (drawerOpen && selected && selected.id !== editorAssetId) {
     editorAssetId = selected.id;
     ensureDrawerEditState(selected);
@@ -600,6 +627,7 @@
     if (kind === 'audio') return 'Audio';
     if (kind === 'image') return 'Image';
     if (kind === 'video') return 'Video';
+    if (kind === 'model') return 'Model';
     return kind;
   }
 
@@ -607,6 +635,7 @@
     if (kind === 'audio') return 'tone-audio';
     if (kind === 'image') return 'tone-image';
     if (kind === 'video') return 'tone-video';
+    if (kind === 'model') return 'tone-model';
     return 'tone-audio';
   }
 
@@ -704,7 +733,13 @@
         <Button variant="primary" size="sm" on:click={openUploadPicker} title="Upload files">
           Upload
         </Button>
-        <input class="upload-input" type="file" multiple bind:this={uploadInput} on:change={onUploadChange} />
+        <input
+          class="upload-input"
+          type="file"
+          multiple
+          bind:this={uploadInput}
+          on:change={onUploadChange}
+        />
         <Button
           variant={filtersOpen || activeAdvancedFilterCount > 0 ? 'primary' : 'secondary'}
           size="sm"
@@ -713,7 +748,9 @@
         >
           Filters
           {#if activeAdvancedFilterCount > 0}
-            <span class="filter-badge" aria-label="Active filter count">{activeAdvancedFilterCount}</span>
+            <span class="filter-badge" aria-label="Active filter count"
+              >{activeAdvancedFilterCount}</span
+            >
           {/if}
         </Button>
         <div class="view-toggle" role="group" aria-label="View mode">
@@ -748,17 +785,28 @@
               { value: 'audio', label: 'Audio' },
               { value: 'image', label: 'Image' },
               { value: 'video', label: 'Video' },
+              { value: 'model', label: 'Model' },
             ]}
           />
           <Select label="File Type" bind:value={filterFileType} options={fileTypeOptions} />
           <Input label="Tags" bind:value={filterTags} placeholder="intro, loop, bg…" />
           <div class="field">
             <label class="control-label" for="assets-uploaded-after">Uploaded After</label>
-            <input id="assets-uploaded-after" class="input" type="date" bind:value={uploadedAfter} />
+            <input
+              id="assets-uploaded-after"
+              class="input"
+              type="date"
+              bind:value={uploadedAfter}
+            />
           </div>
           <div class="field">
             <label class="control-label" for="assets-uploaded-before">Uploaded Before</label>
-            <input id="assets-uploaded-before" class="input" type="date" bind:value={uploadedBefore} />
+            <input
+              id="assets-uploaded-before"
+              class="input"
+              type="date"
+              bind:value={uploadedBefore}
+            />
           </div>
           <div class="field">
             <label class="control-label" for="assets-size-min">Min Size (MB)</label>
@@ -817,116 +865,125 @@
       <div class="banner error">{errorMessage ?? 'Unknown error'}</div>
     {/if}
 
-  {#if status === 'loading' && assets.length === 0}
-    <Card class="empty">
-      <div class="empty-text">Loading assets…</div>
-    </Card>
-  {:else if filtered.length === 0}
-    <Card class="empty">
-      <div class="empty-text">No matching assets</div>
-      <div class="empty-hint">Try clearing filters, or upload files by dragging them here.</div>
-    </Card>
-  {:else if viewMode === 'grid'}
-    <div class="grid">
-      {#each filtered as a (a.id)}
-        {@const contentUrl = buildAssetContentUrl(a.id)}
-        <button
-          class="asset-card {kindTone(a.kind)}"
-          class:selected={a.id === selectedId && drawerOpen}
-          type="button"
-          on:click={() => openDrawer(a.id)}
-        >
-          <div class="thumb">
-            {#if a.kind === 'image' && contentUrl}
-              <img class="thumb-media" src={contentUrl} alt={a.originalName} loading="lazy" decoding="async" />
-            {:else if a.kind === 'video' && contentUrl}
-              <video class="thumb-media" src={contentUrl} muted playsinline preload="metadata"></video>
-              <div class="thumb-overlay">VIDEO</div>
-            {:else}
-              <div class="thumb-audio">
-                <div class="glyph">♪</div>
-                <div class="file-ext">{(a.originalName.split('.').pop() ?? 'audio').toUpperCase()}</div>
-              </div>
-              <div class="thumb-overlay">AUDIO</div>
-            {/if}
-          </div>
-
-          <div class="card-body">
-            <div class="name" title={a.originalName}>{a.originalName}</div>
-            <div class="meta-row">
-              <span class="pill">{kindPillLabel(a.kind)}</span>
-              <span class="meta-text mono">{formatBytes(a.sizeBytes)}</span>
-              <span class="meta-text mono">{shortId(a.id)}</span>
-            </div>
-            {#if (a.tags?.length ?? 0) > 0}
-              <div class="tags">
-                {#each (a.tags ?? []).slice(0, 3) as t (t)}
-                  <span class="tag">{t}</span>
-                {/each}
-                {#if (a.tags?.length ?? 0) > 3}
-                  <span class="tag more">+{(a.tags?.length ?? 0) - 3}</span>
-                {/if}
-              </div>
-            {/if}
-          </div>
-        </button>
-      {/each}
-    </div>
-  {:else}
-    <Card class="list-card">
-      <div class="list">
-        <div class="list-head">
-          <div>Name</div>
-          <div>Kind</div>
-          <div>Size</div>
-          <div>Created</div>
-          <div>ID</div>
-        </div>
+    {#if status === 'loading' && assets.length === 0}
+      <Card class="empty">
+        <div class="empty-text">Loading assets…</div>
+      </Card>
+    {:else if filtered.length === 0}
+      <Card class="empty">
+        <div class="empty-text">No matching assets</div>
+        <div class="empty-hint">Try clearing filters, or upload files by dragging them here.</div>
+      </Card>
+    {:else if viewMode === 'grid'}
+      <div class="grid">
         {#each filtered as a (a.id)}
-          <button class="list-row" type="button" on:click={() => openDrawer(a.id)}>
-            <div class="cell name" title={a.originalName}>{a.originalName}</div>
-            <div class="cell"><span class="pill">{kindPillLabel(a.kind)}</span></div>
-            <div class="cell mono">{formatBytes(a.sizeBytes)}</div>
-            <div class="cell mono">{formatDateTime(a.createdAt)}</div>
-            <div class="cell mono" title={a.id}>{shortId(a.id)}</div>
+          {@const contentUrl = buildAssetContentUrl(a.id)}
+          <button
+            class="asset-card {kindTone(a.kind)}"
+            class:selected={a.id === selectedId && drawerOpen}
+            type="button"
+            on:click={() => openDrawer(a.id)}
+          >
+            <div class="thumb">
+              {#if a.kind === 'image' && contentUrl}
+                <img
+                  class="thumb-media"
+                  src={contentUrl}
+                  alt={a.originalName}
+                  loading="lazy"
+                  decoding="async"
+                />
+              {:else if a.kind === 'video' && contentUrl}
+                <video class="thumb-media" src={contentUrl} muted playsinline preload="metadata"
+                ></video>
+                <div class="thumb-overlay">VIDEO</div>
+              {:else}
+                <div class="thumb-audio">
+                  <div class="glyph">♪</div>
+                  <div class="file-ext">
+                    {(a.originalName.split('.').pop() ?? 'audio').toUpperCase()}
+                  </div>
+                </div>
+                <div class="thumb-overlay">AUDIO</div>
+              {/if}
+            </div>
+
+            <div class="card-body">
+              <div class="name" title={a.originalName}>{a.originalName}</div>
+              <div class="meta-row">
+                <span class="pill">{kindPillLabel(a.kind)}</span>
+                <span class="meta-text mono">{formatBytes(a.sizeBytes)}</span>
+                <span class="meta-text mono">{shortId(a.id)}</span>
+              </div>
+              {#if (a.tags?.length ?? 0) > 0}
+                <div class="tags">
+                  {#each (a.tags ?? []).slice(0, 3) as t (t)}
+                    <span class="tag">{t}</span>
+                  {/each}
+                  {#if (a.tags?.length ?? 0) > 3}
+                    <span class="tag more">+{(a.tags?.length ?? 0) - 3}</span>
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </button>
         {/each}
       </div>
-    </Card>
-  {/if}
-
-  {#if uploadQueue.length > 0}
-    <Card class="upload-queue" title="Uploads">
-      <div class="queue">
-        {#each uploadQueue.slice(-6) as item (item.id)}
-          <div class="queue-row">
-            <div class="queue-name" title={item.file.name}>{item.file.name}</div>
-            <div class="queue-status">
-              {#if item.status === 'uploading'}
-                <div class="bar">
-                  <div class="bar-fill" style="width: {item.progressPct}%" />
-                </div>
-                <div class="pct mono">{item.progressPct}%</div>
-              {:else if item.status === 'done'}
-                <div class="done">Done</div>
-              {:else if item.status === 'error'}
-                <div class="err" title={item.error ?? ''}>Error</div>
-              {:else}
-                <div class="queued">Queued</div>
-              {/if}
-            </div>
+    {:else}
+      <Card class="list-card">
+        <div class="list">
+          <div class="list-head">
+            <div>Name</div>
+            <div>Kind</div>
+            <div>Size</div>
+            <div>Created</div>
+            <div>ID</div>
           </div>
-        {/each}
-      </div>
-    </Card>
-  {/if}
+          {#each filtered as a (a.id)}
+            <button class="list-row" type="button" on:click={() => openDrawer(a.id)}>
+              <div class="cell name" title={a.originalName}>{a.originalName}</div>
+              <div class="cell"><span class="pill">{kindPillLabel(a.kind)}</span></div>
+              <div class="cell mono">{formatBytes(a.sizeBytes)}</div>
+              <div class="cell mono">{formatDateTime(a.createdAt)}</div>
+              <div class="cell mono" title={a.id}>{shortId(a.id)}</div>
+            </button>
+          {/each}
+        </div>
+      </Card>
+    {/if}
+
+    {#if uploadQueue.length > 0}
+      <Card class="upload-queue" title="Uploads">
+        <div class="queue">
+          {#each uploadQueue.slice(-6) as item (item.id)}
+            <div class="queue-row">
+              <div class="queue-name" title={item.file.name}>{item.file.name}</div>
+              <div class="queue-status">
+                {#if item.status === 'uploading'}
+                  <div class="bar">
+                    <div class="bar-fill" style="width: {item.progressPct}%" />
+                  </div>
+                  <div class="pct mono">{item.progressPct}%</div>
+                {:else if item.status === 'done'}
+                  <div class="done">Done</div>
+                {:else if item.status === 'error'}
+                  <div class="err" title={item.error ?? ''}>Error</div>
+                {:else}
+                  <div class="queued">Queued</div>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </Card>
+    {/if}
   </div>
 
   {#if isDragActive}
     <div class="drop-overlay" aria-hidden="true">
       <div class="drop-card">
         <div class="drop-title">Drop files to upload</div>
-        <div class="drop-sub">Audio / Image / Video — 1–10MB works great</div>
+        <div class="drop-sub">Audio / Image / Video / Model — 1–10MB works great</div>
       </div>
     </div>
   {/if}
@@ -946,7 +1003,8 @@
         {#if selected.kind === 'image' && contentUrl}
           <img class="preview-media" src={contentUrl} alt={selected.originalName} />
         {:else if selected.kind === 'video' && contentUrl}
-          <video class="preview-media" src={contentUrl} controls playsinline preload="metadata"></video>
+          <video class="preview-media" src={contentUrl} controls playsinline preload="metadata"
+          ></video>
         {:else if contentUrl}
           <audio class="audio" src={contentUrl} controls preload="metadata"></audio>
         {:else}
@@ -964,6 +1022,7 @@
               { value: 'audio', label: 'Audio' },
               { value: 'image', label: 'Image' },
               { value: 'video', label: 'Video' },
+              { value: 'model', label: 'Model' },
             ]}
           />
         </div>
@@ -1018,7 +1077,8 @@
             Copy sha
           </Button>
           {#if contentUrl}
-            <Button variant="secondary" size="sm" on:click={() => copy(contentUrl)}>Copy URL</Button>
+            <Button variant="secondary" size="sm" on:click={() => copy(contentUrl)}>Copy URL</Button
+            >
           {/if}
         </div>
 
@@ -1026,7 +1086,12 @@
           <Button variant="danger" size="sm" on:click={() => deleteSelectedAsset(selected)}>
             Delete
           </Button>
-          <Button variant="primary" size="sm" on:click={() => saveSelectedAsset(selected)} disabled={isSaving}>
+          <Button
+            variant="primary"
+            size="sm"
+            on:click={() => saveSelectedAsset(selected)}
+            disabled={isSaving}
+          >
             {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </div>
@@ -1079,10 +1144,8 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding:
-      calc(var(--ui-pill-toolbar-top) + var(--ui-pill-toolbar-height) + var(--space-xl))
-      var(--space-2xl, 32px)
-      var(--space-2xl, 32px);
+    padding: calc(var(--ui-pill-toolbar-top) + var(--ui-pill-toolbar-height) + var(--space-xl))
+      var(--space-2xl, 32px) var(--space-2xl, 32px);
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -1196,7 +1259,7 @@
     width: 100%;
     padding: 12px;
     border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(15, 23, 42, 0.62);
     backdrop-filter: blur(10px);
     box-shadow: 0 18px 56px rgba(0, 0, 0, 0.35);
@@ -1353,7 +1416,7 @@
     flex-direction: column;
     min-width: 0;
     color: var(--text-primary);
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.03);
@@ -1374,7 +1437,9 @@
 
   .asset-card.selected {
     border-color: rgba(6, 182, 212, 0.6);
-    box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.2), 0 14px 38px rgba(0, 0, 0, 0.4);
+    box-shadow:
+      0 0 0 1px rgba(6, 182, 212, 0.2),
+      0 14px 38px rgba(0, 0, 0, 0.4);
   }
 
   .thumb {
@@ -1464,7 +1529,7 @@
     gap: 6px;
     padding: 3px 8px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(2, 6, 23, 0.35);
     font-size: 10px;
     letter-spacing: 0.5px;
@@ -1491,23 +1556,26 @@
     font-size: 10px;
     padding: 3px 8px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    background: rgba(6, 182, 212, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(6, 182, 212, 0.1);
     color: rgba(255, 255, 255, 0.82);
   }
 
   .tag.more {
-    background: rgba(236, 72, 153, 0.10);
+    background: rgba(236, 72, 153, 0.1);
   }
 
   .tone-audio .tag {
-    background: rgba(34, 197, 94, 0.10);
+    background: rgba(34, 197, 94, 0.1);
   }
   .tone-image .tag {
-    background: rgba(59, 130, 246, 0.10);
+    background: rgba(59, 130, 246, 0.1);
   }
   .tone-video .tag {
-    background: rgba(168, 85, 247, 0.10);
+    background: rgba(168, 85, 247, 0.1);
+  }
+  .tone-model .tag {
+    background: rgba(245, 158, 11, 0.12);
   }
 
   .list-card {
@@ -1582,7 +1650,7 @@
     align-items: center;
     padding: 8px 10px;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(2, 6, 23, 0.22);
   }
 
@@ -1657,7 +1725,7 @@
     height: 100vh;
     width: min(520px, 92vw);
     z-index: 150;
-    border-left: 1px solid rgba(255, 255, 255, 0.10);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(10, 10, 15, 0.85);
     backdrop-filter: blur(16px);
     display: flex;
@@ -1703,7 +1771,7 @@
     width: 100%;
     max-height: 260px;
     border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.02);
     object-fit: contain;
   }
@@ -1774,8 +1842,8 @@
     gap: 8px;
     padding: 6px 10px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    background: rgba(6, 182, 212, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(6, 182, 212, 0.1);
     color: rgba(255, 255, 255, 0.86);
     cursor: pointer;
     font-size: 12px;

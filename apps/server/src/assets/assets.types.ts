@@ -2,7 +2,7 @@
  * Purpose: Shared types for the server-side Asset Service (records, kinds, persistence shape).
  */
 
-export type AssetKind = 'audio' | 'image' | 'video';
+export type AssetKind = 'audio' | 'image' | 'video' | 'model';
 
 export type AssetRecord = {
   id: string; // UUIDv4

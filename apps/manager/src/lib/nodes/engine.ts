@@ -1076,6 +1076,7 @@ class NodeEngineClass {
       'client-object',
       'proc-client-sensors',
       'math',
+      'ai-model-ref',
       // Gates
       'logic-not',
       'logic-and',
@@ -1115,6 +1116,24 @@ class NodeEngineClass {
         config: { ...(node.config ?? {}) },
         inputValues: { ...(node.inputValues ?? {}) },
         outputValues: {}, // stripped
+      });
+    }
+
+    // AI model refs act as global deployment toggles (unconnected by design).
+    // Include them so the client NodeExecutor can enable/disable its AI runtime.
+    const graphSnapshot = this.runtime.exportGraph();
+    for (const node of graphSnapshot.nodes ?? []) {
+      if (String(node.type) !== 'ai-model-ref') continue;
+      const nodeId = String(node.id);
+      if (!nodeId) continue;
+      if (nodes.some((n) => n.id === nodeId)) continue;
+      nodes.push({
+        id: nodeId,
+        type: 'ai-model-ref',
+        position: node.position,
+        config: { ...(node.config ?? {}) },
+        inputValues: { ...(node.inputValues ?? {}) },
+        outputValues: {},
       });
     }
 
@@ -1231,6 +1250,8 @@ class NodeEngineClass {
       'video-out',
       'effect-out',
       'scene-out',
+      // AI
+      'ai-model-ref',
     ]);
 
     for (const n of patch.graph.nodes) {
@@ -1246,6 +1267,23 @@ class NodeEngineClass {
             : `Patch contains non-deployable node type: ${type}`
         );
       }
+    }
+
+    // AI model refs are global toggles and can be unconnected to patch roots.
+    for (const node of snapshot.nodes ?? []) {
+      if (String(node.type) !== 'ai-model-ref') continue;
+      const nodeId = String(node.id);
+      if (!nodeId) continue;
+      if (this.disabledNodeIds.has(nodeId)) continue;
+      if (patch.graph.nodes.some((n) => String(n.id) === nodeId)) continue;
+      patch.graph.nodes.push({
+        id: nodeId,
+        type: 'ai-model-ref',
+        position: node.position,
+        config: { ...(node.config ?? {}) },
+        inputValues: { ...(node.inputValues ?? {}) },
+        outputValues: {},
+      });
     }
 
     const caps = new Set<string>();

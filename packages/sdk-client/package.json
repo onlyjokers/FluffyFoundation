@@ -26,6 +26,7 @@
         "dist-out"
     ],
     "dependencies": {
+        "@shugu/ai-core": "workspace:*",
         "@shugu/multimedia-core": "workspace:*",
         "@shugu/node-core": "workspace:*",
         "@shugu/protocol": "workspace:*",

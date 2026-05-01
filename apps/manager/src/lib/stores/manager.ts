@@ -96,6 +96,14 @@ export type ClientToneReadiness = {
 // Per-client Tone readiness (drives audio gating in show mode).
 export const clientToneReadiness = writable<Map<string, ClientToneReadiness>>(new Map());
 
+export type ClientAiReadiness = {
+    enabled: boolean | null;
+    error?: string;
+    updatedAt: number;
+};
+
+export const clientAiReadiness = writable<Map<string, ClientAiReadiness>>(new Map());
+
 export type ClientScreenshotUpload = {
     dataUrl: string;
     mime?: string;
@@ -278,6 +286,19 @@ export function connect(config: ManagerSDKConfig): void {
             return next;
         });
 
+        clientAiReadiness.update((prev) => {
+            const next = new Map(prev);
+            for (const id of next.keys()) {
+                if (!ids.has(id)) next.delete(id);
+            }
+            for (const id of ids) {
+                if (!next.has(id)) {
+                    next.set(id, { enabled: null, updatedAt: now });
+                }
+            }
+            return next;
+        });
+
         clientScreenshotUploads.update((prev) => {
             const next = new Map(prev);
             for (const id of next.keys()) {
@@ -364,6 +385,20 @@ export function connect(config: ManagerSDKConfig): void {
                 const now = Date.now();
 
                 clientToneReadiness.update((prev) => {
+                    const next = new Map(prev);
+                    const current = next.get(data.clientId) ?? { enabled: null, updatedAt: now };
+                    next.set(data.clientId, { ...current, enabled, error, updatedAt: now });
+                    return next;
+                });
+            }
+
+            if (payload?.kind === 'node-executor' && payload?.event === 'ai') {
+                const status = typeof payload.status === 'string' ? payload.status : '';
+                const enabled = status === 'enabled' ? true : status === 'disabled' ? false : null;
+                const error = payload.error ? String(payload.error) : undefined;
+                const now = Date.now();
+
+                clientAiReadiness.update((prev) => {
                     const next = new Map(prev);
                     const current = next.get(data.clientId) ?? { enabled: null, updatedAt: now };
                     next.set(data.clientId, { ...current, enabled, error, updatedAt: now });
@@ -458,6 +493,7 @@ export function disconnect(): void {
     sensorData.set(new Map());
     clientReadiness.set(new Map());
     clientToneReadiness.set(new Map());
+    clientAiReadiness.set(new Map());
     clientScreenshotUploads.set(new Map());
     nodeMediaSignals.set(new Map());
     parameterRegistry.clear();

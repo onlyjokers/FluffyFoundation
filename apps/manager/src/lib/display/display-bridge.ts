@@ -15,8 +15,21 @@
  */
 
 import { get, writable } from 'svelte/store';
-import type { ControlAction, ControlPayload } from '@shugu/protocol';
-import { getLatestManifest, subscribeLatestManifest, type AssetManifest } from '$lib/nodes/asset-manifest-store';
+import {
+  SYSTEM_SCOPE_GROUP_ID,
+  createControlMessage,
+  createPluginControlMessage,
+  type ControlAction,
+  type ControlPayload,
+  type ControlMessage,
+  type PluginControlMessage,
+  type PluginCommand,
+} from '@shugu/protocol';
+import {
+  getLatestManifest,
+  subscribeLatestManifest,
+  type AssetManifest,
+} from '$lib/nodes/asset-manifest-store';
 import { localDisplayMediaStore, parseDisplayFileId } from '$lib/stores/local-display-media';
 
 export type DisplayBridgeStatus = 'idle' | 'opening' | 'pairing' | 'connected' | 'closed' | 'error';
@@ -63,16 +76,13 @@ type DisplayPairMessage = {
 
 type DisplayControlMessage = {
   type: 'shugu:display:control';
-  action: ControlAction;
-  payload: ControlPayload;
+  message: ControlMessage;
   executeAtLocal?: number;
 };
 
 type DisplayPluginMessage = {
   type: 'shugu:display:plugin';
-  pluginId: string;
-  command: string;
-  payload?: Record<string, unknown>;
+  message: PluginControlMessage;
 };
 
 export type AssetManifestSnapshot = {
@@ -130,7 +140,10 @@ function getLocalMediaBroadcast(): BroadcastChannel | null {
   return localMediaBroadcast;
 }
 
-function broadcastLocalMedia(command: LocalMediaBroadcastMessage['command'], payload?: Record<string, unknown>): void {
+function broadcastLocalMedia(
+  command: LocalMediaBroadcastMessage['command'],
+  payload?: Record<string, unknown>
+): void {
   const channel = getLocalMediaBroadcast();
   if (!channel) return;
 
@@ -281,12 +294,32 @@ function teardownPort(): void {
   if (controlPort) {
     try {
       const cleanup: DisplayControlMessage[] = [
-        { type: 'shugu:display:control', action: 'stopMedia', payload: {} },
-        { type: 'shugu:display:control', action: 'hideImage', payload: {} },
         {
           type: 'shugu:display:control',
-          action: 'screenColor',
-          payload: { color: '#000000', opacity: 0, mode: 'solid' } as ControlPayload,
+          message: createControlMessage(
+            { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+            { mode: 'all' },
+            'stopMedia',
+            {}
+          ) as unknown as ControlMessage,
+        },
+        {
+          type: 'shugu:display:control',
+          message: createControlMessage(
+            { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+            { mode: 'all' },
+            'hideImage',
+            {}
+          ) as unknown as ControlMessage,
+        },
+        {
+          type: 'shugu:display:control',
+          message: createControlMessage(
+            { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+            { mode: 'all' },
+            'screenColor',
+            { color: '#000000', opacity: 0, mode: 'solid' } as ControlPayload
+          ) as unknown as ControlMessage,
         },
       ];
       for (const msg of cleanup) controlPort.postMessage(msg);
@@ -423,7 +456,9 @@ export function openDisplay(options?: {
 
   const serverUrl = options?.serverUrl?.trim() ? options.serverUrl.trim() : getDefaultServerUrl();
   const assetReadToken =
-    options?.assetReadToken != null ? String(options.assetReadToken ?? '') : getDefaultAssetReadToken();
+    options?.assetReadToken != null
+      ? String(options.assetReadToken ?? '')
+      : getDefaultAssetReadToken();
   const pairToken = createRandomToken('pt_');
 
   const displayUrl = (() => {
@@ -450,7 +485,11 @@ export function openDisplay(options?: {
 
   displayWindow = window.open(displayUrl.toString(), '_blank');
   if (!displayWindow) {
-    displayBridgeState.update((s) => ({ ...s, status: 'error', error: 'Popup blocked: window.open returned null' }));
+    displayBridgeState.update((s) => ({
+      ...s,
+      status: 'error',
+      error: 'Popup blocked: window.open returned null',
+    }));
     return;
   }
 
@@ -458,7 +497,12 @@ export function openDisplay(options?: {
 
   // Pair after a short delay to reduce the chance that Display misses the initial postMessage listener.
   setTimeout(() => {
-    pairDisplay({ serverUrl, assetReadToken, tokenOverride: pairToken, displayOrigin: displayUrl.origin });
+    pairDisplay({
+      serverUrl,
+      assetReadToken,
+      tokenOverride: pairToken,
+      displayOrigin: displayUrl.origin,
+    });
   }, 250);
 }
 
@@ -484,15 +528,17 @@ export function pairDisplay(options?: {
     : serverUrlFromState || getDefaultServerUrl();
 
   const assetReadToken =
-    options?.assetReadToken != null ? String(options.assetReadToken ?? '') : getDefaultAssetReadToken();
+    options?.assetReadToken != null
+      ? String(options.assetReadToken ?? '')
+      : getDefaultAssetReadToken();
 
   const token = options?.tokenOverride?.trim()
     ? options.tokenOverride.trim()
-    : stateSnapshot.pairToken ?? createRandomToken('pt_');
+    : (stateSnapshot.pairToken ?? createRandomToken('pt_'));
 
   const displayOrigin = options?.displayOrigin?.trim()
     ? options.displayOrigin.trim()
-    : stateSnapshot.displayOrigin ?? getDefaultDisplayUrl().origin;
+    : (stateSnapshot.displayOrigin ?? getDefaultDisplayUrl().origin);
 
   const channel = new MessageChannel();
   controlPort = channel.port1;
@@ -541,7 +587,11 @@ export function closeDisplay(): void {
   displayBridgeState.update((s) => ({ ...s, status: 'closed' }));
 }
 
-export function sendControl(action: ControlAction, payload: ControlPayload, executeAtLocal?: number): void {
+export function sendControl(
+  action: ControlAction,
+  payload: ControlPayload,
+  executeAtLocal?: number
+): void {
   if (!controlPort) return;
 
   // If the payload references a Display-local file, register it first via MessagePort (no server upload).
@@ -549,9 +599,15 @@ export function sendControl(action: ControlAction, payload: ControlPayload, exec
 
   const message: DisplayControlMessage = {
     type: 'shugu:display:control',
-    action,
-    payload,
-    ...(typeof executeAtLocal === 'number' && Number.isFinite(executeAtLocal) ? { executeAtLocal } : {}),
+    message: createControlMessage(
+      { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+      { mode: 'all' },
+      action,
+      payload
+    ) as unknown as ControlMessage,
+    ...(typeof executeAtLocal === 'number' && Number.isFinite(executeAtLocal)
+      ? { executeAtLocal }
+      : {}),
   };
   try {
     controlPort.postMessage(message);
@@ -560,14 +616,24 @@ export function sendControl(action: ControlAction, payload: ControlPayload, exec
   }
 }
 
-export function sendPlugin(pluginId: string, command: string, payload?: Record<string, unknown>): void {
+export function sendPlugin(
+  pluginId: string,
+  command: string,
+  payload?: Record<string, unknown>
+): void {
   if (!controlPort) return;
+
   const message: DisplayPluginMessage = {
     type: 'shugu:display:plugin',
-    pluginId,
-    command,
-    ...(payload ? { payload } : {}),
+    message: createPluginControlMessage(
+      { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+      { mode: 'all' },
+      pluginId,
+      command as PluginCommand,
+      payload
+    ) as unknown as PluginControlMessage,
   };
+
   try {
     controlPort.postMessage(message);
   } catch {

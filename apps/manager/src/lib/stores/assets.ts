@@ -6,7 +6,7 @@
 
 import { writable } from 'svelte/store';
 
-export type AssetKind = 'audio' | 'image' | 'video';
+export type AssetKind = 'audio' | 'image' | 'video' | 'model';
 
 export type AssetRecord = {
   id: string;
@@ -85,7 +85,10 @@ async function refresh(opts?: { serverUrl?: string; writeToken?: string }): Prom
       const serverUrl = typeof opts?.serverUrl === 'string' ? opts.serverUrl : readServerUrl();
       const url = buildUrl(serverUrl, 'api/assets');
       if (!url) throw new Error('Missing or invalid Server URL.');
-      const data = await fetchJson(url, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      const data = await fetchJson(url, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const record = (data ?? {}) as Record<string, unknown>;
       const assets = Array.isArray(record.assets) ? (record.assets as AssetRecord[]) : [];
       assets.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));

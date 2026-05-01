@@ -23,11 +23,27 @@ function guessKind(mimeType: string, originalName: string): AssetKind {
   if (mime.startsWith('audio/')) return 'audio';
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('model/')) return 'model';
 
   const ext = path.extname(originalName).toLowerCase();
   if (['.wav', '.mp3', '.aac', '.m4a', '.ogg', '.flac'].includes(ext)) return 'audio';
   if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].includes(ext)) return 'image';
   if (['.mp4', '.webm', '.mov', '.mkv', '.m4v', '.avi'].includes(ext)) return 'video';
+  if (
+    [
+      '.onnx',
+      '.tflite',
+      '.bin',
+      '.pt',
+      '.pth',
+      '.safetensors',
+      '.mlmodel',
+      '.gguf',
+      '.ggml',
+    ].includes(ext)
+  ) {
+    return 'model';
+  }
   return 'audio';
 }
 
@@ -102,7 +118,7 @@ function normalizeTags(raw: unknown): string[] {
 function normalizeKind(raw: unknown): AssetKind | null {
   if (typeof raw !== 'string') return null;
   const k = raw.trim().toLowerCase();
-  if (k === 'audio' || k === 'image' || k === 'video') return k;
+  if (k === 'audio' || k === 'image' || k === 'video' || k === 'model') return k;
   return null;
 }
 
@@ -123,7 +139,14 @@ export class AssetsService {
     ok: boolean;
     dataDir: { path: string; ok: boolean; error?: string };
     dbPath: { path: string; ok: boolean; error?: string };
-    disk?: { path: string; ok: boolean; totalBytes?: number; freeBytes?: number; availBytes?: number; error?: string };
+    disk?: {
+      path: string;
+      ok: boolean;
+      totalBytes?: number;
+      freeBytes?: number;
+      availBytes?: number;
+      error?: string;
+    };
     auth: { writeConfigured: boolean; readConfigured: boolean };
     warnings: string[];
     assetCount: number;
@@ -135,8 +158,18 @@ export class AssetsService {
       ok: true,
       dataDir: { path: dataDir, ok: true as boolean, error: undefined as string | undefined },
       dbPath: { path: dbPath, ok: true as boolean, error: undefined as string | undefined },
-      disk: { path: dataDir, ok: true as boolean, totalBytes: undefined as number | undefined, freeBytes: undefined as number | undefined, availBytes: undefined as number | undefined, error: undefined as string | undefined },
-      auth: { writeConfigured: Boolean(this.config.writeToken), readConfigured: Boolean(this.config.readToken) },
+      disk: {
+        path: dataDir,
+        ok: true as boolean,
+        totalBytes: undefined as number | undefined,
+        freeBytes: undefined as number | undefined,
+        availBytes: undefined as number | undefined,
+        error: undefined as string | undefined,
+      },
+      auth: {
+        writeConfigured: Boolean(this.config.writeToken),
+        readConfigured: Boolean(this.config.readToken),
+      },
       warnings: [] as string[],
       assetCount: this.index.byId.size,
     };

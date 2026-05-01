@@ -52,7 +52,12 @@ export class BooleanControl extends ClassicPreset.Control {
   readonly: boolean;
   private onChange?: (value: boolean) => void;
 
-  constructor(opts: { label?: string; initial?: boolean; readonly?: boolean; change?: (v: boolean) => void }) {
+  constructor(opts: {
+    label?: string;
+    initial?: boolean;
+    readonly?: boolean;
+    change?: (v: boolean) => void;
+  }) {
     super();
     this.label = opts.label;
     this.value = Boolean(opts.initial);
@@ -74,7 +79,12 @@ export class ClientPickerControl extends ClassicPreset.Control {
   readonly: boolean;
   private onChange?: (value: string) => void;
 
-  constructor(opts: { label?: string; initial?: string; readonly?: boolean; change?: (value: string) => void }) {
+  constructor(opts: {
+    label?: string;
+    initial?: string;
+    readonly?: boolean;
+    change?: (value: string) => void;
+  }) {
     super();
     this.label = opts.label;
     this.value = opts.initial ?? '';
@@ -93,14 +103,14 @@ export class AssetPickerControl extends ClassicPreset.Control {
   controlType = 'asset-picker' as const;
   label?: string;
   value: string;
-  assetKind: 'audio' | 'image' | 'video' | 'any';
+  assetKind: 'audio' | 'image' | 'video' | 'model' | 'any';
   readonly: boolean;
   private onChange?: (value: string) => void;
 
   constructor(opts: {
     label?: string;
     initial?: string;
-    assetKind?: 'audio' | 'image' | 'video' | 'any';
+    assetKind?: 'audio' | 'image' | 'video' | 'model' | 'any';
     readonly?: boolean;
     change?: (value: string) => void;
   }) {
@@ -123,14 +133,14 @@ export class LocalAssetPickerControl extends ClassicPreset.Control {
   controlType = 'local-asset-picker' as const;
   label?: string;
   value: string;
-  assetKind: 'audio' | 'image' | 'video' | 'any';
+  assetKind: 'audio' | 'image' | 'video' | 'model' | 'any';
   readonly: boolean;
   private onChange?: (value: string) => void;
 
   constructor(opts: {
     label?: string;
     initial?: string;
-    assetKind?: 'audio' | 'image' | 'video' | 'any';
+    assetKind?: 'audio' | 'image' | 'video' | 'model' | 'any';
     readonly?: boolean;
     change?: (value: string) => void;
   }) {

@@ -61,7 +61,7 @@ export interface ConfigField {
     | 'curve';
   defaultValue?: unknown;
   options?: { value: string; label: string }[];
-  assetKind?: 'audio' | 'image' | 'video' | 'any';
+  assetKind?: 'audio' | 'image' | 'video' | 'model' | 'any';
   min?: number;
   max?: number;
   step?: number;

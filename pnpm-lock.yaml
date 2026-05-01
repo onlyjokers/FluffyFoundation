@@ -274,6 +274,12 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
+  packages/ai-core:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/audio-plugins:
     dependencies:
       '@shugu/protocol':
@@ -312,6 +318,9 @@ importers:
 
   packages/sdk-client:
     dependencies:
+      '@shugu/ai-core':
+        specifier: workspace:*
+        version: link:../ai-core
       '@shugu/multimedia-core':
         specifier: workspace:*
         version: link:../multimedia-core

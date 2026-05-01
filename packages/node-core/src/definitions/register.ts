@@ -85,6 +85,7 @@ import {
   createSceneMelNode,
 } from './nodes/scenes.js';
 import { createEffectAsciiNode, createEffectConvolutionNode } from './nodes/effects.js';
+import { createAiModelRefNode } from './nodes/ai.js';
 
 export function registerDefaultNodeDefinitions(
   registry: NodeRegistry,
@@ -161,4 +162,5 @@ export function registerDefaultNodeDefinitions(
   registry.register(createSceneBackCameraNode());
   registry.register(createEffectConvolutionNode());
   registry.register(createEffectAsciiNode());
+  registry.register(createAiModelRefNode());
 }

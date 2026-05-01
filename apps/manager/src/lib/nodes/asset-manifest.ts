@@ -17,6 +17,7 @@ import { nodeEngine } from './engine';
 import { nodeRegistry } from './registry';
 import { getSDK, state as managerState } from '$lib/stores/manager';
 import { assetsStore } from '$lib/stores/assets';
+import { modelDistributionStore } from '$lib/stores/model-distribution';
 import {
   type AssetManifest,
   getLatestManifest,
@@ -187,26 +188,44 @@ function pushManifestToClientIds(clientIds: string[], manifest: AssetManifest): 
   for (const id of ids) sentManifestIdByClient.set(id, manifest.manifestId);
 }
 
-let latestManifest: AssetManifest | null = null;
+let latestDisplayManifest: AssetManifest | null = null;
+let latestManifestByClientId = new Map<string, AssetManifest>();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let lastGraphSnapshot: GraphState | null = null;
-// Store asset info with kind for priority sorting: audio > image > video.
-let lastAllAssetRecords: { id: string; kind: 'audio' | 'image' | 'video' }[] = [];
+let lastAllAssetRecords: { id: string; kind: 'audio' | 'image' | 'video' | 'model' }[] = [];
+let lastModelDistribution: Record<string, string[]> = {};
 
 function recomputeAndMaybePush(): void {
   const graph = lastGraphSnapshot;
   if (!graph) return;
 
-  // Start with assets used in the graph (priority order).
-  const graphAssets = scanGraphForAssetRefs(graph);
+  const kindByAssetId = new Map(lastAllAssetRecords.map((r) => [String(r.id), r.kind] as const));
+  const assetIdFromRef = (ref: string): string | null => {
+    const normalized = normalizeAssetRef(ref);
+    if (!normalized) return null;
+    const id = normalized.slice('asset:'.length).trim();
+    return id ? id : null;
+  };
+
+  const allGraphAssetRefs = scanGraphForAssetRefs(graph);
+  const graphAssets = allGraphAssetRefs.filter((ref) => {
+    const id = assetIdFromRef(ref);
+    if (!id) return true;
+    return kindByAssetId.get(id) !== 'model';
+  });
   const seen = new Set(graphAssets);
 
-  // Add ALL assets from the Assets Manager (so user can switch to any without delay).
-  // Sort by priority: audio first, then image, then video.
-  const PRIORITY_ORDER = { audio: 0, image: 1, video: 2 };
-  const sortedRecords = [...lastAllAssetRecords].sort((a, b) => {
-    return (PRIORITY_ORDER[a.kind] ?? 99) - (PRIORITY_ORDER[b.kind] ?? 99);
-  });
+  const PRIORITY_ORDER: Record<(typeof lastAllAssetRecords)[number]['kind'], number> = {
+    audio: 0,
+    image: 1,
+    video: 2,
+    model: 3,
+  };
+  const sortedRecords = [...lastAllAssetRecords]
+    .filter((r) => r.kind !== 'model')
+    .sort((a, b) => {
+      return (PRIORITY_ORDER[a.kind] ?? 99) - (PRIORITY_ORDER[b.kind] ?? 99);
+    });
 
   const allAssets = [...graphAssets];
   for (const { id } of sortedRecords) {
@@ -217,19 +236,90 @@ function recomputeAndMaybePush(): void {
     }
   }
 
-  const manifestId = hashManifest(allAssets);
-  const next: AssetManifest = { manifestId, assets: allAssets, updatedAt: Date.now() };
+  const displayManifestId = hashManifest(allAssets);
+  const displayManifest: AssetManifest = {
+    manifestId: displayManifestId,
+    assets: allAssets,
+    updatedAt: Date.now(),
+  };
 
-  if (latestManifest && latestManifest.manifestId === next.manifestId) return;
-  latestManifest = next;
-  setLatestManifest(next);
+  if (!latestDisplayManifest || latestDisplayManifest.manifestId !== displayManifest.manifestId) {
+    latestDisplayManifest = displayManifest;
+    setLatestManifest(displayManifest);
+  }
+
+  const clients = (get(managerState).clients ?? []).map((c) => String(c.clientId)).filter(Boolean);
+  const connected = new Set(clients);
+
+  const ownerStackByGroupId = (get(managerState).controlPlane.ownership ?? {}) as Record<
+    string,
+    { ownerStack?: unknown }
+  >;
+
+  const modelRefsByClientId = new Map<string, Set<string>>();
+  for (const [groupId, modelIds] of Object.entries(lastModelDistribution ?? {})) {
+    const ownership = ownerStackByGroupId[String(groupId)] as { ownerStack?: unknown } | undefined;
+    const ownerStackRaw = ownership?.ownerStack;
+    const ownerStack = Array.isArray(ownerStackRaw)
+      ? ownerStackRaw.map(String).filter(Boolean)
+      : [];
+    const currentOwner = ownerStack.length > 0 ? ownerStack[ownerStack.length - 1] : '';
+    if (!currentOwner || !connected.has(currentOwner)) continue;
+
+    const bucket = modelRefsByClientId.get(currentOwner) ?? new Set<string>();
+    for (const modelId of modelIds ?? []) {
+      const id = String(modelId ?? '').trim();
+      if (!id) continue;
+      bucket.add(`asset:${id}`);
+    }
+    modelRefsByClientId.set(currentOwner, bucket);
+  }
+
+  const nextManifestByClientId = new Map<string, AssetManifest>();
+  const now = Date.now();
+  for (const clientId of clients) {
+    const modelRefs = Array.from(modelRefsByClientId.get(clientId) ?? []).sort();
+    const assets = (() => {
+      if (modelRefs.length === 0) return allAssets;
+      const out: string[] = [...allAssets];
+      const localSeen = new Set(out);
+      for (const ref of modelRefs) {
+        if (localSeen.has(ref)) continue;
+        localSeen.add(ref);
+        out.push(ref);
+      }
+      return out;
+    })();
+
+    const manifestId = hashManifest(assets);
+    nextManifestByClientId.set(clientId, { manifestId, assets, updatedAt: now });
+  }
+
+  latestManifestByClientId = nextManifestByClientId;
 
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    const clients = (get(managerState).clients ?? []).map((c) => c.clientId);
-    const pending = clients.filter((id) => sentManifestIdByClient.get(id) !== next.manifestId);
-    pushManifestToClientIds(pending, next);
+
+    const pending = clients.filter((id) => {
+      const desired = latestManifestByClientId.get(id);
+      if (!desired) return false;
+      return sentManifestIdByClient.get(id) !== desired.manifestId;
+    });
+    if (pending.length === 0) return;
+
+    const groups = new Map<string, { manifest: AssetManifest; clientIds: string[] }>();
+    for (const id of pending) {
+      const manifest = latestManifestByClientId.get(id);
+      if (!manifest) continue;
+      const entry = groups.get(manifest.manifestId) ?? { manifest, clientIds: [] };
+      entry.clientIds.push(id);
+      groups.set(manifest.manifestId, entry);
+    }
+
+    for (const { clientIds, manifest } of groups.values()) {
+      pushManifestToClientIds(clientIds, manifest);
+    }
   }, MANIFEST_DEBOUNCE_MS);
 }
 
@@ -248,11 +338,32 @@ assetsStore.subscribe((state) => {
   recomputeAndMaybePush();
 });
 
+modelDistributionStore.subscribe((mapping) => {
+  lastModelDistribution = (mapping ?? {}) as Record<string, string[]>;
+  recomputeAndMaybePush();
+});
+
 // Push manifest to clients that join after the last graph update.
 managerState.subscribe(($state) => {
-  if (!latestManifest) return;
-  const ids = ($state.clients ?? []).map((c) => c.clientId);
-  const pending = ids.filter((id) => sentManifestIdByClient.get(id) !== latestManifest?.manifestId);
+  recomputeAndMaybePush();
+  const ids = ($state.clients ?? []).map((c) => String(c.clientId)).filter(Boolean);
+  if (ids.length === 0) return;
+  const pending = ids.filter((id) => {
+    const desired = latestManifestByClientId.get(id);
+    if (!desired) return false;
+    return sentManifestIdByClient.get(id) !== desired.manifestId;
+  });
   if (pending.length === 0) return;
-  pushManifestToClientIds(pending, latestManifest);
+
+  const groups = new Map<string, { manifest: AssetManifest; clientIds: string[] }>();
+  for (const id of pending) {
+    const manifest = latestManifestByClientId.get(id);
+    if (!manifest) continue;
+    const entry = groups.get(manifest.manifestId) ?? { manifest, clientIds: [] };
+    entry.clientIds.push(id);
+    groups.set(manifest.manifestId, entry);
+  }
+  for (const { clientIds, manifest } of groups.values()) {
+    pushManifestToClientIds(clientIds, manifest);
+  }
 });

@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION, type PluginControlMessage } from '@shugu/protocol';
 import type { ClientSDK } from './client-sdk.js';
 import { applyGraphChanges, type GraphChange, NodeRegistry, NodeRuntime } from '@shugu/node-core';
+import { createAiRuntime, type AiRuntime } from '@shugu/ai-core';
 import { registerDefaultNodeDefinitions, type NodeCommand } from './node-definitions.js';
 import type { GraphState } from './node-types.js';
 import { registerToneClientDefinitions, type ToneAdapterHandle } from './tone-adapter.js';
@@ -58,6 +59,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export class NodeExecutor {
   private registry = new NodeRegistry();
   private runtime: NodeRuntime;
+  private aiRuntime: AiRuntime | null = null;
+  private aiEnabled = false;
   private toneAdapter: ToneAdapterHandle | null = null;
   private loopId: string | null = null;
   private lastError: string | null = null;
@@ -196,6 +199,7 @@ export class NodeExecutor {
   destroy(): void {
     this.runtime.stop();
     this.runtime.clear();
+    void this.disableAiRuntime();
     this.clearToneNodes();
     this.loopId = null;
     this.running = false;
@@ -272,6 +276,7 @@ export class NodeExecutor {
     );
     this.toneAdapter?.syncActiveNodes(toneNodeIds, next.nodes, next.connections);
     this.runtime.loadGraph(next);
+    void this.syncAiRuntimeForGraph(next);
   }
 
   private deploy(payload: unknown): void {
@@ -356,6 +361,7 @@ export class NodeExecutor {
     this.lastError = null;
     this.runtime.start();
     this.running = true;
+    void this.syncAiRuntimeForGraph(parsed.graph);
 
     console.log('[node-executor] deployed', {
       loopId: this.loopId,
@@ -378,6 +384,7 @@ export class NodeExecutor {
     if (loopId && this.loopId && loopId !== this.loopId) return;
     this.runtime.start();
     this.running = true;
+    void this.syncAiRuntimeForGraph(this.runtime.exportGraph());
     this.report('started', { loopId: this.loopId });
   }
 
@@ -385,6 +392,7 @@ export class NodeExecutor {
     const loopId = this.readLoopId(payload);
     if (loopId && this.loopId && loopId !== this.loopId) return;
     this.runtime.stop();
+    void this.disableAiRuntime();
     this.running = false;
     this.report('stopped', { loopId: this.loopId });
   }
@@ -395,6 +403,7 @@ export class NodeExecutor {
     this.runtime.stop();
     this.runtime.clear();
     this.runtime.clearOverrides();
+    void this.disableAiRuntime();
     this.clearToneNodes();
     this.loopId = null;
     this.running = false;
@@ -456,5 +465,77 @@ export class NodeExecutor {
 
   private clearToneNodes(): void {
     this.toneAdapter?.disposeAll();
+  }
+
+  private scanGraphForAiEnabled(graph: Pick<GraphState, 'nodes' | 'connections'>): boolean {
+    const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+    if (nodes.length === 0) return false;
+
+    const aiNodes = nodes.filter((node) => String(node.type) === 'ai-model-ref');
+    if (aiNodes.length === 0) return false;
+
+    for (const node of aiNodes) {
+      const enabledRaw = (node.config as Record<string, unknown> | undefined)?.enabled;
+      if (typeof enabledRaw === 'boolean') {
+        if (enabledRaw) return true;
+        continue;
+      }
+      if (typeof enabledRaw === 'number' && Number.isFinite(enabledRaw)) {
+        if (enabledRaw >= 0.5) return true;
+        continue;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  private async syncAiRuntimeForGraph(graph: Pick<GraphState, 'nodes' | 'connections'>): Promise<void> {
+    if (!this.running) {
+      await this.disableAiRuntime();
+      return;
+    }
+
+    const shouldEnable = this.scanGraphForAiEnabled(graph);
+    if (!shouldEnable) {
+      await this.disableAiRuntime();
+      return;
+    }
+
+    if (!this.aiRuntime) {
+      this.aiRuntime = createAiRuntime({ backend: 'noop' });
+    }
+
+    if (this.aiEnabled) return;
+
+    this.aiEnabled = true;
+    try {
+      await this.aiRuntime.enable();
+      this.report('ai', { status: 'enabled' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.report('ai', { status: 'error', error: message });
+    }
+  }
+
+  private async disableAiRuntime(): Promise<void> {
+    if (!this.aiRuntime) {
+      this.aiEnabled = false;
+      return;
+    }
+
+    if (!this.aiEnabled) return;
+
+    this.aiEnabled = false;
+    try {
+      await this.aiRuntime.disable();
+      await this.aiRuntime.dispose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.report('ai', { status: 'error', error: message });
+    } finally {
+      this.aiRuntime = null;
+      this.report('ai', { status: 'disabled' });
+    }
   }
 }
