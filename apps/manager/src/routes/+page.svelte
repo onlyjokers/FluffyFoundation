@@ -3,7 +3,7 @@
   import { onMount, tick } from 'svelte';
   import { spring } from 'svelte/motion';
   import { connect, disconnect, connectionStatus } from '$lib/stores/manager';
-  import { ALLOWED_USERNAMES, auth, type AuthUser } from '$lib/stores/auth';
+  import { auth } from '$lib/stores/auth';
   import { nodeEngine } from '$lib/nodes';
   import {
     loadLocalProject,
@@ -19,6 +19,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Toggle from '$lib/components/ui/Toggle.svelte';
+  import ManagerLoginPanel from '$lib/components/ManagerLoginPanel.svelte';
 
   import GeoControl from '$lib/features/location/GeoControl.svelte';
   import RegistryMidiPanel from '$lib/components/RegistryMidiPanel.svelte';
@@ -29,9 +30,6 @@
   let assetWriteToken = '';
   let managerKey = '';
   let isConnecting = false;
-  let username: AuthUser | '' = '';
-  let password = '';
-  let rememberLogin = false;
 
   type WorkspaceTab = 'dashboard' | 'assets' | 'registry-midi' | 'nodes';
   let activePage: WorkspaceTab = 'dashboard';
@@ -99,6 +97,7 @@
   // Settings (persisted)
   const PERFORMANCE_MODE_STORAGE_KEY = 'shugu-manager-performance-mode';
   const MANAGER_KEY_STORAGE_KEY = 'shugu-manager-key';
+  const allowInsecureHttpManagerControl = import.meta.env.DEV;
 
   let performanceMode = false;
 
@@ -133,7 +132,11 @@
       savedUrl && (savedUrl.includes('localhost') || savedUrl.includes('127.0.0.1'));
     const savedIsHttp = savedUrl && savedUrl.startsWith('http:');
 
-    if (savedUrl && !savedIsHttp && !(isAccessingViaIP && savedIsLocalhost)) {
+    if (
+      savedUrl &&
+      (allowInsecureHttpManagerControl || !savedIsHttp) &&
+      !(isAccessingViaIP && savedIsLocalhost)
+    ) {
       serverUrl = savedUrl;
     } else {
       // Default to current hostname (localhost or IP) with HTTPS
@@ -210,6 +213,9 @@
 
   function handleConnect() {
     if (!$auth.user) return;
+    if (!allowInsecureHttpManagerControl && serverUrl.trim().toLowerCase().startsWith('http:')) {
+      return;
+    }
     localStorage.setItem('shugu-server-url', serverUrl);
     localStorage.setItem('shugu-asset-write-token', assetWriteToken);
     localStorage.setItem(MANAGER_KEY_STORAGE_KEY, managerKey);
@@ -226,23 +232,9 @@
     disconnect();
   }
 
-  function handleLogin(event: Event) {
-    event.preventDefault();
-    auth.clearError();
-    const result = auth.login(username, password, rememberLogin);
-
-    if (result.ok) {
-      password = '';
-    } else {
-      password = '';
-    }
-  }
-
   function handleLogout() {
     handleDisconnect();
     auth.logout();
-    rememberLogin = false;
-    password = '';
   }
 </script>
 
@@ -259,52 +251,7 @@
       </div>
     </div>
   {:else if !$auth.user}
-    <div class="connect-screen">
-      <div class="connect-card card card-glass">
-        <h1 class="title">Fluffy Manager</h1>
-
-        <form class="connect-form" on:submit|preventDefault={handleLogin} autocomplete="on">
-          <label class="form-label" for="username">Username</label>
-          <input
-            id="username"
-            list="user-options"
-            type="text"
-            class="input"
-            bind:value={username}
-            placeholder="Eureka / Starno / VKong"
-            autocomplete="username"
-            on:input={() => auth.clearError()}
-          />
-          <datalist id="user-options">
-            {#each ALLOWED_USERNAMES as name}
-              <option value={name} />
-            {/each}
-          </datalist>
-
-          <label class="form-label" for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            class="input"
-            bind:value={password}
-            placeholder="******"
-            autocomplete="current-password"
-            on:input={() => auth.clearError()}
-          />
-
-          <label class="remember-row">
-            <input type="checkbox" bind:checked={rememberLogin} />
-            <span>Remember me</span>
-          </label>
-
-          {#if $auth.error}
-            <p class="error-message">{$auth.error}</p>
-          {/if}
-
-          <button class="btn btn-primary btn-lg w-full" type="submit">Login</button>
-        </form>
-      </div>
-    </div>
+    <ManagerLoginPanel />
   {:else if $connectionStatus === 'disconnected' || $connectionStatus === 'error'}
     <div class="connect-screen">
       <div class="connect-card card card-glass">
@@ -346,12 +293,21 @@
             <p class="error-message">Failed to connect. Please check the server URL.</p>
           {/if}
 
+          {#if !allowInsecureHttpManagerControl && serverUrl
+              .trim()
+              .toLowerCase()
+              .startsWith('http:')}
+            <p class="error-message">Manager control requires HTTPS in production.</p>
+          {/if}
+
           <Button
             variant="primary"
             size="lg"
             fullWidth
             on:click={handleConnect}
-            disabled={isConnecting}
+            disabled={isConnecting ||
+              (!allowInsecureHttpManagerControl &&
+                serverUrl.trim().toLowerCase().startsWith('http:'))}
           >
             {isConnecting ? 'Connecting...' : 'Connect'}
           </Button>
@@ -527,15 +483,6 @@
     font-size: var(--text-sm);
   }
 
-  .remember-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-
   /* Dashboard Grid */
   .dashboard-grid {
     display: grid;
@@ -616,5 +563,4 @@
     color: var(--text-muted);
     line-height: 1.35;
   }
-
 </style>

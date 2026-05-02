@@ -20,6 +20,55 @@ function createGateway(overrides?: { isManager?: boolean }) {
   return { gateway, routed };
 }
 
+function withEnv(patch: Record<string, string | undefined>, fn: () => void): void {
+  const previous = new Map<string, string | undefined>();
+  for (const key of Object.keys(patch)) {
+    previous.set(key, process.env[key]);
+    if (patch[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = patch[key];
+    }
+  }
+
+  try {
+    fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+function createConnectionGateway() {
+  let registeredRole: string | null = null;
+  const clientRegistry = {
+    onClientExpired: () => () => undefined,
+    registerConnection: (_socketId: string, role: string) => {
+      registeredRole = role;
+      return { clientId: 'registered-1', isNewClient: true };
+    },
+    setClientGroup: () => undefined,
+    getClient: () => ({ selected: false }),
+  };
+  const messageRouter = {
+    sendRegistrationConfirmation: () => undefined,
+    notifyClientJoined: () => undefined,
+    broadcastClientListUpdate: () => undefined,
+    setServer: () => undefined,
+    routeMessage: () => undefined,
+  };
+
+  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
+  gateway.server = { sockets: { sockets: new Map() } } as never;
+
+  return { gateway, getRegisteredRole: () => registeredRole };
+}
+
 test('handleMessage rejects schema-invalid messages before routing and logs structured reasons', () => {
   const { gateway, routed } = createGateway({ isManager: true });
   const warnings: unknown[][] = [];
@@ -90,4 +139,79 @@ test('handleMessage rejects unauthorized routing with structured policy metadata
     code: 'server.policy.unauthorized',
     message: 'manager role is required for plugin messages',
   });
+});
+
+test('handleConnection denies requested manager role by default when no secure key is configured', () => {
+  withEnv(
+    {
+      SHUGU_MANAGER_KEY: undefined,
+      SHUGU_ALLOW_INSECURE_MANAGER: undefined,
+      NODE_ENV: undefined,
+    },
+    () => {
+      const { gateway, getRegisteredRole } = createConnectionGateway();
+
+      gateway.handleConnection({
+        id: 'socket-manager-no-key',
+        handshake: {
+          query: { role: 'manager' },
+          headers: {},
+          auth: {},
+          address: '203.0.113.10',
+        },
+      } as never);
+
+      assert.equal(getRegisteredRole(), 'client');
+    }
+  );
+});
+
+test('handleConnection denies requested manager role when configured key is wrong', () => {
+  withEnv(
+    {
+      SHUGU_MANAGER_KEY: 'secure-manager-key-123',
+      SHUGU_ALLOW_INSECURE_MANAGER: undefined,
+      NODE_ENV: undefined,
+    },
+    () => {
+      const { gateway, getRegisteredRole } = createConnectionGateway();
+
+      gateway.handleConnection({
+        id: 'socket-manager-wrong-key',
+        handshake: {
+          query: { role: 'manager' },
+          headers: {},
+          auth: { managerKey: 'wrong-key' },
+          address: '203.0.113.10',
+        },
+      } as never);
+
+      assert.equal(getRegisteredRole(), 'client');
+    }
+  );
+});
+
+test('handleConnection allows explicit local insecure manager mode for local development only', () => {
+  withEnv(
+    {
+      SHUGU_MANAGER_KEY: undefined,
+      SHUGU_ALLOW_INSECURE_MANAGER: '1',
+      NODE_ENV: 'development',
+    },
+    () => {
+      const { gateway, getRegisteredRole } = createConnectionGateway();
+
+      gateway.handleConnection({
+        id: 'socket-manager-local-insecure',
+        handshake: {
+          query: { role: 'manager' },
+          headers: {},
+          auth: {},
+          address: '127.0.0.1',
+        },
+      } as never);
+
+      assert.equal(getRegisteredRole(), 'manager');
+    }
+  );
 });

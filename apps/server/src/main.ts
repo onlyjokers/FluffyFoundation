@@ -1,9 +1,12 @@
 import { type NestApplicationOptions } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadOptionalEnv } from './bootstrap/load-env.js';
+import {
+  createHttpCorsOptions,
+  validateServerSecurityConfig,
+} from './bootstrap/security-policy.js';
 
 async function bootstrap() {
   const env = loadOptionalEnv();
@@ -33,29 +36,27 @@ async function bootstrap() {
     };
     console.log('🔒 HTTPS enabled');
   } else {
-    console.warn('⚠️ No SSL certificates found, falling back to HTTP');
+    console.warn('⚠️ No SSL certificates found, falling back to HTTP (local/dev only)');
   }
 
+  const securityConfig = {
+    nodeEnv: process.env.NODE_ENV,
+    managerKey: process.env.SHUGU_MANAGER_KEY,
+    allowInsecureManager: process.env.SHUGU_ALLOW_INSECURE_MANAGER,
+    corsOrigins: process.env.SHUGU_CORS_ORIGINS,
+    hasHttps: Boolean(httpsOptions),
+  };
+  validateServerSecurityConfig(securityConfig);
+
   const appOptions: NestApplicationOptions = {
-    cors: {
-      origin: '*',
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-      credentials: false,
-      allowedHeaders: ['Range', 'If-None-Match', 'Content-Type', 'Authorization'],
-      exposedHeaders: [
-        'Content-Range',
-        'Accept-Ranges',
-        'ETag',
-        'Content-Length',
-        'Content-Type',
-      ],
-    },
+    cors: createHttpCorsOptions(securityConfig),
   };
 
   if (httpsOptions) {
     appOptions.httpsOptions = httpsOptions;
   }
 
+  const { AppModule } = await import('./app.module.js');
   const app = await NestFactory.create(AppModule, appOptions);
 
   const port = process.env.PORT || 3001;

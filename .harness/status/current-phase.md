@@ -14,4 +14,5 @@ and documenting/blocking production HTTP fallback for manager control.
 
 ## Work Status
 
-FF-03 was accepted and committed as `b5fa051 Add runtime protocol validation`. FF-04 is the active next phase.
+FF-04 Work implementation is ready for Review. Evidence is recorded in `.harness/evidence/FF-04/summary.md`
+and handoff is recorded in `.harness/handoffs/FF-04-work-handoff.md`.

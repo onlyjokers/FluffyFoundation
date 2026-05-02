@@ -13,7 +13,9 @@ type AuthState = {
 
 type LoginResult = { ok: true } | { ok: false; reason: string };
 
-const PASSWORD = '521184';
+const DEV_PASSWORD = import.meta.env.DEV
+  ? (import.meta.env.VITE_SHUGU_MANAGER_DEV_PASSWORD ?? '')
+  : '';
 const COOKIE_NAME = 'shugu-manager-auth';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
@@ -21,12 +23,14 @@ function isAuthUser(value: string): value is AuthUser {
   return (ALLOWED_USERNAMES as readonly string[]).includes(value);
 }
 
+export function isDevPasswordLoginEnabled(): boolean {
+  return import.meta.env.DEV && DEV_PASSWORD.length > 0;
+}
+
 function readCookie(name: string): string | null {
   if (!browser) return null;
 
-  const entry = document.cookie
-    .split('; ')
-    .find((part) => part.trim().startsWith(`${name}=`));
+  const entry = document.cookie.split('; ').find((part) => part.trim().startsWith(`${name}=`));
 
   if (!entry) return null;
   const [, value] = entry.split('=');
@@ -88,7 +92,7 @@ function createAuthStore() {
       return { ok: false, reason: 'invalid-user' };
     }
 
-    if (password !== PASSWORD) {
+    if (!isDevPasswordLoginEnabled() || password !== DEV_PASSWORD) {
       update((state) => ({ ...state, error: '密码错误' }));
       return { ok: false, reason: 'invalid-password' };
     }

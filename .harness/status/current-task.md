@@ -23,4 +23,4 @@ Manager/auth/CORS security baseline scope:
 
 ## Next Expected Action
 
-Implement only the FF-04 manager/auth/CORS security baseline boundary in the next bounded Work dispatch.
+Review the FF-04 manager/auth/CORS security baseline implementation and evidence.
