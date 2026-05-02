@@ -16,7 +16,7 @@
     "harness:validate": "python3 .harness/scripts/validate_harness.py",
     "harness:hotspots": "python3 .harness/scripts/check_hotspots.py",
     "harness:verify": "pnpm harness:validate && pnpm harness:hotspots && pnpm validate:node-specs",
-    "verify": "pnpm guard:deps && pnpm lint && pnpm build:all && pnpm test:core && pnpm harness:verify",
+    "verify": "pnpm guard:deps && pnpm lint && pnpm build:all && pnpm test:node-core && pnpm validate:node-specs && pnpm e2e:node-executor:offline && pnpm harness:verify",
     "test:node-canvas": "pnpm tsx --test \"apps/manager/src/lib/components/nodes/node-canvas/groups/**/*.spec.ts\"",
     "guard:deps": "node scripts/guard-deps.mjs && node scripts/guard-server-messages.mjs",
     "guard:server-messages": "node scripts/guard-server-messages.mjs",
