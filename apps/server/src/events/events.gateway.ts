@@ -14,7 +14,12 @@ import { createClient, type RedisClientType } from 'redis';
 import { ClientRegistryService } from '../client-registry/client-registry.service.js';
 import { MessageRouterService } from '../message-router/message-router.service.js';
 import type { ConnectionRole, TimePingData } from '@shugu/protocol';
-import { createTimePong, isValidMessage, targetClients } from '@shugu/protocol';
+import {
+    createPolicyRejectReason,
+    createTimePong,
+    targetClients,
+    validateMessage,
+} from '@shugu/protocol';
 import { sendServerControl } from '../protocol/server-messages.js';
 
 function sanitizeGroup(value: unknown): string | null {
@@ -192,22 +197,59 @@ export class EventsGateway
         @MessageBody() message: unknown,
         @ConnectedSocket() client: Socket,
     ): void {
-        // Validate message structure
-        if (!isValidMessage(message)) {
-            console.warn(`[Gateway] Invalid message from ${client.id}:`, message);
+        // Validate the full runtime protocol schema before routing.
+        const validation = validateMessage(message);
+        if (!validation.ok) {
+            this.logRejectedMessage(client.id, validation.reasons);
             return;
         }
 
+        const validatedMessage = validation.message;
+
         // Check authorization for control messages
-        if (message.type === 'control' || message.type === 'media' || message.type === 'plugin') {
+        if (validatedMessage.type === 'control' || validatedMessage.type === 'media' || validatedMessage.type === 'plugin') {
             if (!this.clientRegistry.isManager(client.id)) {
-                console.warn(`[Gateway] Unauthorized control message from ${client.id}`);
+                this.logRejectedMessage(client.id, [
+                    createPolicyRejectReason({
+                        actor: 'from' in validatedMessage ? validatedMessage.from : 'unknown',
+                        scope: 'server.ingress.authorization',
+                        type: validatedMessage.type,
+                        path: 'from',
+                        message: `manager role is required for ${validatedMessage.type} messages`,
+                    }),
+                ]);
                 return;
             }
         }
 
         // Route the message
-        this.messageRouter.routeMessage(message, client.id);
+        this.messageRouter.routeMessage(validatedMessage, client.id);
+    }
+
+    private logRejectedMessage(
+        socketId: string,
+        reasons: Array<{
+            actor: string;
+            scope: string;
+            type: string;
+            path: string;
+            decision: string;
+            code: string;
+            message: string;
+        }>
+    ): void {
+        for (const reason of reasons) {
+            console.warn('[Gateway] Message rejected', {
+                socketId,
+                actor: reason.actor,
+                scope: reason.scope,
+                type: reason.type,
+                path: reason.path,
+                decision: reason.decision,
+                code: reason.code,
+                message: reason.message,
+            });
+        }
     }
 
     /**

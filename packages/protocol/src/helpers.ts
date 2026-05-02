@@ -18,7 +18,9 @@ import {
     PluginCommand,
     SystemAction,
 } from './types.js';
+import { validateMessage } from './validation.js';
 export { matchesTarget } from './helpers/matches-target.js';
+export { createPolicyRejectReason, validateMessage } from './validation.js';
 
 /**
  * Get current timestamp in milliseconds
@@ -36,16 +38,19 @@ export function createControlMessage(
     payload: ControlPayload,
     executeAt?: number
 ): Omit<ControlMessage, 'serverTimestamp'> {
-    return {
+    const message: Omit<ControlMessage, 'serverTimestamp'> = {
         type: 'control' as const,
         version: PROTOCOL_VERSION,
         from: 'manager',
         target,
         action,
         payload,
-        executeAt,
         clientTimestamp: now(),
     };
+    if (typeof executeAt === 'number' && Number.isFinite(executeAt)) {
+        message.executeAt = executeAt;
+    }
+    return message;
 }
 
 /**
@@ -57,16 +62,19 @@ export function createServerControlMessage(
     payload: ControlPayload,
     executeAt?: number
 ): Omit<ControlMessage, 'serverTimestamp'> {
-    return {
+    const message: Omit<ControlMessage, 'serverTimestamp'> = {
         type: 'control' as const,
         version: PROTOCOL_VERSION,
         from: 'server',
         target,
         action,
         payload,
-        executeAt,
         clientTimestamp: now(),
     };
+    if (typeof executeAt === 'number' && Number.isFinite(executeAt)) {
+        message.executeAt = executeAt;
+    }
+    return message;
 }
 
 /**
@@ -98,7 +106,7 @@ export function createMediaMetaMessage(
     executeAt: number,
     options?: MediaMetaMessage['options']
 ): Omit<MediaMetaMessage, 'serverTimestamp'> {
-    return {
+    const message: Omit<MediaMetaMessage, 'serverTimestamp'> = {
         type: 'media' as const,
         version: PROTOCOL_VERSION,
         from: 'manager',
@@ -106,9 +114,12 @@ export function createMediaMetaMessage(
         mediaType,
         url,
         executeAt,
-        options,
         clientTimestamp: now(),
     };
+    if (options !== undefined) {
+        message.options = options;
+    }
+    return message;
 }
 
 /**
@@ -120,16 +131,19 @@ export function createPluginControlMessage(
     command: PluginCommand,
     payload?: Record<string, unknown>
 ): Omit<PluginControlMessage, 'serverTimestamp'> {
-    return {
+    const message: Omit<PluginControlMessage, 'serverTimestamp'> = {
         type: 'plugin' as const,
         version: PROTOCOL_VERSION,
         from: 'manager',
         target,
         pluginId,
         command,
-        payload,
         clientTimestamp: now(),
     };
+    if (payload !== undefined) {
+        message.payload = payload;
+    }
+    return message;
 }
 
 /**
@@ -243,11 +257,5 @@ export function addServerTimestamp<T extends Partial<BaseMessage>>(
  * Validate message structure
  */
 export function isValidMessage(msg: unknown): msg is MessageWithoutServerTimestamp {
-    if (typeof msg !== 'object' || msg === null) return false;
-    const m = msg as Partial<MessageWithoutServerTimestamp>;
-    return (
-        typeof m.type === 'string' &&
-        ['control', 'data', 'media', 'system', 'plugin'].includes(m.type) &&
-        m.version === PROTOCOL_VERSION
-    );
+    return validateMessage(msg).ok;
 }

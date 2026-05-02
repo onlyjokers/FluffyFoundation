@@ -11,3 +11,6 @@ export * from './helpers.js';
 
 // Export time sync utilities
 export * from './time-sync.js';
+
+// Export runtime validation result types
+export type * from './validation/types.js';
