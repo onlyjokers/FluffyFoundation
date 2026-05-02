@@ -4,23 +4,23 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-04 - Manager/Auth/CORS Security Baseline
+FF-05 - Scope, Audit, And Command Envelope Repair
 
 ## Current Boundary
 
-Manager/auth/CORS security baseline scope:
+Scope/audit/command-envelope repair scope:
 
-- `apps/server/**` for auth/CORS/production boot checks
-- `apps/manager/**` only where manager login/control configuration must be removed or isolated
-- `packages/protocol/**` only if protocol-level auth/error types are strictly required
-- related tests/fixtures for missing manager key and production-like insecure config denial
+- `packages/sdk-manager/**` for caller scope preservation and batching/flush behavior
+- `packages/protocol/**` for command envelope/audit contracts if required
+- `apps/server/**` for normalization/authorization/rejection/audit integration
+- related tests/fixtures for scope preservation and missing/wrong scope denial
 - `package.json` only for verification script wiring if required
-- `docs/harness/**` only for FF-04 policy/evidence references
+- `docs/harness/**` only for FF-05 policy/evidence references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-04/**`
+- `.harness/evidence/FF-05/**`
 
 ## Next Expected Action
 
-Review the FF-04 manager/auth/CORS security baseline implementation and evidence.
+Implement only the FF-05 scope/audit/command-envelope repair boundary in the next bounded Work dispatch.

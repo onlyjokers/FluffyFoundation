@@ -31,3 +31,14 @@ Implemented the FF-04 security baseline inside the approved manager/auth/CORS bo
 - No new dependency or lockfile change was introduced.
 - Browser/runtime proof was not required by Runtime Input; CLI/test proof covers the FF-04 policy boundary.
 - Existing warnings are documented in `.harness/evidence/FF-04/summary.md`.
+
+## FF-04 To FF-05 Transition
+
+FF-04 - Manager/Auth/CORS Security Baseline was accepted and committed as
+`5617f78 Add manager auth security baseline`.
+
+FF-05 - Scope, Audit, And Command Envelope Repair is now the active next phase.
+
+The next Work dispatch should stay inside the FF-05 scope/audit/command-envelope boundary: SDK manager caller scope
+preservation and batching/flush behavior, protocol command envelope/audit contracts if required, server
+normalization/authorization/rejection/audit integration, and related scope preservation or denial tests.

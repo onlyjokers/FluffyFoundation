@@ -4,15 +4,13 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-04 - Manager/Auth/CORS Security Baseline
+FF-05 - Scope, Audit, And Command Envelope Repair
 
 ## Active Claim
 
-Close manager/control-plane takeover paths by denying manager role by default without secure config or explicit local
-insecure mode, making production CORS fail closed, removing or isolating hardcoded frontend login secret to dev mode,
-and documenting/blocking production HTTP fallback for manager control.
+Make `scopeGroupId` trustworthy by preserving caller scope, requiring actor/role/correlation/idempotency metadata on
+non-system control commands, rejecting ambiguous scope at the server, and defining audit records for mutating commands.
 
 ## Work Status
 
-FF-04 Work implementation is ready for Review. Evidence is recorded in `.harness/evidence/FF-04/summary.md`
-and handoff is recorded in `.harness/handoffs/FF-04-work-handoff.md`.
+FF-04 was accepted and committed as `5617f78 Add manager auth security baseline`. FF-05 is the active next phase.
