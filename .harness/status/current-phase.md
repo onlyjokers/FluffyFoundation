@@ -4,13 +4,15 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-05 - Scope, Audit, And Command Envelope Repair
+FF-06 - Server State Strategy And Multi-Instance Contract
 
 ## Active Claim
 
-Make `scopeGroupId` trustworthy by preserving caller scope, requiring actor/role/correlation/idempotency metadata on
-non-system control commands, rejecting ambiguous scope at the server, and defining audit records for mutating commands.
+Remove the current "Redis broadcast but local truth" ambiguity by choosing and making visible either explicit
+single-server production mode or shared state for registry, selection, ownership, and control-plane snapshot.
 
 ## Work Status
 
-FF-04 was accepted and committed as `5617f78 Add manager auth security baseline`. FF-05 is the active next phase.
+FF-05 was accepted and committed as `30c43ac Add scoped command envelope enforcement`. FF-06 is the active next
+phase/task. The next Plan dispatch may start bounded FF-06 Work, but this transition boundary does not implement
+FF-06.

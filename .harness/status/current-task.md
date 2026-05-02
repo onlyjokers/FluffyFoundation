@@ -4,23 +4,33 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-05 - Scope, Audit, And Command Envelope Repair
+FF-06 - Server State Strategy And Multi-Instance Contract
 
 ## Current Boundary
 
-Scope/audit/command-envelope repair scope:
+Server state strategy and multi-instance contract scope from `docs/harness/PLAN.md`:
 
-- `packages/sdk-manager/**` for caller scope preservation and batching/flush behavior
-- `packages/protocol/**` for command envelope/audit contracts if required
-- `apps/server/**` for normalization/authorization/rejection/audit integration
-- related tests/fixtures for scope preservation and missing/wrong scope denial
+- ADR chooses either explicit single-server production mode or shared state for registry, selection, ownership, and
+  control-plane snapshot.
+- If single-server: boot/runtime checks make it visible and reject unsupported clustered configs.
+- If shared-state: registry/control-plane updates publish/subscribe and converge across instances.
+- Status UI and logs show the active state strategy.
+- Verification target: single-server guard or two-instance convergence test, and ownership snapshot cannot diverge
+  silently.
+
+Allowed FF-06 implementation boundary for a future bounded Work dispatch:
+
+- server state strategy/boot/runtime checks and related logs/status surfaces
+- shared-state or single-server ADR/evidence required by the chosen strategy
+- related tests/fixtures proving the selected single-server guard or two-instance convergence behavior
 - `package.json` only for verification script wiring if required
-- `docs/harness/**` only for FF-05 policy/evidence references
+- `docs/harness/**` only for FF-06 policy/evidence/ADR references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-05/**`
+- `.harness/evidence/FF-06/**`
 
 ## Next Expected Action
 
-Implement only the FF-05 scope/audit/command-envelope repair boundary in the next bounded Work dispatch.
+The next Plan dispatch may start bounded FF-06 Work. This FF-05-to-FF-06 status-transition boundary must not implement
+FF-06 server state strategy behavior.
