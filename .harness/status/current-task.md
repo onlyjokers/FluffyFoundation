@@ -23,4 +23,4 @@ Ownership and topology ratchet scope:
 
 ## Next Expected Action
 
-Implement only the FF-02 ownership/topology ratchets and their evidence in the next bounded Work dispatch.
+Review the FF-02 ownership/topology ratchets, evidence, and handoff. If accepted, Review owns the final commit.

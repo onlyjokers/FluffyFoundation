@@ -3,28 +3,233 @@
   "thresholds": {
     "watch": 250,
     "split_required": 400,
-    "block_unlisted": 700
+    "block_unlisted": 400
   },
   "files": {
-    "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteControl.svelte": { "max_lines": 2701, "owner": "node-graph", "plan": "FF-02/FF-08/FF-09" },
-    "apps/manager/src/lib/components/nodes/NodeCanvas.svelte": { "max_lines": 2646, "owner": "node-graph", "plan": "FF-02/FF-08/FF-09" },
-    "apps/manager/src/lib/components/AssetsManager.svelte": { "max_lines": 1936, "owner": "assets-ui", "plan": "FF-16" },
-    "apps/manager/src/lib/components/nodes/node-canvas/controllers/group-controller.ts": { "max_lines": 1870, "owner": "node-graph", "plan": "FF-12" },
-    "apps/manager/src/lib/nodes/specs/register.ts": { "max_lines": 1665, "owner": "node-registry", "plan": "FF-10" },
-    "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte": { "max_lines": 1561, "owner": "node-graph", "plan": "FF-08" },
-    "packages/sdk-client/src/tone-adapter/register.ts": { "max_lines": 1487, "owner": "plugin-runtime", "plan": "FF-17" },
-    "apps/manager/src/lib/components/nodes/node-canvas/runtime/patch-runtime.ts": { "max_lines": 1417, "owner": "execution", "plan": "FF-14" },
-    "packages/sdk-client/src/action-executors.ts": { "max_lines": 1371, "owner": "client-runtime", "plan": "FF-14/FF-17" },
-    "apps/manager/src/lib/nodes/engine.ts": { "max_lines": 1364, "owner": "node-graph", "plan": "FF-09/FF-14" },
-    "packages/sdk-client/src/tone-adapter/nodes.ts": { "max_lines": 1253, "owner": "plugin-runtime", "plan": "FF-17" },
-    "apps/display/src/lib/stores/display.ts": { "max_lines": 1208, "owner": "display-runtime", "plan": "FF-15" },
-    "apps/manager/src/lib/components/nodes/node-canvas/controllers/group-port-nodes-controller.ts": { "max_lines": 1135, "owner": "node-graph", "plan": "FF-12" },
-    "packages/node-core/src/runtime.ts": { "max_lines": 979, "owner": "node-runtime", "plan": "FF-11/FF-14" },
-    "packages/node-core/src/definitions/nodes/assets.ts": { "max_lines": 840, "owner": "node-registry", "plan": "FF-10/FF-16" },
-    "packages/node-core/src/definitions/nodes/logic.ts": { "max_lines": 794, "owner": "node-registry", "plan": "FF-10" },
-    "packages/sdk-manager/src/manager-sdk.ts": { "max_lines": 771, "owner": "manager-sdk", "plan": "FF-05/FF-07" },
-    "apps/manager/src/lib/components/nodes/node-canvas/rete/rete-builder.ts": { "max_lines": 726, "owner": "node-graph", "plan": "FF-08" },
-    "apps/manager/src/lib/stores/manager.ts": { "max_lines": 719, "owner": "manager-runtime", "plan": "FF-08" },
-    "apps/manager/src/lib/components/RegistryMidiPanel.svelte": { "max_lines": 718, "owner": "midi-ui", "plan": "FF-17" }
+    "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteControl.svelte": {
+      "max_lines": 2701,
+      "owner": "node-graph",
+      "plan": "FF-02/FF-08/FF-09"
+    },
+    "apps/manager/src/lib/components/nodes/NodeCanvas.svelte": {
+      "max_lines": 2646,
+      "owner": "node-graph",
+      "plan": "FF-02/FF-08/FF-09"
+    },
+    "apps/manager/src/lib/components/AssetsManager.svelte": {
+      "max_lines": 1936,
+      "owner": "assets-ui",
+      "plan": "FF-16"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/group-controller.ts": {
+      "max_lines": 1870,
+      "owner": "node-graph",
+      "plan": "FF-12"
+    },
+    "apps/manager/src/lib/nodes/specs/register.ts": {
+      "max_lines": 1665,
+      "owner": "node-registry",
+      "plan": "FF-10"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte": {
+      "max_lines": 1561,
+      "owner": "node-graph",
+      "plan": "FF-08"
+    },
+    "packages/sdk-client/src/tone-adapter/register.ts": {
+      "max_lines": 1487,
+      "owner": "plugin-runtime",
+      "plan": "FF-17"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/runtime/patch-runtime.ts": {
+      "max_lines": 1417,
+      "owner": "execution",
+      "plan": "FF-14"
+    },
+    "packages/sdk-client/src/action-executors.ts": {
+      "max_lines": 1371,
+      "owner": "client-runtime",
+      "plan": "FF-14/FF-17"
+    },
+    "apps/manager/src/lib/nodes/engine.ts": {
+      "max_lines": 1364,
+      "owner": "node-graph",
+      "plan": "FF-09/FF-14"
+    },
+    "packages/sdk-client/src/tone-adapter/nodes.ts": {
+      "max_lines": 1253,
+      "owner": "plugin-runtime",
+      "plan": "FF-17"
+    },
+    "apps/display/src/lib/stores/display.ts": {
+      "max_lines": 1208,
+      "owner": "display-runtime",
+      "plan": "FF-15"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/group-port-nodes-controller.ts": {
+      "max_lines": 1135,
+      "owner": "node-graph",
+      "plan": "FF-12"
+    },
+    "packages/node-core/src/runtime.ts": {
+      "max_lines": 979,
+      "owner": "node-runtime",
+      "plan": "FF-11/FF-14"
+    },
+    "packages/node-core/src/definitions/nodes/assets.ts": {
+      "max_lines": 840,
+      "owner": "node-registry",
+      "plan": "FF-10/FF-16"
+    },
+    "packages/node-core/src/definitions/nodes/logic.ts": {
+      "max_lines": 794,
+      "owner": "node-registry",
+      "plan": "FF-10"
+    },
+    "packages/sdk-manager/src/manager-sdk.ts": {
+      "max_lines": 771,
+      "owner": "manager-sdk",
+      "plan": "FF-05/FF-07"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/rete/rete-builder.ts": {
+      "max_lines": 726,
+      "owner": "node-graph",
+      "plan": "FF-08"
+    },
+    "apps/manager/src/lib/stores/manager.ts": {
+      "max_lines": 719,
+      "owner": "manager-runtime",
+      "plan": "FF-08"
+    },
+    "apps/manager/src/lib/components/RegistryMidiPanel.svelte": {
+      "max_lines": 718,
+      "owner": "midi-ui",
+      "plan": "FF-17"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/custom-nodes/custom-node-expansion.ts": {
+      "max_lines": 682,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte": {
+      "max_lines": 676,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/display/display-bridge.ts": {
+      "max_lines": 652,
+      "owner": "display-bridge",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/routes/+page.svelte": {
+      "max_lines": 620,
+      "owner": "manager-ui",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/client/src/routes/+page.svelte": {
+      "max_lines": 606,
+      "owner": "client-runtime",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/custom-nodes/custom-node-actions.ts": {
+      "max_lines": 598,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/sdk-client/src/node-executor.ts": {
+      "max_lines": 541,
+      "owner": "client-sdk",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/ui/NodeCanvasToolbar.svelte": {
+      "max_lines": 525,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/protocol/src/types.ts": {
+      "max_lines": 523,
+      "owner": "protocol",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/ui-kit/src/components/VideoPlayer.svelte": {
+      "max_lines": 516,
+      "owner": "ui-kit",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/server/src/assets/assets.service.ts": {
+      "max_lines": 492,
+      "owner": "assets-server",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/node-core/src/definitions/nodes/player.ts": {
+      "max_lines": 492,
+      "owner": "node-registry",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/features/midi/midi-templates.ts": {
+      "max_lines": 491,
+      "owner": "midi-ui",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/multimedia-core/src/multimedia-core.ts": {
+      "max_lines": 483,
+      "owner": "multimedia-runtime",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/sdk-client/src/client-sdk.ts": {
+      "max_lines": 483,
+      "owner": "client-sdk",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-controller.ts": {
+      "max_lines": 476,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/io/file-actions.ts": {
+      "max_lines": 473,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/minimap-controller.ts": {
+      "max_lines": 460,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/client/src/lib/components/VisualCanvas.svelte": {
+      "max_lines": 452,
+      "owner": "client-runtime",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/client/src/lib/stores/client/client-control.ts": {
+      "max_lines": 447,
+      "owner": "client-runtime",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "packages/node-core/src/definitions/nodes/processors.ts": {
+      "max_lines": 447,
+      "owner": "node-registry",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/clipboard-controller.ts": {
+      "max_lines": 434,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/client/src/lib/stores/client/client-runtime.ts": {
+      "max_lines": 412,
+      "owner": "client-runtime",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/server/src/client-registry/client-registry.service.ts": {
+      "max_lines": 406,
+      "owner": "server-registry",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/manager/src/lib/components/nodes/node-canvas/adapters/rete-adapter.ts": {
+      "max_lines": 400,
+      "owner": "node-graph",
+      "plan": "FF-02 ratchet; split in owning follow-up"
+    }
   }
 }

@@ -1,0 +1,47 @@
+# Purpose: Placeholder ownership map for FF-02 topology, security, runtime, and release review lanes.
+# These local @shugu/* handles are not confirmed GitHub teams. Replace them with real teams before branch protection relies on CODEOWNERS.
+
+# Architecture and harness policy
+/docs/harness/ @shugu/architecture
+/.harness/ @shugu/architecture
+/scripts/guard-*.mjs @shugu/architecture
+
+# Security-sensitive server, asset, geo, and auth paths
+/apps/server/src/assets/ @shugu/security @shugu/server
+/apps/server/src/geo/ @shugu/security @shugu/server
+/apps/server/src/bootstrap/ @shugu/security @shugu/server
+
+# AI lane
+/packages/ai-core/ @shugu/ai
+/apps/manager/src/lib/components/nodes/node-canvas/ui/panels/ModelDistributionPanel.svelte @shugu/ai @shugu/ui
+/apps/manager/src/lib/stores/model-distribution.ts @shugu/ai @shugu/ui
+
+# Server authority and transport lanes
+/apps/server/ @shugu/server
+/apps/server/src/events/ @shugu/server @shugu/runtime
+/apps/server/src/message-router/ @shugu/server @shugu/runtime
+/apps/server/src/client-registry/ @shugu/server @shugu/runtime
+
+# UI lanes
+/apps/manager/ @shugu/ui
+/apps/client/ @shugu/ui @shugu/runtime
+/apps/display/ @shugu/ui @shugu/runtime
+/packages/ui-kit/ @shugu/ui
+
+# Protocol and SDK contracts
+/packages/protocol/ @shugu/protocol
+/packages/sdk-client/ @shugu/runtime
+/packages/sdk-manager/ @shugu/runtime
+
+# Runtime, plugin, and topology implementation
+/packages/node-core/ @shugu/runtime
+/packages/multimedia-core/ @shugu/runtime
+/packages/audio-plugins/ @shugu/runtime
+/packages/visual-plugins/ @shugu/runtime
+/packages/visual-effects/ @shugu/runtime
+
+# Release and CI surfaces
+/package.json @shugu/release
+/pnpm-lock.yaml @shugu/release
+/pnpm-workspace.yaml @shugu/release
+/.github/ @shugu/release

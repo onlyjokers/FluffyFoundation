@@ -32,6 +32,9 @@ Every layer should have one reason to change. UI renders and captures intent; co
 - Future semantic packages should be split by bounded context, for example `@shugu/graph-commands`, `@shugu/node-registry`, `@shugu/control-plane-contracts`, `@shugu/ai-operator-contracts`, and `@shugu/execution-contracts`.
 - App packages may depend on contracts and SDKs; contracts must not depend on app packages.
 - External app/provider SDKs stay behind adapter packages and never enter core contracts.
+- Package and app imports must use declared public package exports. Deep imports such as
+  `@shugu/sdk-client/src/client-sdk` are blocked by `pnpm guard:deps` unless a package exposes that subpath in
+  `package.json`.
 
 ## Forbidden Patterns
 
@@ -52,3 +55,30 @@ Every layer should have one reason to change. UI renders and captures intent; co
 - Root authoring: `apps/manager/src/routes/root`, Canvas adapters, Root-only stores.
 - Manager performance: `apps/manager/src/routes/manager`, published Group controls, lightweight stores.
 - AI: `packages/ai-core` plus future AI operator package; no direct UI mutation.
+
+## Topology Change Policy
+
+Every new source file must start with a short purpose header that states the file's role. The header may be a block
+comment in TypeScript/Svelte, an HTML comment in Markdown/Svelte markup, or the closest repo-native comment form.
+
+Every new workspace package must have a package-level purpose in `package.json` and must be listed in the topology
+policy before code depends on it. The policy entry must name its lane, allowed upstream packages, and CODEOWNERS lane.
+
+Topology changes require an ADR or harness policy update before implementation when they do any of the following:
+
+- add a new app or package;
+- add a new public package export;
+- add a new cross-package dependency or reverse an existing dependency direction;
+- move ownership between Root, Manager, Display, SDK, server, plugin, AI, persistence, topology, protocol, or runtime
+  lanes;
+- expand a hotspot allowance instead of splitting or shrinking it.
+
+FF-02 guard ownership:
+
+- `pnpm harness:hotspots` blocks growth in allowlisted large files and blocks unlisted files at or above 400 lines.
+- `pnpm guard:deps` blocks unexported deep imports, undeclared package dependencies, package-to-app imports, and
+  disallowed lane dependencies for Root, Manager, Display, SDK, server, plugin, AI, persistence, topology, protocol,
+  and runtime paths.
+- Root `CODEOWNERS` declares placeholder local handles for architecture, security, AI, server, UI, protocol, runtime,
+  and release ownership. These handles must be replaced with real GitHub teams before repository protection relies on
+  CODEOWNERS enforcement.
