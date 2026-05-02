@@ -29,13 +29,14 @@ Decision rules:
 - Return `BLOCKED` when human approval, external dependency approval, or a scope decision is required.
 - Return `REVISE` only when Review should inspect an existing boundary before Plan can continue.
 - Do not dispatch feature work that violates the sequence in `docs/harness/PLAN.md`.
-- Do not dispatch a new task while an accepted diff must be committed, parked, or discarded.
+- Do not dispatch a new task while an accepted diff must be reviewed, committed, parked, or discarded.
+- Do not send accepted-diff commit work to Work. If the next action is to close an accepted boundary by staging and committing it, return `REVISE` so Review receives that boundary and owns the final accept-and-commit step.
 - Do not treat ignored disposable runtime output as an unresolved boundary. `.looooper/**`, `.looooper/runs/**`, `.harness/evidence/*`, `.harness/handoffs/*`, caches, logs, build outputs, and other `.gitignore`-matched paths are non-blocking unless Runtime Input explicitly asks to inspect or preserve them.
 - Do not treat a branch being ahead of origin as a reason to finish or as an unresolved working-tree boundary. It is status context only.
 
 Handoff requirements for `PASS`:
 - Name the exact `FF-*` or justified `FF-xx-WP<n>` task ID.
-- State whether this is implementation, review-fix, commit-prep, harness-only, status-transition, or next-task work.
+- State whether this is implementation, review-fix, commit-candidate-prep, harness-only, status-transition, or next-task work.
 - List allowed files/directories.
 - List non-goals.
 - Define proof/checks Work should run.
@@ -43,12 +44,20 @@ Handoff requirements for `PASS`:
 - Set `targetSessionPolicy` to `resume` when continuing the same `FF-*` or `FF-xx-WP<n>` Work context.
 - Set `targetSessionPolicy` to `new` only when starting a genuinely independent next `FF-*`/WP boundary.
 
+Handoff requirements for `REVISE`:
+- Use `REVISE` when Review must close an accepted existing boundary before Plan can continue.
+- Name the exact accepted task ID and commit scope.
+- Tell Review to inspect the diff, run or verify the requested checks, stage exactly the accepted files, inspect the cached diff, commit with a conventional message, and return `PASS`.
+- Do not ask Review to choose or dispatch the next `FF-*` task.
+
 Output contract:
 - Return JSON only.
 - Return no Markdown, no code fence, and no prose outside the JSON object.
 - Include every required field exactly once. Do not add extra keys.
 - `decision` must be `PASS`, `REVISE`, `BLOCKED`, or `FINISH`.
 - `targetSessionPolicy` must be `new` or `resume` when `decision` is `PASS`; otherwise `null`.
+- Never return `committed`, `accepted`, `in_progress`, or any other non-schema decision.
+- `artifacts` and `nonGoals` must be string arrays only; do not return artifact objects.
 - Use empty arrays when there are no artifacts, checks, non-goals, or metadata.
 - Use `commitMessage: null` unless the handoff specifically requires a commit.
 

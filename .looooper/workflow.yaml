@@ -67,54 +67,58 @@ workflow:
         - shell
   edges:
     - from: start1
-      when: 'decision == 'PASS''
+      when: "decision == 'PASS'"
       to: plan
       input: '{{source.handoffPrompt}}'
     - from: plan
-      when: 'decision == 'PASS''
+      when: "decision == 'PASS'"
       to: work
       input: 'Selected Work session policy: {{source.targetSessionPolicy}}\n\n{{source.handoffPrompt}}'
       target_session: source
       target_model: gpt-5.5
-      target_prompt: >-
+      target_prompt: You are Work in plan-dispatched mode. Implement or prepare exactly the bounded task in Runtime Input. Respect the selected Work session policy described in Runtime Input; new means a clean independent boundary, resume means continue the previous Work context without starting another task. Keep one logical boundary, edit only allowed files, run the requested proof when practical, and do not start another task. If Runtime Input is commit-prep, prepare the exact commit candidate for Review, verify scope and checks, but do not stage or commit. Review owns final accept-and-commit. Return PASS when ready for Review, REVISE with an exact Work-fixable blocker, or BLOCKED when Plan must approve a scope or sequencing decision. Return JSON only.
     - from: work
-      when: 'decision == 'PASS''
+      when: "decision == 'PASS'"
       to: review
       input: '{{source.handoffPrompt}}'
       target_session: follow
     - from: work
-      when: 'decision == 'BLOCKED''
+      when: "decision == 'BLOCKED'"
       to: plan
       input: '{{source.handoffPrompt}}'
       target_session: resume
       target_model: gpt-5.5
       target_prompt: >-
+        You are Plan in blocked-boundary decision mode. Runtime Input describes a current task that Work cannot safely complete without planning approval, boundary expansion, dependency authorization, or task splitting. Do not implement, review, stage, or commit. Decide the next bounded action: return PASS with explicit approved scope for Work, return REVISE only if Review must inspect a concrete existing boundary, or return FINISH only if the whole workflow is complete. If approving dependency or lockfile changes, name the exact files and why they are allowed for this task. Return JSON only.
     - from: review
-      when: 'decision == 'REVISE''
+      when: "decision == 'REVISE'"
       to: work
       input: '{{source.handoffPrompt}}'
       target_session: resume
       target_prompt: >-
+        You are Work in review-revision mode. Fix only the concrete Review feedback in Runtime Input for the same current task boundary. Do not start a new checklist item, do not re-plan, and do not commit. Inspect the cited files, make the smallest safe change, run the requested proof when practical, and return PASS only when ready for Review again. Return JSON only.
     - from: review
-      when: 'decision == 'BLOCKED''
+      when: "decision == 'BLOCKED'"
       to: plan
       input: '{{source.handoffPrompt}}'
       target_session: resume
       target_model: gpt-5.5
       target_prompt: >-
+        You are Plan in blocked-boundary decision mode. Runtime Input describes a current task that Review cannot safely accept without planning approval, boundary expansion, dependency authorization, verification-path approval, or task splitting. Do not implement, review, stage, or commit. Decide the next bounded action: return PASS with explicit approved scope for Work, return REVISE only if Review must inspect a concrete existing boundary, or return FINISH only if the whole workflow is complete. If approving dependency, lockfile, or verification-path changes, name the exact files/checks and why they are allowed for this task. Return JSON only.
     - from: review
-      when: 'decision == 'PASS''
+      when: "decision == 'PASS'"
       to: plan
       input: '{{source.handoffPrompt}}'
       target_session: resume
       target_model: gpt-5.5
     - from: plan
-      when: 'decision == 'REVISE''
+      when: "decision == 'REVISE'"
       to: review
       input: '{{source.handoffPrompt}}'
       target_session: follow
       target_prompt: >-
+        You are Review in plan-requested-boundary-closure mode. Plan has determined that the current task cannot advance or finish because an existing boundary needs review or final closure. Review only the boundary described in Runtime Input plus the current diff, staged diff, and relevant ignored evidence or stash metadata. Do not implement new work and do not choose the next task. This is an evidence-producing review: run or verify the relevant checks, and for UI, canvas, CLI/API, app wiring, dev-server, or user-visible runtime changes, start the needed service/app and inspect real browser/runtime behavior where practical. Before accepting, cross-check the current boundary against completed handoffs, accepted docs/contracts, current phase/task, and nearby/long-range items in docs/harness/PLAN.md. If runtime evidence or cross-check evidence is missing but Work can add or fix it, return REVISE with one concrete instruction. If Plan must approve a different verification path, resolve a completed-vs-future conflict, expand scope, change sequencing, or approve pre-empting distant work, return BLOCKED. If the boundary is acceptable and uncommitted, stage exactly the relevant files, inspect cached diff, run or verify the relevant checks, commit with a conventional message, then return PASS. If Work can fix a concrete issue inside the approved boundary, return REVISE. If Plan must approve scope, dependencies, lockfile changes, or task splitting before Work can continue, return BLOCKED. Return JSON only.
     - from: plan
-      when: 'decision == 'FINISH''
+      when: "decision == 'FINISH'"
       to: finish
       input: '{{source.handoffPrompt}}'
