@@ -1,0 +1,30 @@
+{
+  "purpose": "Freeze current large source files so future work must split or shrink them instead of growing hotspots.",
+  "thresholds": {
+    "watch": 250,
+    "split_required": 400,
+    "block_unlisted": 700
+  },
+  "files": {
+    "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteControl.svelte": { "max_lines": 2701, "owner": "node-graph", "plan": "FF-02/FF-08/FF-09" },
+    "apps/manager/src/lib/components/nodes/NodeCanvas.svelte": { "max_lines": 2646, "owner": "node-graph", "plan": "FF-02/FF-08/FF-09" },
+    "apps/manager/src/lib/components/AssetsManager.svelte": { "max_lines": 1936, "owner": "assets-ui", "plan": "FF-16" },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/group-controller.ts": { "max_lines": 1870, "owner": "node-graph", "plan": "FF-12" },
+    "apps/manager/src/lib/nodes/specs/register.ts": { "max_lines": 1665, "owner": "node-registry", "plan": "FF-10" },
+    "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte": { "max_lines": 1561, "owner": "node-graph", "plan": "FF-08" },
+    "packages/sdk-client/src/tone-adapter/register.ts": { "max_lines": 1487, "owner": "plugin-runtime", "plan": "FF-17" },
+    "apps/manager/src/lib/components/nodes/node-canvas/runtime/patch-runtime.ts": { "max_lines": 1417, "owner": "execution", "plan": "FF-14" },
+    "packages/sdk-client/src/action-executors.ts": { "max_lines": 1371, "owner": "client-runtime", "plan": "FF-14/FF-17" },
+    "apps/manager/src/lib/nodes/engine.ts": { "max_lines": 1364, "owner": "node-graph", "plan": "FF-09/FF-14" },
+    "packages/sdk-client/src/tone-adapter/nodes.ts": { "max_lines": 1253, "owner": "plugin-runtime", "plan": "FF-17" },
+    "apps/display/src/lib/stores/display.ts": { "max_lines": 1208, "owner": "display-runtime", "plan": "FF-15" },
+    "apps/manager/src/lib/components/nodes/node-canvas/controllers/group-port-nodes-controller.ts": { "max_lines": 1135, "owner": "node-graph", "plan": "FF-12" },
+    "packages/node-core/src/runtime.ts": { "max_lines": 979, "owner": "node-runtime", "plan": "FF-11/FF-14" },
+    "packages/node-core/src/definitions/nodes/assets.ts": { "max_lines": 840, "owner": "node-registry", "plan": "FF-10/FF-16" },
+    "packages/node-core/src/definitions/nodes/logic.ts": { "max_lines": 794, "owner": "node-registry", "plan": "FF-10" },
+    "packages/sdk-manager/src/manager-sdk.ts": { "max_lines": 771, "owner": "manager-sdk", "plan": "FF-05/FF-07" },
+    "apps/manager/src/lib/components/nodes/node-canvas/rete/rete-builder.ts": { "max_lines": 726, "owner": "node-graph", "plan": "FF-08" },
+    "apps/manager/src/lib/stores/manager.ts": { "max_lines": 719, "owner": "manager-runtime", "plan": "FF-08" },
+    "apps/manager/src/lib/components/RegistryMidiPanel.svelte": { "max_lines": 718, "owner": "midi-ui", "plan": "FF-17" }
+  }
+}

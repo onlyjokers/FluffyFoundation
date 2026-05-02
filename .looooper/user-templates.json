@@ -1,0 +1,13 @@
+{
+  "purpose": "Looooper user-facing task templates for the FluffyFoundation harness.",
+  "templates": [
+    {
+      "name": "Continue current FF task",
+      "prompt": "Continue the active FluffyFoundation harness task. Read .harness/status/current-phase.md, .harness/status/current-task.md, docs/harness/PLAN.md, and the latest handoff before dispatching work."
+    },
+    {
+      "name": "Review current boundary",
+      "prompt": "Review the current FluffyFoundation diff against docs/harness/PLAN.md, QUALITY-GATES.md, BOUNDARIES.md, and the active .harness status files. Findings first; return JSON only."
+    }
+  ]
+}

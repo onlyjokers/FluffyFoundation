@@ -1,0 +1,38 @@
+{
+  "$comment": "Purpose: JSON output contract for the Looooper start1 node.",
+  "type": "object",
+  "properties": {
+    "decision": { "type": "string", "enum": ["PASS", "REVISE", "BLOCKED", "FINISH"] },
+    "summary": { "type": "string" },
+    "handoffPrompt": { "type": "string" },
+    "artifacts": { "type": "array", "items": { "type": "string" } },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "type": "string" }
+        },
+        "required": ["name", "status"],
+        "additionalProperties": false
+      }
+    },
+    "commitMessage": { "type": ["string", "null"] },
+    "nonGoals": { "type": "array", "items": { "type": "string" } },
+    "metadata": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "value": { "type": "string" }
+        },
+        "required": ["key", "value"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["decision", "summary", "handoffPrompt", "artifacts", "checks", "commitMessage", "nonGoals", "metadata"],
+  "additionalProperties": false
+}

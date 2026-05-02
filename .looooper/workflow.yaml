@@ -1,0 +1,120 @@
+workflow:
+  entry: start1
+  allow_parallel: true
+  nodes:
+    finish:
+      backend: claude
+      prompt: prompts/finish.md
+      output_schema: schemas/finish-result.json
+      session_policy: new
+      position_x: 1360
+      position_y: -575
+      sandbox: workspace-write
+      approval: on-request
+      effort: low
+    plan:
+      backend: codex
+      model: gpt-5.5
+      prompt: prompts/plan.md
+      output_schema: schemas/plan-result.json
+      session_policy: resume
+      position_x: 807.41
+      position_y: -811.93
+      sandbox: read-only
+      approval: never
+      effort: medium
+      tools:
+        - shell
+    review:
+      backend: codex
+      model: gpt-5.5
+      prompt: prompts/review.md
+      output_schema: schemas/review-result.json
+      session_policy: resume
+      position_x: 1140
+      position_y: -180
+      sandbox: danger-full-access
+      approval: never
+      effort: medium
+      tools:
+        - shell
+    start1:
+      backend: claude
+      prompt: prompts/start1.md
+      output_schema: schemas/start1-result.json
+      session_policy: new
+      position_x: 250
+      position_y: -590
+      sandbox: read-only
+      approval: never
+      effort: low
+    work:
+      backend: codex
+      model: gpt-5.5
+      prompt: prompts/work.md
+      output_schema: schemas/work-result.json
+      session_policy: new
+      position_x: 569.45
+      position_y: -171.19
+      sandbox: danger-full-access
+      approval: never
+      effort: high
+      tools:
+        - Bash
+        - Read
+        - Write
+        - Edit
+        - shell
+  edges:
+    - from: start1
+      when: 'decision == 'PASS''
+      to: plan
+      input: '{{source.handoffPrompt}}'
+    - from: plan
+      when: 'decision == 'PASS''
+      to: work
+      input: 'Selected Work session policy: {{source.targetSessionPolicy}}\n\n{{source.handoffPrompt}}'
+      target_session: source
+      target_model: gpt-5.5
+      target_prompt: You are Work in plan-dispatched mode for FluffyFoundation. Implement exactly the bounded task in Runtime Input. Respect the selected Work session policy. Edit only allowed files, keep one logical boundary, run the requested proof when practical, and do not start another PLAN item. Do not commit by default. Return JSON only.
+    - from: work
+      when: 'decision == 'PASS''
+      to: review
+      input: '{{source.handoffPrompt}}'
+      target_session: follow
+    - from: work
+      when: 'decision == 'BLOCKED''
+      to: plan
+      input: '{{source.handoffPrompt}}'
+      target_session: resume
+      target_model: gpt-5.5
+      target_prompt: You are Plan in blocked-boundary decision mode. Runtime Input describes a current task Work cannot safely complete without planning approval, task splitting, dependency authorization, or boundary expansion. Do not implement. Return JSON only.
+    - from: review
+      when: 'decision == 'REVISE''
+      to: work
+      input: '{{source.handoffPrompt}}'
+      target_session: resume
+      target_prompt: You are Work in review-revision mode. Fix only the concrete Review feedback for the same current task boundary. Do not start a new PLAN item. Make the smallest safe change, run the requested proof when practical, and return JSON only.
+    - from: review
+      when: 'decision == 'BLOCKED''
+      to: plan
+      input: '{{source.handoffPrompt}}'
+      target_session: resume
+      target_model: gpt-5.5
+      target_prompt: You are Plan in review-blocked mode. Decide the next bounded action: approve scope expansion, split the task, send back to Review with an exact boundary, or finish only if no work remains. Return JSON only.
+    - from: review
+      when: 'decision == 'PASS''
+      to: plan
+      input: '{{source.handoffPrompt}}'
+      target_session: resume
+      target_model: gpt-5.5
+    - from: plan
+      when: 'decision == 'REVISE''
+      to: review
+      input: '{{source.handoffPrompt}}'
+      target_session: follow
+      target_prompt: You are Review in plan-requested-boundary-closure mode. Review only the boundary described in Runtime Input plus current diff/staged diff and relevant harness docs. Do not implement. Return JSON only.
+    - from: plan
+      when: 'decision == 'FINISH''
+      to: finish
+      input: '{{source.handoffPrompt}}'
