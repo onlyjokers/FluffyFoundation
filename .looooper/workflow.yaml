@@ -76,7 +76,7 @@ workflow:
       input: 'Selected Work session policy: {{source.targetSessionPolicy}}\n\n{{source.handoffPrompt}}'
       target_session: source
       target_model: gpt-5.5
-      target_prompt: You are Work in plan-dispatched mode for FluffyFoundation. Implement exactly the bounded task in Runtime Input. Respect the selected Work session policy. Edit only allowed files, keep one logical boundary, run the requested proof when practical, and do not start another PLAN item. Do not commit by default. Return JSON only.
+      target_prompt: >-
     - from: work
       when: 'decision == 'PASS''
       to: review
@@ -88,20 +88,20 @@ workflow:
       input: '{{source.handoffPrompt}}'
       target_session: resume
       target_model: gpt-5.5
-      target_prompt: You are Plan in blocked-boundary decision mode. Runtime Input describes a current task Work cannot safely complete without planning approval, task splitting, dependency authorization, or boundary expansion. Do not implement. Return JSON only.
+      target_prompt: >-
     - from: review
       when: 'decision == 'REVISE''
       to: work
       input: '{{source.handoffPrompt}}'
       target_session: resume
-      target_prompt: You are Work in review-revision mode. Fix only the concrete Review feedback for the same current task boundary. Do not start a new PLAN item. Make the smallest safe change, run the requested proof when practical, and return JSON only.
+      target_prompt: >-
     - from: review
       when: 'decision == 'BLOCKED''
       to: plan
       input: '{{source.handoffPrompt}}'
       target_session: resume
       target_model: gpt-5.5
-      target_prompt: You are Plan in review-blocked mode. Decide the next bounded action: approve scope expansion, split the task, send back to Review with an exact boundary, or finish only if no work remains. Return JSON only.
+      target_prompt: >-
     - from: review
       when: 'decision == 'PASS''
       to: plan
@@ -113,7 +113,7 @@ workflow:
       to: review
       input: '{{source.handoffPrompt}}'
       target_session: follow
-      target_prompt: You are Review in plan-requested-boundary-closure mode. Review only the boundary described in Runtime Input plus current diff/staged diff and relevant harness docs. Do not implement. Return JSON only.
+      target_prompt: >-
     - from: plan
       when: 'decision == 'FINISH''
       to: finish

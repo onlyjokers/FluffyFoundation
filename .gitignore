@@ -63,6 +63,15 @@ certs/
 # Runtime data / local test assets
 apps/**/data/
 /assets/
+.looooper/runs/
+.looooper/logs/
+.looooper/tmp/
+.looooper/cache/
+.looooper/sessions/
+.harness/evidence/*
+!.harness/evidence/.gitkeep
+.harness/handoffs/*
+!.harness/handoffs/.gitkeep
 
 # Python Cache
 **/__pycache__/
