@@ -4,14 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-06 - Server State Strategy And Multi-Instance Contract
+FF-07 - Realtime Delivery Contract, Backpressure, And Final-Value Semantics
+
+## Previous Acceptance
+
+FF-06 was accepted and committed as `74aa818 Add single-server state strategy guard`.
 
 ## Active Claim
 
-Remove the current "Redis broadcast but local truth" ambiguity by choosing and making visible either explicit
-single-server production mode or shared state for registry, selection, ownership, and control-plane snapshot.
+Make realtime throttling predictable instead of two layers silently dropping state.
 
 ## Work Status
 
-FF-06 Work is ready for Review. The selected strategy is explicit single-server production mode with boot/runtime
-guards, status surfaces, manager-visible dashboard proof, and ownership snapshot divergence tests.
+FF-07 is active for the next bounded Plan dispatch. This transition only updates harness status and must not
+implement FF-07.

@@ -4,32 +4,39 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-06 - Server State Strategy And Multi-Instance Contract
+FF-07 - Realtime Delivery Contract, Backpressure, And Final-Value Semantics
+
+## Previous Acceptance
+
+FF-06 was accepted and committed as `74aa818 Add single-server state strategy guard`.
 
 ## Current Boundary
 
-Server state strategy and multi-instance contract scope from `docs/harness/PLAN.md`:
+Realtime delivery contract, backpressure, and final-value semantics scope from `docs/harness/PLAN.md`:
 
-- ADR chooses either explicit single-server production mode or shared state for registry, selection, ownership, and
-  control-plane snapshot.
-- If single-server: boot/runtime checks make it visible and reject unsupported clustered configs.
-- If shared-state: registry/control-plane updates publish/subscribe and converge across instances.
-- Status UI and logs show the active state strategy.
-- Verification target: single-server guard or two-instance convergence test, and ownership snapshot cannot diverge
-  silently.
+- Explicit classes for volatile telemetry, latest-state controls, reliable commands, and scheduled commands.
+- SDK/server throttling share one delivery contract.
+- Latest-state keys are replayed or removed with no dead pending map.
+- Metrics track dropped, coalesced, delivered, late, and rejected messages.
+- Verification target includes deterministic tests for coalescing and last-value delivery plus load test records for
+  latency/drop budgets.
 
-Allowed FF-06 implementation boundary for a future bounded Work dispatch:
+Allowed FF-07 implementation boundary for a future bounded Work dispatch:
 
-- server state strategy/boot/runtime checks and related logs/status surfaces
-- shared-state or single-server ADR/evidence required by the chosen strategy
-- related tests/fixtures proving the selected single-server guard or two-instance convergence behavior
+- realtime delivery class definitions and shared SDK/server delivery contract
+- throttling/backpressure behavior for volatile telemetry, latest-state controls, reliable commands, and scheduled
+  commands
+- latest-state replay/removal behavior that avoids dead pending maps
+- dropped, coalesced, delivered, late, and rejected message metrics
+- deterministic tests for coalescing and last-value delivery
+- load test records for latency/drop budgets
 - `package.json` only for verification script wiring if required
-- `docs/harness/**` only for FF-06 policy/evidence/ADR references
+- `docs/harness/**` only for FF-07 policy/evidence/ADR references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-06/**`
+- `.harness/evidence/FF-07/**`
 
 ## Next Expected Action
 
-Review FF-06 commit candidate. Work has prepared the single-server strategy implementation, evidence, and handoff.
+The next Plan dispatch may start bounded FF-07 Work. This status-transition boundary must not implement FF-07.
