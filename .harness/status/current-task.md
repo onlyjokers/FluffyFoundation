@@ -4,23 +4,23 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-01 - Unified Verify, CI, And Evidence Artifacts
+FF-02 - Topology Ownership And No-God-Object Ratchets
 
 ## Current Boundary
 
-Verification wiring and evidence only:
+Ownership and topology ratchet scope:
 
-- `package.json`
-- `pnpm-lock.yaml` if package script or dependency changes require it
-- `.github/workflows/**`
+- `.harness/hotspots-allowlist.json`
+- `.harness/scripts/**` for hotspot/dependency guard support
+- `scripts/**` for dependency/boundary guard support
+- `package.json` only for verification script wiring if required
+- `CODEOWNERS` or `.github/CODEOWNERS` if the repo convention requires it
+- `docs/harness/**` only for FF-02 policy/evidence references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-01/**`
-- `.harness/scripts/**` only for FF-01 verification/evidence-gate support
-- `scripts/**` only for root `pnpm verify` guard or validation commands
+- source fixture files only when needed for executable negative dependency/import proofs
 
 ## Next Expected Action
 
-Run `pnpm verify` and requested subchecks, capture executable negative proofs for boundary imports and node specs,
-then write the FF-01 evidence/handoff before moving to the next FF task.
+Implement only the FF-02 ownership/topology ratchets and their evidence in the next bounded Work dispatch.
