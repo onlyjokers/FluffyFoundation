@@ -9,6 +9,8 @@ import { applyAsciiEffect } from './ascii.js';
 import type { ConvolutionEffectRuntime } from './convolution.js';
 import { applyConvolutionEffect } from './convolution.js';
 import {
+  asAsciiVisualEffect,
+  asConvolutionVisualEffect,
   asVisualEffect,
   getAsciiCellSize,
   getConvolutionScale,
@@ -197,6 +199,8 @@ export function renderVisualEffects(
 
     const applied = (() => {
       if (type === 'convolution') {
+        const convolutionEffect = asConvolutionVisualEffect(visualEffect);
+        if (!convolutionEffect) return false;
         return applyConvolutionEffect(
           pipeline,
           srcCanvas,
@@ -204,10 +208,12 @@ export function renderVisualEffects(
           width,
           height,
           dpr,
-          visualEffect
+          convolutionEffect
         );
       }
       if (type === 'ascii') {
+        const asciiEffect = asAsciiVisualEffect(visualEffect);
+        if (!asciiEffect) return false;
         const result = applyAsciiEffect(
           pipeline,
           srcCanvas,
@@ -215,7 +221,7 @@ export function renderVisualEffects(
           width,
           height,
           dpr,
-          visualEffect
+          asciiEffect
         );
         if (result && asciiOverlay) {
           asciiOverlay(dstCtx, width, height, result.cols, result.rows);

@@ -6,7 +6,7 @@ import type { BaseControlPayload } from '@shugu/protocol';
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-export function mergeControlPayload(prev: BaseControlPayload, next: BaseControlPayload): BaseControlPayload {
+export function mergeControlPayload(prev: unknown, next: BaseControlPayload): BaseControlPayload {
   if (isObject(prev) && isObject(next)) {
     return { ...prev, ...next };
   }

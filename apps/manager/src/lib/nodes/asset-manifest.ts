@@ -17,6 +17,7 @@ import { nodeEngine } from './engine';
 import { nodeRegistry } from './registry';
 import { getSDK, state as managerState } from '$lib/stores/manager';
 import { assetsStore } from '$lib/stores/assets';
+import { getControlPlaneOwnership } from '$lib/stores/manager-state-guards';
 import { modelDistributionStore } from '$lib/stores/model-distribution';
 import {
   type AssetManifest,
@@ -251,10 +252,7 @@ function recomputeAndMaybePush(): void {
   const clients = (get(managerState).clients ?? []).map((c) => String(c.clientId)).filter(Boolean);
   const connected = new Set(clients);
 
-  const ownerStackByGroupId = (get(managerState).controlPlane.ownership ?? {}) as Record<
-    string,
-    { ownerStack?: unknown }
-  >;
+  const ownerStackByGroupId = getControlPlaneOwnership(get(managerState));
 
   const modelRefsByClientId = new Map<string, Set<string>>();
   for (const [groupId, modelIds] of Object.entries(lastModelDistribution ?? {})) {

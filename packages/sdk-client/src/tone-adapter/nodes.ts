@@ -8,14 +8,26 @@ import type {
   LoopEvent,
   ParsedLoop,
   ToneAdapterDeps,
+  ToneConnectable,
+  ToneDelayEffectLike,
+  ToneEffectLike,
   ToneEffectKind,
   ToneEffectInstance,
+  ToneGainLike,
   ToneGranularInstance,
   ToneLfoInstance,
+  ToneLoopLike,
+  ToneLfoLike,
   ToneOscInstance,
+  ToneOscillatorLike,
+  ToneParamLike,
+  TonePitchEffectLike,
   TonePlayerInstance,
+  TonePlayerLike,
+  ToneResonatorEffectLike,
+  ToneReverbEffectLike,
 } from './types.js';
-import type { LFOOptions, OscillatorType, PlayerOptions } from 'tone';
+import type { LFOOptions, PlayerOptions, ToneOscillatorType } from 'tone';
 import {
   DEFAULT_RAMP_SECONDS,
   DEFAULT_STEP_SECONDS,
@@ -213,15 +225,15 @@ export function createOscInstance(
 ): ToneOscInstance {
   if (!toneModule) throw new Error('Tone module is not loaded');
 
-  const oscType = waveform as OscillatorType;
-  const osc = new toneModule.Oscillator({ frequency, type: oscType });
+  const oscType = waveform as ToneOscillatorType;
+  const osc = new toneModule.Oscillator(frequency, oscType);
   const gain = new toneModule.Gain({ gain: amplitude });
   osc.connect(gain);
   osc.start();
 
   const instance: ToneOscInstance = {
-    osc,
-    gain,
+    osc: osc as unknown as ToneOscillatorLike,
+    gain: gain as unknown as ToneGainLike,
     loop: null,
     loopKey: null,
     loopDefaults: null,
@@ -244,11 +256,13 @@ export function createToneLfoInstance(
 
   const min = Math.min(params.min, params.max);
   const max = Math.max(params.min, params.max);
-  const lfoOptions: LFOOptions = {
+  const lfoOptions: Partial<LFOOptions> = {
     frequency: params.frequencyHz,
     min,
     max,
-    type: params.waveform as OscillatorType,
+    amplitude: params.amplitude,
+    units: 'number',
+    type: params.waveform as ToneOscillatorType,
   };
   const lfo = new toneModule.LFO(lfoOptions);
 
@@ -260,7 +274,7 @@ export function createToneLfoInstance(
 
   const instance: ToneLfoInstance = {
     nodeId,
-    lfo,
+    lfo: lfo as unknown as ToneLfoLike,
     started: false,
     lastParams: { ...params, min, max },
   };
@@ -368,7 +382,7 @@ export function updateLoop(
       if (typeof event.amplitude === 'number' && Number.isFinite(event.amplitude)) {
         instance.gain.gain.setValueAtTime(event.amplitude, time);
       }
-    }, []);
+    }, []) as unknown as ToneLoopLike;
     instance.loop.loop = true;
   }
 
@@ -411,10 +425,10 @@ function createDelayEffect(time: number, feedback: number, wet: number): EffectW
   });
   const setWet = (value: number) => effect.wet.rampTo(value, DEFAULT_RAMP_SECONDS);
   return {
-    input: effect,
-    output: effect,
-    effect,
-    wetParam: effect.wet,
+    input: effect as unknown as ToneConnectable,
+    output: effect as unknown as ToneConnectable,
+    effect: effect as unknown as ToneEffectLike,
+    wetParam: effect.wet as unknown as ToneDelayEffectLike['wet'],
     setWet,
     dispose: () => effect.dispose(),
   };
@@ -424,10 +438,10 @@ function createReverbEffect(decay: number, wet: number): EffectWrapper {
   const effect = new toneModule!.Reverb({ decay, preDelay: FIXED_TONE_REVERB_PREDELAY_SECONDS, wet });
   const setWet = (value: number) => effect.wet.rampTo(value, DEFAULT_RAMP_SECONDS);
   return {
-    input: effect,
-    output: effect,
-    effect,
-    wetParam: effect.wet,
+    input: effect as unknown as ToneConnectable,
+    output: effect as unknown as ToneConnectable,
+    effect: effect as unknown as ToneEffectLike,
+    wetParam: effect.wet as unknown as ToneReverbEffectLike['wet'],
     setWet,
     dispose: () => effect.dispose(),
   };
@@ -448,10 +462,10 @@ function createPitchEffect(
   });
   const setWet = (value: number) => effect.wet.rampTo(value, DEFAULT_RAMP_SECONDS);
   return {
-    input: effect,
-    output: effect,
-    effect,
-    wetParam: effect.wet,
+    input: effect as unknown as ToneConnectable,
+    output: effect as unknown as ToneConnectable,
+    effect: effect as unknown as ToneEffectLike,
+    wetParam: effect.wet as unknown as TonePitchEffectLike['wet'],
     setWet,
     dispose: () => effect.dispose(),
   };
@@ -474,10 +488,10 @@ function createResonatorEffect(
   comb.connect(crossfade.b);
   const setWet = (value: number) => crossfade.fade.rampTo(value, DEFAULT_RAMP_SECONDS);
   return {
-    input,
-    output: crossfade,
-    effect: comb,
-    wetParam: crossfade.fade,
+    input: input as unknown as ToneConnectable,
+    output: crossfade as unknown as ToneConnectable,
+    effect: comb as unknown as ToneEffectLike,
+    wetParam: crossfade.fade as unknown as ToneParamLike,
     setWet,
     dispose: () => {
       input.dispose();
@@ -548,7 +562,7 @@ export function updateEffectInstance(
 
   switch (instance.kind) {
     case 'tone-delay': {
-      const effect = instance.wrapper.effect;
+      const effect = instance.wrapper.effect as ToneDelayEffectLike;
       const time = toToneDelayTimeSeconds(nextParams.time, 0.25);
       const feedback = clamp(nextParams.feedback, 0, 1);
       const wet = clamp(nextParams.wet, 0, 1);
@@ -571,7 +585,7 @@ export function updateEffectInstance(
       break;
     }
     case 'tone-reverb': {
-      const effect = instance.wrapper.effect;
+      const effect = instance.wrapper.effect as ToneReverbEffectLike;
       const decay = nextParams.decay;
       const wet = clamp(nextParams.wet, 0, 1);
       if (instance.lastParams.decay !== decay) effect.decay = decay;
@@ -596,14 +610,16 @@ export function updateEffectInstance(
       break;
     }
     case 'tone-pitch': {
-      const effect = instance.wrapper.effect;
+      const effect = instance.wrapper.effect as TonePitchEffectLike;
       const pitch = nextParams.pitch;
       const windowSize = nextParams.windowSize;
       const feedback = FIXED_TONE_PITCH_FEEDBACK;
       const wet = FIXED_TONE_PITCH_WET;
       if (instance.lastParams.pitch !== pitch) effect.pitch = pitch;
       if (instance.lastParams.windowSize !== windowSize) effect.windowSize = windowSize;
-      if (instance.lastParams.feedback !== feedback) effect.feedback = feedback;
+      if (instance.lastParams.feedback !== feedback) {
+        effect.feedback.rampTo(feedback, DEFAULT_RAMP_SECONDS);
+      }
       if (
         instance.lastParams.wet !== wet &&
         !isToneLfoTargetActive(instance.nodeId, 'wet')
@@ -614,11 +630,12 @@ export function updateEffectInstance(
       break;
     }
     case 'tone-resonator': {
-      const comb = instance.wrapper.effect;
+      const comb = instance.wrapper.effect as ToneResonatorEffectLike;
       const resonance = clamp(nextParams.resonance, 0, 1);
       const dampening = nextParams.dampening;
       const wet = clamp(nextParams.wet, 0, 1);
-      if (instance.lastParams.resonance !== resonance) comb.resonance = resonance;
+      if (instance.lastParams.resonance !== resonance)
+        comb.resonance.rampTo(resonance, DEFAULT_RAMP_SECONDS);
       if (instance.lastParams.dampening !== dampening) comb.dampening = dampening;
       if (
         instance.lastParams.wet !== wet &&
@@ -660,8 +677,8 @@ export function createGranularInstance(
 
   const instance: ToneGranularInstance = {
     nodeId,
-    player,
-    gain,
+    player: player as unknown as TonePlayerLike,
+    gain: gain as unknown as ToneGainLike,
     playing: Boolean(params.playing),
     lastUrl: url,
     lastParams: { ...params },
@@ -779,10 +796,9 @@ export function createPlayerInstance(
 ): TonePlayerInstance {
   const gain = new toneModule!.Gain({ gain: params.volume as number });
   const playbackRate = toNonNegativeNumber(params.playbackRate, 1);
-  const playerOptions: PlayerOptions = {
+  const playerOptions: Partial<PlayerOptions> = {
     loop: Boolean(params.loop),
     playbackRate,
-    detune: params.detune as number,
     autostart: false,
   };
   const player = new toneModule!.Player(playerOptions);
@@ -791,8 +807,8 @@ export function createPlayerInstance(
 
   const instance: TonePlayerInstance = {
     nodeId,
-    player,
-    gain,
+    player: player as unknown as TonePlayerLike,
+    gain: gain as unknown as ToneGainLike,
     playing: Boolean(params.playing),
     started: false,
     startedAt: 0,
@@ -908,7 +924,7 @@ export function createAudioDataInstance(
     output,
     analyser,
     timeData: new Float32Array(analyser.fftSize) as unknown as Float32Array<ArrayBuffer>,
-    freqData: new Uint8Array(analyser.frequencyBinCount),
+    freqData: new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>,
     energyHistory: [],
     lastBeatAt: 0,
     beatIntervals: [],
@@ -932,7 +948,7 @@ export function updateAudioDataInstance(
     try {
       instance.analyser.fftSize = config.fftSize;
       instance.timeData = new Float32Array(instance.analyser.fftSize) as unknown as Float32Array<ArrayBuffer>;
-      instance.freqData = new Uint8Array(instance.analyser.frequencyBinCount);
+      instance.freqData = new Uint8Array(instance.analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
     } catch {
       // ignore
     }

@@ -46,57 +46,103 @@ export type TransportStartState = {
 };
 
 export type ToneParamLike = {
-  value?: number;
-  rampTo?: (value: number, seconds: number) => void;
-  setValueAtTime?: (value: number, time: number) => void;
-  linearRampToValueAtTime?: (value: number, time: number) => void;
-  cancelScheduledValues?: (time: number) => void;
+  value: unknown;
+  rampTo: (value: number, seconds: number) => unknown;
+  setValueAtTime: (value: number, time: number) => unknown;
+  linearRampToValueAtTime: (value: number, time: number) => unknown;
+  cancelScheduledValues: (time: number) => unknown;
 };
 
 export type ToneConnectable = {
-  connect?: (destination: unknown) => void;
-  disconnect?: (...args: unknown[]) => void;
+  connect: (...args: any[]) => unknown;
+  disconnect: (...args: any[]) => unknown;
+  dispose: () => unknown;
 };
 
 export type ToneGainLike = ToneConnectable & {
-  gain?: ToneParamLike;
+  gain: ToneParamLike;
   toDestination?: () => ToneGainLike;
 };
 
 export type ToneOscillatorLike = ToneConnectable & {
-  frequency?: ToneParamLike;
-  type?: string;
-  start?: (...args: unknown[]) => void;
-  stop?: (...args: unknown[]) => void;
-  dispose?: () => void;
+  frequency: ToneParamLike;
+  type: string;
+  start: (...args: unknown[]) => unknown;
+  stop: (...args: unknown[]) => unknown;
 };
 
 export type TonePlayerLike = ToneConnectable & {
-  buffer?: AudioBuffer | null;
-  loop?: boolean;
-  playbackRate?: number;
+  buffer?: { duration?: number } | AudioBuffer | null;
+  loop: boolean;
+  loopStart?: unknown;
+  loopEnd?: unknown;
+  reverse?: boolean;
+  playbackRate: number;
   detune?: number;
-  start?: (...args: unknown[]) => void;
-  stop?: (...args: unknown[]) => void;
-  dispose?: () => void;
+  grainSize?: number;
+  overlap?: number;
+  state?: string;
+  start: (...args: unknown[]) => unknown;
+  stop: (...args: unknown[]) => unknown;
   onstop?: (() => void) | null;
 };
 
 export type ToneLfoLike = ToneConnectable & {
-  frequency?: ToneParamLike;
-  amplitude?: ToneParamLike;
-  min?: number;
-  max?: number;
-  type?: string;
-  start?: (...args: unknown[]) => void;
-  stop?: (...args: unknown[]) => void;
-  dispose?: () => void;
+  frequency: ToneParamLike;
+  amplitude: ToneParamLike;
+  min: number;
+  max: number;
+  type: string;
+  start: (...args: unknown[]) => unknown;
+  stop: (...args: unknown[]) => unknown;
 };
 
 export type ToneEffectLike = ToneConnectable & {
   delayTime?: ToneParamLike;
   feedback?: ToneParamLike;
   wet?: ToneParamLike;
+  decay?: unknown;
+  generate?: () => Promise<unknown>;
+  pitch?: unknown;
+  windowSize?: unknown;
+  resonance?: ToneParamLike;
+  dampening?: unknown;
+};
+
+export type ToneDelayEffectLike = ToneConnectable & {
+  delayTime: ToneParamLike;
+  feedback: ToneParamLike;
+  wet: ToneParamLike;
+};
+
+export type ToneReverbEffectLike = ToneConnectable & {
+  decay: unknown;
+  wet: ToneParamLike;
+  generate: () => Promise<unknown>;
+};
+
+export type TonePitchEffectLike = ToneConnectable & {
+  pitch: unknown;
+  windowSize: unknown;
+  feedback: ToneParamLike;
+  wet: ToneParamLike;
+};
+
+export type ToneResonatorEffectLike = ToneConnectable & {
+  resonance: ToneParamLike;
+  dampening: unknown;
+};
+
+export type ToneLoopLike = {
+  loop: boolean | number;
+  loopStart: number;
+  loopEnd: number;
+  state?: string;
+  add: (time: number, event: LoopEvent) => unknown;
+  clear: () => unknown;
+  start: (...args: unknown[]) => unknown;
+  stop: (...args: unknown[]) => unknown;
+  dispose: () => unknown;
 };
 
 export type EffectWrapper = {
@@ -128,7 +174,7 @@ export type ToneEffectInstance = {
 export type ToneOscInstance = {
   osc: ToneOscillatorLike;
   gain: ToneGainLike;
-  loop: ToneConnectable | null;
+  loop: ToneLoopLike | null;
   loopKey: string | null;
   loopDefaults: { frequency: number; amplitude: number } | null;
   lastFrequency: number | null;
@@ -191,7 +237,7 @@ export type AudioDataInstance = {
   output: ToneConnectable;
   analyser: AnalyserNode;
   timeData: Float32Array<ArrayBuffer>;
-  freqData: Uint8Array;
+  freqData: Uint8Array<ArrayBuffer>;
   energyHistory: { t: number; e: number }[];
   lastBeatAt: number;
   beatIntervals: number[];

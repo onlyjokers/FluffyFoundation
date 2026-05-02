@@ -18,7 +18,7 @@ import type {
     TonePlayerLike,
 } from './tone-adapter/types.js';
 import { getToneRawContext, unwrapDefaultExport } from './tone-adapter/tone-guards.js';
-import type { LFOOptions, OscillatorType, PlayerOptions } from 'tone';
+import type { LFOOptions, PlayerOptions, ToneOscillatorType } from 'tone';
 
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
 type TorchConstraintSet = MediaTrackConstraintSet & { torch?: boolean };
@@ -892,7 +892,7 @@ export class ToneSoundPlayer {
         const { toneAudioEngine } = await import('@shugu/multimedia-core');
         if (toneAudioEngine.isEnabled()) {
             await this.ensureTone();
-            if (!this.player || this.lastUrl !== url) return false;
+            if (!this.tone || !this.player || !this.gain || this.lastUrl !== url) return false;
 
             this.lastVolume = nextVolume;
             this.lastLoop = nextLoop;
@@ -948,12 +948,12 @@ export class ToneSoundPlayer {
         const Tone = this.tone;
         if (!Tone) return;
         const gain = new Tone.Gain(0).toDestination();
-        const playerOptions: PlayerOptions = { url, loop: opts.loop, autostart: false };
+        const playerOptions: Partial<PlayerOptions> = { url, loop: opts.loop, autostart: false };
         const player = new Tone.Player(playerOptions);
         player.connect(gain);
 
-        this.gain = gain;
-        this.player = player;
+        this.gain = gain as unknown as ToneGainLike;
+        this.player = player as unknown as TonePlayerLike;
 
         const startAt = Tone.now() + Math.max(0, delaySeconds);
         const g = gain.gain;
@@ -1011,9 +1011,9 @@ export class ToneSoundPlayer {
                 this.htmlSource = raw.createMediaElementSource(audio);
                 // Try to connect into Tone destination graph when possible.
                 const destInput =
-                    (Tone as { Destination?: { input?: { connect?: (dest: unknown) => void } } })
+                    (Tone as unknown as { Destination?: { input?: unknown } })
                         .Destination?.input ?? null;
-                if (destInput && typeof destInput.connect === 'function') {
+                if (destInput instanceof AudioNode) {
                     this.htmlSource.connect(destInput);
                 } else {
                     this.htmlSource.connect(raw.destination);
@@ -1103,10 +1103,12 @@ export class ToneModulatedSoundPlayer {
         this.durationSeconds = duration;
         this.releaseSeconds = release;
 
-        this.gain = new Tone.Gain(0).toDestination();
-        const oscOptions = { frequency: freq, type: waveform as OscillatorType };
-        this.carrier = new Tone.Oscillator(oscOptions);
-        this.carrier.connect(this.gain);
+        const gain = new Tone.Gain(0).toDestination();
+        const oscOptions = { frequency: freq, type: waveform as ToneOscillatorType };
+        const carrier = new Tone.Oscillator(freq, oscOptions.type);
+        carrier.connect(gain);
+        this.gain = gain as unknown as ToneGainLike;
+        this.carrier = carrier as unknown as ToneOscillatorLike;
 
         // Envelope on gain (Tone Param supports setValueAtTime/linearRampToValueAtTime).
         const g = this.gain.gain;
@@ -1118,18 +1120,21 @@ export class ToneModulatedSoundPlayer {
 
         if (modDepth > 0) {
             const depthHz = modDepth * freq;
-            const lfoOptions: LFOOptions = {
+            const lfoOptions: Partial<LFOOptions> = {
                 frequency: modFreq,
                 min: Math.max(0, freq - depthHz),
                 max: freq + depthHz,
+                amplitude: 1,
+                units: 'number',
                 type: 'sine',
             };
-            this.lfo = new Tone.LFO(lfoOptions);
-            this.lfo.connect(this.carrier.frequency);
-            this.lfo.start(now);
+            const lfo = new Tone.LFO(lfoOptions);
+            lfo.connect(carrier.frequency);
+            lfo.start(now);
+            this.lfo = lfo as unknown as ToneLfoLike;
         }
 
-        this.carrier.start(now);
+        carrier.start(now);
 
         const stopAt = now + duration + release * 2;
         const stopDelayMs = Math.max(10, (stopAt - Tone.now()) * 1000);
@@ -1182,7 +1187,7 @@ export class ToneModulatedSoundPlayer {
     async update(payload: {
         frequency?: number;
         volume?: number;
-        waveform?: OscillatorType;
+        waveform?: ModulateSoundPayload['waveform'];
         modFrequency?: number;
         modDepth?: number;
         durationMs?: number;
@@ -1238,15 +1243,18 @@ export class ToneModulatedSoundPlayer {
 
             if (!this.lfo && modDepth !== null && modDepth > 0) {
                 const depthHz = modDepth * currentFreq;
-                const lfoOptions: LFOOptions = {
+                const lfoOptions: Partial<LFOOptions> = {
                     frequency: payload.modFrequency ?? 12,
                     min: Math.max(0, currentFreq - depthHz),
                     max: currentFreq + depthHz,
+                    amplitude: 1,
+                    units: 'number',
                     type: 'sine',
                 };
-                this.lfo = new Tone.LFO(lfoOptions);
-                this.lfo.connect(this.carrier.frequency);
-                this.lfo.start(now);
+                const lfo = new Tone.LFO(lfoOptions);
+                lfo.connect(this.carrier.frequency as unknown as never);
+                lfo.start(now);
+                this.lfo = lfo as unknown as ToneLfoLike;
             }
 
             if (this.lfo) {

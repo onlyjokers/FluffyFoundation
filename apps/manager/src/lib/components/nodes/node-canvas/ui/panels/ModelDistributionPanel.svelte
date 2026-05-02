@@ -2,6 +2,7 @@
   import { get } from 'svelte/store';
   import { onDestroy } from 'svelte';
   import { assetsStore, type AssetRecord } from '$lib/stores/assets';
+  import { getControlPlaneOwnership } from '$lib/stores/manager-state-guards';
   import { modelDistributionStore } from '$lib/stores/model-distribution';
   import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
   import { state as managerState } from '$lib/stores/manager';
@@ -64,7 +65,7 @@
   const currentOwner = () => {
     const groupId = String(selectedGroupId ?? '');
     if (!groupId) return '';
-    const o = (get(managerState).controlPlane.ownership ?? {})[groupId];
+    const o = getControlPlaneOwnership(get(managerState))[groupId];
     const stackRaw = (o as { ownerStack?: unknown } | undefined)?.ownerStack;
     const stack = Array.isArray(stackRaw) ? stackRaw.map(String).filter(Boolean) : [];
     return stack.length > 0 ? stack[stack.length - 1] : '';

@@ -516,3 +516,8 @@ export const SOCKET_EVENTS = {
  * Connection roles
  */
 export type ConnectionRole = 'manager' | 'client';
+
+/**
+ * Reserved scope group for system-authored manager/display messages.
+ */
+export const SYSTEM_SCOPE_GROUP_ID = '__system__' as const;

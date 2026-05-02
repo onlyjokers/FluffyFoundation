@@ -19,12 +19,12 @@ export function applyAsciiEffect(
   width: number,
   height: number,
   dpr: number,
-  effect: { cellSize?: unknown }
+  effect: { cellSize: number }
 ): AsciiEffectResult | null {
   const { tinyCanvas, tinyCtx } = runtime;
   if (!tinyCtx || !tinyCanvas) return null;
 
-  const cellSize = Math.max(1, Math.min(100, Math.round(Number(effect.cellSize ?? 11))));
+  const cellSize = Math.max(1, Math.min(100, Math.round(Number(effect.cellSize))));
   const cols = Math.max(24, Math.floor(width / cellSize));
   const rows = Math.max(18, Math.floor(height / (cellSize * 1.05)));
 

@@ -1,6 +1,8 @@
 // Purpose: Typed helpers for device motion/orientation constructors.
 
-type DeviceMotionCtor = typeof DeviceMotionEvent;
+type DeviceMotionCtor = typeof DeviceMotionEvent & {
+  requestPermission?: () => Promise<PermissionState>;
+};
 type DeviceOrientationCtor = typeof DeviceOrientationEvent;
 
 export const getDeviceMotionEventCtor = (win?: Window | null): DeviceMotionCtor | null => {

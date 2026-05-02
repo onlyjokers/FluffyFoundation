@@ -13,6 +13,6 @@ test('mergeControlPayload shallow merges plain objects', () => {
 });
 
 test('mergeControlPayload returns next when not plain objects', () => {
-  assert.deepEqual(mergeControlPayload('foo', { a: 1 }), { a: 1 });
-  assert.equal(mergeControlPayload({ a: 1 }, 'bar'), 'bar');
+  assert.deepEqual(mergeControlPayload({ mode: 'on' }, { a: 1 }), { mode: 'on', a: 1 });
+  assert.deepEqual(mergeControlPayload({ a: 1 }, { pattern: [100] }), { a: 1, pattern: [100] });
 });
