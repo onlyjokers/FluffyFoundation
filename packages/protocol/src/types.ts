@@ -299,6 +299,16 @@ export interface ControlMessage extends BaseMessage {
   payload: ControlPayload;
 }
 
+export type CommandEnvelopeFields = {
+  actor: string;
+  role: ConnectionRole | 'system';
+  scopeGroupId: string;
+  correlationId: string;
+  idempotencyKey: string;
+};
+
+export type NonSystemControlMessage = ControlMessage & CommandEnvelopeFields & { from: 'manager' };
+
 /**
  * Sensor types for data messages
  */
@@ -393,6 +403,8 @@ export interface MediaMetaMessage extends BaseMessage {
   };
 }
 
+export type NonSystemMediaMetaMessage = MediaMetaMessage & CommandEnvelopeFields;
+
 /**
  * Plugin IDs
  */
@@ -433,6 +445,9 @@ export interface PluginControlMessage extends BaseMessage {
   command: PluginCommand;
   payload?: Record<string, unknown>;
 }
+
+export type NonSystemPluginControlMessage = PluginControlMessage & CommandEnvelopeFields;
+export type NonSystemMutatingCommandMessage = NonSystemControlMessage | NonSystemMediaMetaMessage | NonSystemPluginControlMessage;
 
 /**
  * System message types
@@ -495,22 +510,6 @@ export type MessageWithoutServerTimestamp =
   | Omit<MediaMetaMessage, 'serverTimestamp'>
   | Omit<PluginControlMessage, 'serverTimestamp'>
   | Omit<SystemMessage, 'serverTimestamp'>;
-
-/**
- * Socket.io event names
- */
-export const SOCKET_EVENTS = {
-  // Main message event
-  MSG: 'msg',
-  // Time sync events
-  TIME_PING: 'time:ping',
-  TIME_PONG: 'time:pong',
-  // Connection events
-  CONNECT: 'connect',
-  DISCONNECT: 'disconnect',
-  CONNECT_ERROR: 'connect_error',
-  RECONNECT: 'reconnect',
-} as const;
 
 /**
  * Connection roles

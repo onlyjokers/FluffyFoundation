@@ -32,6 +32,13 @@ import {
     targetAll,
     targetClients,
 } from '@shugu/protocol';
+import {
+    nextManagerCommandEnvelope,
+    normalizeManagerCommandEnvelope,
+    type CommandEnvelope,
+    type CommandEnvelopeInput,
+} from './command-envelope.js';
+import { sendControlByAudience } from './controls.js';
 import { mergeControlPayload } from './payload-merge.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -77,6 +84,10 @@ export interface ManagerSDKConfig {
      * Default: 33 (~30fps). Set to 0 to disable throttling.
      */
     highFreqThrottleMs?: number;
+    /**
+     * Caller command scope metadata attached to non-system mutating control commands.
+     */
+    commandEnvelope?: CommandEnvelopeInput;
 }
 
 /**
@@ -84,8 +95,9 @@ export interface ManagerSDKConfig {
  */
 export class ManagerSDK {
     private socket: Socket | null = null;
-    private config: Required<ManagerSDKConfig>;
+    private config: Required<Omit<ManagerSDKConfig, 'commandEnvelope'>> & Pick<ManagerSDKConfig, 'commandEnvelope'>;
     private state: ManagerState;
+    private commandEnvelope: CommandEnvelope;
     private stateListeners: Set<(state: ManagerState) => void> = new Set();
     private sensorDataHandlers: Set<MessageHandler<SensorDataMessage>> = new Set();
     private timeSyncIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -128,7 +140,9 @@ export class ManagerSDK {
             // Throttle high-frequency updates to ~30fps by default to prevent backpressure
             highFreqThrottleMs: config.highFreqThrottleMs ?? 33,
             managerKey: typeof config.managerKey === 'string' ? config.managerKey.trim() : '',
+            commandEnvelope: config.commandEnvelope,
         };
+        this.commandEnvelope = normalizeManagerCommandEnvelope(this.config.commandEnvelope);
 
         this.state = {
             status: 'disconnected',
@@ -250,12 +264,12 @@ export class ManagerSDK {
         // Avoid wrapping custom payloads (unknown semantics) unless it is already a control-batch.
         if (action === 'custom') {
             if (isControlBatchPayload(payload)) {
-                const message = createControlMessage(target, action, payload, executeAt);
+                const message = createControlMessage(this.nextCommandEnvelope(), target, action, payload, executeAt);
                 this.socket.emit(SOCKET_EVENTS.MSG, message);
                 return;
             }
 
-            const message = createControlMessage(target, action, payload, executeAt);
+            const message = createControlMessage(this.nextCommandEnvelope(), target, action, payload, executeAt);
             this.socket.emit(SOCKET_EVENTS.MSG, message);
             return;
         }
@@ -275,7 +289,7 @@ export class ManagerSDK {
             items,
             ...(typeof executeAt === 'number' && Number.isFinite(executeAt) ? { executeAt } : {}),
         };
-        const message = createControlMessage(target, 'custom', payload, executeAt);
+        const message = createControlMessage(this.nextCommandEnvelope(), target, 'custom', payload, executeAt);
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 
@@ -290,6 +304,10 @@ export class ManagerSDK {
         if (target.mode !== 'clientIds') return target;
         const ids = (target.ids ?? []).map(String).filter(Boolean).sort();
         return { mode: 'clientIds', ids };
+    }
+
+    private nextCommandEnvelope(): CommandEnvelope {
+        return nextManagerCommandEnvelope(this.commandEnvelope);
     }
 
     private queueControl(target: TargetSelector, item: ControlBatchItem): void {
@@ -354,7 +372,13 @@ export class ManagerSDK {
 
             if (entry.items.length === 1) {
                 const single = entry.items[0];
-                const message = createControlMessage(entry.target, single.action, single.payload, single.executeAt);
+                const message = createControlMessage(
+                    this.nextCommandEnvelope(),
+                    entry.target,
+                    single.action,
+                    single.payload,
+                    single.executeAt
+                );
                 this.socket.emit(SOCKET_EVENTS.MSG, message);
                 continue;
             }
@@ -415,7 +439,7 @@ export class ManagerSDK {
         payload?: Record<string, unknown>
     ): void {
         if (!this.socket?.connected) return;
-        const message = createPluginControlMessage(target, pluginId, command, payload);
+        const message = createPluginControlMessage(this.nextCommandEnvelope(), target, pluginId, command, payload);
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 
@@ -430,7 +454,7 @@ export class ManagerSDK {
         options?: MediaMetaMessage['options']
     ): void {
         if (!this.socket?.connected) return;
-        const message = createMediaMetaMessage(target, mediaType, url, executeAt, options);
+        const message = createMediaMetaMessage(this.nextCommandEnvelope(), target, mediaType, url, executeAt, options);
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 
@@ -461,24 +485,14 @@ export class ManagerSDK {
      * Control flashlight on all or selected clients
      */
     flashlight(mode: 'off' | 'on' | 'blink', options?: { frequency?: number; dutyCycle?: number }, toAll = false, executeAt?: number): void {
-        const payload = { mode, ...options };
-        if (toAll) {
-            this.sendControlToAll('flashlight', payload, executeAt);
-        } else {
-            this.sendControlToSelected('flashlight', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'flashlight', { mode, ...options }, executeAt);
     }
 
     /**
      * Control vibration
      */
     vibrate(pattern: number[], repeat?: number, toAll = false, executeAt?: number): void {
-        const payload = { pattern, repeat };
-        if (toAll) {
-            this.sendControlToAll('vibrate', payload, executeAt);
-        } else {
-            this.sendControlToSelected('vibrate', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'vibrate', { pattern, repeat }, executeAt);
     }
 
     /**
@@ -498,12 +512,7 @@ export class ManagerSDK {
         toAll = false,
         executeAt?: number
     ): void {
-        const payload = { ...options };
-        if (toAll) {
-            this.sendControlToAll('modulateSound', payload, executeAt);
-        } else {
-            this.sendControlToSelected('modulateSound', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'modulateSound', { ...options }, executeAt);
     }
 
     /**
@@ -521,12 +530,7 @@ export class ManagerSDK {
         toAll = false,
         executeAt?: number
     ): void {
-        const payload = { ...options };
-        if (toAll) {
-            this.sendControlToAll('modulateSoundUpdate', payload, executeAt);
-        } else {
-            this.sendControlToSelected('modulateSoundUpdate', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'modulateSoundUpdate', { ...options }, executeAt);
     }
 
     /**
@@ -541,23 +545,14 @@ export class ManagerSDK {
         normalized.mode = normalized.mode ?? 'solid';
         normalized.opacity = normalized.opacity ?? 1;
 
-        if (toAll) {
-            this.sendControlToAll('screenColor', normalized, executeAt);
-        } else {
-            this.sendControlToSelected('screenColor', normalized, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'screenColor', normalized, executeAt);
     }
 
     /**
      * Play sound on clients
      */
     playSound(url: string, options?: { volume?: number; loop?: boolean }, toAll = false, executeAt?: number): void {
-        const payload = { url, ...options };
-        if (toAll) {
-            this.sendControlToAll('playSound', payload, executeAt);
-        } else {
-            this.sendControlToSelected('playSound', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'playSound', { url, ...options }, executeAt);
     }
 
     /**
@@ -575,66 +570,50 @@ export class ManagerSDK {
         toAll = false,
         executeAt?: number
     ): void {
-        const payload = { url, ...options };
-        if (toAll) {
-            this.sendControlToAll('playMedia', payload, executeAt);
-        } else {
-            this.sendControlToSelected('playMedia', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'playMedia', { url, ...options }, executeAt);
     }
 
     /**
      * Stop all media on clients
      */
     stopMedia(toAll = false): void {
-        if (toAll) {
-            this.sendControlToAll('stopMedia', {});
-        } else {
-            this.sendControlToSelected('stopMedia', {});
-        }
+        this.sendAudienceControl(toAll, 'stopMedia', {});
     }
 
     stopSound(toAll = false): void {
-        if (toAll) {
-            this.sendControlToAll('stopSound', {});
-        } else {
-            this.sendControlToSelected('stopSound', {});
-        }
+        this.sendAudienceControl(toAll, 'stopSound', {});
     }
 
     /**
      * Show image on clients
      */
     showImage(url: string, options?: { duration?: number }, toAll = false, executeAt?: number): void {
-        const payload = { url, ...options };
-        if (toAll) {
-            this.sendControlToAll('showImage', payload, executeAt);
-        } else {
-            this.sendControlToSelected('showImage', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'showImage', { url, ...options }, executeAt);
     }
 
     /**
      * Hide image on clients
      */
     hideImage(toAll = false): void {
-        if (toAll) {
-            this.sendControlToAll('hideImage', {});
-        } else {
-            this.sendControlToSelected('hideImage', {});
-        }
+        this.sendAudienceControl(toAll, 'hideImage', {});
     }
 
     /**
      * Set the ordered visual scene layer list.
      */
     setVisualScenes(scenes: VisualSceneLayerItem[], toAll = false, executeAt?: number): void {
-        const payload = { scenes };
-        if (toAll) {
-            this.sendControlToAll('visualScenes', payload, executeAt);
-        } else {
-            this.sendControlToSelected('visualScenes', payload, executeAt);
-        }
+        this.sendAudienceControl(toAll, 'visualScenes', { scenes }, executeAt);
+    }
+
+    private sendAudienceControl(toAll: boolean, action: ControlAction, payload: ControlPayload, executeAt?: number): void {
+        sendControlByAudience(
+            this.sendControlToAll.bind(this),
+            this.sendControlToSelected.bind(this),
+            toAll,
+            action,
+            payload,
+            executeAt
+        );
     }
 
     private setupSocketListeners(): void {

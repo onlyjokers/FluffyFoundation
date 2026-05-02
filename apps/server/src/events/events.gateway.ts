@@ -13,9 +13,16 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient, type RedisClientType } from 'redis';
 import { ClientRegistryService } from '../client-registry/client-registry.service.js';
 import { MessageRouterService } from '../message-router/message-router.service.js';
-import type { ConnectionRole, TimePingData } from '@shugu/protocol';
+import type {
+  ConnectionRole,
+  MessageWithoutServerTimestamp,
+  TargetSelector,
+  TimePingData,
+  ValidationRejectReason,
+} from '@shugu/protocol';
 import {
   createPolicyRejectReason,
+  isNonSystemMutatingCommandMessage,
   createTimePong,
   targetClients,
   validateMessage,
@@ -216,10 +223,69 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         ]);
         return;
       }
+
+      const scopeRejectReason = this.validateCommandScope(validatedMessage);
+      if (scopeRejectReason) {
+        this.logRejectedMessage(client.id, [scopeRejectReason]);
+        return;
+      }
     }
+
+    this.auditMutatingCommand(validatedMessage);
 
     // Route the message
     this.messageRouter.routeMessage(validatedMessage, client.id);
+  }
+
+  private validateCommandScope(message: MessageWithoutServerTimestamp): ValidationRejectReason | null {
+    if (!isNonSystemMutatingCommandMessage(message)) return null;
+
+    if (message.target.mode !== 'group') {
+      return createPolicyRejectReason({
+        actor: message.actor ?? message.from,
+        scope: 'server.ingress.scope',
+        type: message.type,
+        path: 'target.mode',
+        code: 'server.policy.scope_mismatch',
+        message: 'scoped commands must target their scope group',
+      });
+    }
+
+    if (message.target.groupId !== message.scopeGroupId) {
+      return createPolicyRejectReason({
+        actor: message.actor ?? message.from,
+        scope: 'server.ingress.scope',
+        type: message.type,
+        path: 'target.groupId',
+        code: 'server.policy.scope_mismatch',
+        message: 'target group must match scopeGroupId',
+      });
+    }
+
+    return null;
+  }
+
+  private auditMutatingCommand(message: MessageWithoutServerTimestamp): void {
+    if (!isNonSystemMutatingCommandMessage(message)) return;
+
+    console.info('[Gateway] Command audit', {
+      actor: message.actor,
+      role: message.role,
+      scopeGroupId: message.scopeGroupId,
+      type: message.type,
+      command: this.commandName(message),
+      target: message.target as TargetSelector,
+      correlationId: message.correlationId,
+      idempotencyKey: message.idempotencyKey,
+      decision: 'accept',
+    });
+  }
+
+  private commandName(message: MessageWithoutServerTimestamp): string {
+    if (message.type === 'control') return message.action;
+    if (message.type === 'plugin') return message.command;
+    if (message.type === 'media') return message.mediaType;
+    return message.type;
   }
 
   private logRejectedMessage(

@@ -9,6 +9,8 @@ export type ValidationRejectCode =
   | 'protocol.version.unsupported'
   | 'protocol.field.required'
   | 'protocol.field.invalid'
+  | 'protocol.scope.ambiguous'
+  | 'server.policy.scope_mismatch'
   | 'server.policy.unauthorized';
 
 export interface ValidationRejectReason {

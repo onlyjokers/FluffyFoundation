@@ -20,6 +20,13 @@ function createGateway(overrides?: { isManager?: boolean }) {
   return { gateway, routed };
 }
 
+function loggedMetadata(warnings: unknown[][], index = 0): Record<string, unknown> {
+  const value = warnings[index]?.[1];
+  assert.equal(typeof value, 'object');
+  assert.notEqual(value, null);
+  return value as Record<string, unknown>;
+}
+
 function withEnv(patch: Record<string, string | undefined>, fn: () => void): void {
   const previous = new Map<string, string | undefined>();
   for (const key of Object.keys(patch)) {
@@ -79,7 +86,18 @@ test('handleMessage rejects schema-invalid messages before routing and logs stru
 
   try {
     gateway.handleMessage(
-      { type: 'control', version: 1, from: 'manager', target: { mode: 'all' }, action: 'vibrate' },
+      {
+        type: 'control',
+        version: 1,
+        from: 'manager',
+        target: { mode: 'all' },
+        action: 'vibrate',
+        scopeGroupId: 'stage-left',
+        actor: 'manager',
+        role: 'manager',
+        correlationId: 'corr-invalid',
+        idempotencyKey: 'idem-invalid',
+      },
       { id: 'socket-1' } as never
     );
   } finally {
@@ -89,7 +107,7 @@ test('handleMessage rejects schema-invalid messages before routing and logs stru
   assert.equal(routed.length, 0);
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0]?.[0], '[Gateway] Message rejected');
-  assert.deepEqual(warnings[0]?.[1], {
+  assert.deepEqual(loggedMetadata(warnings), {
     socketId: 'socket-1',
     actor: 'manager',
     scope: 'message.control.payload',
@@ -119,6 +137,11 @@ test('handleMessage rejects unauthorized routing with structured policy metadata
         pluginId: 'node-executor',
         command: 'deploy',
         payload: {},
+        scopeGroupId: 'stage-left',
+        actor: 'manager',
+        role: 'manager',
+        correlationId: 'corr-unauthorized',
+        idempotencyKey: 'idem-unauthorized',
       },
       { id: 'socket-2' } as never
     );
@@ -129,7 +152,7 @@ test('handleMessage rejects unauthorized routing with structured policy metadata
   assert.equal(routed.length, 0);
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0]?.[0], '[Gateway] Message rejected');
-  assert.deepEqual(warnings[0]?.[1], {
+  assert.deepEqual(loggedMetadata(warnings), {
     socketId: 'socket-2',
     actor: 'manager',
     scope: 'server.ingress.authorization',

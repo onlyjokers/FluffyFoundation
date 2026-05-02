@@ -17,9 +17,18 @@ import {
     PluginId,
     PluginCommand,
     SystemAction,
+    type NonSystemControlMessage,
+    type NonSystemMediaMetaMessage,
+    type NonSystemPluginControlMessage,
 } from './types.js';
+import {
+    createCommandEnvelope,
+    createSystemCommandEnvelope,
+    type CommandEnvelopeInput,
+} from './command-envelope.js';
 import { validateMessage } from './validation.js';
 export { matchesTarget } from './helpers/matches-target.js';
+export { createCommandEnvelope } from './command-envelope.js';
 export { createPolicyRejectReason, validateMessage } from './validation.js';
 
 /**
@@ -33,15 +42,18 @@ export function now(): number {
  * Create a control message
  */
 export function createControlMessage(
+    envelope: CommandEnvelopeInput,
     target: TargetSelector,
     action: ControlAction,
     payload: ControlPayload,
     executeAt?: number
-): Omit<ControlMessage, 'serverTimestamp'> {
-    const message: Omit<ControlMessage, 'serverTimestamp'> = {
+): Omit<NonSystemControlMessage, 'serverTimestamp'> {
+    const commandEnvelope = createCommandEnvelope(envelope);
+    const message: Omit<NonSystemControlMessage, 'serverTimestamp'> = {
         type: 'control' as const,
         version: PROTOCOL_VERSION,
         from: 'manager',
+        ...commandEnvelope,
         target,
         action,
         payload,
@@ -66,6 +78,7 @@ export function createServerControlMessage(
         type: 'control' as const,
         version: PROTOCOL_VERSION,
         from: 'server',
+        ...createSystemCommandEnvelope(),
         target,
         action,
         payload,
@@ -100,16 +113,19 @@ export function createSensorDataMessage(
  * Create a media metadata message
  */
 export function createMediaMetaMessage(
+    envelope: CommandEnvelopeInput,
     target: TargetSelector,
     mediaType: MediaType,
     url: string,
     executeAt: number,
     options?: MediaMetaMessage['options']
-): Omit<MediaMetaMessage, 'serverTimestamp'> {
-    const message: Omit<MediaMetaMessage, 'serverTimestamp'> = {
+): Omit<NonSystemMediaMetaMessage, 'serverTimestamp'> {
+    const commandEnvelope = createCommandEnvelope(envelope);
+    const message: Omit<NonSystemMediaMetaMessage, 'serverTimestamp'> = {
         type: 'media' as const,
         version: PROTOCOL_VERSION,
         from: 'manager',
+        ...commandEnvelope,
         target,
         mediaType,
         url,
@@ -126,15 +142,18 @@ export function createMediaMetaMessage(
  * Create a plugin control message
  */
 export function createPluginControlMessage(
+    envelope: CommandEnvelopeInput,
     target: TargetSelector,
     pluginId: PluginId,
     command: PluginCommand,
     payload?: Record<string, unknown>
-): Omit<PluginControlMessage, 'serverTimestamp'> {
-    const message: Omit<PluginControlMessage, 'serverTimestamp'> = {
+): Omit<NonSystemPluginControlMessage, 'serverTimestamp'> {
+    const commandEnvelope = createCommandEnvelope(envelope);
+    const message: Omit<NonSystemPluginControlMessage, 'serverTimestamp'> = {
         type: 'plugin' as const,
         version: PROTOCOL_VERSION,
         from: 'manager',
+        ...commandEnvelope,
         target,
         pluginId,
         command,

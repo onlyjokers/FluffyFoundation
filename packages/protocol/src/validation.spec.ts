@@ -6,6 +6,7 @@ import { test } from 'node:test';
 
 import {
   PROTOCOL_VERSION,
+  createCommandEnvelope,
   createControlMessage,
   createMediaMetaMessage,
   createPluginControlMessage,
@@ -16,15 +17,33 @@ import {
 } from './index.js';
 
 const validFixtures = [
-  createControlMessage({ mode: 'all' }, 'vibrate', { pattern: [100, 50, 100], repeat: 1 }),
+  createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'vibrate',
+    { pattern: [100, 50, 100], repeat: 1 }
+  ),
   createSensorDataMessage('client-1', 'gyro', { alpha: 1, beta: 2, gamma: 3 }),
-  createMediaMetaMessage({ mode: 'clientIds', ids: ['client-1'] }, 'video', '/media/demo.mp4', 12345, {
-    loop: true,
-    volume: 0.8,
-  }),
-  createPluginControlMessage({ mode: 'group', groupId: 'stage-left' }, 'node-executor', 'deploy', {
-    graphId: 'main',
-  }),
+  createMediaMetaMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'clientIds', ids: ['client-1'] },
+    'video',
+    '/media/demo.mp4',
+    12345,
+    {
+      loop: true,
+      volume: 0.8,
+    }
+  ),
+  createPluginControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'group', groupId: 'stage-left' },
+    'node-executor',
+    'deploy',
+    {
+      graphId: 'main',
+    }
+  ),
   createSystemMessage('clientList', {
     clients: [{ clientId: 'client-1', connectedAt: 1000, selected: true }],
   }),
@@ -39,13 +58,75 @@ test('validateMessage accepts current protocol fixtures for every message class'
 });
 
 test('validateMessage accepts media and plugin messages when optional object fields are omitted', () => {
-  const media = createMediaMetaMessage({ mode: 'all' }, 'audio', '/x', 123);
-  const plugin = createPluginControlMessage({ mode: 'all' }, 'node-executor', 'start');
+  const media = createMediaMetaMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'audio',
+    '/x',
+    123
+  );
+  const plugin = createPluginControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'node-executor',
+    'start'
+  );
 
   assert.equal(validateMessage(media).ok, true);
   assert.equal(isValidMessage(media), true);
   assert.equal(validateMessage(plugin).ok, true);
   assert.equal(isValidMessage(plugin), true);
+});
+
+test('validateMessage rejects non-system mutating commands without envelope metadata', () => {
+  for (const message of [
+    {
+      type: 'control',
+      version: PROTOCOL_VERSION,
+      from: 'manager',
+      target: { mode: 'all' },
+      action: 'vibrate',
+      payload: { pattern: [100] },
+    },
+    {
+      type: 'plugin',
+      version: PROTOCOL_VERSION,
+      from: 'manager',
+      target: { mode: 'all' },
+      pluginId: 'node-executor',
+      command: 'deploy',
+      payload: {},
+    },
+    {
+      type: 'media',
+      version: PROTOCOL_VERSION,
+      from: 'manager',
+      target: { mode: 'all' },
+      mediaType: 'audio',
+      url: '/media/demo.mp3',
+      executeAt: 123,
+    },
+  ]) {
+    const result = validateMessage(message);
+
+    assert.equal(result.ok, false);
+    assert.deepEqual(
+      result.reasons.map((reason) => reason.path),
+      ['scopeGroupId', 'actor', 'role', 'correlationId', 'idempotencyKey']
+    );
+  }
+});
+
+test('validateMessage rejects ambiguous command scope aliases', () => {
+  const result = validateMessage({
+    ...validFixtures[0],
+    scopeGroupId: 'stage-left',
+    scope: { scopeGroupId: 'stage-right' },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reasons[0]?.code, 'protocol.scope.ambiguous');
+  assert.equal(result.reasons[0]?.path, 'scope.scopeGroupId');
 });
 
 test('validateMessage rejects unsupported protocol versions with structured compatibility metadata', () => {

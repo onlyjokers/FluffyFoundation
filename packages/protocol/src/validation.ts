@@ -3,6 +3,7 @@
  */
 import {
   PROTOCOL_VERSION,
+  SYSTEM_SCOPE_GROUP_ID,
   type MessageType,
   type MessageWithoutServerTimestamp,
 } from './types.js';
@@ -45,6 +46,7 @@ export function validateMessage(input: unknown): MessageValidationResult {
   ctx.type = input.type;
   ctx.actor = inferActor(input);
   validateCommonEnvelope(input, ctx);
+  validateCommandEnvelope(input, ctx);
 
   switch (input.type) {
     case 'control':
@@ -68,6 +70,38 @@ export function validateMessage(input: unknown): MessageValidationResult {
     return { ok: false, reasons: ctx.reasons };
   }
   return { ok: true, message: input as MessageWithoutServerTimestamp };
+}
+
+function validateCommandEnvelope(input: Record<string, unknown>, ctx: MutableValidationContext): void {
+  if (input.type !== 'control' && input.type !== 'plugin' && input.type !== 'media') return;
+  if (input.from === 'server' && input.scopeGroupId === SYSTEM_SCOPE_GROUP_ID) return;
+
+  requireEnvelopeString(input, ctx, 'scopeGroupId', 'message.command.scopeGroupId');
+  requireEnvelopeString(input, ctx, 'actor', 'message.command.actor');
+  requireEnvelopeString(input, ctx, 'role', 'message.command.role');
+  requireEnvelopeString(input, ctx, 'correlationId', 'message.command.correlationId');
+  requireEnvelopeString(input, ctx, 'idempotencyKey', 'message.command.idempotencyKey');
+
+  if (isRecord(input.scope) && typeof input.scope.scopeGroupId === 'string' && input.scope.scopeGroupId !== input.scopeGroupId) {
+    addReason(
+      ctx,
+      'protocol.scope.ambiguous',
+      'message.command.scopeGroupId',
+      'scope.scopeGroupId',
+      'scope.scopeGroupId conflicts with scopeGroupId'
+    );
+  }
+}
+
+function requireEnvelopeString(
+  input: Record<string, unknown>,
+  ctx: MutableValidationContext,
+  key: string,
+  scope: string
+): void {
+  if (typeof input[key] !== 'string' || !input[key].trim()) {
+    addReason(ctx, hasOwn(input, key) ? 'protocol.field.invalid' : 'protocol.field.required', scope, key, `${key} is required`);
+  }
 }
 
 function validateCommonEnvelope(input: Record<string, unknown>, ctx: MutableValidationContext): void {
