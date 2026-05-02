@@ -16,11 +16,7 @@ interface ConnectionInfo {
     instanceId?: string;
 }
 
-type ClientIdentity = {
-    deviceId?: string;
-    instanceId?: string;
-    clientId?: string;
-};
+type ClientIdentity = { deviceId?: string; instanceId?: string; clientId?: string };
 
 @Injectable()
 export class ClientRegistryService {
@@ -385,7 +381,7 @@ export class ClientRegistryService {
      */
     setClientSelected(clientId: string, selected: boolean): void {
         const client = this.clients.get(clientId);
-        if (client) {
+        if (client && client.selected !== selected) {
             client.selected = selected;
         }
     }

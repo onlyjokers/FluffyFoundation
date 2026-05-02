@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { ClientRegistryService } from '../client-registry/client-registry.service.js';
+import { createStateStrategyConfigFromEnv, createStateStrategyStatus } from '../bootstrap/state-strategy.js';
+import { createControlPlaneSnapshot } from '../bootstrap/control-plane-snapshot.js';
 import type {
     ControlMessage,
     SensorDataMessage,
@@ -219,7 +221,11 @@ export class MessageRouterService {
             type: 'system',
             version: 1,
             action: 'clientList',
-            payload: { clients },
+            payload: {
+                clients,
+                stateStrategy: createStateStrategyStatus(createStateStrategyConfigFromEnv()),
+                controlPlane: createControlPlaneSnapshot(clients),
+            },
         }, Date.now());
 
         this.emitToSockets(managerSocketIds, message);

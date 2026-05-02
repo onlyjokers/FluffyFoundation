@@ -40,6 +40,7 @@ import {
 } from './command-envelope.js';
 import { sendControlByAudience } from './controls.js';
 import { mergeControlPayload } from './payload-merge.js';
+import { createStateSnapshotPatch, type StateSnapshotPatch } from './state-snapshot.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -48,6 +49,8 @@ export interface ManagerState {
     managerId: string | null;
     clients: ClientInfo[];
     selectedClientIds: string[];
+    stateStrategy?: StateSnapshotPatch['stateStrategy'];
+    controlPlane?: StateSnapshotPatch['controlPlane'];
     timeSync: TimeSyncState;
     error: string | null;
 }
@@ -694,7 +697,11 @@ export class ManagerSDK {
                 break;
             case 'clientList':
                 if (message.payload.clients) {
-                    this.updateState({ clients: message.payload.clients });
+                    this.updateState(createStateSnapshotPatch({
+                        clients: message.payload.clients,
+                        stateStrategy: message.payload.stateStrategy,
+                        controlPlane: message.payload.controlPlane,
+                    }));
                 }
                 break;
             case 'clientJoined':

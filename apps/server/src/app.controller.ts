@@ -1,6 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
 import { ClientRegistryService } from './client-registry/client-registry.service.js';
 import { AssetsService } from './assets/assets.service.js';
+import { createControlPlaneSnapshot } from './bootstrap/control-plane-snapshot.js';
+import { createStateStrategyConfigFromEnv, createStateStrategyStatus } from './bootstrap/state-strategy.js';
 
 @Controller()
 export class AppController {
@@ -18,15 +20,19 @@ export class AppController {
             status: assetHealth?.ok ? 'ok' : 'degraded',
             timestamp: Date.now(),
             uptime: process.uptime(),
+            stateStrategy: createStateStrategyStatus(createStateStrategyConfigFromEnv()),
             assets: assetHealth,
         };
     }
 
     @Get('clients')
     getClients() {
+        const clients = this.clientRegistry.getAllClients();
         return {
-            clients: this.clientRegistry.getAllClients(),
+            clients,
             managers: this.clientRegistry.getAllManagers(),
+            stateStrategy: createStateStrategyStatus(createStateStrategyConfigFromEnv()),
+            controlPlane: createControlPlaneSnapshot(clients),
             count: {
                 clients: this.clientRegistry.getClientCount(),
                 managers: this.clientRegistry.getManagerCount(),

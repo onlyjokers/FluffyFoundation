@@ -57,6 +57,8 @@ export function validateSystemMessage(input: ObjectRecord, ctx: MutableValidatio
   optionalNonEmptyString(input.payload, ctx, 'error', 'payload.error', 'message.system.payload.error');
   optionalNumber(input.payload, ctx, 'serverTimestamp', 'payload.serverTimestamp', 'message.system.payload.serverTimestamp');
   optionalNumber(input.payload, ctx, 'clientTimestamp', 'payload.clientTimestamp', 'message.system.payload.clientTimestamp');
+  validateStateStrategy(input.payload.stateStrategy, ctx);
+  validateControlPlaneSnapshot(input.payload.controlPlane, ctx);
   validateClientListPayload(input.payload, ctx);
 }
 
@@ -91,4 +93,41 @@ function validateClientInfo(client: unknown, ctx: MutableValidationContext, path
   optionalBoolean(client, ctx, 'selected', `${path}.selected`, 'message.system.payload.clients.selected');
   optionalBoolean(client, ctx, 'connected', `${path}.connected`, 'message.system.payload.clients.connected');
   optionalNumber(client, ctx, 'lastSeenAt', `${path}.lastSeenAt`, 'message.system.payload.clients.lastSeenAt');
+}
+
+function validateStateStrategy(value: unknown, ctx: MutableValidationContext): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.stateStrategy', 'payload.stateStrategy', 'payload.stateStrategy must be an object');
+    return;
+  }
+  if (value.mode !== 'single-server') {
+    addReason(ctx, fieldCode(value, 'mode'), 'message.system.payload.stateStrategy.mode', 'payload.stateStrategy.mode', 'payload.stateStrategy.mode must be single-server');
+  }
+}
+
+function validateControlPlaneSnapshot(value: unknown, ctx: MutableValidationContext): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane', 'payload.controlPlane', 'payload.controlPlane must be an object');
+    return;
+  }
+
+  if (value.strategy !== 'single-server') {
+    addReason(ctx, fieldCode(value, 'strategy'), 'message.system.payload.controlPlane.strategy', 'payload.controlPlane.strategy', 'payload.controlPlane.strategy must be single-server');
+  }
+
+  const selection = value.selection;
+  if (!isRecord(selection)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.selection', 'payload.controlPlane.selection', 'payload.controlPlane.selection must be an object');
+  } else {
+    if (!Array.isArray(selection.selectedClientIds) || selection.selectedClientIds.some((id) => typeof id !== 'string' || id.trim() === '')) {
+      addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.selection.selectedClientIds', 'payload.controlPlane.selection.selectedClientIds', 'payload.controlPlane.selection.selectedClientIds must be a string array');
+    }
+    requireNumber(selection, ctx, 'revision', 'message.system.payload.controlPlane.selection.revision', 'payload.controlPlane.selection.revision');
+  }
+
+  if (value.ownership !== undefined && !isRecord(value.ownership)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership', 'payload.controlPlane.ownership', 'payload.controlPlane.ownership must be an object');
+  }
 }

@@ -13,6 +13,5 @@ single-server production mode or shared state for registry, selection, ownership
 
 ## Work Status
 
-FF-05 was accepted and committed as `30c43ac Add scoped command envelope enforcement`. FF-06 is the active next
-phase/task. The next Plan dispatch may start bounded FF-06 Work, but this transition boundary does not implement
-FF-06.
+FF-06 Work is ready for Review. The selected strategy is explicit single-server production mode with boot/runtime
+guards, status surfaces, manager-visible dashboard proof, and ownership snapshot divergence tests.

@@ -2,7 +2,7 @@
   import '@shugu/ui-kit/styles';
   import { onMount, tick } from 'svelte';
   import { spring } from 'svelte/motion';
-  import { connect, disconnect, connectionStatus } from '$lib/stores/manager';
+  import { connect, disconnect, connectionStatus, state } from '$lib/stores/manager';
   import { auth } from '$lib/stores/auth';
   import { nodeEngine } from '$lib/nodes';
   import {
@@ -381,6 +381,24 @@
             </Card>
           </div>
           <div class="grid-item">
+            <Card title="Server State">
+              <dl class="state-strategy-list">
+                <div>
+                  <dt>Mode</dt>
+                  <dd>{$state.stateStrategy?.mode ?? 'unknown'}</dd>
+                </div>
+                <div>
+                  <dt>Registry</dt>
+                  <dd>{$state.stateStrategy?.registryOwner ?? 'unknown'}</dd>
+                </div>
+                <div>
+                  <dt>Selection</dt>
+                  <dd>{$state.stateStrategy?.selectionOwner ?? 'unknown'}</dd>
+                </div>
+              </dl>
+            </Card>
+          </div>
+          <div class="grid-item">
             <GeoControl {serverUrl} />
           </div>
         </div>
@@ -562,5 +580,37 @@
     font-size: var(--text-xs);
     color: var(--text-muted);
     line-height: 1.35;
+  }
+
+  .state-strategy-list {
+    display: grid;
+    gap: var(--space-sm);
+    margin: 0;
+  }
+
+  .state-strategy-list div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .state-strategy-list div:last-child {
+    border-bottom: 0;
+  }
+
+  .state-strategy-list dt {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .state-strategy-list dd {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-align: right;
   }
 </style>

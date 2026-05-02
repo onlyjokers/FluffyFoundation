@@ -7,6 +7,11 @@ import {
   createHttpCorsOptions,
   validateServerSecurityConfig,
 } from './bootstrap/security-policy.js';
+import {
+  createStateStrategyConfigFromEnv,
+  createStateStrategyStatus,
+  validateServerStateStrategyConfig,
+} from './bootstrap/state-strategy.js';
 
 async function bootstrap() {
   const env = loadOptionalEnv();
@@ -47,6 +52,10 @@ async function bootstrap() {
     hasHttps: Boolean(httpsOptions),
   };
   validateServerSecurityConfig(securityConfig);
+
+  const stateStrategyConfig = createStateStrategyConfigFromEnv();
+  validateServerStateStrategyConfig(stateStrategyConfig);
+  console.info('[state] active server state strategy', createStateStrategyStatus(stateStrategyConfig));
 
   const appOptions: NestApplicationOptions = {
     cors: createHttpCorsOptions(securityConfig),

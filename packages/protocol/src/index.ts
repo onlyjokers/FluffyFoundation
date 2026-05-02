@@ -12,6 +12,9 @@ export * from './helpers.js';
 // Export command envelope contracts
 export * from './command-envelope.js';
 
+// Export state strategy contracts
+export * from './state-strategy.js';
+
 // Export socket event names
 export * from './socket-events.js';
 

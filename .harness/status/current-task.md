@@ -32,5 +32,4 @@ Allowed FF-06 implementation boundary for a future bounded Work dispatch:
 
 ## Next Expected Action
 
-The next Plan dispatch may start bounded FF-06 Work. This FF-05-to-FF-06 status-transition boundary must not implement
-FF-06 server state strategy behavior.
+Review FF-06 commit candidate. Work has prepared the single-server strategy implementation, evidence, and handoff.

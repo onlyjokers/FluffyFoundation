@@ -29,6 +29,11 @@ import {
 } from '@shugu/protocol';
 import { sendServerControl } from '../protocol/server-messages.js';
 import { createSocketCorsOptions, resolveManagerRole } from '../bootstrap/security-policy.js';
+import {
+  createStateStrategyConfigFromEnv,
+  createStateStrategyStatus,
+  validateServerStateStrategyConfig,
+} from '../bootstrap/state-strategy.js';
 
 function sanitizeGroup(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -75,9 +80,17 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // Set DISABLE_REDIS_ADAPTER=1 to compare performance with/without Redis
     const redisUrl = process.env.REDIS_URL;
     const disableRedis = process.env.DISABLE_REDIS_ADAPTER === '1';
+    const stateStrategyConfig = createStateStrategyConfigFromEnv();
+
+    validateServerStateStrategyConfig(stateStrategyConfig);
+    console.info('[Gateway] Active state strategy', createStateStrategyStatus(stateStrategyConfig));
 
     if (disableRedis) {
       console.log('[Gateway] Redis adapter disabled via DISABLE_REDIS_ADAPTER=1');
+    } else if (process.env.NODE_ENV === 'production' && redisUrl) {
+      throw new Error(
+        'Production boot denied: REDIS_URL is unsupported while registry/control-plane state is single-server.'
+      );
     } else if (redisUrl) {
       try {
         console.log('[Gateway] Connecting to Redis adapter...');

@@ -1,6 +1,4 @@
-/**
- * Protocol Version
- */
+/** Protocol Version */
 export const PROTOCOL_VERSION = 1 as const;
 
 /**
@@ -486,6 +484,8 @@ export interface SystemMessage extends BaseMessage {
     error?: string;
     serverTimestamp?: number;
     clientTimestamp?: number;
+    stateStrategy?: import('./state-strategy.js').StateStrategyStatus;
+    controlPlane?: import('./state-strategy.js').ControlPlaneSnapshot;
   };
 }
 
