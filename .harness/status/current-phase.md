@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-10 - Node Registry V2 And Agent-Readable Node Definitions
+FF-11 - Graph Validation, Migrations, History, And Rollback
 
 ## Previous Acceptance
 
-FF-09 was accepted and committed as `38410b8 Add semantic command bus`.
+FF-10 was accepted and committed as `19f6b2b Add node registry v2 metadata`.
 
 ## Active Claim
 
-Make every node type discoverable, validatable, migratable, and understandable by AI without hardcoded logic.
+Make graph state safe to evolve and recover.
 
 ## Work Status
 
-FF-10 is active for the next bounded Plan-dispatched Work session. The FF-09 acceptance is recorded, and this
-status-transition boundary did not implement FF-10.
+FF-11 is active for the next bounded Plan-dispatched Work session. The FF-10 acceptance is recorded, and this
+status-transition boundary did not implement FF-11.
