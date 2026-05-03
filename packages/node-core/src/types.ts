@@ -67,6 +67,7 @@ export interface ConfigField {
   step?: number;
   accept?: string;
   buttonLabel?: string;
+  unit?: string;
 }
 
 export interface ProcessContext {
@@ -75,10 +76,47 @@ export interface ProcessContext {
   deltaTime: number;
 }
 
+export type NodePlatformTarget = 'manager' | 'client' | 'display' | 'server' | 'worker' | 'local-only';
+
+export type NodeSideEffectClass =
+  | 'none'
+  | 'local-state'
+  | 'remote-control'
+  | 'media-playback'
+  | 'sensor-read'
+  | 'network'
+  | 'filesystem';
+
+export interface NodeCompatibilityRule {
+  target: string;
+  rule: string;
+  repairHint?: string;
+}
+
+export interface NodeExample {
+  title: string;
+  summary: string;
+  config?: Record<string, unknown>;
+  inputs?: Record<string, unknown>;
+}
+
+export interface NodeDefinitionMetadata {
+  version: string;
+  platformTargets: NodePlatformTarget[];
+  sideEffectClass: NodeSideEffectClass;
+  permissions: string[];
+  compatibility: NodeCompatibilityRule[];
+  examples: NodeExample[];
+  risks: string[];
+  description: string;
+  repairHints?: string[];
+}
+
 export interface NodeDefinition {
   type: string;
   label: string;
   category: string;
+  metadata?: NodeDefinitionMetadata;
   inputs: NodePort[];
   outputs: NodePort[];
   configSchema: ConfigField[];

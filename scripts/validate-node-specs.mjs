@@ -163,7 +163,17 @@ async function main() {
         warn(`${formatPath(filePath)}: runtime is ignored for node-core types ("${type}")`);
       }
 
-      const allowedKeys = new Set(['__purpose', 'type', 'label', 'category', 'inputs', 'outputs', 'configSchema', 'runtime']);
+      const allowedKeys = new Set([
+        '__purpose',
+        'type',
+        'label',
+        'category',
+        'metadata',
+        'inputs',
+        'outputs',
+        'configSchema',
+        'runtime',
+      ]);
       for (const key of Object.keys(json)) {
         if (!allowedKeys.has(key)) {
           warn(`${formatPath(filePath)}: unknown top-level key "${key}" (not applied in overlay)`);
@@ -284,6 +294,8 @@ async function main() {
         }
       }
 
+      checkMetadata(filePath, type, json.metadata, warn, error);
+
       continue;
     }
 
@@ -295,6 +307,7 @@ async function main() {
     if (!label) error(`${formatPath(filePath)}: manager-only node "${type}" is missing "label" (string)`);
     if (!category) error(`${formatPath(filePath)}: manager-only node "${type}" is missing "category" (string)`);
     if (!runtimeKind) error(`${formatPath(filePath)}: manager-only node "${type}" is missing "runtime.kind" (string)`);
+    checkMetadata(filePath, type, json.metadata, warn, error);
 
     const checkPorts = (kind, ports) => {
       if (!Array.isArray(ports)) {
@@ -364,6 +377,43 @@ async function main() {
   console.log(summary);
 
   if (!ok) process.exitCode = 1;
+}
+
+function checkStringArray(filePath, type, metadata, key, warn) {
+  if (metadata[key] === undefined) return;
+  if (!Array.isArray(metadata[key]) || metadata[key].some((item) => typeof item !== 'string')) {
+    warn(`${formatPath(filePath)}: "${type}" metadata.${key} should be an array of strings`);
+  }
+}
+
+function checkMetadata(filePath, type, metadata, warn, error) {
+  if (metadata === undefined) return;
+  if (!isPlainObject(metadata)) {
+    error(`${formatPath(filePath)}: "${type}" metadata must be an object when provided`);
+    return;
+  }
+
+  if (metadata.version !== undefined && typeof metadata.version !== 'string') {
+    warn(`${formatPath(filePath)}: "${type}" metadata.version should be a string`);
+  }
+  if (metadata.description !== undefined && typeof metadata.description !== 'string') {
+    warn(`${formatPath(filePath)}: "${type}" metadata.description should be a string`);
+  }
+  if (metadata.sideEffectClass !== undefined && typeof metadata.sideEffectClass !== 'string') {
+    warn(`${formatPath(filePath)}: "${type}" metadata.sideEffectClass should be a string`);
+  }
+
+  checkStringArray(filePath, type, metadata, 'platformTargets', warn);
+  checkStringArray(filePath, type, metadata, 'permissions', warn);
+  checkStringArray(filePath, type, metadata, 'risks', warn);
+  checkStringArray(filePath, type, metadata, 'repairHints', warn);
+
+  if (metadata.compatibility !== undefined && !Array.isArray(metadata.compatibility)) {
+    warn(`${formatPath(filePath)}: "${type}" metadata.compatibility should be an array`);
+  }
+  if (metadata.examples !== undefined && !Array.isArray(metadata.examples)) {
+    warn(`${formatPath(filePath)}: "${type}" metadata.examples should be an array`);
+  }
 }
 
 main().catch((err) => {

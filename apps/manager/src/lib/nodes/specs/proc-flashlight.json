@@ -2,6 +2,28 @@
   "type": "proc-flashlight",
   "label": "Flashlight",
   "category": "Processors",
+  "metadata": {
+    "version": "2.0.0",
+    "platformTargets": ["manager", "client"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send", "device:flashlight"],
+    "description": "Builds a flashlight control command for selected client devices.",
+    "compatibility": [
+      {
+        "target": "client-object",
+        "rule": "Connect cmd output to a client-object sink to route the command to clients.",
+        "repairHint": "Add a client-object node when commands are not reaching devices."
+      }
+    ],
+    "examples": [
+      {
+        "title": "Blink clients",
+        "summary": "Mode blink with frequencyHz=2 and dutyCycle=0.5 creates a visible pulse."
+      }
+    ],
+    "risks": ["May activate physical device flashlight hardware."],
+    "repairHints": ["Clamp frequency and duty cycle when inputs come from noisy sensors."]
+  },
   "inputs": [
     { "id": "active", "label": "Active", "type": "boolean" },
     { "id": "mode", "label": "Mode", "type": "string" },

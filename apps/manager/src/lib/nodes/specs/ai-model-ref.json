@@ -1,5 +1,27 @@
 {
   "type": "ai-model-ref",
   "label": "AI Model",
-  "category": "AI"
+  "category": "AI",
+  "metadata": {
+    "version": "2.0.0",
+    "platformTargets": ["manager"],
+    "sideEffectClass": "local-state",
+    "permissions": ["asset:read"],
+    "description": "References an AI model asset for graph nodes that need an explicit model handle.",
+    "compatibility": [
+      {
+        "target": "string inputs",
+        "rule": "Outputs an asset: model reference string when enabled and configured.",
+        "repairHint": "Select a model asset or disable the node when a model is optional."
+      }
+    ],
+    "examples": [
+      {
+        "title": "Use configured model",
+        "summary": "Set enabled=true and choose a model asset; downstream nodes receive asset:<id>."
+      }
+    ],
+    "risks": ["Missing model assets produce an empty reference."],
+    "repairHints": ["Check the asset picker value before connecting this node to model consumers."]
+  }
 }

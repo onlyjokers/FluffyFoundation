@@ -13,6 +13,7 @@ import type {
   SemanticProposal,
   SemanticSnapshotInput,
 } from './semantic-graph-types.js';
+import { createAgentNodeDefinitionSummary } from './node-definition-metadata.js';
 
 export const cloneRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -60,6 +61,16 @@ export const normalizeDefinitions = (
     category: String(def.category ?? 'Other'),
     ports: { inputs: [...(def.inputs ?? [])], outputs: [...(def.outputs ?? [])] },
     params: [...(def.configSchema ?? [])],
+    aiSummary: createAgentNodeDefinitionSummary({
+      type: String(def.type),
+      label: String(def.label ?? def.type),
+      category: String(def.category ?? 'Other'),
+      inputs: [...(def.inputs ?? [])],
+      outputs: [...(def.outputs ?? [])],
+      configSchema: [...(def.configSchema ?? [])],
+      metadata: def.metadata,
+      process: () => ({}),
+    }),
   }));
 
 export const normalizeGroups = (groups: SemanticSnapshotInput['groups'] = []): SemanticGroup[] =>

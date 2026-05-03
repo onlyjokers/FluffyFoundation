@@ -3,6 +3,7 @@
  */
 
 import type { Connection, GraphState, NodeDefinition, NodeInstance } from './types.js';
+import type { AgentNodeDefinitionSummary } from './node-definition-metadata.js';
 
 export type SemanticActor = { id: string; role: string };
 
@@ -21,6 +22,7 @@ export type SemanticDefinition = {
   category: string;
   ports: { inputs: NodeDefinition['inputs']; outputs: NodeDefinition['outputs'] };
   params: NodeDefinition['configSchema'];
+  aiSummary?: AgentNodeDefinitionSummary;
 };
 
 export type SemanticGroup = {

@@ -1,0 +1,68 @@
+{
+  "fixtureAppearsAutomatically": true,
+  "definitionCount": 1,
+  "fixture": {
+    "type": "fixture-auto-node",
+    "label": "Fixture Auto Node",
+    "version": "2.0.0",
+    "category": "Logic",
+    "description": "Evidence fixture proving factory registration does not require a global switch edit.",
+    "platforms": [
+      "manager",
+      "client"
+    ],
+    "sideEffects": "none",
+    "permissions": [],
+    "ports": {
+      "inputs": [
+        {
+          "id": "in",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 10,
+          "step": 1
+        }
+      ],
+      "outputs": [
+        {
+          "id": "value",
+          "type": "number"
+        }
+      ]
+    },
+    "params": [
+      {
+        "key": "value",
+        "type": "number",
+        "default": 7,
+        "min": 0,
+        "max": 10,
+        "step": 1,
+        "unit": "count"
+      }
+    ],
+    "compatibility": [
+      {
+        "target": "number inputs",
+        "rule": "value output can connect to number-compatible inputs",
+        "repairHint": "Insert a converter before non-number targets."
+      }
+    ],
+    "examples": [
+      {
+        "title": "Emit configured value",
+        "summary": "Outputs the configured numeric value for downstream math nodes.",
+        "config": {
+          "value": 7
+        }
+      }
+    ],
+    "risks": [
+      "Fixture node only; no runtime side effects."
+    ],
+    "repairHints": [
+      "Ensure the fixture factory is included in the loader input."
+    ]
+  }
+}

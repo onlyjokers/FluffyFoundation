@@ -3,6 +3,28 @@
   "type": "display-object",
   "label": "Display",
   "category": "Objects",
+  "metadata": {
+    "version": "2.0.0",
+    "platformTargets": ["manager", "display"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["display:control", "control:send"],
+    "description": "Routes command messages to a paired Display session without exposing UI layout details.",
+    "compatibility": [
+      {
+        "target": "command outputs",
+        "rule": "Accepts command sink inputs from media, image, visual, and processor nodes.",
+        "repairHint": "Connect command-producing nodes to Display when output is not visible."
+      }
+    ],
+    "examples": [
+      {
+        "title": "Show media on Display",
+        "summary": "Connect play-media cmd output to Display input to route playback commands."
+      }
+    ],
+    "risks": ["Can change the live Display surface immediately."],
+    "repairHints": ["Verify Display is paired before assuming a command failed."]
+  },
   "inputs": [{ "id": "in", "label": "In", "type": "command", "kind": "sink" }],
   "outputs": [],
   "configSchema": [],
