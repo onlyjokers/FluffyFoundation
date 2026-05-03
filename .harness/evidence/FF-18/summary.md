@@ -299,3 +299,89 @@ Verification notes:
 - Browser/runtime proof remains intentionally deferred for WP4 because Plan scoped this slice to executable contract/scenario proof only.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
+
+## WP5 - AI Semantic Command Bus Parity Adapter
+
+Implemented:
+- `@shugu/ai-core` now exposes `runAiSemanticCommandBusParityFixture`, a deterministic parity fixture that accepts real semantic command bus instances from `@shugu/node-core`.
+- The fixture runs equivalent AI proposal execution and direct non-AI command-bus dispatch for the command surfaces touched so far: `node.add`, `node.archive`, `node.params.update`, `node.connect`, and `node.disconnect`.
+- AI execution still flows through WP1 raw-command proposal/dry-run, WP2 proposal execution/audit/history/rollback metadata, and WP3 structured output-change observation.
+- AI-visible parity traces retain semantic context/redaction metadata, command sequence, dry-run/apply policy, execution audit, rollback reference, history entry, observed result, direct caller result, and normalized snapshot parity flags.
+- `AiSemanticCommand` now includes `node.add` and `node.archive` so AI raw-command proposals can represent the same semantic command bus surfaces as Canvas/CLI/API without adding a direct UI mutation path.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/*.test.mjs
+PASS: 22 tests, 0 failures
+```
+
+Deterministic parity fixture output:
+
+```json
+[
+  {
+    "caseId": "add",
+    "commandType": "node.add",
+    "aiStatus": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:add:rollback:80:3",
+    "historyStatus": "applied",
+    "observed": "success",
+    "redactions": 2
+  },
+  {
+    "caseId": "archive",
+    "commandType": "node.archive",
+    "aiStatus": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:archive:rollback:90:3",
+    "historyStatus": "applied",
+    "observed": "success",
+    "redactions": 2
+  },
+  {
+    "caseId": "params",
+    "commandType": "node.params.update",
+    "aiStatus": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:params:rollback:100:3",
+    "historyStatus": "applied",
+    "observed": "success",
+    "redactions": 2
+  },
+  {
+    "caseId": "connect",
+    "commandType": "node.connect",
+    "aiStatus": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:connect:rollback:110:3",
+    "historyStatus": "applied",
+    "observed": "success",
+    "redactions": 2
+  },
+  {
+    "caseId": "disconnect",
+    "commandType": "node.disconnect",
+    "aiStatus": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:disconnect:rollback:120:3",
+    "historyStatus": "applied",
+    "observed": "success",
+    "redactions": 2
+  }
+]
+```
+
+Verification notes:
+- Browser/runtime proof remains intentionally deferred for WP5 because Plan scoped this packet to deterministic source/tests only.
+- Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
+- `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.

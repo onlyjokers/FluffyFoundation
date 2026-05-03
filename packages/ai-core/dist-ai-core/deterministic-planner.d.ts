@@ -7,6 +7,22 @@ export type AiSemanticActor = {
     role: string;
 };
 export type AiSemanticCommand = {
+    type: 'node.add';
+    node: {
+        id: string;
+        type: string;
+        position?: {
+            x: number;
+            y: number;
+        };
+        config?: Record<string, unknown>;
+        inputValues?: Record<string, unknown>;
+        outputValues?: Record<string, unknown>;
+    };
+} | {
+    type: 'node.archive';
+    nodeId: string;
+} | {
     type: 'node.params.update';
     nodeId: string;
     params: Record<string, unknown>;
