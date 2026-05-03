@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-12 - Group Sovereignty And ControlPlane V2
+FF-13 - Client-As-Controller Transfer Lifecycle
 
 ## Previous Acceptance
 
-FF-11 was accepted and committed as `4616ab8 Add graph validation history and rollback`.
+FF-12 was accepted and committed as `8dca9a4 Add group sovereignty control plane`.
 
 ## Active Claim
 
-Make Group ownership the central authorization unit.
+Let authorized clients temporarily control Groups without bypassing safety.
 
 ## Work Status
 
-FF-12 is active for the next bounded Plan-dispatched Work session. The FF-11 acceptance is recorded, and this
-status-transition boundary did not implement FF-12.
+FF-13 is active for the next bounded Plan-dispatched Work session. The FF-12 acceptance is recorded, and this
+status-transition boundary did not implement FF-13.
