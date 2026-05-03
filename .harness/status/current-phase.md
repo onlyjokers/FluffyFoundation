@@ -16,5 +16,5 @@ Stop Tone, multimedia, visual, AI, and future integrations from each inventing l
 
 ## Work Status
 
-FF-17 is active for the next bounded Plan-dispatched Work session. The FF-16 acceptance is recorded, and this
-status-transition boundary did not implement FF-17.
+FF-17 implementation completed in the current bounded Work session. The plugin host, registry discovery, lifecycle
+tests, and failure-isolation fixture were added under the FF-17 boundary.

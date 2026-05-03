@@ -1,0 +1,28 @@
+{
+  "name": "@shugu/plugin-core",
+  "version": "1.0.0",
+  "description": "Shared plugin lifecycle, registry, and host contracts.",
+  "main": "./dist-out/index.js",
+  "module": "./dist-out/index.js",
+  "types": "./dist-out/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist-out/index.d.ts",
+      "import": "./dist-out/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc",
+    "dev": "pnpm exec tsc --watch",
+    "clean": "rm -rf dist-out",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\"",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "files": [
+    "dist-out"
+  ],
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
