@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-17 - Plugin Host And Capability Lifecycle
+FF-18 - AI Operator Semantic Runtime
 
 ## Previous Acceptance
 
-FF-16 was accepted and committed as `59661aa`.
+FF-17 Plugin Host And Capability Lifecycle was accepted and committed as `111103f` (`Add plugin host lifecycle`).
 
 ## Active Claim
 
-Stop Tone, multimedia, visual, AI, and future integrations from each inventing lifecycle rules.
+Give AI the same semantic operation power as a human Manager/Root within policy.
 
 ## Work Status
 
-FF-17 implementation completed in the current bounded Work session. The plugin host, registry discovery, lifecycle
-tests, and failure-isolation fixture were added under the FF-17 boundary.
+FF-18 is the next active task. This status transition is harness-only and does not implement AI Operator runtime
+behavior.
