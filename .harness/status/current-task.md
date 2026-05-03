@@ -4,41 +4,45 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-13 - Client-As-Controller Transfer Lifecycle
+FF-14 - Distributed NodeExecutor V2 And Execution Partitions
 
 ## Previous Acceptance
 
-FF-12 was accepted and committed as `8dca9a4 Add group sovereignty control plane`.
+FF-13 was accepted and committed as `fe4c39a Add client control transfer lifecycle`.
 
 ## Current Boundary
 
-Client-As-Controller Transfer Lifecycle scope from `docs/harness/PLAN.md`:
+Distributed NodeExecutor V2 And Execution Partitions scope from `docs/harness/PLAN.md`:
 
-- Offer/accept/deny transfer with TTL, UI confirmation on target client, revoke, disconnect fallback, and owner-stack
-  recovery.
-- Client controller commands carry actor role and scoped capability.
-- Human-visible status for pending, accepted, revoked, and control lost.
-- Verification target includes transfer expiry if not accepted, disconnect returning ownership to the previous operator,
-  and unauthorized client control rejection.
+- Execution partitions define target platform: manager, client, display, server, worker, or local-only.
+- Deploy, start, stop, remove, and redeploy are command-bus operations with validation, capability checks, revision
+  binding, and status.
+- Client and display partitions can control allowed targets only through ControlPlane.
+- Watchdog, resource budgets, and failure reports are structured.
+- Verification target includes bad capability rejection, stop/remove manager-side fallback recovery, and partition
+  revision mismatch detection.
 
-Allowed FF-13 implementation boundary for a future bounded Work dispatch:
+Allowed FF-14 implementation boundary for a future bounded Work dispatch:
 
-- Offer/accept/deny transfer lifecycle with TTL and target-client UI confirmation
-- Revoke, disconnect fallback, and owner-stack recovery
-- Actor role and scoped capability on client controller commands
-- Human-visible pending, accepted, revoked, and control-lost status
-- Tests proving transfer expiry, disconnect ownership return, and unauthorized client control rejection
-- `docs/harness/**` only for FF-13 policy/evidence/ADR references
+- Execution partition target platforms: manager, client, display, server, worker, and local-only
+- Command-bus deploy/start/stop/remove/redeploy operations with validation, capability checks, revision binding, and
+  status
+- ControlPlane-only control path for client/display partitions over allowed targets
+- Structured watchdog, resource-budget, and failure-report handling
+- Tests proving bad capability rejection, stop/remove manager-side fallback recovery, and partition revision mismatch
+  detection
+- `docs/harness/**` only for FF-14 policy/evidence/ADR references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-13/**`
+- `.harness/evidence/FF-14/**`
 
 ## Work Result
 
-FF-12 has been accepted and committed. FF-13 is now active; this transition updates harness status only and does not
-implement client transfer lifecycle, client controller commands, UI confirmation, or runtime behavior.
+FF-13 has been accepted and committed. FF-14 is now active; this transition updates harness status only and does not
+implement distributed NodeExecutor behavior, execution partitions, command-bus lifecycle operations, ControlPlane
+partition control, watchdogs, resource budgets, or runtime failure reporting.
 
 ## Next Expected Action
 
-The next Plan dispatch may start bounded FF-13 Work using the boundary above.
+The next Plan dispatch may start bounded FF-14 Work using the boundary above.

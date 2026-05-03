@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-13 - Client-As-Controller Transfer Lifecycle
+FF-14 - Distributed NodeExecutor V2 And Execution Partitions
 
 ## Previous Acceptance
 
-FF-12 was accepted and committed as `8dca9a4 Add group sovereignty control plane`.
+FF-13 was accepted and committed as `fe4c39a Add client control transfer lifecycle`.
 
 ## Active Claim
 
-Let authorized clients temporarily control Groups without bypassing safety.
+Move high-frequency behavior to the correct execution target with observable lifecycle.
 
 ## Work Status
 
-FF-13 is active for the next bounded Plan-dispatched Work session. The FF-12 acceptance is recorded, and this
-status-transition boundary did not implement FF-13.
+FF-14 is active for the next bounded Plan-dispatched Work session. The FF-13 acceptance is recorded, and this
+status-transition boundary did not implement FF-14.
