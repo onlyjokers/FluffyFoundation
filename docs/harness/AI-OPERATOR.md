@@ -83,6 +83,12 @@ Each command has:
 - rollback metadata
 - structured result and observation hook
 
+## FF-18 WP2 In-Memory Execution Core
+
+`@shugu/ai-core` exposes `createAiProposalExecutionCore` as the bounded WP2 API for proposal approval and execution tests. It is dependency-free and accepts an injected semantic command bus, so it does not introduce provider calls, persistence, server endpoints, UI wiring, or Display/Client observation.
+
+The core only evaluates local operation policy, runs dry-run dispatches, applies allowed or approved proposal commands through the command bus, records execution audit/history metadata, and maps AI rollback references back to command-bus rollback tokens.
+
 ## AI Operation Flow
 
 1. Interpret natural-language intent and target scope.

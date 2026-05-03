@@ -49,3 +49,96 @@ Deterministic context/proposal fixture output:
 Verification notes:
 - Browser/runtime proof is intentionally not included for WP1 because live execution, UI, display/client observation, and server runtime wiring are deferred by task scope.
 - The planner remains dependency-free and uses an injected semantic command bus shape, so WP1 does not add a new package dependency or provider/persistence mechanism.
+
+## WP2 - AI Proposal Approval And Transactional Execution Core
+
+Implemented:
+- `@shugu/ai-core` now exposes `createAiProposalExecutionCore`, a bounded in-memory proposal executor that accepts an injected semantic command bus and does not add provider calls, persistence, server endpoints, UI wiring, or Display/Client observation.
+- Local policy evaluation covers allowed, approval-required, and denied operations. Approval-required proposals still dry-run through the semantic command bus and stop before apply until an approval token is supplied.
+- Allowed or approved proposal commands apply through the existing semantic command bus, preserving command-bus validation, policy, audit, history, revision, and rollback-token behavior.
+- Execution results include command sequence, dry-run stage, applied revision, audit lifecycle, history entry, AI rollback reference, command rollback token list, and rollback recovery metadata.
+- Rollback maps the AI rollback reference to the command-bus rollback token and restores the previous semantic state.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/*.test.mjs
+PASS: 8 tests, 0 failures
+
+corepack pnpm@8.15.9 --filter @shugu/node-core run build
+PASS
+
+node --test packages/node-core/test/semantic-command-bus.test.mjs packages/node-core/test/group-ownership-policy.test.mjs
+PASS: 11 tests, 0 failures
+
+corepack pnpm@8.15.9 --filter @shugu/ai-core run lint
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/node-core run lint
+PASS
+
+git diff --check
+PASS
+
+corepack pnpm@8.15.9 lint
+PASS with existing warnings outside WP2:
+- packages/multimedia-core/src/multimedia-core.ts unused reason warning
+- packages/sdk-client/src/tone-adapter/types.ts no-explicit-any warnings
+
+corepack pnpm@8.15.9 build:all
+PASS with existing SvelteKit/Svelte/Rete/Sass build warnings outside WP2
+```
+
+Deterministic execution fixture output:
+
+```json
+{
+  "approved": {
+    "status": "applied",
+    "policy": "allowed",
+    "dryRunOk": true,
+    "dryRunCount": 1,
+    "appliedCount": 1,
+    "previousRevision": 12,
+    "appliedRevision": 13,
+    "historyEntries": 1,
+    "rollbackReference": "ai-rollback:proposal:breath:rollback:12:2",
+    "intensity": 0.72,
+    "rollbackIntensity": 0.35
+  },
+  "denied": {
+    "status": "policy-denied",
+    "policy": "denied",
+    "dryRunOk": false,
+    "dryRunCount": 0,
+    "appliedCount": 0,
+    "previousRevision": 12,
+    "appliedRevision": null,
+    "historyEntries": 0,
+    "rollbackReference": null,
+    "intensity": 0.35,
+    "rollbackIntensity": null
+  },
+  "rollback": {
+    "status": "applied",
+    "policy": "allowed",
+    "dryRunOk": true,
+    "dryRunCount": 1,
+    "appliedCount": 1,
+    "previousRevision": 12,
+    "appliedRevision": 13,
+    "historyEntries": 1,
+    "rollbackReference": "ai-rollback:proposal:breath:rollback:12:2",
+    "intensity": 0.72,
+    "rollbackIntensity": 0.35
+  }
+}
+```
+
+Verification notes:
+- Browser/runtime proof is intentionally not included for WP2 because server/UI/display observation remains deferred by task scope.
+- Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
+- `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
