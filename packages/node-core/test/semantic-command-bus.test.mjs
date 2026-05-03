@@ -363,3 +363,91 @@ test('partition lifecycle rejects revision mismatch and records structured failu
   assert.equal(partition?.failureReport?.code, 'resource.budget_exceeded');
   assert.equal(partition?.failureReport?.resourceBudget?.observedTickHz, 75);
 });
+
+test('semantic command dry-run returns structured validation errors for param overflow and incompatible ports', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'n1',
+          type: 'number',
+          position: { x: 50, y: 80 },
+          config: { value: 2 },
+          inputValues: {},
+          outputValues: { out: 2 },
+        },
+        {
+          id: 'n2',
+          type: 'math',
+          position: { x: 100, y: 100 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'number',
+        label: 'Number',
+        category: 'Values',
+        inputs: [],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 1, min: 0, max: 10 }],
+      },
+      {
+        type: 'math',
+        label: 'Math',
+        category: 'Logic',
+        inputs: [{ id: 'flag', label: 'Flag', type: 'boolean' }],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [],
+      },
+    ],
+    revision: 1,
+  });
+
+  const overflow = bus.dispatch({
+    actor: { id: 'ai:wp1', role: 'ai' },
+    command: { type: 'node.params.update', nodeId: 'n1', params: { value: 20 } },
+    dryRun: true,
+  });
+  assert.equal(overflow.ok, false);
+  assert.equal(overflow.stage, 'dry-run');
+  assert.equal(overflow.validationErrors[0].code, 'GRAPH.PARAM_OUT_OF_RANGE');
+  assert.equal(overflow.validationErrors[0].path, 'nodes.n1.params.value');
+  assert.equal(bus.getSnapshot().nodes.find((node) => node.id === 'n1')?.params.value, 2);
+
+  const incompatible = bus.dispatch({
+    actor: { id: 'ai:wp1', role: 'ai' },
+    command: {
+      type: 'node.connect',
+      connection: {
+        id: 'c1',
+        sourceNodeId: 'n1',
+        sourcePortId: 'out',
+        targetNodeId: 'n2',
+        targetPortId: 'flag',
+      },
+    },
+    dryRun: true,
+  });
+  assert.equal(incompatible.ok, false);
+  assert.equal(incompatible.validationErrors[0].code, 'GRAPH.PORT_INCOMPATIBLE');
+  assert.equal(incompatible.validationErrors[0].path, 'connections.c1');
+
+  const invalidTarget = bus.dispatch({
+    actor: { id: 'ai:wp1', role: 'ai' },
+    command: {
+      type: 'partition.deploy',
+      partitionId: 'partition:bad-target',
+      nodeIds: ['n1'],
+      targetPlatform: 'browser-wall',
+    },
+    dryRun: true,
+  });
+  assert.equal(invalidTarget.ok, false);
+  assert.equal(invalidTarget.validationErrors[0].code, 'EXECUTION.INVALID_TARGET_PLATFORM');
+  assert.equal(invalidTarget.validationErrors[0].path, 'partitions.partition:bad-target.targetPlatform');
+});

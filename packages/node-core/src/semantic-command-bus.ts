@@ -22,7 +22,7 @@ import {
   normalizeDefinitions,
   normalizeGroups,
 } from './semantic-graph-snapshot.js';
-import { applySemanticCommand, validateSemanticCommand } from './semantic-command-apply.js';
+import { applySemanticCommand, validateSemanticCommandDetailed } from './semantic-command-apply.js';
 import { createSemanticHistory, type SemanticHistoryEntry } from './graph-state/history.js';
 import {
   CONTROL_PLANE_CAPABILITIES_BY_ROLE,
@@ -117,14 +117,15 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
   const dispatch: SemanticCommandBus['dispatch'] = ({ actor, command, dryRun = false }) => {
     const previousRevision = state.revision;
     const rollbackToken = `rollback:${previousRevision}:${history.length + auditLog.length + 1}`;
-    const validationError = validateSemanticCommand(state, command, definitions);
-    if (validationError) {
+    const validationErrors = validateSemanticCommandDetailed(state, command, definitions);
+    if (validationErrors.length > 0) {
       return {
         ok: false,
         command,
         dryRun,
         stage: 'dry-run',
-        message: validationError,
+        message: validationErrors[0].message,
+        validationErrors,
         previousRevision,
         appliedRevision: previousRevision,
         snapshot: snapshot(),

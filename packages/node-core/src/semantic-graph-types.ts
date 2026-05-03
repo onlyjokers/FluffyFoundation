@@ -71,6 +71,15 @@ export type DeviceCapability = { deviceId: string; capabilities: string[]; statu
 export type SemanticError = { code: string; message: string; targetId?: string };
 export type SemanticPermission = { actorId: string; operations: string[] };
 
+export type SemanticValidationError = {
+  code: string;
+  path: string;
+  severity: 'error' | 'warning';
+  message: string;
+  machineReason?: string;
+  repairOptions: string[];
+};
+
 export type SemanticProposal = {
   id: string;
   title: string;
@@ -182,6 +191,7 @@ export type SemanticCommandResult =
       dryRun: boolean;
       stage: 'dry-run' | 'policy' | 'apply';
       message: string;
+      validationErrors?: SemanticValidationError[];
       previousRevision: number;
       appliedRevision: number;
       rollbackToken?: string;
