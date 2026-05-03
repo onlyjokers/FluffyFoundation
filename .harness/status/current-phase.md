@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-09 - Semantic Graph Object Model And Command Bus
+FF-10 - Node Registry V2 And Agent-Readable Node Definitions
 
 ## Previous Acceptance
 
-FF-08 was accepted and committed as `4f12010 Split root and manager surfaces`.
+FF-09 was accepted and committed as `38410b8 Add semantic command bus`.
 
 ## Active Claim
 
-Establish one semantic operation layer for Canvas, CLI/API, and AI.
+Make every node type discoverable, validatable, migratable, and understandable by AI without hardcoded logic.
 
 ## Work Status
 
-FF-09 is active for the next bounded Plan-dispatched Work session. The FF-08 acceptance is recorded, and this
-status-transition boundary did not implement FF-09.
+FF-10 is active for the next bounded Plan-dispatched Work session. The FF-09 acceptance is recorded, and this
+status-transition boundary did not implement FF-10.
