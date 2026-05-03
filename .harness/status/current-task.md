@@ -37,6 +37,19 @@ Allowed FF-07 implementation boundary for a future bounded Work dispatch:
 - `.harness/handoffs/**`
 - `.harness/evidence/FF-07/**`
 
+## Work Result
+
+FF-07 Work is ready for Review.
+
+Implemented:
+
+- shared delivery contract for volatile telemetry, latest-state controls, reliable commands, and scheduled commands
+- SDK/server throttling through the shared contract
+- latest-state replay/removal with no dead pending map after drain
+- dropped, coalesced, delivered, late, and rejected metrics
+- deterministic tests for coalescing and last-value delivery
+- bounded local load fixture and evidence records under `.harness/evidence/FF-07/`
+
 ## Next Expected Action
 
-The next Plan dispatch may start bounded FF-07 Work. This status-transition boundary must not implement FF-07.
+Review should verify the FF-07 diff, final checks, and handoff evidence before accepting or requesting fixes.

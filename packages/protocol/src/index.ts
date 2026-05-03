@@ -15,6 +15,9 @@ export * from './command-envelope.js';
 // Export state strategy contracts
 export * from './state-strategy.js';
 
+// Export realtime delivery contract
+export * from './delivery-contract.js';
+
 // Export socket event names
 export * from './socket-events.js';
 

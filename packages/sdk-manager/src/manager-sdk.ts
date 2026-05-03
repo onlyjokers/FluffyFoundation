@@ -8,7 +8,6 @@ import {
     SOCKET_EVENTS,
     isSensorDataMessage,
     isSystemMessage,
-    createControlMessage,
     createPluginControlMessage,
     createMediaMetaMessage,
     createTimePing,
@@ -31,6 +30,7 @@ import {
     VisualSceneLayerItem,
     targetAll,
     targetClients,
+    type DeliveryMetrics,
 } from '@shugu/protocol';
 import {
     nextManagerCommandEnvelope,
@@ -39,7 +39,7 @@ import {
     type CommandEnvelopeInput,
 } from './command-envelope.js';
 import { sendControlByAudience } from './controls.js';
-import { mergeControlPayload } from './payload-merge.js';
+import { ManagerDeliveryQueue } from './delivery-queue.js';
 import { createStateSnapshotPatch, type StateSnapshotPatch } from './state-snapshot.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -104,24 +104,7 @@ export class ManagerSDK {
     private stateListeners: Set<(state: ManagerState) => void> = new Set();
     private sensorDataHandlers: Set<MessageHandler<SensorDataMessage>> = new Set();
     private timeSyncIntervalId: ReturnType<typeof setInterval> | null = null;
-
-    // Batch multiple `sendControl(...)` calls in the same tick into a single `custom` message.
-    private pendingControlByTargetKey: Map<
-        string,
-        { target: TargetSelector; items: ControlBatchItem[] }
-    > = new Map();
-    private pendingControlFlushScheduled = false;
-
-    // Time-based throttling for high-frequency updates (MIDI-driven modulation, etc.)
-    // Key: action type, Value: last sent timestamp
-    private lastSentByAction: Map<string, number> = new Map();
-    // Actions that benefit from throttling when sending to many clients
-    private static THROTTLED_ACTIONS = new Set([
-        'modulateSoundUpdate',
-        'screenColor',
-        'flashlight',
-        'vibrate',
-    ]);
+    private readonly deliveryQueue: ManagerDeliveryQueue;
 
     constructor(config: ManagerSDKConfig) {
         const transports: SocketTransport[] = (() => {
@@ -146,6 +129,12 @@ export class ManagerSDK {
             commandEnvelope: config.commandEnvelope,
         };
         this.commandEnvelope = normalizeManagerCommandEnvelope(this.config.commandEnvelope);
+        this.deliveryQueue = new ManagerDeliveryQueue({
+            getSocket: () => this.socket,
+            getClientCount: () => this.state.clients.length,
+            getThrottleMs: () => this.config.highFreqThrottleMs,
+            nextCommandEnvelope: () => this.nextCommandEnvelope(),
+        });
 
         this.state = {
             status: 'disconnected',
@@ -195,6 +184,7 @@ export class ManagerSDK {
      */
     disconnect(): void {
         this.stopTimeSync();
+        this.deliveryQueue.clearPendingLatestState();
         this.socket?.disconnect();
         this.socket = null;
         this.updateState({
@@ -267,17 +257,15 @@ export class ManagerSDK {
         // Avoid wrapping custom payloads (unknown semantics) unless it is already a control-batch.
         if (action === 'custom') {
             if (isControlBatchPayload(payload)) {
-                const message = createControlMessage(this.nextCommandEnvelope(), target, action, payload, executeAt);
-                this.socket.emit(SOCKET_EVENTS.MSG, message);
+                this.deliveryQueue.emit(target, action, payload, executeAt);
                 return;
             }
 
-            const message = createControlMessage(this.nextCommandEnvelope(), target, action, payload, executeAt);
-            this.socket.emit(SOCKET_EVENTS.MSG, message);
+            this.deliveryQueue.emit(target, action, payload as BaseControlPayload, executeAt);
             return;
         }
 
-        this.queueControl(target, { action, payload: payload as BaseControlPayload, executeAt });
+        this.deliveryQueue.queueControl(target, { action, payload: payload as BaseControlPayload, executeAt });
     }
 
     /**
@@ -286,122 +274,15 @@ export class ManagerSDK {
      * This is used to keep MIDI-driven updates in sync and reduce server message pressure.
      */
     sendControlBatch(target: TargetSelector, items: ControlBatchItem[], executeAt?: number): void {
-        if (!this.socket?.connected) return;
-        const payload: ControlBatchPayload = {
-            kind: 'control-batch',
-            items,
-            ...(typeof executeAt === 'number' && Number.isFinite(executeAt) ? { executeAt } : {}),
-        };
-        const message = createControlMessage(this.nextCommandEnvelope(), target, 'custom', payload, executeAt);
-        this.socket.emit(SOCKET_EVENTS.MSG, message);
+        this.deliveryQueue.sendControlBatch(target, items, executeAt);
     }
 
-    private targetKey(target: TargetSelector): string {
-        if (target.mode === 'all') return 'all';
-        if (target.mode === 'group') return `group:${target.groupId}`;
-        const ids = (target.ids ?? []).map(String).filter(Boolean).sort();
-        return `clientIds:${ids.join(',')}`;
-    }
-
-    private normalizeTarget(target: TargetSelector): TargetSelector {
-        if (target.mode !== 'clientIds') return target;
-        const ids = (target.ids ?? []).map(String).filter(Boolean).sort();
-        return { mode: 'clientIds', ids };
+    getDeliveryMetrics(): DeliveryMetrics {
+        return this.deliveryQueue.getMetrics();
     }
 
     private nextCommandEnvelope(): CommandEnvelope {
         return nextManagerCommandEnvelope(this.commandEnvelope);
-    }
-
-    private queueControl(target: TargetSelector, item: ControlBatchItem): void {
-        // Time-based throttling for high-frequency actions when many clients are connected
-        const throttleMs = this.config.highFreqThrottleMs;
-        if (throttleMs > 0 && ManagerSDK.THROTTLED_ACTIONS.has(item.action)) {
-            const clientCount = this.state.clients.length;
-            // Only throttle when there are multiple clients (reduces overhead when testing/dev)
-            if (clientCount > 10) {
-                const now = Date.now();
-                const lastSent = this.lastSentByAction.get(item.action) ?? 0;
-                if (now - lastSent < throttleMs) {
-                    // Skip this update - too soon since the last one
-                    // Store the latest payload so it will be picked up on next flush
-                    const pendingKey = `pending:${item.action}`;
-                    this.lastSentByAction.set(pendingKey, now);
-                    return;
-                }
-                this.lastSentByAction.set(item.action, now);
-            }
-        }
-
-        const key = this.targetKey(target);
-        const existing = this.pendingControlByTargetKey.get(key) ?? {
-            target: this.normalizeTarget(target),
-            items: [],
-        };
-
-        // Optional optimization: merge "update" style actions in the same tick (keep last, merge payload fields).
-        if (item.action === 'modulateSoundUpdate') {
-            const idx = existing.items.findIndex((entry) => entry.action === 'modulateSoundUpdate');
-            if (idx >= 0) {
-                const prev = existing.items[idx];
-                existing.items[idx] = {
-                    action: 'modulateSoundUpdate',
-                    payload: mergeControlPayload(prev.payload, item.payload),
-                    executeAt: item.executeAt ?? prev.executeAt,
-                };
-            } else {
-                existing.items.push(item);
-            }
-        } else {
-            existing.items.push(item);
-        }
-
-        this.pendingControlByTargetKey.set(key, existing);
-
-        if (this.pendingControlFlushScheduled) return;
-        this.pendingControlFlushScheduled = true;
-        queueMicrotask(() => this.flushQueuedControls());
-    }
-
-    private flushQueuedControls(): void {
-        this.pendingControlFlushScheduled = false;
-        if (!this.socket?.connected) {
-            this.pendingControlByTargetKey.clear();
-            return;
-        }
-
-        for (const entry of this.pendingControlByTargetKey.values()) {
-            if (entry.items.length === 0) continue;
-
-            if (entry.items.length === 1) {
-                const single = entry.items[0];
-                const message = createControlMessage(
-                    this.nextCommandEnvelope(),
-                    entry.target,
-                    single.action,
-                    single.payload,
-                    single.executeAt
-                );
-                this.socket.emit(SOCKET_EVENTS.MSG, message);
-                continue;
-            }
-
-            const sharedExecuteAt = entry.items[0].executeAt;
-            const hasSharedExecuteAt =
-                typeof sharedExecuteAt === 'number' &&
-                Number.isFinite(sharedExecuteAt) &&
-                entry.items.every((item) => item.executeAt === sharedExecuteAt);
-
-            if (hasSharedExecuteAt) {
-                const items = entry.items.map(({ action, payload }) => ({ action, payload }));
-                this.sendControlBatch(entry.target, items, sharedExecuteAt);
-                continue;
-            }
-
-            this.sendControlBatch(entry.target, entry.items, undefined);
-        }
-
-        this.pendingControlByTargetKey.clear();
     }
 
     /**

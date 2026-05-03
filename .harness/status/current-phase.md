@@ -16,5 +16,5 @@ Make realtime throttling predictable instead of two layers silently dropping sta
 
 ## Work Status
 
-FF-07 is active for the next bounded Plan dispatch. This transition only updates harness status and must not
-implement FF-07.
+FF-07 implementation is ready for Review. Work added the shared delivery contract, SDK/server backpressure behavior,
+latest-state replay/removal semantics, metrics, deterministic tests, and bounded load evidence.

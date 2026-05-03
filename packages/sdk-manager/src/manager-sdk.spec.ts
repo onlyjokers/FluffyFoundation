@@ -81,3 +81,77 @@ test('ManagerSDK sendMedia preserves caller scope envelope', () => {
   assert.equal((emitted[0] as { actor?: string }).actor, 'media-manager');
   assert.equal((emitted[0] as { role?: string }).role, 'manager');
 });
+
+test('ManagerSDK coalesces latest-state controls and flushes the last value after throttle', async () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    highFreqThrottleMs: 50,
+    commandEnvelope: { actor: 'manager-1', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const emitted = connectFakeSocket(sdk);
+  (sdk as unknown as { state: { clients: Array<{ clientId: string }> } }).state.clients = Array.from(
+    { length: 11 },
+    (_, index) => ({ clientId: `client-${index}` })
+  );
+
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' });
+  await flushMicrotasks();
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' });
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#333333' });
+  await flushMicrotasks();
+
+  assert.equal(emitted.length, 1);
+  assert.equal((emitted[0] as { payload?: { color?: string } }).payload?.color, '#111111');
+
+  await new Promise((resolve) => setTimeout(resolve, 70));
+
+  assert.equal(emitted.length, 2);
+  assert.equal((emitted[1] as { payload?: { color?: string } }).payload?.color, '#333333');
+  assert.equal((sdk as unknown as { getDeliveryMetrics: () => { coalesced: number } }).getDeliveryMetrics().coalesced, 2);
+});
+
+test('ManagerSDK does not let latest-state throttling silently drop reliable or scheduled commands', async () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    highFreqThrottleMs: 50,
+    commandEnvelope: { actor: 'manager-1', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const emitted = connectFakeSocket(sdk);
+  (sdk as unknown as { state: { clients: Array<{ clientId: string }> } }).state.clients = Array.from(
+    { length: 11 },
+    (_, index) => ({ clientId: `client-${index}` })
+  );
+
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' });
+  await flushMicrotasks();
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' });
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'playMedia', { url: '/reliable.mp4' });
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'vibrate', { pattern: [10] }, 123456);
+  await flushMicrotasks();
+
+  const actions = emitted.flatMap((message) => {
+    const record = message as { action?: string; payload?: { kind?: string; items?: Array<{ action: string }> } };
+    if (record.action === 'custom' && record.payload?.kind === 'control-batch') {
+      return record.payload.items?.map((item) => item.action) ?? [];
+    }
+    return record.action ? [record.action] : [];
+  });
+  assert.deepEqual(actions, ['screenColor', 'playMedia', 'vibrate']);
+});
+
+test('ManagerSDK counts direct custom controls as delivered reliable messages', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'manager-1', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  connectFakeSocket(sdk);
+
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'custom', { kind: 'operator-note', note: 'go' });
+  sdk.sendControl(
+    { mode: 'group', groupId: 'stage-left' },
+    'custom',
+    { kind: 'control-batch', items: [{ action: 'playMedia', payload: { url: '/a.mp4' } }] }
+  );
+
+  assert.equal(sdk.getDeliveryMetrics().delivered, 2);
+});

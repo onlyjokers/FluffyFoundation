@@ -12,33 +12,9 @@ import type {
     Message,
     MessageWithoutServerTimestamp,
     TargetSelector,
+    DeliveryMetrics,
 } from '@shugu/protocol';
-import { addServerTimestamp } from '@shugu/protocol';
-
-/**
- * High-frequency control actions that can use volatile emit.
- * These actions are typically MIDI-driven updates where missing a frame is acceptable.
- */
-const VOLATILE_ACTIONS = new Set([
-    'modulateSoundUpdate',
-    'screenColor',
-    'flashlight',
-]);
-
-/**
- * Actions that should always use reliable emit (never drop).
- */
-const RELIABLE_ACTIONS = new Set([
-    'playMedia',
-    'stopMedia',
-    'playSound',
-    'stopSound',
-    'showImage',
-    'hideImage',
-    'visualScenes',
-    'visualEffects',
-    'modulateSound', // initial play should be reliable
-]);
+import { addServerTimestamp, classifyDelivery, createDeliveryMetrics } from '@shugu/protocol';
 
 @Injectable()
 export class MessageRouterService {
@@ -47,6 +23,11 @@ export class MessageRouterService {
     // Rate limiting for high-frequency broadcasts
     private lastBroadcastTime: Map<string, number> = new Map();
     private readonly minBroadcastIntervalMs = 22; // ~45fps max
+    private pendingLatestStateByKey: Map<
+        string,
+        { message: ControlMessage; dueAt: number; timeoutId: ReturnType<typeof setTimeout> | null }
+    > = new Map();
+    private readonly deliveryMetrics: DeliveryMetrics = createDeliveryMetrics();
 
     constructor(private readonly clientRegistry: ClientRegistryService) { }
 
@@ -55,6 +36,10 @@ export class MessageRouterService {
      */
     setServer(server: Server): void {
         this.server = server;
+    }
+
+    getDeliveryMetrics(): DeliveryMetrics {
+        return { ...this.deliveryMetrics };
     }
 
     /**
@@ -94,28 +79,35 @@ export class MessageRouterService {
      */
     private routeControlMessage(message: ControlMessage): void {
         const socketIds = this.resolveTargetSocketIds(message.target, 'client');
-        if (socketIds.length === 0) return;
-
-        const action = message.action;
-        const isVolatile = VOLATILE_ACTIONS.has(action) && !RELIABLE_ACTIONS.has(action);
-
-        // Rate limiting for volatile actions when broadcasting to many clients
-        if (isVolatile && socketIds.length > 50) {
-            const now = Date.now();
-            const lastTime = this.lastBroadcastTime.get(action) ?? 0;
-            if (now - lastTime < this.minBroadcastIntervalMs) {
-                // Skip this message to prevent backpressure buildup
-                return;
-            }
-            this.lastBroadcastTime.set(action, now);
+        if (socketIds.length === 0) {
+            this.deliveryMetrics.rejected += 1;
+            return;
         }
 
-        // Use volatile emit for high-frequency updates (can be dropped if buffer full)
-        if (isVolatile) {
+        const delivery = classifyDelivery(message);
+
+        if (delivery.deliveryClass === 'latest-state-control' && delivery.latestStateKey && socketIds.length > 50) {
+            const now = Date.now();
+            const lastTime = this.lastBroadcastTime.get(delivery.latestStateKey) ?? 0;
+            if (now - lastTime < this.minBroadcastIntervalMs) {
+                this.queueLatestStateReplay(
+                    delivery.latestStateKey,
+                    message,
+                    lastTime + this.minBroadcastIntervalMs
+                );
+                this.deliveryMetrics.coalesced += 1;
+                return;
+            }
+            this.lastBroadcastTime.set(delivery.latestStateKey, now);
+        }
+
+        if (delivery.deliveryClass === 'volatile-telemetry') {
             this.emitVolatile(socketIds, message);
         } else {
             this.emitToSockets(socketIds, message);
         }
+
+        this.flushDueLatestState();
     }
 
     /**
@@ -129,7 +121,7 @@ export class MessageRouterService {
         // Block high-frequency sensor data that causes network congestion
         // Allowed types: 'gyro' | 'accel' | 'orientation' | 'mic' | 'camera' | 'custom'
         if (sensorType === 'mic' || sensorType === 'gyro' || sensorType === 'accel' || sensorType === 'orientation') {
-            // Drop these - they're too frequent and not critical
+            this.deliveryMetrics.dropped += 1;
             return;
         }
         
@@ -149,7 +141,7 @@ export class MessageRouterService {
             ];
             
             if (typeof kind !== 'string' || !allowedKinds.includes(kind)) {
-                // Unknown or high-frequency custom data - drop it
+                this.deliveryMetrics.rejected += 1;
                 return;
             }
         }
@@ -292,6 +284,7 @@ export class MessageRouterService {
         if (socketIds.length === 0) return;
         // Note: this still sends one packet per connection, but avoids per-socket JS loop jitter.
         this.server.to(socketIds).emit('msg', message);
+        this.deliveryMetrics.delivered += 1;
     }
 
     /**
@@ -303,5 +296,44 @@ export class MessageRouterService {
         if (!this.server) return;
         if (socketIds.length === 0) return;
         this.server.volatile.to(socketIds).emit('msg', message);
+        this.deliveryMetrics.delivered += 1;
+    }
+
+    private flushDueLatestState(forceKey?: string): void {
+        for (const [key, entry] of Array.from(this.pendingLatestStateByKey.entries())) {
+            if (key !== forceKey && Date.now() < entry.dueAt) continue;
+            if (entry.timeoutId) clearTimeout(entry.timeoutId);
+            this.flushLatestStateEntry(key, entry);
+        }
+    }
+
+    private queueLatestStateReplay(latestStateKey: string, message: ControlMessage, dueAt: number): void {
+        const previous = this.pendingLatestStateByKey.get(latestStateKey);
+        if (previous?.timeoutId) clearTimeout(previous.timeoutId);
+        const delayMs = Math.max(0, dueAt - Date.now());
+        const timeoutId = setTimeout(() => {
+            const entry = this.pendingLatestStateByKey.get(latestStateKey);
+            if (!entry) return;
+            this.flushLatestStateEntry(latestStateKey, entry);
+        }, delayMs);
+        this.pendingLatestStateByKey.set(latestStateKey, { message, dueAt, timeoutId });
+    }
+
+    private flushLatestStateEntry(
+        key: string,
+        entry: { message: ControlMessage; dueAt: number; timeoutId: ReturnType<typeof setTimeout> | null }
+    ): void {
+        const { message, dueAt } = entry;
+        const socketIds = this.resolveTargetSocketIds(message.target, 'client');
+        if (socketIds.length === 0) {
+            this.deliveryMetrics.rejected += 1;
+            this.pendingLatestStateByKey.delete(key);
+            return;
+        }
+        const deliveredAt = Date.now();
+        if (deliveredAt > dueAt + this.minBroadcastIntervalMs) this.deliveryMetrics.late += 1;
+        this.emitToSockets(socketIds, message);
+        this.lastBroadcastTime.set(key, deliveredAt);
+        this.pendingLatestStateByKey.delete(key);
     }
 }
