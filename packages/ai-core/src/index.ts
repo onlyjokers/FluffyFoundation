@@ -7,3 +7,4 @@ export * from './proposal-execution.js';
 export * from './observation-repair.js';
 export * from './golden-scenario-fixtures.js';
 export * from './semantic-command-bus-parity.js';
+export * from './operator-acceptance-fixtures.js';

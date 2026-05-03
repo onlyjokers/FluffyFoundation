@@ -20,6 +20,9 @@ export type AiSemanticCommand = {
         outputValues?: Record<string, unknown>;
     };
 } | {
+    type: 'node.remove';
+    nodeId: string;
+} | {
     type: 'node.archive';
     nodeId: string;
 } | {

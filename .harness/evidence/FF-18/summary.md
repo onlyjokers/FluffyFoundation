@@ -385,3 +385,96 @@ Verification notes:
 - Browser/runtime proof remains intentionally deferred for WP5 because Plan scoped this packet to deterministic source/tests only.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
+
+## WP6 - AI Operator Safety Acceptance Traces
+
+Implemented:
+- `@shugu/ai-core` now exposes `runAiOperatorAcceptanceFixtures`, a deterministic acceptance fixture runner for missing device capability, policy denial/proposal stop, and prompt-injection-resistant registry/context handling.
+- The fixture composes the existing FF-18 semantic context, deterministic planner, proposal execution, observation evaluator, golden scenario, and command-bus parity cores. It remains dependency-free and does not add provider calls, persistence, server endpoints, browser runtime wiring, or UI mutation paths.
+- Missing device capability is represented as a structured `device-capability-gap` observation and emits a bounded fallback proposal for display/screen pulse behavior.
+- Policy-denied destructive mutation is stopped before dry-run/apply and converted into a human approval proposal while preserving non-execution evidence.
+- Prompt-injection-like registry text remains AI-visible as inert data, while secret/private-path fields are redacted and cannot bypass semantic command bus policy.
+- `AiSemanticCommand` now includes `node.remove` only so denied destructive proposals can be represented and proven non-executing by the AI Operator acceptance trace.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/operator-acceptance.test.mjs
+PASS: 1 test, 0 failures
+```
+
+Deterministic acceptance trace output:
+
+```json
+[
+  {
+    "scenarioId": "capability-gap",
+    "executionStatus": "applied",
+    "evaluation": "device-capability-gap",
+    "fallback": {
+      "type": "proposal",
+      "reasonCode": "DEVICE.CAPABILITY_GAP",
+      "source": "capability-gap",
+      "proposal": {
+        "id": "proposal:wp6-capability-gap:fallback",
+        "status": "draft",
+        "commands": [
+          { "type": "node.params.update", "nodeId": "flash:1", "params": { "mode": "screen-pulse", "rhythmHz": 4 } }
+        ]
+      }
+    },
+    "nonExecution": { "beforeRevision": 200, "afterRevision": 201, "appliedMutation": true },
+    "redactions": 3
+  },
+  {
+    "scenarioId": "policy-denial",
+    "executionStatus": "policy-denied",
+    "evaluation": "policy-denied",
+    "fallback": {
+      "type": "proposal",
+      "reasonCode": "POLICY.APPROVAL_REQUIRED",
+      "source": "policy-denial",
+      "proposal": {
+        "id": "proposal:wp6-policy-denied",
+        "status": "proposed",
+        "commands": [{ "type": "node.remove", "nodeId": "display:1" }]
+      }
+    },
+    "nonExecution": {
+      "beforeRevision": 300,
+      "afterRevision": 300,
+      "beforeNodeCount": 1,
+      "afterNodeCount": 1,
+      "appliedMutation": false
+    },
+    "redactions": 2
+  },
+  {
+    "scenarioId": "prompt-injection-registry",
+    "executionStatus": "policy-denied",
+    "evaluation": "policy-denied",
+    "fallback": {
+      "type": "unavailable",
+      "reasonCode": "POLICY.PROMPT_INJECTION_DATA_ONLY",
+      "source": "prompt-injection"
+    },
+    "injection": { "handledAsData": true, "deniedOperation": "node.remove" },
+    "nonExecution": {
+      "beforeRevision": 400,
+      "afterRevision": 400,
+      "beforeNodeCount": 1,
+      "afterNodeCount": 1,
+      "appliedMutation": false
+    },
+    "redactions": 2
+  }
+]
+```
+
+Verification notes:
+- Browser/runtime proof remains intentionally deferred for WP6 because Plan scoped this packet to deterministic source/tests only.
+- Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
+- `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
