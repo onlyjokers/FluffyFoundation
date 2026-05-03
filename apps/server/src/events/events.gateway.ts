@@ -21,7 +21,6 @@ import type {
   ValidationRejectReason,
 } from '@shugu/protocol';
 import {
-  createControlPlaneActor,
   createPolicyRejectReason,
   createServerControlMessage,
   isNonSystemMutatingCommandMessage,
@@ -33,10 +32,9 @@ import { sendServerControl } from '../protocol/server-messages.js';
 import { enforceGroupOwnership, isRootStopAll } from './group-ownership-policy.js';
 import {
   ClientControlTransferService,
+  handleClientControlTransferCommand,
   isAcceptedClientControllerCommand,
-  isClientControlTransferMessage,
   isClientTransferResponse,
-  type ClientControlTransferCommand,
   type ClientTransferCommandMessage,
 } from './client-control-transfer.js';
 import { validatePartitionLifecycleIngress } from './partition-lifecycle-policy.js';
@@ -46,6 +44,7 @@ import {
   createStateStrategyStatus,
   validateServerStateStrategyConfig,
 } from '../bootstrap/state-strategy.js';
+import { handleDisplayRouterCommand } from './display-routing.js';
 
 function sanitizeGroup(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -288,7 +287,28 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         return;
       }
 
-      if (this.handleClientControlTransferCommand(validatedMessage, client)) return;
+      if (
+        handleClientControlTransferCommand({
+          message: validatedMessage as ClientTransferCommandMessage,
+          socketClientId: this.clientControlTransfers.clientIdBySocket(this.clientRegistry, client.id),
+          isManager: this.clientRegistry.isManager(client.id),
+          service: this.clientControlTransfers,
+          audit: () => this.auditMutatingCommand(validatedMessage),
+          logRejected: (reason) => this.logRejectedMessage(client.id, [reason]),
+        })
+      )
+        return;
+      if (
+        handleDisplayRouterCommand({
+          message: validatedMessage,
+          isManager: this.clientRegistry.isManager(client.id),
+          displays: this.clientRegistry.getDisplayDescriptors(),
+          routeMessage: (routed) => this.messageRouter.routeMessage(routed, client.id),
+          logRejected: (reasons) => this.logRejectedMessage(client.id, reasons),
+          audit: () => this.auditMutatingCommand(validatedMessage),
+        })
+      )
+        return;
 
       const scopeRejectReason = this.validateCommandScope(validatedMessage);
       if (scopeRejectReason) return this.logRejectedMessage(client.id, [scopeRejectReason]);
@@ -305,68 +325,6 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
     // Route the message
     this.messageRouter.routeMessage(validatedMessage, client.id);
-  }
-
-  private handleClientControlTransferCommand(
-    message: MessageWithoutServerTimestamp,
-    client: Socket
-  ): boolean {
-    if (!isClientControlTransferMessage(message as ClientTransferCommandMessage)) return false;
-    const commandMessage = message as ClientTransferCommandMessage;
-    const payload = commandMessage.payload as Partial<ClientControlTransferCommand> | undefined;
-    if (!payload || payload.kind !== 'client-control-transfer') return true;
-    const socketClientId = this.clientControlTransfers.clientIdBySocket(this.clientRegistry, client.id);
-
-    if (
-      payload.action === 'offer' &&
-      this.clientRegistry.isManager(client.id) &&
-      typeof payload.groupId === 'string' &&
-      typeof payload.targetClientId === 'string' &&
-      typeof commandMessage.actor === 'string'
-    ) {
-      this.clientControlTransfers.offer({
-        groupId: payload.groupId,
-        targetClientId: payload.targetClientId,
-        ttlMs: payload.ttlMs,
-        actor: createControlPlaneActor({ id: commandMessage.actor, role: 'manager' }),
-      });
-      this.auditMutatingCommand(message);
-      return true;
-    }
-
-    if (payload.action === 'accept' && socketClientId && typeof payload.transferId === 'string') {
-      const result = this.clientControlTransfers.accept(payload.transferId, socketClientId);
-      if (!result.ok) {
-        this.logRejectedMessage(client.id, [
-          this.clientControlTransfers.rejectReason({
-            clientId: socketClientId,
-            type: message.type,
-            scopeGroupId: commandMessage.scopeGroupId ?? '',
-          }),
-        ]);
-      }
-      this.auditMutatingCommand(message);
-      return true;
-    }
-
-    if (payload.action === 'deny' && socketClientId && typeof payload.transferId === 'string') {
-      this.clientControlTransfers.deny(payload.transferId, socketClientId, payload.reason);
-      this.auditMutatingCommand(message);
-      return true;
-    }
-
-    if (
-      payload.action === 'revoke' &&
-      this.clientRegistry.isManager(client.id) &&
-      typeof payload.transferId === 'string' &&
-      typeof commandMessage.actor === 'string'
-    ) {
-      this.clientControlTransfers.revoke(payload.transferId, commandMessage.actor, payload.reason);
-      this.auditMutatingCommand(message);
-      return true;
-    }
-
-    return true;
   }
 
   private emitTransferStatus(status: import('@shugu/protocol').ClientControlTransferOffer): void {

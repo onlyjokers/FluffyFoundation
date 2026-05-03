@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { ClientInfo, ConnectionRole, ControlPlaneActor, GroupOwnershipEntry } from '@shugu/protocol';
+import type {
+    ClientInfo,
+    ConnectionRole,
+    ControlPlaneActor,
+    DisplayDescriptor,
+    GroupOwnershipEntry,
+} from '@shugu/protocol';
 import { GroupOwnershipRegistry } from './group-ownership-registry.js';
 
 interface ConnectionInfo {
@@ -322,6 +328,22 @@ export class ClientRegistryService {
     }
     getClientsByGroup(groupId: string): ConnectionInfo[] {
         return Array.from(this.clients.values()).filter(c => c.group === groupId && c.connected);
+    }
+    getDisplayDescriptors(): DisplayDescriptor[] {
+        return Array.from(this.clients.values())
+            .filter(c => c.connected && c.group === 'display')
+            .map((c) => ({
+                displayId: c.clientId,
+                name: c.userAgent ? c.userAgent.slice(0, 80) : c.clientId,
+                groupId: c.group,
+                status: 'reachable',
+                capabilities: ['display.render', 'media.image', 'media.video'],
+                localMediaLimits: {
+                    maxBytes: 200 * 1024 * 1024,
+                    acceptedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'],
+                },
+                serverDeliverableAssets: [],
+            }));
     }
     getSelectedClients(): ConnectionInfo[] {
         return Array.from(this.clients.values()).filter(c => c.selected);

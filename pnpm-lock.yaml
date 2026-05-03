@@ -111,6 +111,9 @@ importers:
       '@shugu/multimedia-core':
         specifier: workspace:*
         version: link:../../packages/multimedia-core
+      '@shugu/node-core':
+        specifier: workspace:*
+        version: link:../../packages/node-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

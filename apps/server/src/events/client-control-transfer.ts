@@ -77,6 +77,70 @@ export function isClientTransferResponse(input: {
   );
 }
 
+export function handleClientControlTransferCommand(input: {
+  message: ClientTransferCommandMessage;
+  socketClientId?: string;
+  isManager: boolean;
+  service: ClientControlTransferService;
+  audit: () => void;
+  logRejected: (reason: ValidationRejectReason) => void;
+}): boolean {
+  if (!isClientControlTransferMessage(input.message)) return false;
+  const payload = input.message.payload as Partial<ClientControlTransferCommand> | undefined;
+  if (!payload || payload.kind !== 'client-control-transfer') return true;
+
+  if (
+    payload.action === 'offer' &&
+    input.isManager &&
+    typeof payload.groupId === 'string' &&
+    typeof payload.targetClientId === 'string' &&
+    typeof input.message.actor === 'string'
+  ) {
+    input.service.offer({
+      groupId: payload.groupId,
+      targetClientId: payload.targetClientId,
+      ttlMs: payload.ttlMs,
+      actor: createControlPlaneActor({ id: input.message.actor, role: 'manager' }),
+    });
+    input.audit();
+    return true;
+  }
+
+  if (payload.action === 'accept' && input.socketClientId && typeof payload.transferId === 'string') {
+    const result = input.service.accept(payload.transferId, input.socketClientId);
+    if (!result.ok) {
+      input.logRejected(
+        input.service.rejectReason({
+          clientId: input.socketClientId,
+          type: input.message.type ?? 'control',
+          scopeGroupId: input.message.scopeGroupId ?? '',
+        })
+      );
+    }
+    input.audit();
+    return true;
+  }
+
+  if (payload.action === 'deny' && input.socketClientId && typeof payload.transferId === 'string') {
+    input.service.deny(payload.transferId, input.socketClientId, payload.reason);
+    input.audit();
+    return true;
+  }
+
+  if (
+    payload.action === 'revoke' &&
+    input.isManager &&
+    typeof payload.transferId === 'string' &&
+    typeof input.message.actor === 'string'
+  ) {
+    input.service.revoke(payload.transferId, input.message.actor, payload.reason);
+    input.audit();
+    return true;
+  }
+
+  return true;
+}
+
 @Injectable()
 export class ClientControlTransferService {
   private readonly offers = new Map<string, ClientControlTransferOffer>();

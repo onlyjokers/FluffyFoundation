@@ -417,7 +417,7 @@ export type PluginId = AudioPluginId | VisualPluginId | SystemPluginId;
 /**
  * Plugin commands
  */
-export type PluginCommand = 'init' | 'start' | 'stop' | 'configure' | 'deploy' | 'graph-changes' | 'remove' | 'reclaim' | 'release' | 'archive' | 'restore' | 'override-set' | 'override-remove';
+export type PluginCommand = 'init' | 'start' | 'stop' | 'configure' | 'deploy' | 'graph-changes' | 'remove' | 'reclaim' | 'release' | 'archive' | 'restore' | 'override-set' | 'override-remove' | 'display-operation';
 
 /**
  * Payload shape for incremental graph updates (opaque to protocol).

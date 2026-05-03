@@ -34,6 +34,7 @@ import {
     targetAll,
     targetClients,
     type DeliveryMetrics,
+    type DisplayOperation,
 } from '@shugu/protocol';
 import {
     nextManagerCommandEnvelope,
@@ -328,6 +329,15 @@ export class ManagerSDK {
         if (!this.socket?.connected) return;
         const message = createPluginControlMessage(this.nextCommandEnvelope(), target, pluginId, command, payload);
         this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    sendDisplayOperation(operation: DisplayOperation): void {
+        this.sendPluginControl(
+            { mode: 'group', groupId: this.commandEnvelope.scopeGroupId },
+            'display-router',
+            'display-operation',
+            operation as unknown as Record<string, unknown>
+        );
     }
 
     deployPartition(input: {
