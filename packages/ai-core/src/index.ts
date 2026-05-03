@@ -5,3 +5,4 @@ export * from './semantic-context.js';
 export * from './deterministic-planner.js';
 export * from './proposal-execution.js';
 export * from './observation-repair.js';
+export * from './golden-scenario-fixtures.js';

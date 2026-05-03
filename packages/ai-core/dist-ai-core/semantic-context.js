@@ -18,7 +18,7 @@ const UI_NOISE_KEYS = new Set([
     'panel',
     'layout',
 ]);
-const SECRET_KEY_PATTERN = /(secret|token|key|password|credential|auth|managerKey)/i;
+const SECRET_KEY_PATTERN = /(secret|token|password|credential|auth|managerKey|apiKey|accessKey|privateKey)/i;
 const SECRET_VALUE_PATTERN = /(secret|token|key|password|credential|auth|managerKey)\s*(?:[:=]\s*)?[\w.-]*\d[\w.-]*/i;
 const PRIVATE_PATH_PATTERN = /(?:^|["'\s])(?:\/Users\/|\/private\/|\/Volumes\/|[A-Za-z]:\\)/;
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);

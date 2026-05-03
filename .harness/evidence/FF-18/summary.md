@@ -203,3 +203,99 @@ Verification notes:
 - Browser/runtime proof remains intentionally deferred for WP3 because live server/UI/display observation is outside this slice.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
+
+## WP4 - AI Golden Scenario Contract Fixtures
+
+Implemented:
+- `@shugu/ai-core` now exposes `runFf18GoldenScenarioFixtures`, a deterministic executable contract fixture runner for FF-18 GS-12, GS-13, and GS-14.
+- The fixture runner composes the existing WP1 semantic context/planner, WP2 proposal execution/rollback core, and WP3 observation/repair planner. It does not add providers, persistence, server endpoints, browser routes, protocol-breaking types, or live runtime wiring.
+- GS-12 proves gyro rotation context drives a tense flashlight rhythm via semantic `node.params.update` graph commands, command-bus dry-run/apply metadata, structured output-change observation, rollback metadata, risk, policy, and redaction summary.
+- GS-13 proves display breathing applies bounded display params and records a structured output-change observation.
+- GS-14 proves a structured `GRAPH.PARAM_OUT_OF_RANGE` validation error emits a bounded repair proposal that clamps overflow without parsing arbitrary console text.
+- Context redaction was narrowed so registry param schema fields named `key` remain usable for repair planning while secret-bearing names like `managerKey`, `apiKey`, `accessKey`, and `privateKey` are still redacted.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/golden-scenario-contract.test.mjs packages/ai-core/test/semantic-context.test.mjs
+PASS: 7 tests, 0 failures
+```
+
+Deterministic golden scenario fixture output:
+
+```json
+[
+  {
+    "scenarioId": "GS-12",
+    "commandSequence": [
+      { "type": "node.params.update", "nodeId": "flashlight:rhythm", "params": { "rhythmHz": 9, "tension": 0.86 } }
+    ],
+    "expectedOutputChange": {
+      "summary": "Gyro input maps to a bounded tense flashlight rhythm parameter change.",
+      "targetNodeId": "flashlight:rhythm",
+      "params": { "rhythmHz": 9, "tension": 0.86 }
+    },
+    "risk": { "level": "high" },
+    "policy": { "dryRun": "proposal-only", "apply": "allowed" },
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "audit": {
+      "rollbackReference": "ai-rollback:proposal:gs12-gyro-flashlight:rollback:30:3",
+      "historyStatus": "applied"
+    },
+    "observedResult": { "classification": "success", "evidenceKind": "output-change" },
+    "redactions": 4
+  },
+  {
+    "scenarioId": "GS-13",
+    "commandSequence": [
+      { "type": "node.params.update", "nodeId": "display:breath", "params": { "intensity": 0.68, "breathRate": 0.42 } }
+    ],
+    "expectedOutputChange": {
+      "summary": "Display breathing intensity changes within bounded visual parameters.",
+      "targetNodeId": "display:breath",
+      "params": { "intensity": 0.68, "breathRate": 0.42 }
+    },
+    "risk": { "level": "medium" },
+    "policy": { "dryRun": "proposal-only", "apply": "allowed" },
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "audit": {
+      "rollbackReference": "ai-rollback:proposal:gs13-display-breathing:rollback:40:3",
+      "historyStatus": "applied"
+    },
+    "observedResult": { "classification": "success", "changedTargets": ["display:breath"] },
+    "redactions": 3
+  },
+  {
+    "scenarioId": "GS-14",
+    "commandSequence": [
+      { "type": "node.params.update", "nodeId": "display:overflow", "params": { "intensity": 1.8, "breathRate": 0.5 } }
+    ],
+    "expectedOutputChange": {
+      "summary": "Display breathing intensity changes within bounded visual parameters.",
+      "targetNodeId": "display:overflow",
+      "params": { "intensity": 1.8, "breathRate": 0.5 }
+    },
+    "risk": { "level": "medium" },
+    "policy": { "dryRun": "proposal-only", "apply": "allowed" },
+    "status": { "dryRun": "dry-run-failed", "apply": "dry-run-failed" },
+    "audit": { "rollbackReference": null, "historyStatus": null },
+    "observedResult": { "classification": "validation-failure", "sourceError": "GRAPH.PARAM_OUT_OF_RANGE" },
+    "repair": {
+      "type": "proposal",
+      "commands": [
+        { "type": "node.params.update", "nodeId": "display:overflow", "params": { "intensity": 1 } }
+      ],
+      "sourceErrorCodes": ["GRAPH.PARAM_OUT_OF_RANGE"]
+    },
+    "redactions": 3
+  }
+]
+```
+
+Verification notes:
+- Browser/runtime proof remains intentionally deferred for WP4 because Plan scoped this slice to executable contract/scenario proof only.
+- Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
+- `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
