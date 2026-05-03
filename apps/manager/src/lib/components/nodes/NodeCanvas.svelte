@@ -61,6 +61,7 @@
   import { createFileActions } from './node-canvas/io/file-actions';
   import { LiveDOMSocketPosition } from './node-canvas/rete/live-socket-position';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
+  import { createNodeCanvasSemanticCommands } from './node-canvas/adapters/semantic-command-adapter';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
   import { createGroupController, type GroupFrame, type NodeGroup } from './node-canvas/controllers/group-controller';
   import { createFocusController } from './node-canvas/controllers/focus-controller';
@@ -203,6 +204,23 @@
     getNodeMap: () => nodeMap,
     getConnectionMap: () => connectionMap,
     requestFramesUpdate: () => requestFramesUpdate(),
+  });
+
+  const canvasCommands = createNodeCanvasSemanticCommands({
+    nodeEngine,
+    nodeRegistry,
+    getGroups: () => get(groupController.nodeGroups),
+    getPartitions: () =>
+      loopController
+        ? get(loopController.localLoops).map((loop) => ({
+            id: loop.id,
+            nodeIds: loop.nodeIds,
+            status: get(loopController!.deployedLoopIds).has(loop.id) ? 'deployed' : 'draft',
+            requiredCapabilities: loop.requiredCapabilities,
+          }))
+        : [],
+    isRunningStore,
+    lastErrorStore,
   });
 
   // Manager-only visual state (not part of the graph runtime).
@@ -465,7 +483,9 @@
 
       return nodeId;
     },
-    addConnection: (conn) => nodeEngine.addConnection(conn),
+    addConnection: (conn) => {
+      canvasCommands.connect(conn);
+    },
   });
 
   pickerControllerRef = pickerController;
@@ -875,7 +895,7 @@
         inputValues: {},
         outputValues: {},
       };
-      nodeEngine.addNode(newNode);
+      canvasCommands.addNode(newNode);
       return newNode.id;
     }
 
@@ -893,7 +913,7 @@
       inputValues: {},
       outputValues: {},
     };
-    nodeEngine.addNode(newNode);
+    canvasCommands.addNode(newNode);
     return newNode.id;
   }
 
@@ -1155,7 +1175,7 @@
           row += 1;
         }
 
-        nodeEngine.addNode({
+        canvasCommands.addNode({
           id: nodeId,
           type: customNodeType(did),
           position: pos,
@@ -1377,7 +1397,7 @@
               )?.id ?? '';
             if (gateNodeId) {
               const connId = `conn-${crypto.randomUUID?.() ?? Date.now()}`;
-              nodeEngine.addConnection({
+              canvasCommands.connect({
                 id: connId,
                 sourceNodeId: initialSocket.nodeId,
                 sourcePortId: initialSocket.key,
@@ -1486,7 +1506,7 @@
                       targetNodeId: initialSocket.nodeId,
                       targetPortId: initialSocket.key,
                     };
-              nodeEngine.addConnection(conn);
+              canvasCommands.connect(conn);
               groupPortNodesController.scheduleAlign();
               groupPortNodesController.scheduleNormalizeProxies();
               return ctx;
@@ -1517,7 +1537,7 @@
                     targetNodeId: initialSocket.nodeId,
                     targetPortId: initialSocket.key,
                   };
-            nodeEngine.addConnection(engineConn);
+            canvasCommands.connect(engineConn);
             groupPortNodesController.scheduleNormalizeProxies();
           } else {
             openConnectPicker(initialSocket);
@@ -2065,7 +2085,7 @@
                 outputValues: {},
               };
 
-              nodeEngine.addNode(clone);
+              canvasCommands.addNode(clone);
 
               didDuplicate = true;
               duplicatedId = newId;

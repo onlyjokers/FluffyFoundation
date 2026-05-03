@@ -12,7 +12,7 @@
       "plan": "FF-02/FF-08/FF-09"
     },
     "apps/manager/src/lib/components/nodes/NodeCanvas.svelte": {
-      "max_lines": 2646,
+      "max_lines": 2666,
       "owner": "node-graph",
       "plan": "FF-02/FF-08/FF-09"
     },

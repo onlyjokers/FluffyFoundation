@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "checkedFiles": [
+    "apps/manager/src/lib/components/nodes/NodeCanvas.svelte",
+    "apps/manager/src/lib/components/nodes/node-canvas/adapters/semantic-command-adapter.ts"
+  ],
+  "scopedGestureMutators": [
+    "nodeEngine.addNode(",
+    "nodeEngine.addConnection("
+  ],
+  "allowedBridge": "NodeCanvas.applySemanticCommandToEngine",
+  "violations": []
+}

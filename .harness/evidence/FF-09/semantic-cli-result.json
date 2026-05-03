@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "operation": "add math node and connect number.out to math.a",
+  "canvasRevision": 3,
+  "cliRevision": 3,
+  "nodes": [
+    {
+      "id": "n1",
+      "type": "number",
+      "params": {
+        "value": 4
+      }
+    },
+    {
+      "id": "n2",
+      "type": "math",
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "n1",
+      "sourcePortId": "out",
+      "targetNodeId": "n2",
+      "targetPortId": "a"
+    }
+  ]
+}

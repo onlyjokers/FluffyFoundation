@@ -1,0 +1,103 @@
+// Purpose: FF-09 Canvas adapter tests proving UI gestures translate to semantic commands.
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { createSemanticCommandBus, type SemanticCommand } from '@shugu/node-core';
+import { createCanvasSemanticCommandAdapter } from './semantic-command-adapter';
+import type { NodeInstance } from '$lib/nodes/types';
+
+const definitions = [
+  {
+    type: 'number',
+    label: 'Number',
+    category: 'Values',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+  },
+  {
+    type: 'math',
+    label: 'Math',
+    category: 'Logic',
+    inputs: [{ id: 'a', label: 'A', type: 'number' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+  },
+];
+
+const numberNode: NodeInstance = {
+  id: 'n1',
+  type: 'number',
+  position: { x: 10, y: 20 },
+  config: {},
+  inputValues: {},
+  outputValues: {},
+};
+
+test('Canvas add/connect adapter dispatches semantic commands without direct graph mutation', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 1,
+  });
+  const commands: SemanticCommand[] = [];
+  const adapter = createCanvasSemanticCommandAdapter({
+    commandBus: bus,
+    onCommand: (command) => commands.push(command),
+  });
+
+  assert.equal(adapter.addNode(numberNode), true);
+  assert.deepEqual(
+    commands.map((command) => command.type),
+    ['node.add']
+  );
+  assert.equal(bus.getSnapshot().nodes.length, 1);
+});
+
+test('Canvas and CLI fixture command path produce the same semantic snapshot', () => {
+  const canvasBus = createSemanticCommandBus({
+    graph: { nodes: [numberNode], connections: [] },
+    definitions,
+    revision: 1,
+  });
+  const cliBus = createSemanticCommandBus({
+    graph: { nodes: [numberNode], connections: [] },
+    definitions,
+    revision: 1,
+  });
+
+  const command: SemanticCommand = {
+    type: 'node.connect',
+    connection: {
+      id: 'c1',
+      sourceNodeId: 'n1',
+      sourcePortId: 'out',
+      targetNodeId: 'n2',
+      targetPortId: 'a',
+    },
+  };
+  const addMath: SemanticCommand = {
+    type: 'node.add',
+    node: {
+      id: 'n2',
+      type: 'math',
+      position: { x: 50, y: 50 },
+      config: {},
+      inputValues: {},
+      outputValues: {},
+    },
+  };
+
+  const canvasAdapter = createCanvasSemanticCommandAdapter({ commandBus: canvasBus });
+  assert.equal(canvasAdapter.dispatchForFixture(addMath), true);
+  assert.equal(canvasAdapter.dispatchForFixture(command), true);
+
+  assert.equal(
+    cliBus.dispatch({ actor: { id: 'cli', role: 'operator' }, command: addMath }).ok,
+    true
+  );
+  assert.equal(cliBus.dispatch({ actor: { id: 'cli', role: 'operator' }, command }).ok, true);
+
+  assert.deepEqual(canvasBus.getSnapshot().nodes, cliBus.getSnapshot().nodes);
+  assert.deepEqual(canvasBus.getSnapshot().connections, cliBus.getSnapshot().connections);
+});
