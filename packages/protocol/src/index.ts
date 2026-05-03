@@ -14,6 +14,7 @@ export * from './command-envelope.js';
 
 // Export ControlPlane V2 contracts
 export * from './control-plane.js';
+export * from './partition-lifecycle.js';
 
 // Export state strategy contracts
 export * from './state-strategy.js';

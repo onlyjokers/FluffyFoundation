@@ -5,6 +5,7 @@
 import { applyGraphChanges, type GraphChange } from './graph-state/changes.js';
 import type { NodeInstance } from './types.js';
 import type { CommandState, SemanticCommand, SemanticDefinition } from './semantic-graph-types.js';
+import { isExecutionTargetPlatform } from '@shugu/protocol';
 import {
   cloneGraph,
   cloneGroups,
@@ -32,6 +33,16 @@ export function validateSemanticCommand(
   const nodeIds = new Set(state.graph.nodes.map((node) => String(node.id)));
   const connIds = new Set(state.graph.connections.map((conn) => String(conn.id)));
   const groupIds = new Set(state.groups.map((group) => String(group.id)));
+  const partitionIds = new Set(state.partitions.map((partition) => String(partition.id)));
+
+  const validateRevision = (partitionId: string, expectedRevision?: number): string | null => {
+    if (expectedRevision === undefined) return null;
+    const partition = state.partitions.find((item) => item.id === partitionId);
+    const actual = partition?.boundRevision ?? state.revision;
+    return actual === expectedRevision
+      ? null
+      : `Partition revision mismatch: expected ${expectedRevision}, got ${actual}.`;
+  };
 
   switch (command.type) {
     case 'node.add':
@@ -70,11 +81,34 @@ export function validateSemanticCommand(
       return groupIds.has(String(command.groupId)) ? null : `Group not found: ${command.groupId}`;
     case 'partition.deploy':
       if (!isNonEmpty(command.partitionId)) return 'Partition id is required.';
+      if (command.targetPlatform && !isExecutionTargetPlatform(command.targetPlatform)) {
+        return 'Partition target platform is invalid.';
+      }
+      {
+        const revisionError = validateRevision(command.partitionId, command.expectedRevision);
+        if (revisionError) return revisionError;
+      }
       return command.nodeIds.every((nodeId) => nodeIds.has(String(nodeId)))
         ? null
         : 'Partition references unknown nodes.';
+    case 'partition.start':
+    case 'partition.redeploy':
+    case 'partition.remove':
+      if (!isNonEmpty(command.partitionId)) return 'Partition id is required.';
+      if (!partitionIds.has(String(command.partitionId))) return `Partition not found: ${command.partitionId}`;
+      return validateRevision(command.partitionId, command.expectedRevision);
     case 'partition.stop':
+      {
+        const revisionError = validateRevision(command.partitionId, command.expectedRevision);
+        if (revisionError) return revisionError;
+      }
       return isNonEmpty(command.partitionId) ? null : 'Partition id is required.';
+    case 'partition.report.failure':
+      if (!isNonEmpty(command.partitionId)) return 'Partition id is required.';
+      if (!command.report || command.report.kind !== 'partition-failure-report') {
+        return 'Partition failure report is required.';
+      }
+      return null;
     case 'partition.stop.all':
       return null;
     case 'proposal.create':
@@ -189,23 +223,84 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
         {
           id: command.partitionId,
           nodeIds: [...command.nodeIds],
+          targetPlatform: command.targetPlatform ?? 'manager',
           status: 'deployed',
+          boundRevision: state.revision + 1,
           requiredCapabilities: command.requiredCapabilities
             ? [...command.requiredCapabilities]
             : undefined,
+          resourceBudget: command.resourceBudget ? { ...command.resourceBudget } : undefined,
+          watchdog: command.watchdog ? { ...command.watchdog } : undefined,
         },
       ];
       break;
+    case 'partition.start':
+      next.partitions = next.partitions.map((partition) =>
+        partition.id === command.partitionId
+          ? { ...partition, status: 'running', boundRevision: state.revision + 1 }
+          : partition
+      );
+      break;
     case 'partition.stop':
       next.partitions = next.partitions.map((partition) =>
-        partition.id === command.partitionId ? { ...partition, status: 'stopped' } : partition
+        partition.id === command.partitionId
+          ? { ...partition, status: 'stopped', boundRevision: state.revision + 1 }
+          : partition
       );
       if (!next.partitions.some((partition) => partition.id === command.partitionId)) {
-        next.partitions.push({ id: command.partitionId, nodeIds: [], status: 'stopped' });
+        next.partitions.push({
+          id: command.partitionId,
+          nodeIds: [],
+          targetPlatform: 'manager',
+          status: 'stopped',
+          boundRevision: state.revision + 1,
+        });
+      }
+      break;
+    case 'partition.remove':
+      next.partitions = next.partitions.map((partition) =>
+        partition.id === command.partitionId
+          ? { ...partition, status: 'removed', boundRevision: state.revision + 1 }
+          : partition
+      );
+      break;
+    case 'partition.redeploy':
+      next.partitions = next.partitions.map((partition) =>
+        partition.id === command.partitionId
+          ? { ...partition, status: 'deployed', boundRevision: state.revision + 1 }
+          : partition
+      );
+      break;
+    case 'partition.report.failure':
+      next.partitions = next.partitions.map((partition) =>
+        partition.id === command.partitionId
+          ? {
+              ...partition,
+              status: 'error',
+              failureReport: { ...command.report },
+              error: command.report.message,
+              boundRevision: state.revision + 1,
+            }
+          : partition
+      );
+      if (!next.partitions.some((partition) => partition.id === command.partitionId)) {
+        next.partitions.push({
+          id: command.partitionId,
+          nodeIds: [],
+          targetPlatform: command.report.targetPlatform,
+          status: 'error',
+          failureReport: { ...command.report },
+          error: command.report.message,
+          boundRevision: state.revision + 1,
+        });
       }
       break;
     case 'partition.stop.all':
-      next.partitions = next.partitions.map((partition) => ({ ...partition, status: 'stopped' }));
+      next.partitions = next.partitions.map((partition) => ({
+        ...partition,
+        status: 'stopped',
+        boundRevision: state.revision + 1,
+      }));
       break;
     case 'proposal.create':
       next.proposals = [

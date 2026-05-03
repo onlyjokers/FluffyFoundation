@@ -104,12 +104,21 @@ const normalizePartition = (value: unknown): SemanticPartition => {
   const partition = asRecord(value);
   const status = asString(partition.status, 'draft');
   const safeStatus =
-    status === 'deployed' || status === 'stopped' || status === 'error' || status === 'draft'
+    status === 'deployed' || status === 'running' || status === 'stopped' || status === 'removed' || status === 'error' || status === 'draft'
       ? status
       : 'draft';
   return {
     id: asString(partition.id),
     nodeIds: asStringArray(partition.nodeIds),
+    targetPlatform:
+      partition.targetPlatform === 'manager' ||
+      partition.targetPlatform === 'client' ||
+      partition.targetPlatform === 'display' ||
+      partition.targetPlatform === 'server' ||
+      partition.targetPlatform === 'worker' ||
+      partition.targetPlatform === 'local-only'
+        ? partition.targetPlatform
+        : 'manager',
     status: safeStatus,
     requiredCapabilities: Array.isArray(partition.requiredCapabilities)
       ? asStringArray(partition.requiredCapabilities)

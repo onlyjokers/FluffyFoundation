@@ -252,3 +252,114 @@ test('command bus handles groups, partitions, params, disconnect, and proposals 
   );
   assert.equal(snapshot.proposals?.[0].id, 'proposal:1');
 });
+
+test('partition lifecycle commands bind target platform, status, rollback, and revision', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions,
+    revision: 10,
+  });
+
+  const deployed = bus.dispatch({
+    actor: { id: 'manager-1', role: 'manager' },
+    command: {
+      type: 'partition.deploy',
+      partitionId: 'partition:display',
+      nodeIds: ['n1'],
+      targetPlatform: 'display',
+      requiredCapabilities: ['display.render'],
+      resourceBudget: { maxTickHz: 30, maxMemoryMb: 128 },
+      watchdog: { timeoutMs: 1500, failureThreshold: 2 },
+      expectedRevision: 10,
+    },
+  });
+
+  assert.equal(deployed.ok, true);
+  const partition = bus.getSnapshot().partitions.find((item) => item.id === 'partition:display');
+  assert.equal(partition?.targetPlatform, 'display');
+  assert.equal(partition?.status, 'deployed');
+  assert.equal(partition?.boundRevision, 11);
+  assert.equal(partition?.resourceBudget?.maxTickHz, 30);
+  assert.equal(partition?.watchdog?.timeoutMs, 1500);
+  assert.equal(deployed.audit.lifecycle.includes('rollback-token'), true);
+
+  assert.equal(
+    bus.dispatch({
+      actor: { id: 'manager-1', role: 'manager' },
+      command: { type: 'partition.start', partitionId: 'partition:display', expectedRevision: 11 },
+    }).ok,
+    true
+  );
+  assert.equal(
+    bus.dispatch({
+      actor: { id: 'manager-1', role: 'manager' },
+      command: { type: 'partition.stop', partitionId: 'partition:display', expectedRevision: 12 },
+    }).ok,
+    true
+  );
+  assert.equal(
+    bus.dispatch({
+      actor: { id: 'manager-1', role: 'manager' },
+      command: { type: 'partition.redeploy', partitionId: 'partition:display', expectedRevision: 13 },
+    }).ok,
+    true
+  );
+  assert.equal(
+    bus.dispatch({
+      actor: { id: 'manager-1', role: 'manager' },
+      command: { type: 'partition.remove', partitionId: 'partition:display', expectedRevision: 14 },
+    }).ok,
+    true
+  );
+
+  assert.equal(bus.getSnapshot().partitions.find((item) => item.id === 'partition:display')?.status, 'removed');
+});
+
+test('partition lifecycle rejects revision mismatch and records structured failure reports', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions,
+    partitions: [
+      {
+        id: 'partition:client',
+        nodeIds: ['n1'],
+        targetPlatform: 'client',
+        status: 'deployed',
+        boundRevision: 3,
+        requiredCapabilities: ['sensor.gyro'],
+      },
+    ],
+    revision: 3,
+  });
+
+  const stale = bus.dispatch({
+    actor: { id: 'manager-1', role: 'manager' },
+    command: { type: 'partition.start', partitionId: 'partition:client', expectedRevision: 2 },
+  });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.stage, 'dry-run');
+  assert.match(stale.message, /revision/i);
+
+  const failure = bus.dispatch({
+    actor: { id: 'manager-1', role: 'manager' },
+    command: {
+      type: 'partition.report.failure',
+      partitionId: 'partition:client',
+      report: {
+        kind: 'partition-failure-report',
+        partitionId: 'partition:client',
+        targetPlatform: 'client',
+        code: 'resource.budget_exceeded',
+        message: 'Tick rate exceeded budget.',
+        atRevision: 3,
+        resourceBudget: { maxTickHz: 30, observedTickHz: 75 },
+      },
+    },
+  });
+
+  assert.equal(failure.ok, true);
+  const partition = bus.getSnapshot().partitions.find((item) => item.id === 'partition:client');
+  assert.equal(partition?.status, 'error');
+  assert.equal(partition?.failureReport?.code, 'resource.budget_exceeded');
+  assert.equal(partition?.failureReport?.resourceBudget?.observedTickHz, 75);
+});

@@ -229,3 +229,103 @@ test('handleMessage audits accepted mutating manager commands', () => {
     decision: 'accept',
   });
 });
+
+test('handleMessage rejects partition deploy when target capabilities are missing', () => {
+  const { gateway, routed } = createGateway();
+  const warnings = captureWarns(() => {
+    gateway.handleMessage(
+      {
+        type: 'plugin',
+        version: 1,
+        from: 'manager',
+        target: { mode: 'group', groupId: 'stage-left' },
+        pluginId: 'node-executor',
+        command: 'deploy',
+        payload: {
+          kind: 'partition-lifecycle',
+          operation: 'deploy',
+          partition: {
+            id: 'partition:display',
+            nodeIds: ['visual-1'],
+            targetPlatform: 'display',
+            requiredCapabilities: ['display.render'],
+            boundRevision: 1,
+          },
+          availableCapabilities: [],
+          currentRevision: 1,
+        },
+        ...envelope(),
+      },
+      { id: 'socket-partition-capability' } as never
+    );
+  });
+
+  assert.equal(routed.length, 0);
+  assert.equal(loggedMetadata(warnings).code, 'partition.capability.missing');
+  assert.equal(loggedMetadata(warnings).path, 'payload.partition.requiredCapabilities');
+});
+
+test('handleMessage rejects client direct partition lifecycle control outside ControlPlane transfer', () => {
+  const { gateway, routed } = createGateway();
+  const warnings = captureWarns(() => {
+    gateway.handleMessage(
+      {
+        type: 'plugin',
+        version: 1,
+        from: 'manager',
+        target: { mode: 'group', groupId: 'stage-left' },
+        pluginId: 'node-executor',
+        command: 'start',
+        payload: {
+          kind: 'partition-lifecycle',
+          operation: 'start',
+          partitionId: 'partition:client',
+        },
+        actor: 'client-1',
+        role: 'client',
+        scopeGroupId: 'stage-left',
+        correlationId: 'corr-client-direct',
+        idempotencyKey: 'idem-client-direct',
+      },
+      { id: 'socket-client-direct' } as never
+    );
+  });
+
+  assert.equal(routed.length, 0);
+  assert.equal(loggedMetadata(warnings).code, 'control-plane.capability_required');
+  assert.equal(loggedMetadata(warnings).path, 'role');
+});
+
+test('handleMessage rejects partition lifecycle revision mismatch before routing', () => {
+  const { gateway, routed } = createGateway();
+  const warnings = captureWarns(() => {
+    gateway.handleMessage(
+      {
+        type: 'plugin',
+        version: 1,
+        from: 'manager',
+        target: { mode: 'group', groupId: 'stage-left' },
+        pluginId: 'node-executor',
+        command: 'start',
+        payload: {
+          kind: 'partition-lifecycle',
+          operation: 'start',
+          partition: {
+            id: 'partition:client',
+            nodeIds: ['n1'],
+            targetPlatform: 'client',
+            status: 'deployed',
+            boundRevision: 4,
+          },
+          currentRevision: 5,
+        },
+        ...envelope(),
+      },
+      { id: 'socket-partition-revision' } as never
+    );
+  });
+
+  assert.equal(routed.length, 0);
+  assert.equal(loggedMetadata(warnings).code, 'partition.revision_mismatch');
+  assert.equal(loggedMetadata(warnings).path, 'payload.partition.boundRevision');
+});

@@ -1,6 +1,21 @@
 /**
  * Purpose: Define the FF-12 ControlPlane V2 actor, capability, and Group ownership contract.
  */
+export {
+  createExecutionPartition,
+  createPartitionFailureReport,
+  isExecutionTargetPlatform,
+  validatePartitionLifecycleRequest,
+  type ExecutionPartition,
+  type ExecutionPartitionStatus,
+  type ExecutionTargetPlatform,
+  type PartitionFailureReport,
+  type PartitionLifecycleOperation,
+  type PartitionLifecycleRejectCode,
+  type PartitionLifecycleValidationResult,
+  type PartitionResourceBudget,
+  type PartitionWatchdogConfig,
+} from './partition-lifecycle.js';
 
 export type ControlPlaneActorRole = 'root' | 'manager' | 'client' | 'service' | 'ai';
 

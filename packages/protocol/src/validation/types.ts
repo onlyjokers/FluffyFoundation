@@ -14,6 +14,10 @@ export type ValidationRejectCode =
   | 'server.policy.ownership_denied'
   | 'server.policy.client_transfer_required'
   | 'server.policy.capability_denied'
+  | 'control-plane.capability_required'
+  | 'partition.capability.missing'
+  | 'partition.revision_mismatch'
+  | 'partition.target.invalid'
   | 'server.policy.unauthorized';
 
 export interface ValidationRejectReason {

@@ -363,7 +363,13 @@ function requiredCapability(command: SemanticCommand): ControlPlaneCapability | 
   if (command.type === 'group.archive' || command.type === 'group.delete') return 'group.archive';
   if (command.type === 'group.restore') return 'group.restore';
   if (command.type === 'partition.deploy') return 'partition.deploy';
-  if (command.type === 'partition.stop') return 'partition.stop';
+  if (command.type === 'partition.redeploy') return 'partition.deploy';
+  if (
+    command.type === 'partition.start' ||
+    command.type === 'partition.stop' ||
+    command.type === 'partition.remove' ||
+    command.type === 'partition.report.failure'
+  ) return 'partition.stop';
   return null;
 }
 

@@ -6,11 +6,15 @@ import { test } from 'node:test';
 
 import {
   CONTROL_PLANE_CAPABILITIES_BY_ROLE,
+  createExecutionPartition,
+  createPartitionFailureReport,
   createControlPlaneActor,
   createGroupOwnershipEntry,
   createTransferOffer,
   getControlPlaneCapabilities,
   isControlPlaneActorRole,
+  isExecutionTargetPlatform,
+  validatePartitionLifecycleRequest,
 } from './control-plane.js';
 
 test('ControlPlane defines explicit capability scopes for manager, client, service, and AI actors', () => {
@@ -95,4 +99,91 @@ test('client transfer offers carry target confirmation, TTL, and scoped mutate c
   assert.equal(offer.capability.scopeGroupId, 'stage-left');
   assert.equal(offer.capability.targetClientId, 'client-1');
   assert.deepEqual(offer.capability.capabilities, ['group.view', 'group.mutate', 'group.release']);
+});
+
+test('Execution partitions define FF-14 target platforms and structured status metadata', () => {
+  assert.equal(isExecutionTargetPlatform('manager'), true);
+  assert.equal(isExecutionTargetPlatform('client'), true);
+  assert.equal(isExecutionTargetPlatform('display'), true);
+  assert.equal(isExecutionTargetPlatform('server'), true);
+  assert.equal(isExecutionTargetPlatform('worker'), true);
+  assert.equal(isExecutionTargetPlatform('local-only'), true);
+  assert.equal(isExecutionTargetPlatform('browser'), false);
+
+  const partition = createExecutionPartition({
+    id: 'partition:display',
+    nodeIds: ['visual-1'],
+    targetPlatform: 'display',
+    status: 'deployed',
+    requiredCapabilities: ['display.render'],
+    boundRevision: 12,
+    resourceBudget: { maxTickHz: 30, maxMemoryMb: 128 },
+    watchdog: { timeoutMs: 1500, failureThreshold: 2 },
+  });
+
+  assert.deepEqual(partition, {
+    id: 'partition:display',
+    nodeIds: ['visual-1'],
+    targetPlatform: 'display',
+    status: 'deployed',
+    requiredCapabilities: ['display.render'],
+    boundRevision: 12,
+    resourceBudget: { maxTickHz: 30, maxMemoryMb: 128 },
+    watchdog: { timeoutMs: 1500, failureThreshold: 2 },
+  });
+});
+
+test('partition lifecycle validation rejects bad capability and revision mismatches', () => {
+  const rejected = validatePartitionLifecycleRequest({
+    operation: 'deploy',
+    partition: createExecutionPartition({
+      id: 'partition:client',
+      nodeIds: ['n1'],
+      targetPlatform: 'client',
+      requiredCapabilities: ['sensor.gyro', 'camera.front'],
+      boundRevision: 5,
+    }),
+    actor: createControlPlaneActor({ id: 'manager-1', role: 'manager' }),
+    availableCapabilities: ['sensor.gyro'],
+    currentRevision: 5,
+  });
+
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.reason?.code, 'partition.capability.missing');
+  assert.deepEqual(rejected.reason?.missingCapabilities, ['camera.front']);
+
+  const stale = validatePartitionLifecycleRequest({
+    operation: 'start',
+    partition: createExecutionPartition({
+      id: 'partition:client',
+      nodeIds: ['n1'],
+      targetPlatform: 'client',
+      boundRevision: 4,
+    }),
+    actor: createControlPlaneActor({ id: 'manager-1', role: 'manager' }),
+    availableCapabilities: [],
+    currentRevision: 5,
+  });
+
+  assert.equal(stale.ok, false);
+  assert.equal(stale.reason?.code, 'partition.revision_mismatch');
+  assert.equal(stale.reason?.expectedRevision, 5);
+  assert.equal(stale.reason?.actualRevision, 4);
+});
+
+test('partition failure reports preserve watchdog and budget details for AI-visible audit', () => {
+  const report = createPartitionFailureReport({
+    partitionId: 'partition:worker',
+    targetPlatform: 'worker',
+    code: 'watchdog.timeout',
+    message: 'Partition watchdog timed out.',
+    atRevision: 9,
+    watchdog: { timeoutMs: 500, lastHeartbeatAt: 1000, missedHeartbeats: 3 },
+    resourceBudget: { maxTickHz: 60, maxMemoryMb: 64, observedTickHz: 90, observedMemoryMb: 72 },
+  });
+
+  assert.equal(report.kind, 'partition-failure-report');
+  assert.equal(report.partitionId, 'partition:worker');
+  assert.equal(report.watchdog?.missedHeartbeats, 3);
+  assert.equal(report.resourceBudget?.observedTickHz, 90);
 });

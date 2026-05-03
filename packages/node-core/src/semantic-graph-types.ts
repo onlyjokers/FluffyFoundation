@@ -5,6 +5,11 @@
 import type { Connection, GraphState, NodeDefinition, NodeInstance } from './types.js';
 import type { AgentNodeDefinitionSummary } from './node-definition-metadata.js';
 import type {
+  ExecutionPartition,
+  ExecutionTargetPlatform,
+  PartitionFailureReport,
+  PartitionResourceBudget,
+  PartitionWatchdogConfig,
   ControlPlaneActorRole,
   ControlPlaneCapability,
   ControlPlaneSurface,
@@ -54,13 +59,7 @@ export type SemanticGroup = {
   visibility?: { defaultAccess: ControlPlaneVisibilityAccess };
 };
 
-export type SemanticPartition = {
-  id: string;
-  nodeIds: string[];
-  status: 'draft' | 'deployed' | 'stopped' | 'error';
-  requiredCapabilities?: string[];
-  error?: string;
-};
+export type SemanticPartition = ExecutionPartition;
 
 export type RuntimeStatus = {
   running: boolean;
@@ -124,9 +123,17 @@ export type SemanticCommand =
       type: 'partition.deploy';
       partitionId: string;
       nodeIds: string[];
+      targetPlatform?: ExecutionTargetPlatform;
       requiredCapabilities?: string[];
+      resourceBudget?: PartitionResourceBudget;
+      watchdog?: PartitionWatchdogConfig;
+      expectedRevision?: number;
     }
-  | { type: 'partition.stop'; partitionId: string }
+  | { type: 'partition.start'; partitionId: string; expectedRevision?: number }
+  | { type: 'partition.stop'; partitionId: string; expectedRevision?: number }
+  | { type: 'partition.remove'; partitionId: string; expectedRevision?: number }
+  | { type: 'partition.redeploy'; partitionId: string; expectedRevision?: number }
+  | { type: 'partition.report.failure'; partitionId: string; report: PartitionFailureReport }
   | { type: 'partition.stop.all' }
   | { type: 'proposal.create'; proposal: SemanticProposal };
 

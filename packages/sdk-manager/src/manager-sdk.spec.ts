@@ -122,6 +122,53 @@ test('ManagerSDK emits structured transfer lifecycle commands with manager actor
   assert.equal((emitted[1] as { payload?: { action?: string } }).payload?.action, 'revoke');
 });
 
+test('ManagerSDK emits partition lifecycle commands through the semantic node-executor bus', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'manager-partition', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.deployPartition({
+    groupId: 'stage-left',
+    partition: {
+      id: 'partition:display',
+      nodeIds: ['visual-1'],
+      targetPlatform: 'display',
+      status: 'draft',
+      requiredCapabilities: ['display.render'],
+      boundRevision: 8,
+    },
+    currentRevision: 8,
+  });
+  sdk.stopPartition({ groupId: 'stage-left', partitionId: 'partition:display', currentRevision: 9 });
+  sdk.removePartition({ groupId: 'stage-left', partitionId: 'partition:display', currentRevision: 10 });
+  sdk.redeployPartition({ groupId: 'stage-left', partitionId: 'partition:display', currentRevision: 11 });
+
+  assert.equal(emitted.length, 4);
+  assert.equal((emitted[0] as { type?: string }).type, 'plugin');
+  assert.equal((emitted[0] as { pluginId?: string }).pluginId, 'node-executor');
+  assert.equal((emitted[0] as { command?: string }).command, 'deploy');
+  assert.deepEqual((emitted[0] as { payload?: unknown }).payload, {
+    kind: 'partition-lifecycle',
+    operation: 'deploy',
+    partition: {
+      id: 'partition:display',
+      nodeIds: ['visual-1'],
+      targetPlatform: 'display',
+      status: 'draft',
+      requiredCapabilities: ['display.render'],
+      boundRevision: 8,
+    },
+    currentRevision: 8,
+  });
+  assert.deepEqual(
+    emitted.map((message) => (message as { command?: string }).command),
+    ['deploy', 'stop', 'remove', 'deploy']
+  );
+  assert.equal((emitted[0] as { actor?: string }).actor, 'manager-partition');
+});
+
 test('ManagerSDK coalesces latest-state controls and flushes the last value after throttle', async () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',

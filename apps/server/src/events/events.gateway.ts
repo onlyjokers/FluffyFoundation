@@ -39,6 +39,7 @@ import {
   type ClientControlTransferCommand,
   type ClientTransferCommandMessage,
 } from './client-control-transfer.js';
+import { validatePartitionLifecycleIngress } from './partition-lifecycle-policy.js';
 import { createSocketCorsOptions, resolveManagerRole } from '../bootstrap/security-policy.js';
 import {
   createStateStrategyConfigFromEnv,
@@ -254,6 +255,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         message: commandMessage,
         socketClientId,
       });
+      const partitionRejectReason = validatePartitionLifecycleIngress(validatedMessage);
+      if (partitionRejectReason) return this.logRejectedMessage(client.id, [partitionRejectReason]);
       if (
         !isClientController &&
         !isTransferResponse &&
@@ -288,20 +291,14 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       if (this.handleClientControlTransferCommand(validatedMessage, client)) return;
 
       const scopeRejectReason = this.validateCommandScope(validatedMessage);
-      if (scopeRejectReason) {
-        this.logRejectedMessage(client.id, [scopeRejectReason]);
-        return;
-      }
+      if (scopeRejectReason) return this.logRejectedMessage(client.id, [scopeRejectReason]);
 
       const ownershipRejectReason = enforceGroupOwnership({
         message: validatedMessage,
         registry: this.clientRegistry,
         commandName: (msg) => this.commandName(msg),
       });
-      if (ownershipRejectReason) {
-        this.logRejectedMessage(client.id, [ownershipRejectReason]);
-        return;
-      }
+      if (ownershipRejectReason) return this.logRejectedMessage(client.id, [ownershipRejectReason]);
     }
 
     this.auditMutatingCommand(validatedMessage);

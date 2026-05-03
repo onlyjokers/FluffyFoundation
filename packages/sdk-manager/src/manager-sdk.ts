@@ -24,6 +24,8 @@ import {
     ControlPayload,
     ControlBatchPayload,
     type ControlBatchItem,
+    type ExecutionPartition,
+    type PartitionLifecyclePayload,
     ScreenColorPayload,
     PluginId,
     PluginCommand,
@@ -325,6 +327,78 @@ export class ManagerSDK {
     ): void {
         if (!this.socket?.connected) return;
         const message = createPluginControlMessage(this.nextCommandEnvelope(), target, pluginId, command, payload);
+        this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    deployPartition(input: {
+        groupId: string;
+        partition: ExecutionPartition;
+        currentRevision?: number;
+        availableCapabilities?: string[];
+    }): void {
+        this.sendPartitionLifecycle({
+            groupId: input.groupId,
+            operation: 'deploy',
+            partition: input.partition,
+            currentRevision: input.currentRevision,
+            availableCapabilities: input.availableCapabilities,
+        });
+    }
+
+    startPartition(input: { groupId: string; partitionId: string; currentRevision?: number }): void {
+        this.sendPartitionLifecycle({
+            groupId: input.groupId,
+            operation: 'start',
+            partitionId: input.partitionId,
+            currentRevision: input.currentRevision,
+        });
+    }
+
+    stopPartition(input: { groupId: string; partitionId: string; currentRevision?: number }): void {
+        this.sendPartitionLifecycle({
+            groupId: input.groupId,
+            operation: 'stop',
+            partitionId: input.partitionId,
+            currentRevision: input.currentRevision,
+        });
+    }
+
+    removePartition(input: { groupId: string; partitionId: string; currentRevision?: number }): void {
+        this.sendPartitionLifecycle({
+            groupId: input.groupId,
+            operation: 'remove',
+            partitionId: input.partitionId,
+            currentRevision: input.currentRevision,
+        });
+    }
+
+    redeployPartition(input: { groupId: string; partitionId: string; currentRevision?: number }): void {
+        this.sendPartitionLifecycle({
+            groupId: input.groupId,
+            operation: 'redeploy',
+            partitionId: input.partitionId,
+            currentRevision: input.currentRevision,
+        });
+    }
+
+    private sendPartitionLifecycle(input: { groupId: string } & Omit<PartitionLifecyclePayload, 'kind'>): void {
+        if (!this.socket?.connected) return;
+        const command = input.operation === 'redeploy' ? 'deploy' : input.operation;
+        const payload: PartitionLifecyclePayload = {
+            kind: 'partition-lifecycle',
+            operation: input.operation,
+            ...(input.partition ? { partition: input.partition } : {}),
+            ...(input.partitionId ? { partitionId: input.partitionId } : {}),
+            ...(typeof input.currentRevision === 'number' ? { currentRevision: input.currentRevision } : {}),
+            ...(input.availableCapabilities ? { availableCapabilities: input.availableCapabilities } : {}),
+        };
+        const message = createPluginControlMessage(
+            this.nextCommandEnvelope(),
+            { mode: 'group', groupId: input.groupId },
+            'node-executor',
+            command,
+            payload
+        );
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 

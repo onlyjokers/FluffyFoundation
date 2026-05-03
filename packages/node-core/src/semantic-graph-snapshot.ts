@@ -53,9 +53,19 @@ export const clonePartitions = (partitions: SemanticPartition[]): SemanticPartit
   partitions.map((partition) => ({
     ...partition,
     nodeIds: [...(partition.nodeIds ?? [])],
+    targetPlatform: partition.targetPlatform ?? 'manager',
     requiredCapabilities: partition.requiredCapabilities
       ? [...partition.requiredCapabilities]
       : undefined,
+    resourceBudget: partition.resourceBudget ? { ...partition.resourceBudget } : undefined,
+    watchdog: partition.watchdog ? { ...partition.watchdog } : undefined,
+    failureReport: partition.failureReport ? {
+      ...partition.failureReport,
+      watchdog: partition.failureReport.watchdog ? { ...partition.failureReport.watchdog } : undefined,
+      resourceBudget: partition.failureReport.resourceBudget
+        ? { ...partition.failureReport.resourceBudget }
+        : undefined,
+    } : undefined,
   }));
 
 export const cloneProposals = (proposals: SemanticProposal[]): SemanticProposal[] =>
