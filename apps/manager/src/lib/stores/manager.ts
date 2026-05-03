@@ -22,11 +22,13 @@ import {
     sendPlugin as sendLocalDisplayPlugin,
 } from '$lib/display/display-bridge';
 import { createDisplayTransport } from '$lib/display/display-transport';
+import {
+    offerClientControlTransferWithSdk,
+    revokeClientControlTransferWithSdk,
+} from './manager-transfer';
+import { getManagerSDK, setManagerSDK } from './manager-sdk-access';
 
 const SEND_TO_DISPLAY_STORAGE_KEY = 'shugu-send-to-display';
-
-// SDK instance
-let sdk: ManagerSDK | null = null;
 
 // Core state store
 export const state = writable<ManagerState>({
@@ -173,8 +175,8 @@ function scheduleSelectAllSync(clientIds: string[]): void {
     Promise.resolve().then(() => {
         selectAllSyncScheduled = false;
         if (!get(selectAllClientsEnabled)) return;
+        const sdk = getManagerSDK();
         if (!sdk) return;
-
         const ids = selectAllSyncTargetIds ?? [];
         selectAllSyncTargetIds = null;
         sdk.selectClients(ids);
@@ -239,15 +241,17 @@ displayBridgeNodeMedia.subscribe((event) => {
  * Initialize and connect to server
  */
 export function connect(config: ManagerSDKConfig): void {
-    if (sdk) {
-        sdk.disconnect();
+    const existingSdk = getManagerSDK();
+    if (existingSdk) {
+        existingSdk.disconnect();
     }
     nodeMediaSignals.set(new Map());
 
     // Seed registry-based control parameters early so MIDI/AutoUI/Project restore can see them.
     registerDefaultControlParameters();
 
-    sdk = new ManagerSDK(config);
+    const sdk = new ManagerSDK(config);
+    setManagerSDK(sdk);
 
     // Subscribe to state changes
     sdk.onStateChange((newState) => {
@@ -488,8 +492,8 @@ export function connect(config: ManagerSDKConfig): void {
  * Disconnect from server
  */
 export function disconnect(): void {
-    sdk?.disconnect();
-    sdk = null;
+    getManagerSDK()?.disconnect();
+    setManagerSDK(null);
     sensorData.set(new Map());
     clientReadiness.set(new Map());
     clientToneReadiness.set(new Map());
@@ -504,7 +508,7 @@ export function disconnect(): void {
  */
 export function selectClients(clientIds: string[]): void {
     const audienceIdSet = new Set(get(audienceClients).map((c) => c.clientId));
-    sdk?.selectClients(clientIds.filter((id) => audienceIdSet.has(id)));
+    getManagerSDK()?.selectClients(clientIds.filter((id) => audienceIdSet.has(id)));
 }
 
 export function setSelectAllClients(enabled: boolean): void {
@@ -545,7 +549,7 @@ export function selectAllClients(): void {
  */
 export function clearSelection(): void {
     selectAllClientsEnabled.set(false);
-    sdk?.clearSelection();
+    getManagerSDK()?.clearSelection();
 }
 
 function resolveAudienceTarget(toAll: boolean): TargetSelector | null {
@@ -572,11 +576,11 @@ function maybeMirrorToDisplay(action: ControlAction, payload: ControlPayload, ex
 
 // Control actions
 export function flashlight(mode: 'off' | 'on' | 'blink', options?: { frequency?: number; dutyCycle?: number }, toAll = false, executeAt?: number): void {
-    sdk?.flashlight(mode, options, toAll, executeAt);
+    getManagerSDK()?.flashlight(mode, options, toAll, executeAt);
 }
 
 export function vibrate(pattern: number[], repeat?: number, toAll = false, executeAt?: number): void {
-    sdk?.vibrate(pattern, repeat, toAll, executeAt);
+    getManagerSDK()?.vibrate(pattern, repeat, toAll, executeAt);
 }
 
 export function modulateSound(
@@ -593,7 +597,7 @@ export function modulateSound(
     toAll = false,
     executeAt?: number
 ): void {
-    sdk?.modulateSound(options, toAll, executeAt);
+    getManagerSDK()?.modulateSound(options, toAll, executeAt);
 }
 
 export function modulateSoundUpdate(
@@ -608,7 +612,7 @@ export function modulateSoundUpdate(
     toAll = false,
     executeAt?: number
 ): void {
-    sdk?.modulateSoundUpdate(options, toAll, executeAt);
+    getManagerSDK()?.modulateSoundUpdate(options, toAll, executeAt);
 }
 
 export function screenColor(
@@ -622,6 +626,7 @@ export function screenColor(
         : colorOrPayload;
 
     const target = resolveAudienceTarget(toAll);
+    const sdk = getManagerSDK();
     if (target && sdk) {
         sdk.sendControl(target, 'screenColor', payload, executeAt);
     }
@@ -629,7 +634,7 @@ export function screenColor(
 }
 
 export function playSound(url: string, options?: { volume?: number; loop?: boolean }, toAll = false, executeAt?: number): void {
-    sdk?.playSound(url, options, toAll, executeAt);
+    getManagerSDK()?.playSound(url, options, toAll, executeAt);
 }
 
 export function playMedia(
@@ -646,6 +651,7 @@ export function playMedia(
 ): void {
     const payload = { url, ...options };
     const target = resolveAudienceTarget(toAll);
+    const sdk = getManagerSDK();
     if (target && sdk) {
         sdk.sendControl(target, 'playMedia', payload, executeAt);
     }
@@ -654,6 +660,7 @@ export function playMedia(
 
 export function stopMedia(toAll = false): void {
     const target = resolveAudienceTarget(toAll);
+    const sdk = getManagerSDK();
     if (target && sdk) {
         sdk.sendControl(target, 'stopMedia', {});
     }
@@ -661,7 +668,7 @@ export function stopMedia(toAll = false): void {
 }
 
 export function stopSound(toAll = false): void {
-    sdk?.stopSound(toAll);
+    getManagerSDK()?.stopSound(toAll);
 }
 
 export function interruptMedia(toAll = false): void {
@@ -679,6 +686,7 @@ export function showImage(
 ): void {
     const payload = { url, ...options };
     const target = resolveAudienceTarget(toAll);
+    const sdk = getManagerSDK();
     if (target && sdk) {
         sdk.sendControl(target, 'showImage', payload, executeAt);
     }
@@ -687,6 +695,7 @@ export function showImage(
 
 export function hideImage(toAll = false): void {
     const target = resolveAudienceTarget(toAll);
+    const sdk = getManagerSDK();
     if (target && sdk) {
         sdk.sendControl(target, 'hideImage', {});
     }
@@ -694,7 +703,7 @@ export function hideImage(toAll = false): void {
 }
 
 export function setVisualScenes(scenes: VisualSceneLayerItem[], toAll = false, executeAt?: number): void {
-    sdk?.setVisualScenes(scenes, toAll, executeAt);
+    getManagerSDK()?.setVisualScenes(scenes, toAll, executeAt);
 }
 
 export function sendPluginControl(
@@ -703,6 +712,7 @@ export function sendPluginControl(
     payload?: Record<string, unknown>,
     toAll = false
 ): void {
+    const sdk = getManagerSDK();
     if (!sdk) return;
     const currentState = get(state);
     const target = toAll
@@ -715,5 +725,13 @@ export function sendPluginControl(
  * Get SDK instance (for advanced usage)
  */
 export function getSDK(): ManagerSDK | null {
-    return sdk;
+    return getManagerSDK();
+}
+
+export function offerClientControlTransfer(groupId: string, targetClientId: string, ttlMs = 30_000): void {
+    offerClientControlTransferWithSdk(getManagerSDK(), groupId, targetClientId, ttlMs);
+}
+
+export function revokeClientControlTransfer(transferId: string, groupId: string): void {
+    revokeClientControlTransferWithSdk(getManagerSDK(), transferId, groupId);
 }

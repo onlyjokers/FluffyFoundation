@@ -4,6 +4,7 @@
  */
 
 export * from './client-sdk.js';
+export * from './client-control-transfer.js';
 export * from './sensor-manager.js';
 export * from './action-executors.js';
 export * from './node-types.js';

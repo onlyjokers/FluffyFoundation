@@ -8,6 +8,8 @@
     connectToServer,
     disconnectFromServer,
     getSDK,
+    clientControlTransfer,
+    applyClientControlTransferStatus,
     permissions,
     enableAudio,
     startEarlyPreload,
@@ -16,7 +18,10 @@
   import VisualCanvas from '$lib/components/VisualCanvas.svelte';
   import PermissionWarning from '$lib/components/PermissionWarning.svelte';
   import GeoGateOverlay from '$lib/components/GeoGateOverlay.svelte';
+  import ClientControlTransferStatus from '$lib/components/ClientControlTransferStatus.svelte';
   import { toneAudioEngine } from '@shugu/multimedia-core';
+  import { sendTransferResponse as sendClientTransferResponse } from '$lib/stores/client/client-transfer-command';
+  import { formatMeters, haversineDistanceM } from '$lib/client-page/geo-gate';
 
   let hasStarted = false;
   let serverUrl = 'https://localhost:3001';
@@ -56,6 +61,11 @@
 
   const asRecord = (value: unknown): Record<string, unknown> | null =>
     value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
+  function sendTransferResponse(action: 'accept' | 'deny'): void {
+    const next = sendClientTransferResponse(getSDK(), $clientControlTransfer, action);
+    if (next) applyClientControlTransferStatus(next);
+  }
 
   function canScrollHorizontally(element: Element | null, deltaX: number): boolean {
     let current: Element | null = element;
@@ -311,18 +321,6 @@
     }
   }
 
-  function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const r = 6371_000; // meters
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return r * c;
-  }
-
   function requestGeolocationOnce(options: PositionOptions): Promise<GeolocationPosition> {
     if (!('geolocation' in navigator) || !navigator.geolocation) {
       return Promise.reject(new Error('Geolocation API is not supported'));
@@ -380,12 +378,6 @@
     const json = (await response.json()) as { formattedAddress?: string; displayName?: string };
     const address = (json.formattedAddress || json.displayName || '').trim();
     return address || null;
-  }
-
-  function formatMeters(value: number): string {
-    const m = Math.max(0, Math.round(value));
-    if (m < 1000) return `${m}m`;
-    return `${(m / 1000).toFixed(2)}km`;
   }
 
   async function runGeoGate(): Promise<void> {
@@ -584,6 +576,12 @@
     {/if}
   {:else}
     <VisualCanvas />
+    {#if $clientControlTransfer}
+      <ClientControlTransferStatus
+        transfer={$clientControlTransfer}
+        onRespond={sendTransferResponse}
+      />
+    {/if}
     <PermissionWarning />
   {/if}
 </div>

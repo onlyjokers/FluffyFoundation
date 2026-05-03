@@ -72,6 +72,16 @@ export function enforceGroupOwnership(input: {
     return null;
   }
   if (entry && entry.owner.actorId !== actor.id && role !== 'root') {
+    if (role === 'client') {
+      return createPolicyRejectReason({
+        actor: message.actor ?? ('from' in message ? message.from : 'unknown'),
+        scope: 'server.ingress.clientControlTransfer',
+        type: message.type,
+        path: 'transferId',
+        code: 'server.policy.client_transfer_required',
+        message: 'accepted client control transfer capability is required',
+      });
+    }
     return createPolicyDeny(message, `Group is ${entry.visibility.defaultAccess}; actor is not the owner`);
   }
   return null;

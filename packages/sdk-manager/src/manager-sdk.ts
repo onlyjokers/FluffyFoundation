@@ -8,6 +8,7 @@ import {
     SOCKET_EVENTS,
     isSensorDataMessage,
     isSystemMessage,
+    createControlMessage,
     createPluginControlMessage,
     createMediaMetaMessage,
     createTimePing,
@@ -324,6 +325,43 @@ export class ManagerSDK {
     ): void {
         if (!this.socket?.connected) return;
         const message = createPluginControlMessage(this.nextCommandEnvelope(), target, pluginId, command, payload);
+        this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Offer temporary Group control to a target client. Server owns TTL, confirmation, and owner recovery.
+     */
+    offerClientControlTransfer(input: { groupId: string; targetClientId: string; ttlMs?: number }): void {
+        if (!this.socket?.connected) return;
+        const message = createControlMessage(
+            this.nextCommandEnvelope(),
+            { mode: 'group', groupId: input.groupId },
+            'clientControlTransfer',
+            {
+                kind: 'client-control-transfer',
+                action: 'offer',
+                groupId: input.groupId,
+                targetClientId: input.targetClientId,
+                ...(typeof input.ttlMs === 'number' && Number.isFinite(input.ttlMs) ? { ttlMs: input.ttlMs } : {}),
+            }
+        );
+        this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    revokeClientControlTransfer(input: { transferId: string; groupId: string; reason?: string }): void {
+        if (!this.socket?.connected) return;
+        const message = createControlMessage(
+            this.nextCommandEnvelope(),
+            { mode: 'group', groupId: input.groupId },
+            'clientControlTransfer',
+            {
+                kind: 'client-control-transfer',
+                action: 'revoke',
+                transferId: input.transferId,
+                groupId: input.groupId,
+                ...(input.reason ? { reason: input.reason } : {}),
+            }
+        );
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 

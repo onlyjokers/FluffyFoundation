@@ -6,6 +6,12 @@
 
 export { state, permissions, latency, connectionStatus, clientId } from './client/client-state';
 export {
+  clientControlTransfer,
+  applyClientControlTransferStatus,
+  clearClientControlTransfer,
+  formatClientControlTransferStatus,
+} from './client/client-transfer';
+export {
   boxSceneEnabled,
   melSceneEnabled,
   frontCameraEnabled,

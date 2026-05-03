@@ -9,6 +9,10 @@ export type ControlPlaneCapability =
   | 'group.mutate'
   | 'group.reclaim'
   | 'group.release'
+  | 'group.transfer.offer'
+  | 'group.transfer.accept'
+  | 'group.transfer.deny'
+  | 'group.transfer.revoke'
   | 'group.archive'
   | 'group.restore'
   | 'partition.deploy'
@@ -46,6 +50,39 @@ export interface GroupOwnershipEntry {
   selectedClientIds: string[];
 }
 
+export type ClientControlTransferStatus =
+  | 'pending'
+  | 'accepted'
+  | 'denied'
+  | 'expired'
+  | 'revoked'
+  | 'control-lost';
+
+export interface ClientControlCapability {
+  transferId: string;
+  scopeGroupId: string;
+  targetClientId: string;
+  capabilities: ControlPlaneCapability[];
+  acceptedAt?: number;
+  expiresAt: number;
+}
+
+export interface ClientControlTransferOffer {
+  kind: 'client-control-transfer-status';
+  transferId: string;
+  groupId: string;
+  offeredBy: GroupOwnershipActor;
+  targetClientId: string;
+  status: ClientControlTransferStatus;
+  offeredAt: number;
+  expiresAt: number;
+  capability: ClientControlCapability;
+  acceptedAt?: number;
+  deniedAt?: number;
+  revokedAt?: number;
+  reason?: string;
+}
+
 export const ROOT_EMERGENCY_SCOPE_GROUP_ID = '__root_emergency__' as const;
 
 export const CONTROL_PLANE_CAPABILITIES_BY_ROLE: Record<
@@ -57,6 +94,10 @@ export const CONTROL_PLANE_CAPABILITIES_BY_ROLE: Record<
     'group.mutate',
     'group.reclaim',
     'group.release',
+    'group.transfer.offer',
+    'group.transfer.accept',
+    'group.transfer.deny',
+    'group.transfer.revoke',
     'group.archive',
     'group.restore',
     'partition.deploy',
@@ -69,12 +110,14 @@ export const CONTROL_PLANE_CAPABILITIES_BY_ROLE: Record<
     'group.mutate',
     'group.reclaim',
     'group.release',
+    'group.transfer.offer',
+    'group.transfer.revoke',
     'group.archive',
     'group.restore',
     'partition.deploy',
     'partition.stop',
   ],
-  client: ['group.view'],
+  client: ['group.view', 'group.transfer.accept', 'group.transfer.deny'],
   service: ['group.view', 'partition.deploy', 'partition.stop'],
   ai: ['group.view', 'proposal.create'],
 };
@@ -138,6 +181,40 @@ export function createGroupOwnershipEntry(input: {
   };
 }
 
+export function createTransferOffer(input: {
+  transferId?: string;
+  groupId: string;
+  offeredBy: ControlPlaneActor | GroupOwnershipActor;
+  targetClientId: string;
+  ttlMs: number;
+  now?: number;
+}): ClientControlTransferOffer {
+  const nowMs = typeof input.now === 'number' && Number.isFinite(input.now) ? input.now : Date.now();
+  const groupId = normalizeRequiredString(input.groupId, 'groupId');
+  const targetClientId = normalizeRequiredString(input.targetClientId, 'targetClientId');
+  const ttlMs = Math.max(1, Math.floor(input.ttlMs));
+  const transferId =
+    normalizeOptionalString(input.transferId) ??
+    `transfer-${groupId}-${targetClientId}-${nowMs.toString(36)}`;
+  return {
+    kind: 'client-control-transfer-status',
+    transferId,
+    groupId,
+    offeredBy: normalizeOwnershipActor(input.offeredBy),
+    targetClientId,
+    status: 'pending',
+    offeredAt: nowMs,
+    expiresAt: nowMs + ttlMs,
+    capability: {
+      transferId,
+      scopeGroupId: groupId,
+      targetClientId,
+      capabilities: ['group.view', 'group.mutate', 'group.release'],
+      expiresAt: nowMs + ttlMs,
+    },
+  };
+}
+
 export function normalizeOwnershipActor(actor: ControlPlaneActor | GroupOwnershipActor): GroupOwnershipActor {
   const record = actor as unknown as Record<string, unknown>;
   const actorId = normalizeRequiredString(record.actorId ?? record.id, 'actorId');
@@ -156,4 +233,8 @@ function normalizeRequiredString(value: unknown, field: string): string {
     throw new Error(`${field} is required`);
   }
   return value.trim();
+}
+
+function normalizeOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }

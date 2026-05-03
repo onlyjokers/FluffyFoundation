@@ -12,6 +12,7 @@ export type ValidationRejectCode =
   | 'protocol.scope.ambiguous'
   | 'server.policy.scope_mismatch'
   | 'server.policy.ownership_denied'
+  | 'server.policy.client_transfer_required'
   | 'server.policy.capability_denied'
   | 'server.policy.unauthorized';
 

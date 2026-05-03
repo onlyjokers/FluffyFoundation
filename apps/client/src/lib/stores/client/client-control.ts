@@ -43,6 +43,7 @@ import {
   visualScenes,
 } from './client-visual';
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
+import { handleClientControlTransferPayload } from './client-transfer-handler';
 
 export type ClientControlDeps = {
   getSDK: () => ClientSDK | null;
@@ -297,6 +298,10 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
               }
             }
           }
+          break;
+
+        case 'clientControlTransfer':
+          handleClientControlTransferPayload(payload);
           break;
 
         case 'visualEffects':

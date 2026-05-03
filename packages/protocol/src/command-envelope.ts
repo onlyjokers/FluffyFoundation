@@ -16,6 +16,7 @@ export interface CommandEnvelope {
   scopeGroupId: string;
   correlationId: string;
   idempotencyKey: string;
+  transferId?: string;
 }
 
 export type CommandEnvelopeInput = Partial<CommandEnvelope> & {
@@ -24,13 +25,16 @@ export type CommandEnvelopeInput = Partial<CommandEnvelope> & {
 };
 
 export function createCommandEnvelope(input: CommandEnvelopeInput): CommandEnvelope {
-  return {
+  const envelope: CommandEnvelope = {
     actor: normalizeRequiredString(input.actor ?? input.actorId, 'actor'),
     role: normalizeRequiredString(input.role ?? input.actorRole, 'role') as CommandEnvelope['role'],
     scopeGroupId: normalizeRequiredString(input.scopeGroupId, 'scopeGroupId'),
     correlationId: normalizeOptionalString(input.correlationId) ?? createProtocolId('corr'),
     idempotencyKey: normalizeOptionalString(input.idempotencyKey) ?? createProtocolId('idem'),
   };
+  const transferId = normalizeOptionalString(input.transferId);
+  if (transferId) envelope.transferId = transferId;
+  return envelope;
 }
 
 export function createSystemCommandEnvelope(): CommandEnvelope {

@@ -8,6 +8,7 @@ import {
   CONTROL_PLANE_CAPABILITIES_BY_ROLE,
   createControlPlaneActor,
   createGroupOwnershipEntry,
+  createTransferOffer,
   getControlPlaneCapabilities,
   isControlPlaneActorRole,
 } from './control-plane.js';
@@ -45,6 +46,10 @@ test('ControlPlane actors are normalized with role-bounded capabilities', () => 
     'group.mutate',
     'group.reclaim',
     'group.release',
+    'group.transfer.offer',
+    'group.transfer.accept',
+    'group.transfer.deny',
+    'group.transfer.revoke',
     'group.archive',
     'group.restore',
     'partition.deploy',
@@ -71,4 +76,23 @@ test('Group ownership entry records owner stack, transferability, surface, and r
   assert.equal(entry.surface, 'public');
   assert.equal(entry.visibility.defaultAccess, 'visible-readonly');
   assert.deepEqual(entry.selectedClientIds, ['client-1']);
+});
+
+test('client transfer offers carry target confirmation, TTL, and scoped mutate capability', () => {
+  const offer = createTransferOffer({
+    transferId: 'transfer-stage-left-client-1',
+    groupId: 'stage-left',
+    offeredBy: createControlPlaneActor({ id: 'manager-1', role: 'manager' }),
+    targetClientId: 'client-1',
+    ttlMs: 30_000,
+    now: 1_000,
+  });
+
+  assert.equal(offer.status, 'pending');
+  assert.equal(offer.groupId, 'stage-left');
+  assert.equal(offer.targetClientId, 'client-1');
+  assert.equal(offer.expiresAt, 31_000);
+  assert.equal(offer.capability.scopeGroupId, 'stage-left');
+  assert.equal(offer.capability.targetClientId, 'client-1');
+  assert.deepEqual(offer.capability.capabilities, ['group.view', 'group.mutate', 'group.release']);
 });

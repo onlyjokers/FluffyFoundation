@@ -12,9 +12,7 @@ import {
     isMediaMetaMessage,
     createSensorDataMessage,
     createTimePing,
-    processTimePong,
     createTimeSyncState,
-    updateTimeSyncState,
     getServerTime,
     calculateExecutionDelay,
     scheduleAtServerTime,
@@ -22,7 +20,13 @@ import {
     TimePongData,
     SensorType,
     SensorPayload,
+    type ClientControlCapability,
+    type ControlAction,
+    type ControlPayload,
+    type TargetSelector,
 } from '@shugu/protocol';
+import { emitClientControlCommand } from './client-control-transfer.js';
+import { emitTimePing, registerClientSocketListeners } from './client-sdk-socket-listeners.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -271,6 +275,45 @@ export class ClientSDK {
     }
 
     /**
+     * Send a scoped mutating command as an accepted client controller.
+     */
+    sendClientControlCommand(
+        capability: ClientControlCapability,
+        action: ControlAction,
+        payload: ControlPayload,
+        target: TargetSelector = { mode: 'group', groupId: capability.scopeGroupId },
+        executeAt?: number
+    ): void {
+        emitClientControlCommand({
+            socket: this.socket,
+            clientId: this.state.clientId,
+            capability,
+            action,
+            payload,
+            target,
+            executeAt,
+        });
+    }
+
+    /**
+     * Deny a pending transfer before control authority has been accepted.
+     */
+    sendClientControlTransferDeny(capability: ClientControlCapability, transferId: string, reason?: string): void {
+        emitClientControlCommand({
+            socket: this.socket,
+            clientId: this.state.clientId,
+            capability,
+            action: 'clientControlTransfer',
+            payload: {
+                kind: 'client-control-transfer',
+                action: 'deny',
+                transferId,
+                ...(reason ? { reason } : {}),
+            },
+        });
+    }
+
+    /**
      * Latest locally produced sensor message (best-effort snapshot).
      * Useful for client-side execution (e.g. node-executor) even when offline.
      */
@@ -308,54 +351,15 @@ export class ClientSDK {
 
     private setupSocketListeners(): void {
         if (!this.socket) return;
-
-        this.socket.on('connect', () => {
-            console.log('[SDK Client] Connected');
-            this.updateState({ status: 'connected', error: null });
-            this.startTimeSync();
-        });
-
-        this.socket.on('disconnect', (reason) => {
-            console.log('[SDK Client] Disconnected:', reason);
-            this.stopTimeSync();
-
-            // socket.io does not auto-reconnect if the server explicitly disconnected us.
-            if (this.config.autoReconnect && reason !== 'io client disconnect') {
-                this.updateState({ status: 'reconnecting', clientId: null });
-
-                if (reason === 'io server disconnect') {
-                    this.socket?.connect();
-                }
-                return;
-            }
-
-            this.updateState({ status: 'disconnected', clientId: null });
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error('[SDK Client] Connection error:', error.message);
-            this.updateState({ status: 'error', error: error.message });
-        });
-
-        this.socket.io.on('reconnect_attempt', () => {
-            this.updateState({ status: 'reconnecting' });
-        });
-
-        this.socket.io.on('reconnect', () => {
-            console.log('[SDK Client] Reconnected');
-            this.updateState({ status: 'connected', error: null });
-        });
-
-        // Handle messages
-        this.socket.on(SOCKET_EVENTS.MSG, (message: Message) => {
-            this.handleMessage(message);
-        });
-
-        // Handle time sync pong
-        this.socket.on(SOCKET_EVENTS.TIME_PONG, (data: TimePongData) => {
-            const result = processTimePong(data);
-            const newTimeSync = updateTimeSyncState(this.state.timeSync, result);
-            this.updateState({ timeSync: newTimeSync });
+        registerClientSocketListeners({
+            socket: this.socket,
+            autoReconnect: this.config.autoReconnect,
+            updateState: (partial) => this.updateState(partial as Partial<ClientState>),
+            startTimeSync: () => this.startTimeSync(),
+            stopTimeSync: () => this.stopTimeSync(),
+            getTimeSync: () => this.state.timeSync,
+            setTimeSync: (timeSync) => this.updateState({ timeSync }),
+            handleMessage: (message) => this.handleMessage(message),
         });
     }
 
@@ -441,9 +445,7 @@ export class ClientSDK {
     }
 
     private doTimeSync(): void {
-        if (!this.socket?.connected) return;
-        const pingData = createTimePing();
-        this.socket.emit(SOCKET_EVENTS.TIME_PING, pingData);
+        emitTimePing(this.socket);
     }
 
     /**

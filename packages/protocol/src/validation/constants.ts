@@ -21,6 +21,7 @@ export const CONTROL_ACTIONS = [
   'visualEffects',
   'setDataReportingRate',
   'setSensorState',
+  'clientControlTransfer',
   'custom',
 ] as const;
 

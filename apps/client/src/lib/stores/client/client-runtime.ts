@@ -24,6 +24,8 @@ import {
   type MediaEngineState,
 } from '@shugu/multimedia-core';
 import { permissions, state, latency } from './client-state';
+import { clientControlTransfer } from './client-transfer';
+import { markTransferControlLost } from './client-lifecycle';
 import { audioStream, imageState, videoState } from './client-media';
 import { createClientControlHandlers } from './client-control';
 import {
@@ -245,6 +247,7 @@ export function connectToServer(): void {
  * Useful for treating "background/lock screen" as offline without losing app state.
  */
 export function disconnectFromServer(): void {
+  markTransferControlLost(clientControlTransfer);
   sdk?.disconnect();
 }
 

@@ -98,6 +98,30 @@ test('ManagerSDK sendPluginControl preserves reclaim command envelope for Group 
   assert.equal((emitted[0] as { actor?: string }).actor, 'manager-reclaim');
 });
 
+test('ManagerSDK emits structured transfer lifecycle commands with manager actor envelope', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'manager-transfer', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.offerClientControlTransfer({ groupId: 'stage-left', targetClientId: 'client-1', ttlMs: 30_000 });
+  sdk.revokeClientControlTransfer({ transferId: 'transfer-stage-left-client-1', groupId: 'stage-left' });
+
+  assert.equal(emitted.length, 2);
+  assert.deepEqual((emitted[0] as { payload?: unknown }).payload, {
+    kind: 'client-control-transfer',
+    action: 'offer',
+    groupId: 'stage-left',
+    targetClientId: 'client-1',
+    ttlMs: 30_000,
+  });
+  assert.equal((emitted[0] as { actor?: string }).actor, 'manager-transfer');
+  assert.equal((emitted[0] as { role?: string }).role, 'manager');
+  assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'stage-left');
+  assert.equal((emitted[1] as { payload?: { action?: string } }).payload?.action, 'revoke');
+});
+
 test('ManagerSDK coalesces latest-state controls and flushes the last value after throttle', async () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',

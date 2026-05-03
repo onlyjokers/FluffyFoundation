@@ -97,9 +97,9 @@
       "plan": "FF-08"
     },
     "apps/manager/src/lib/stores/manager.ts": {
-      "max_lines": 719,
+      "max_lines": 737,
       "owner": "manager-runtime",
-      "plan": "FF-08"
+      "plan": "FF-13 transfer lifecycle; split in owning follow-up"
     },
     "apps/manager/src/lib/components/RegistryMidiPanel.svelte": {
       "max_lines": 718,
@@ -177,9 +177,9 @@
       "plan": "FF-02 ratchet; split in owning follow-up"
     },
     "packages/sdk-client/src/client-sdk.ts": {
-      "max_lines": 483,
+      "max_lines": 485,
       "owner": "client-sdk",
-      "plan": "FF-02 ratchet; split in owning follow-up"
+      "plan": "FF-13 transfer lifecycle; split in owning follow-up"
     },
     "apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-controller.ts": {
       "max_lines": 476,
@@ -202,9 +202,9 @@
       "plan": "FF-02 ratchet; split in owning follow-up"
     },
     "apps/client/src/lib/stores/client/client-control.ts": {
-      "max_lines": 447,
+      "max_lines": 452,
       "owner": "client-runtime",
-      "plan": "FF-02 ratchet; split in owning follow-up"
+      "plan": "FF-13 transfer lifecycle; split in owning follow-up"
     },
     "packages/node-core/src/definitions/nodes/processors.ts": {
       "max_lines": 447,
@@ -217,9 +217,9 @@
       "plan": "FF-02 ratchet; split in owning follow-up"
     },
     "apps/client/src/lib/stores/client/client-runtime.ts": {
-      "max_lines": 412,
+      "max_lines": 415,
       "owner": "client-runtime",
-      "plan": "FF-02 ratchet; split in owning follow-up"
+      "plan": "FF-13 transfer lifecycle; split in owning follow-up"
     },
     "apps/server/src/client-registry/client-registry.service.ts": {
       "max_lines": 406,
@@ -230,6 +230,11 @@
       "max_lines": 400,
       "owner": "node-graph",
       "plan": "FF-02 ratchet; split in owning follow-up"
+    },
+    "apps/server/src/events/events.gateway.ts": {
+      "max_lines": 519,
+      "owner": "ff13-boundary",
+      "plan": "FF-13 transfer lifecycle; split in owning follow-up"
     }
   }
 }

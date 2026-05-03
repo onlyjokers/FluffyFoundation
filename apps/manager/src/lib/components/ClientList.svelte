@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { audienceClients, clientReadiness, clientAiReadiness } from '$lib/stores/domain/client-registry-view';
+  import {
+    audienceClients,
+    clientReadiness,
+    clientAiReadiness,
+    offerClientControlTransfer,
+  } from '$lib/stores/domain/client-registry-view';
   import type { ClientInfo } from '@shugu/protocol';
   import { formatClientId } from '@shugu/ui-kit';
 
@@ -72,6 +77,16 @@
             </span>
           </div>
           <div class="ai-pill {aiStatus(client)}" title={aiTitle(client)}>AI</div>
+          {#if client.group}
+            <button
+              class="transfer-button"
+              type="button"
+              title="Offer temporary client control"
+              on:click={() => client.group && offerClientControlTransfer(client.group, client.clientId)}
+            >
+              Control
+            </button>
+          {/if}
         </div>
       {/each}
     {/if}
@@ -193,6 +208,19 @@
     border-color: rgba(239, 68, 68, 0.55);
     background: rgba(239, 68, 68, 0.12);
     color: rgba(252, 165, 165, 0.95);
+  }
+
+  .transfer-button {
+    flex: 0 0 auto;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid rgba(34, 197, 94, 0.45);
+    border-radius: 7px;
+    background: rgba(34, 197, 94, 0.1);
+    color: rgba(187, 247, 208, 0.95);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
   }
 
   .client-id {

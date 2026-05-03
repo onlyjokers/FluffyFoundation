@@ -49,6 +49,7 @@ export type ControlAction =
   | 'visualEffects'
   | 'setDataReportingRate'
   | 'setSensorState'
+  | 'clientControlTransfer'
   | 'custom';
 
 /**
@@ -254,6 +255,7 @@ export type BaseControlPayload =
   | VisualScenesPayload
   | VisualEffectsPayload
   | DataReportingRatePayload
+  | import('./control-plane.js').ClientControlTransferOffer
   | Record<string, unknown>;
 
 /**
@@ -303,6 +305,7 @@ export type CommandEnvelopeFields = {
   scopeGroupId: string;
   correlationId: string;
   idempotencyKey: string;
+  transferId?: string;
 };
 
 export type NonSystemControlMessage = ControlMessage & CommandEnvelopeFields & { from: 'manager' };
