@@ -4,4 +4,5 @@ export * from './noop-runtime.js';
 export * from './semantic-context.js';
 export * from './deterministic-planner.js';
 export * from './proposal-execution.js';
+export * from './observation-repair.js';
 //# sourceMappingURL=index.js.map

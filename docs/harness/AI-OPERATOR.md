@@ -89,6 +89,12 @@ Each command has:
 
 The core only evaluates local operation policy, runs dry-run dispatches, applies allowed or approved proposal commands through the command bus, records execution audit/history metadata, and maps AI rollback references back to command-bus rollback tokens.
 
+## FF-18 WP3 In-Memory Observation And Repair Core
+
+`@shugu/ai-core` exposes `createAiObservationEvaluator` and `createAiRepairPlanner` as the bounded WP3 API for structured observation and repair planning tests. These are deterministic, in-memory helpers over WP1 context and WP2 execution results; they do not add provider calls, persistence, server endpoints, UI wiring, Display/Client live observation, or browser runtime hooks.
+
+The evaluator accepts only structured observation reports for output change, validation errors, device capability gaps, no output change, rollback-needed states, and policy denial. Arbitrary console text is not a repair input. The planner uses structured validation codes, paths, command rollback metadata, registry summaries, and repair hints to either draft a bounded proposal command sequence or recommend rollback through the existing WP2 rollback reference.
+
 ## AI Operation Flow
 
 1. Interpret natural-language intent and target scope.

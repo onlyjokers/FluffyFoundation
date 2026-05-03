@@ -11,6 +11,9 @@ export type AiSemanticCommand = {
     nodeId: string;
     params: Record<string, unknown>;
 } | {
+    type: 'node.disconnect';
+    connectionId: string;
+} | {
     type: 'node.connect';
     connection: {
         id: string;

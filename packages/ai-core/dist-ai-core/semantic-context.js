@@ -19,6 +19,7 @@ const UI_NOISE_KEYS = new Set([
     'layout',
 ]);
 const SECRET_KEY_PATTERN = /(secret|token|key|password|credential|auth|managerKey)/i;
+const SECRET_VALUE_PATTERN = /(secret|token|key|password|credential|auth|managerKey)\s*(?:[:=]\s*)?[\w.-]*\d[\w.-]*/i;
 const PRIVATE_PATH_PATTERN = /(?:^|["'\s])(?:\/Users\/|\/private\/|\/Volumes\/|[A-Za-z]:\\)/;
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const redactionMetadata = (accumulator) => ({
@@ -31,6 +32,10 @@ const mark = (accumulator, kind, _path) => {
 const isUiNoiseKey = (key) => UI_NOISE_KEYS.has(key);
 const redactedScalar = (key, value, path, accumulator) => {
     if (SECRET_KEY_PATTERN.test(key)) {
+        mark(accumulator, 'secret', path);
+        return '[REDACTED:secret]';
+    }
+    if (typeof value === 'string' && SECRET_VALUE_PATTERN.test(value)) {
         mark(accumulator, 'secret', path);
         return '[REDACTED:secret]';
     }
@@ -56,6 +61,10 @@ const redact = (value, path, accumulator) => {
             continue;
         }
         if (SECRET_KEY_PATTERN.test(key)) {
+            output[key] = redactedScalar(key, raw, childPath, accumulator);
+            continue;
+        }
+        if (typeof raw === 'string' && SECRET_VALUE_PATTERN.test(raw)) {
             output[key] = redactedScalar(key, raw, childPath, accumulator);
             continue;
         }

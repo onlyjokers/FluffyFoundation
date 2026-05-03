@@ -142,3 +142,64 @@ Verification notes:
 - Browser/runtime proof is intentionally not included for WP2 because server/UI/display observation remains deferred by task scope.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
+
+## WP3 - AI Structured Observation And Repair Planning Core
+
+Implemented:
+- `@shugu/ai-core` exposes `createAiObservationEvaluator` and `createAiRepairPlanner` as the bounded in-memory WP3 observation and repair API. This public export is documented in `docs/harness/AI-OPERATOR.md` and remains limited to the WP3 contract.
+- Structured observation report types cover output change, validation errors, device capability gaps, no output change, rollback-needed states, and policy denial.
+- The evaluator consumes WP2 proposal execution results plus structured observation reports, classifies success, validation failure, missing device capability, no visible output change, rollback-needed, and policy-denied outcomes, and maps rollback recommendations to WP2 rollback metadata.
+- The repair planner uses structured validation codes, paths, registry summaries, and repair hints to draft bounded semantic command proposals for param overflow and incompatible connections. It does not parse arbitrary console text.
+- Observation and repair results reuse AI context redaction so secret-like values and private local paths in structured observation fields are stripped before evaluator/planner output.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/observation-repair.test.mjs
+PASS: 10 tests, 0 failures
+```
+
+Deterministic observation/repair fixture output:
+
+```json
+{
+  "success": {
+    "classification": "success",
+    "rollbackRecommended": false,
+    "evidenceKind": "output-change"
+  },
+  "noOutputChange": {
+    "classification": "no-output-change",
+    "rollbackRecommended": true,
+    "rollbackReference": "ai-rollback:proposal:wp3:rollback:12:2",
+    "previousRevision": 12,
+    "appliedRevision": 13
+  },
+  "validationRepair": {
+    "classification": "validation-failure",
+    "repairable": true,
+    "sourceError": "GRAPH.PARAM_OUT_OF_RANGE",
+    "repairType": "proposal",
+    "commands": [
+      {
+        "type": "node.params.update",
+        "nodeId": "display:breath",
+        "params": {
+          "intensity": 1
+        }
+      }
+    ],
+    "sourceErrorCodes": [
+      "GRAPH.PARAM_OUT_OF_RANGE"
+    ]
+  }
+}
+```
+
+Verification notes:
+- Browser/runtime proof remains intentionally deferred for WP3 because live server/UI/display observation is outside this slice.
+- Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
+- `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.

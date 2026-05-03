@@ -21,6 +21,7 @@ const UI_NOISE_KEYS = new Set([
 ]);
 
 const SECRET_KEY_PATTERN = /(secret|token|key|password|credential|auth|managerKey)/i;
+const SECRET_VALUE_PATTERN = /(secret|token|key|password|credential|auth|managerKey)\s*(?:[:=]\s*)?[\w.-]*\d[\w.-]*/i;
 const PRIVATE_PATH_PATTERN = /(?:^|["'\s])(?:\/Users\/|\/private\/|\/Volumes\/|[A-Za-z]:\\)/;
 
 export type AiContextRedaction = {
@@ -108,6 +109,10 @@ const redactedScalar = (
     mark(accumulator, 'secret', path);
     return '[REDACTED:secret]';
   }
+  if (typeof value === 'string' && SECRET_VALUE_PATTERN.test(value)) {
+    mark(accumulator, 'secret', path);
+    return '[REDACTED:secret]';
+  }
   if (typeof value === 'string' && PRIVATE_PATH_PATTERN.test(value)) {
     mark(accumulator, 'private-path', path);
     return '[REDACTED:private-path]';
@@ -132,6 +137,10 @@ const redact = (value: unknown, path: string, accumulator: RedactionAccumulator)
       continue;
     }
     if (SECRET_KEY_PATTERN.test(key)) {
+      output[key] = redactedScalar(key, raw, childPath, accumulator);
+      continue;
+    }
+    if (typeof raw === 'string' && SECRET_VALUE_PATTERN.test(raw)) {
       output[key] = redactedScalar(key, raw, childPath, accumulator);
       continue;
     }

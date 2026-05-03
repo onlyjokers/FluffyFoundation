@@ -8,6 +8,7 @@ export type AiSemanticActor = { id: string; role: string };
 
 export type AiSemanticCommand =
   | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown> }
+  | { type: 'node.disconnect'; connectionId: string }
   | {
       type: 'node.connect';
       connection: {
