@@ -3,7 +3,7 @@ Purpose: Display panel (Phase 5) - show Local/Remote Display status and controls
 -->
 
 <script lang="ts">
-  import { displayClients, clientReadiness, sendToDisplayEnabled } from '$lib/stores/manager';
+  import { displayClients, clientReadiness, sendToDisplayEnabled } from '$lib/stores/domain/display-status';
   import {
     closeDisplay,
     displayBridgeState,

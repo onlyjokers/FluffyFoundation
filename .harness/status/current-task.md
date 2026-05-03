@@ -37,14 +37,12 @@ Allowed FF-08 implementation boundary for a future bounded Work dispatch:
 - `.harness/handoffs/**`
 - `.harness/evidence/FF-08/**`
 
-## Transition Result
+## Work Result
 
-FF-07 was accepted and committed as `45ee4ea Add realtime delivery contract`.
-
-FF-08 is now the active next task.
-
-The next Plan dispatch may start bounded FF-08 Work, but this status-transition boundary must not implement FF-08.
+FF-08 Work implementation is prepared for Review. The candidate separates `/manager` and `/manager/root`, adds
+published Group controls, splits Manager store domains, and wires FF-08 tests and bundle/import guards into
+`pnpm verify`.
 
 ## Next Expected Action
 
-Review should verify this transition-only diff and then Plan may dispatch bounded FF-08 Work.
+Review should verify the FF-08 implementation candidate and decide accept-and-commit or return a bounded revision.

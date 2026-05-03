@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { disconnect } from '$lib/stores/manager';
+  import { disconnect } from '$lib/stores/domain/connection';
   import { auth } from '$lib/stores/auth';
   import { onMount } from 'svelte';
 

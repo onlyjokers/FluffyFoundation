@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { audienceClients, clientReadiness, clientAiReadiness } from '$lib/stores/manager';
+  import { audienceClients, clientReadiness, clientAiReadiness } from '$lib/stores/domain/client-registry-view';
   import type { ClientInfo } from '@shugu/protocol';
   import { formatClientId } from '@shugu/ui-kit';
 

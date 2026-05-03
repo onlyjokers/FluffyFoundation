@@ -16,5 +16,5 @@ Root becomes the heavy authoring environment; Manager becomes a lightweight perf
 
 ## Work Status
 
-FF-08 is the active next task. The next Plan dispatch may start bounded FF-08 Work, but the FF-07 to FF-08
-status-transition boundary must not implement FF-08.
+FF-08 Work implementation is prepared for Review. Root/Manager route separation, Manager bundle guards, published
+Group control proof, and full verification evidence are captured under `.harness/evidence/FF-08/`.

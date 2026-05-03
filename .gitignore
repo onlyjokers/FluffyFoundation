@@ -70,8 +70,12 @@ apps/**/data/
 .looooper/sessions/
 .harness/evidence/*
 !.harness/evidence/.gitkeep
+!.harness/evidence/FF-08/
+.harness/evidence/FF-08/*
+!.harness/evidence/FF-08/summary.md
 .harness/handoffs/*
 !.harness/handoffs/.gitkeep
+!.harness/handoffs/2026-05-03-FF-08-root-manager-product-split.md
 
 # Python Cache
 **/__pycache__/

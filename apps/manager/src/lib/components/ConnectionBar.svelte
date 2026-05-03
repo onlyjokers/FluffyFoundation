@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { connectionStatus, timeOffset } from '$lib/stores/manager';
+  import { connectionStatus, timeOffset } from '$lib/stores/domain/connection';
 </script>
 
 <div class="connection-bar">
