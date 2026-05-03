@@ -12,4 +12,5 @@ export * from './node-registry.js';
 export * from './node-runtime.js';
 export * from './node-definitions.js';
 export * from './node-executor.js';
+export * from './stop-all-cleanup.js';
 export * from './tone-adapter.js';

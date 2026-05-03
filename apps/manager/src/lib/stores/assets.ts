@@ -22,6 +22,23 @@ export type AssetRecord = {
   durationMs?: number;
   width?: number;
   height?: number;
+  variants: {
+    id: string;
+    assetId: string;
+    mimeType: string;
+    width?: number;
+    height?: number;
+    durationMs?: number;
+  }[];
+  cachePolicy: {
+    strategy: 'immutable' | 'revalidate' | 'no-store';
+    maxAgeSeconds?: number;
+  };
+  permissions: {
+    scope: 'server-deliverable' | 'local-only';
+    localOnlyReason?: string;
+    roles?: string[];
+  };
 };
 
 type AssetsState = {

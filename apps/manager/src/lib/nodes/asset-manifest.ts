@@ -19,6 +19,7 @@ import { getSDK, state as managerState } from '$lib/stores/manager';
 import { assetsStore } from '$lib/stores/assets';
 import { getControlPlaneOwnership } from '$lib/stores/manager-state-guards';
 import { modelDistributionStore } from '$lib/stores/model-distribution';
+import { buildManifestEntries, type ManifestAssetRecord } from './asset-manifest-entries';
 import {
   type AssetManifest,
   getLatestManifest,
@@ -183,6 +184,7 @@ function pushManifestToClientIds(clientIds: string[], manifest: AssetManifest): 
   sdk.sendPluginControl(targetClients(ids), PLUGIN_ID, 'configure', {
     manifestId: manifest.manifestId,
     assets: manifest.assets,
+    ...(Array.isArray(manifest.entries) ? { entries: manifest.entries } : {}),
     updatedAt: manifest.updatedAt,
   });
 
@@ -193,7 +195,7 @@ let latestDisplayManifest: AssetManifest | null = null;
 let latestManifestByClientId = new Map<string, AssetManifest>();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let lastGraphSnapshot: GraphState | null = null;
-let lastAllAssetRecords: { id: string; kind: 'audio' | 'image' | 'video' | 'model' }[] = [];
+let lastAllAssetRecords: ManifestAssetRecord[] = [];
 let lastModelDistribution: Record<string, string[]> = {};
 
 function recomputeAndMaybePush(): void {
@@ -201,6 +203,7 @@ function recomputeAndMaybePush(): void {
   if (!graph) return;
 
   const kindByAssetId = new Map(lastAllAssetRecords.map((r) => [String(r.id), r.kind] as const));
+  const recordByAssetId = new Map(lastAllAssetRecords.map((r) => [String(r.id), r] as const));
   const assetIdFromRef = (ref: string): string | null => {
     const normalized = normalizeAssetRef(ref);
     if (!normalized) return null;
@@ -241,6 +244,7 @@ function recomputeAndMaybePush(): void {
   const displayManifest: AssetManifest = {
     manifestId: displayManifestId,
     assets: allAssets,
+    entries: buildManifestEntries(allAssets, recordByAssetId, assetIdFromRef),
     updatedAt: Date.now(),
   };
 
@@ -290,7 +294,12 @@ function recomputeAndMaybePush(): void {
     })();
 
     const manifestId = hashManifest(assets);
-    nextManifestByClientId.set(clientId, { manifestId, assets, updatedAt: now });
+    nextManifestByClientId.set(clientId, {
+      manifestId,
+      assets,
+      entries: buildManifestEntries(assets, recordByAssetId, assetIdFromRef),
+      updatedAt: now,
+    });
   }
 
   latestManifestByClientId = nextManifestByClientId;
@@ -332,6 +341,15 @@ assetsStore.subscribe((state) => {
   lastAllAssetRecords = (state.assets ?? []).map((a) => ({
     id: a.id,
     kind: a.kind,
+    mimeType: a.mimeType,
+    sizeBytes: a.sizeBytes,
+    sha256: a.sha256,
+    durationMs: a.durationMs,
+    width: a.width,
+    height: a.height,
+    variants: a.variants,
+    cachePolicy: a.cachePolicy,
+    permissions: a.permissions,
   }));
   recomputeAndMaybePush();
 });

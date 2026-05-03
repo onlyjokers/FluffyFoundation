@@ -88,7 +88,7 @@ type DisplayPluginMessage = {
 export type AssetManifestSnapshot = {
   manifestId: string;
   assets: string[];
-  updatedAt?: number;
+  updatedAt?: number; entries?: unknown[];
 };
 
 type DisplayReadyMessage = {

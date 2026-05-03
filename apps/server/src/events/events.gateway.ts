@@ -322,6 +322,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
 
     this.auditMutatingCommand(validatedMessage);
+    if (isRootStopAll(validatedMessage)) {
+      this.clientControlTransfers.clear();
+    }
 
     // Route the message
     this.messageRouter.routeMessage(validatedMessage, client.id);

@@ -1,0 +1,1039 @@
+
+> shugu3@1.0.0 verify /Users/ziqi/Desktop/FluffyFoundation
+> pnpm guard:deps && pnpm lint && pnpm build:all && pnpm test:node-core && pnpm test:ff08 && pnpm test:ff09 && pnpm validate:node-specs && pnpm e2e:node-executor:offline && pnpm guard:ff08 && pnpm harness:verify
+
+
+> shugu3@1.0.0 guard:deps /Users/ziqi/Desktop/FluffyFoundation
+> node scripts/guard-deps.mjs && node scripts/guard-server-messages.mjs
+
+[deps-guard] ok (682 files scanned)
+[server-msg-guard] ok (52 files scanned)
+
+> shugu3@1.0.0 lint /Users/ziqi/Desktop/FluffyFoundation
+> ESLINT_USE_FLAT_CONFIG=true pnpm -r run lint
+
+Scope: 14 of 15 workspace projects
+packages/ai-core lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/protocol lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/ai-core lint: Done
+packages/protocol lint: Done
+apps/server lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/audio-plugins lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/node-core lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/multimedia-core lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/audio-plugins lint: Done
+packages/sdk-manager lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/multimedia-core lint: Done
+packages/visual-effects lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+apps/server lint: Done
+packages/visual-plugins lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/node-core lint: Done
+packages/sdk-manager lint: Done
+packages/visual-effects lint: Done
+packages/visual-plugins lint: Done
+packages/ui-kit lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+packages/sdk-client lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/ui-kit lint: Done
+packages/sdk-client lint: /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/src/tone-adapter/types.ts
+packages/sdk-client lint:   57:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+packages/sdk-client lint:   58:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+packages/sdk-client lint: ✖ 2 problems (0 errors, 2 warnings)
+packages/sdk-client lint: Done
+apps/client lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+apps/display lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+apps/manager lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+apps/display lint: Done
+apps/client lint: Done
+apps/manager lint: Done
+
+> shugu3@1.0.0 build:all /Users/ziqi/Desktop/FluffyFoundation
+> pnpm -r run build
+
+Scope: 14 of 15 workspace projects
+packages/ai-core build$ pnpm exec tsc
+packages/protocol build$ pnpm exec tsc
+packages/ai-core build: Done
+packages/protocol build: Done
+packages/audio-plugins build$ pnpm exec tsc
+packages/multimedia-core build$ pnpm exec tsc
+apps/server build$ pnpm exec nest build
+packages/node-core build$ pnpm exec tsc
+packages/audio-plugins build: Done
+packages/sdk-manager build$ pnpm exec tsc
+packages/multimedia-core build: Done
+packages/visual-effects build$ pnpm exec tsc
+packages/node-core build: Done
+packages/visual-plugins build$ pnpm exec tsc
+packages/sdk-manager build: Done
+packages/visual-effects build: Done
+packages/visual-plugins build: Done
+apps/server build: Done
+packages/sdk-client build$ pnpm exec tsc
+packages/ui-kit build$ pnpm exec tsc
+packages/ui-kit build: Done
+packages/sdk-client build: Done
+apps/display build$ vite build
+apps/client build$ vite build
+apps/manager build$ vite build
+apps/client build: vite v5.4.21 building SSR bundle for production...
+apps/manager build: 9:26:45 PM [vite-plugin-svelte] WARNING: The following packages have a svelte field in their package.json but no exports condition for svelte.
+apps/manager build: rete-svelte-plugin@2.1.1
+apps/manager build: Please see https://github.com/sveltejs/vite-plugin-svelte/blob/main/docs/faq.md#missing-exports-condition for details.
+apps/display build: vite v5.4.21 building SSR bundle for production...
+apps/manager build: vite v5.4.21 building SSR bundle for production...
+apps/client build: transforming...
+apps/display build: transforming...
+apps/manager build: transforming...
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (317:13): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (320:15): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (6:23): "untrack" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (349:26): "fork" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (1253:30): "settled" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/AssetsManager.svelte:861:10 A11y: <video> elements must have a <track kind="captions">
+apps/manager build: 859:           <img class="preview-media" src={contentUrl} alt={selected.originalName} />
+apps/manager build: 860:         {:else if selected.kind === 'video' && contentUrl}
+apps/manager build: 861:           <video class="preview-media" src={contentUrl} controls playsinline preload="metadata"
+apps/manager build:                ^
+apps/manager build: 862:           ></video>
+apps/manager build: 863:         {:else if contentUrl}
+apps/client build: ✓ 249 modules transformed.
+apps/client build: rendering chunks...
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (317:13): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (320:15): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (6:23): "untrack" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (349:26): "fork" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (1253:30): "settled" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:10:11 GroupFramesOverlay has unused export property 'gateModeGroupIds'. If it is for external reference only, please consider using `export const gateModeGroupIds`
+apps/manager build:  8: export let selectedGroupId = null;
+apps/manager build:  9: export let toast = null;
+apps/manager build: 10: export let gateModeGroupIds = null;
+apps/manager build:                ^
+apps/manager build: 11: export let groupGateNodeIdByGroupId = null;
+apps/manager build: 12: export let customNodeGroupIds = null;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:512:2 Unused CSS selector ".group-frame-title-count"
+apps/manager build: 510:   }
+apps/manager build: 511:
+apps/manager build: 512:   .group-frame-title-count {
+apps/manager build:        ^
+apps/manager build: 513:     color: rgba(148, 163, 184, 0.95);
+apps/manager build: 514:     font-variant-numeric: tabular-nums;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:518:2 Unused CSS selector ".group-frame-gate"
+apps/manager build: 516:   }
+apps/manager build: 517:
+apps/manager build: 518:   .group-frame-gate {
+apps/manager build:        ^
+apps/manager build: 519:     display: inline-flex;
+apps/manager build: 520:     align-items: center;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:532:2 Unused CSS selector ".group-frame-gate.open"
+apps/manager build: 530:   }
+apps/manager build: 531:
+apps/manager build: 532:   .group-frame-gate.open {
+apps/manager build:        ^
+apps/manager build: 533:     border-color: rgba(34, 197, 94, 0.45);
+apps/manager build: 534:     background: rgba(34, 197, 94, 0.14);
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:538:2 Unused CSS selector ".group-frame-gate.closed"
+apps/manager build: 536:   }
+apps/manager build: 537:
+apps/manager build: 538:   .group-frame-gate.closed {
+apps/manager build:        ^
+apps/manager build: 539:     border-color: rgba(148, 163, 184, 0.4);
+apps/manager build: 540:     background: rgba(148, 163, 184, 0.12);
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:4:11 ReteConnection has unused export property 'source'. If it is for external reference only, please consider using `export const source`
+apps/manager build: 2: <script lang="ts">import { nodeGraphEdgeShadows } from "$lib/features/node-graph-flags";
+apps/manager build: 3: export let id = "";
+apps/manager build: 4: export let source = "";
+apps/manager build:               ^
+apps/manager build: 5: export let target = "";
+apps/manager build: 6: export let sourceOutput = "";
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:5:11 ReteConnection has unused export property 'target'. If it is for external reference only, please consider using `export const target`
+apps/manager build: 3: export let id = "";
+apps/manager build: 4: export let source = "";
+apps/manager build: 5: export let target = "";
+apps/manager build:               ^
+apps/manager build: 6: export let sourceOutput = "";
+apps/manager build: 7: export let targetInput = "";
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:6:11 ReteConnection has unused export property 'sourceOutput'. If it is for external reference only, please consider using `export const sourceOutput`
+apps/manager build: 4: export let source = "";
+apps/manager build: 5: export let target = "";
+apps/manager build: 6: export let sourceOutput = "";
+apps/manager build:               ^
+apps/manager build: 7: export let targetInput = "";
+apps/manager build: 8: export let isLoop = void 0;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:7:11 ReteConnection has unused export property 'targetInput'. If it is for external reference only, please consider using `export const targetInput`
+apps/manager build:  5: export let target = "";
+apps/manager build:  6: export let sourceOutput = "";
+apps/manager build:  7: export let targetInput = "";
+apps/manager build:                ^
+apps/manager build:  8: export let isLoop = void 0;
+apps/manager build:  9: export let isPseudo = void 0;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:8:11 ReteConnection has unused export property 'isLoop'. If it is for external reference only, please consider using `export const isLoop`
+apps/manager build:  6: export let sourceOutput = "";
+apps/manager build:  7: export let targetInput = "";
+apps/manager build:  8: export let isLoop = void 0;
+apps/manager build:                ^
+apps/manager build:  9: export let isPseudo = void 0;
+apps/manager build: 10: export let localLoop = void 0;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:9:11 ReteConnection has unused export property 'isPseudo'. If it is for external reference only, please consider using `export const isPseudo`
+apps/manager build:  7: export let targetInput = "";
+apps/manager build:  8: export let isLoop = void 0;
+apps/manager build:  9: export let isPseudo = void 0;
+apps/manager build:                ^
+apps/manager build: 10: export let localLoop = void 0;
+apps/manager build: 11: export let deployedLoop = void 0;
+apps/client build: vite v5.4.21 building for production...
+apps/client build: transforming...
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte:846:2 Unused CSS selector ".node.group-port-activate .title"
+apps/manager build: 844:   }
+apps/manager build: 845:
+apps/manager build: 846:   .node.group-port-activate .title {
+apps/manager build:        ^
+apps/manager build: 847:     padding: 8px 10px;
+apps/manager build: 848:     font-size: 12px;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte:853:2 Unused CSS selector ".node.group-port-activate .ports"
+apps/manager build: 851:   }
+apps/manager build: 852:
+apps/manager build: 853:   .node.group-port-activate .ports {
+apps/manager build:        ^
+apps/manager build: 854:     padding: 6px 0 8px;
+apps/manager build: 855:     gap: 6px;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte:858:2 Unused CSS selector ".node.group-port-activate .port-row"
+apps/manager build: 856:   }
+apps/manager build: 857:
+apps/manager build: 858:   .node.group-port-activate .port-row {
+apps/manager build:        ^
+apps/manager build: 859:     padding: 0 10px;
+apps/manager build: 860:     gap: 10px;
+apps/display build: ✓ 1171 modules transformed.
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../block";
+apps/manager build:   │           ^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Menu.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 4 │   @import "../context-vars";
+apps/manager build:   │           ^^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Menu.svelte.vite-preprocess.scss 4:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../vars";
+apps/manager build:   │           ^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/display build: rendering chunks...
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../vars";
+apps/manager build:   │           ^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Node.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Connection.svelte:1:29 Connection has unused export property 'data'. If it is for external reference only, please consider using `export const data`
+apps/manager build: 1: <script lang="ts">export let data;
+apps/manager build:                                 ^
+apps/manager build: 2: export let start;
+apps/manager build: 3: export let end;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Connection.svelte:2:11 Connection has unused export property 'start'. If it is for external reference only, please consider using `export const start`
+apps/manager build: 1: <script lang="ts">export let data;
+apps/manager build: 2: export let start;
+apps/manager build:               ^
+apps/manager build: 3: export let end;
+apps/manager build: 4: export let path;
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Connection.svelte:3:11 Connection has unused export property 'end'. If it is for external reference only, please consider using `export const end`
+apps/manager build: 1: <script lang="ts">export let data;
+apps/manager build: 2: export let start;
+apps/manager build: 3: export let end;
+apps/manager build:               ^
+apps/manager build: 4: export let path;
+apps/manager build: 5: </script>
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 1 │ @import "./context-vars";
+apps/manager build:   │         ^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/block.scss 1:9                                    @import
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Menu.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: Use color.adjust instead.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:    ╷
+apps/manager build: 20 │       background: lighten($node-color, 4%);
+apps/manager build:    │                   ^^^^^^^^^^^^^^^^^^^^^^^^
+apps/manager build:    ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Node.svelte.vite-preprocess.scss 20:19  root stylesheet
+apps/manager build: DEPRECATION WARNING [color-functions]: lighten() is deprecated. Suggestions:
+apps/manager build: color.scale($color, $lightness: 14.0689655172%)
+apps/manager build: color.adjust($color, $lightness: 4%)
+apps/manager build: More info: https://sass-lang.com/d/color-functions
+apps/manager build:    ╷
+apps/manager build: 20 │       background: lighten($node-color, 4%);
+apps/manager build:    │                   ^^^^^^^^^^^^^^^^^^^^^^^^
+apps/manager build:    ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Node.svelte.vite-preprocess.scss 20:19  root stylesheet
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte:22:0 Unused CSS selector ".socket.multiple"
+apps/manager build: 20:   border-width: 4px;
+apps/manager build: 21: }
+apps/manager build: 22: .socket.multiple {
+apps/manager build:     ^
+apps/manager build: 23:   border-color: yellow;
+apps/manager build: 24: }
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte:25:0 Unused CSS selector ".socket.output"
+apps/manager build: 23:   border-color: yellow;
+apps/manager build: 24: }
+apps/manager build: 25: .socket.output {
+apps/manager build:     ^
+apps/manager build: 26:   margin-right: -12px;
+apps/manager build: 27: }
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte:28:0 Unused CSS selector ".socket.input"
+apps/manager build: 26:   margin-right: -12px;
+apps/manager build: 27: }
+apps/manager build: 28: .socket.input {
+apps/manager build:     ^
+apps/manager build: 29:   margin-left: -12px;
+apps/manager build: 30: }</style>
+apps/manager build: 9:26:46 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/CurveEditor.svelte:126:0 A11y: <div> with mousedown handler must have an ARIA role
+apps/manager build: 124: </script>
+apps/manager build: 125:
+apps/manager build: 126: <div
+apps/manager build:      ^
+apps/manager build: 127:   class="curve-editor"
+apps/manager build: 128:   class:readonly
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 2 │   @import "../block";
+apps/manager build:   │           ^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Item.svelte.vite-preprocess.scss 2:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../context-vars";
+apps/manager build:   │           ^^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Item.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 1 │ @import "./context-vars";
+apps/manager build:   │         ^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/block.scss 1:9                                    @import
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Item.svelte.vite-preprocess.scss 2:11  root stylesheet
+apps/display build: vite v5.4.21 building for production...
+apps/display build: transforming...
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (317:13): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (320:15): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (6:23): "untrack" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (349:26): "fork" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (1253:30): "settled" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/ssr.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (317:13): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (320:15): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (5:23): "untrack" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (348:26): "fork" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/client build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (1252:30): "settled" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: ✓ 1403 modules transformed.
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (317:13): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (320:15): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (5:23): "untrack" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (348:26): "fork" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/display build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (1252:30): "settled" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: rendering chunks...
+apps/client build: ✓ 1206 modules transformed.
+apps/client build: rendering chunks...
+apps/display build: ✓ 1165 modules transformed.
+apps/manager build: 9:26:47 PM [vite-plugin-svelte] WARNING: The following packages have a svelte field in their package.json but no exports condition for svelte.
+apps/manager build: rete-svelte-plugin@2.1.1
+apps/manager build: Please see https://github.com/sveltejs/vite-plugin-svelte/blob/main/docs/faq.md#missing-exports-condition for details.
+apps/manager build: vite v5.4.21 building for production...
+apps/manager build: transforming...
+apps/client build: [plugin:vite:reporter] [plugin vite:reporter]
+apps/client build: (!) /Users/ziqi/Desktop/FluffyFoundation/packages/multimedia-core/dist-out/index.js is dynamically imported by /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/action-executors.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/action-executors.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/action-executors.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/action-executors.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/action-executors.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/action-executors.js but also statically imported by /Users/ziqi/Desktop/FluffyFoundation/apps/client/src/lib/components/VisualCanvas.svelte, /Users/ziqi/Desktop/FluffyFoundation/apps/client/src/lib/stores/client/client-runtime.ts, /Users/ziqi/Desktop/FluffyFoundation/apps/client/src/lib/stores/client/client-tone.ts, /Users/ziqi/Desktop/FluffyFoundation/apps/client/src/routes/+page.svelte, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/tone-adapter/engine-host.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/tone-adapter/register.js, /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/dist-out/tone-adapter/state.js, /Users/ziqi/Desktop/FluffyFoundation/packages/ui-kit/src/components/VideoPlayer.svelte, dynamic import will not move module into another chunk.
+apps/client build: computing gzip size...
+apps/client build: .svelte-kit-client/output/client/_app/version.json                         0.03 kB │ gzip:   0.05 kB
+apps/client build: .svelte-kit-client/output/client/.vite/manifest.json                       3.26 kB │ gzip:   0.66 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/assets/2.DJ6MxdGX.css     16.63 kB │ gzip:   3.79 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/entry/start.CZAFCECJ.js    0.08 kB │ gzip:   0.09 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/nodes/0.CJRc1JGU.js        0.58 kB │ gzip:   0.37 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/chunks/C273likU.js         0.92 kB │ gzip:   0.57 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/nodes/1.DIFm5vzl.js        1.00 kB │ gzip:   0.58 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/chunks/C1FmrZbK.js         1.14 kB │ gzip:   0.68 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/chunks/GoEiBS5h.js         4.60 kB │ gzip:   2.36 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/entry/app.AsdlY7GT.js      5.45 kB │ gzip:   2.07 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/chunks/B1dZlz6o.js         6.38 kB │ gzip:   2.59 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/chunks/sl0vXoaw.js        27.18 kB │ gzip:  10.55 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/chunks/MxYNumwX.js       345.41 kB │ gzip:  81.72 kB
+apps/client build: .svelte-kit-client/output/client/_app/immutable/nodes/2.6Q_LbZpb.js      774.68 kB │ gzip: 205.44 kB
+apps/client build: (!) Some chunks are larger than 500 kB after minification. Consider:
+apps/client build: - Using dynamic import() to code-split the application
+apps/client build: - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+apps/client build: - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+apps/client build: ✓ built in 1.50s
+apps/display build: rendering chunks...
+apps/display build: computing gzip size...
+apps/display build: .svelte-kit-display/output/client/_app/version.json                         0.03 kB │ gzip:  0.05 kB
+apps/display build: .svelte-kit-display/output/client/.vite/manifest.json                       3.28 kB │ gzip:  0.66 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/assets/2.DjzNCXkS.css     13.53 kB │ gzip:  3.07 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/entry/start.DHjIjpm_.js    0.08 kB │ gzip:  0.09 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/nodes/0.DWcnkc4y.js        0.58 kB │ gzip:  0.38 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/chunks/DI5xM5ti.js         0.92 kB │ gzip:  0.57 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/nodes/1.iIeYQliu.js        1.00 kB │ gzip:  0.58 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/chunks/C1FmrZbK.js         1.14 kB │ gzip:  0.68 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/chunks/B8Quj92E.js         2.14 kB │ gzip:  1.02 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/entry/app.gFrP71Lj.js      5.45 kB │ gzip:  2.06 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/chunks/Cfc7Aijz.js         8.21 kB │ gzip:  3.64 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/chunks/CFXqDt7V.js        27.19 kB │ gzip: 10.56 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/nodes/2.CUUk7iTS.js      242.16 kB │ gzip: 66.57 kB
+apps/display build: .svelte-kit-display/output/client/_app/immutable/chunks/MxYNumwX.js       345.41 kB │ gzip: 81.72 kB
+apps/display build: ✓ built in 1.03s
+apps/client build: .svelte-kit-client/output/server/.vite/manifest.json                         4.05 kB
+apps/client build: .svelte-kit-client/output/server/_app/immutable/assets/_page.BRwqgEoD.css   16.20 kB
+apps/client build: .svelte-kit-client/output/server/entries/pages/_page.ts.js                   0.08 kB
+apps/client build: .svelte-kit-client/output/server/chunks/ssr2.js                              0.10 kB
+apps/client build: .svelte-kit-client/output/server/entries/fallbacks/layout.svelte.js          0.24 kB
+apps/client build: .svelte-kit-client/output/server/internal.js                                 0.33 kB
+apps/client build: .svelte-kit-client/output/server/chunks/environment.js                       0.62 kB
+apps/client build: .svelte-kit-client/output/server/chunks/utils.js                             1.15 kB
+apps/client build: .svelte-kit-client/output/server/entries/fallbacks/error.svelte.js           1.40 kB
+apps/client build: .svelte-kit-client/output/server/chunks/index.js                             2.58 kB
+apps/client build: .svelte-kit-client/output/server/chunks/ssr.js                               4.54 kB
+apps/client build: .svelte-kit-client/output/server/chunks/exports.js                           5.54 kB
+apps/client build: .svelte-kit-client/output/server/chunks/internal.js                          6.75 kB
+apps/client build: .svelte-kit-client/output/server/remote-entry.js                            23.78 kB
+apps/client build: .svelte-kit-client/output/server/entries/pages/_page.svelte.js              33.19 kB
+apps/client build: .svelte-kit-client/output/server/chunks/shared.js                           50.52 kB
+apps/client build: .svelte-kit-client/output/server/index.js                                  146.01 kB
+apps/client build: ✓ built in 2.46s
+apps/client build: Run npm run preview to preview your production build locally.
+apps/client build: > Using @sveltejs/adapter-node
+apps/display build: .svelte-kit-display/output/server/.vite/manifest.json                         4.42 kB
+apps/display build: .svelte-kit-display/output/server/_app/immutable/assets/_page.DnJgwPxX.css   13.24 kB
+apps/display build: .svelte-kit-display/output/server/entries/pages/_page.ts.js                   0.08 kB
+apps/display build: .svelte-kit-display/output/server/chunks/ssr2.js                              0.10 kB
+apps/display build: .svelte-kit-display/output/server/entries/fallbacks/layout.svelte.js          0.24 kB
+apps/display build: .svelte-kit-display/output/server/internal.js                                 0.33 kB
+apps/display build: .svelte-kit-display/output/server/chunks/environment.js                       0.63 kB
+apps/display build: .svelte-kit-display/output/server/chunks/utils.js                             1.15 kB
+apps/display build: .svelte-kit-display/output/server/entries/fallbacks/error.svelte.js           1.40 kB
+apps/display build: .svelte-kit-display/output/server/chunks/index.js                             2.58 kB
+apps/display build: .svelte-kit-display/output/server/chunks/ssr.js                               4.32 kB
+apps/display build: .svelte-kit-display/output/server/chunks/exports.js                           5.54 kB
+apps/display build: .svelte-kit-display/output/server/chunks/internal.js                          6.45 kB
+apps/display build: .svelte-kit-display/output/server/remote-entry.js                            23.78 kB
+apps/display build: .svelte-kit-display/output/server/chunks/shared.js                           50.52 kB
+apps/display build: .svelte-kit-display/output/server/entries/pages/_page.svelte.js              50.71 kB
+apps/display build: .svelte-kit-display/output/server/index.js                                  146.01 kB
+apps/display build: .svelte-kit-display/output/server/chunks/index2.js                          838.21 kB
+apps/display build: ✓ built in 2.52s
+apps/display build: Run npm run preview to preview your production build locally.
+apps/display build: > Using @sveltejs/adapter-node
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/AssetsManager.svelte:861:10 A11y: <video> elements must have a <track kind="captions">
+apps/manager build: 859:           <img class="preview-media" src={contentUrl} alt={selected.originalName} />
+apps/manager build: 860:         {:else if selected.kind === 'video' && contentUrl}
+apps/manager build: 861:           <video class="preview-media" src={contentUrl} controls playsinline preload="metadata"
+apps/manager build:                ^
+apps/manager build: 862:           ></video>
+apps/manager build: 863:         {:else if contentUrl}
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:10:11 GroupFramesOverlay has unused export property 'gateModeGroupIds'. If it is for external reference only, please consider using `export const gateModeGroupIds`
+apps/manager build:  8: export let selectedGroupId = null;
+apps/manager build:  9: export let toast = null;
+apps/manager build: 10: export let gateModeGroupIds = null;
+apps/manager build:                ^
+apps/manager build: 11: export let groupGateNodeIdByGroupId = null;
+apps/manager build: 12: export let customNodeGroupIds = null;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:512:2 Unused CSS selector ".group-frame-title-count"
+apps/manager build: 510:   }
+apps/manager build: 511:
+apps/manager build: 512:   .group-frame-title-count {
+apps/manager build:        ^
+apps/manager build: 513:     color: rgba(148, 163, 184, 0.95);
+apps/manager build: 514:     font-variant-numeric: tabular-nums;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:518:2 Unused CSS selector ".group-frame-gate"
+apps/manager build: 516:   }
+apps/manager build: 517:
+apps/manager build: 518:   .group-frame-gate {
+apps/manager build:        ^
+apps/manager build: 519:     display: inline-flex;
+apps/manager build: 520:     align-items: center;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:532:2 Unused CSS selector ".group-frame-gate.open"
+apps/manager build: 530:   }
+apps/manager build: 531:
+apps/manager build: 532:   .group-frame-gate.open {
+apps/manager build:        ^
+apps/manager build: 533:     border-color: rgba(34, 197, 94, 0.45);
+apps/manager build: 534:     background: rgba(34, 197, 94, 0.14);
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/overlays/GroupFramesOverlay.svelte:538:2 Unused CSS selector ".group-frame-gate.closed"
+apps/manager build: 536:   }
+apps/manager build: 537:
+apps/manager build: 538:   .group-frame-gate.closed {
+apps/manager build:        ^
+apps/manager build: 539:     border-color: rgba(148, 163, 184, 0.4);
+apps/manager build: 540:     background: rgba(148, 163, 184, 0.12);
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:4:11 ReteConnection has unused export property 'source'. If it is for external reference only, please consider using `export const source`
+apps/manager build: 2: <script lang="ts">import { nodeGraphEdgeShadows } from "$lib/features/node-graph-flags";
+apps/manager build: 3: export let id = "";
+apps/manager build: 4: export let source = "";
+apps/manager build:               ^
+apps/manager build: 5: export let target = "";
+apps/manager build: 6: export let sourceOutput = "";
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:5:11 ReteConnection has unused export property 'target'. If it is for external reference only, please consider using `export const target`
+apps/manager build: 3: export let id = "";
+apps/manager build: 4: export let source = "";
+apps/manager build: 5: export let target = "";
+apps/manager build:               ^
+apps/manager build: 6: export let sourceOutput = "";
+apps/manager build: 7: export let targetInput = "";
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:6:11 ReteConnection has unused export property 'sourceOutput'. If it is for external reference only, please consider using `export const sourceOutput`
+apps/manager build: 4: export let source = "";
+apps/manager build: 5: export let target = "";
+apps/manager build: 6: export let sourceOutput = "";
+apps/manager build:               ^
+apps/manager build: 7: export let targetInput = "";
+apps/manager build: 8: export let isLoop = void 0;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:7:11 ReteConnection has unused export property 'targetInput'. If it is for external reference only, please consider using `export const targetInput`
+apps/manager build:  5: export let target = "";
+apps/manager build:  6: export let sourceOutput = "";
+apps/manager build:  7: export let targetInput = "";
+apps/manager build:                ^
+apps/manager build:  8: export let isLoop = void 0;
+apps/manager build:  9: export let isPseudo = void 0;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:8:11 ReteConnection has unused export property 'isLoop'. If it is for external reference only, please consider using `export const isLoop`
+apps/manager build:  6: export let sourceOutput = "";
+apps/manager build:  7: export let targetInput = "";
+apps/manager build:  8: export let isLoop = void 0;
+apps/manager build:                ^
+apps/manager build:  9: export let isPseudo = void 0;
+apps/manager build: 10: export let localLoop = void 0;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteConnection.svelte:9:11 ReteConnection has unused export property 'isPseudo'. If it is for external reference only, please consider using `export const isPseudo`
+apps/manager build:  7: export let targetInput = "";
+apps/manager build:  8: export let isLoop = void 0;
+apps/manager build:  9: export let isPseudo = void 0;
+apps/manager build:                ^
+apps/manager build: 10: export let localLoop = void 0;
+apps/manager build: 11: export let deployedLoop = void 0;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte:846:2 Unused CSS selector ".node.group-port-activate .title"
+apps/manager build: 844:   }
+apps/manager build: 845:
+apps/manager build: 846:   .node.group-port-activate .title {
+apps/manager build:        ^
+apps/manager build: 847:     padding: 8px 10px;
+apps/manager build: 848:     font-size: 12px;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte:853:2 Unused CSS selector ".node.group-port-activate .ports"
+apps/manager build: 851:   }
+apps/manager build: 852:
+apps/manager build: 853:   .node.group-port-activate .ports {
+apps/manager build:        ^
+apps/manager build: 854:     padding: 6px 0 8px;
+apps/manager build: 855:     gap: 6px;
+apps/manager build: 9:26:48 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte:858:2 Unused CSS selector ".node.group-port-activate .port-row"
+apps/manager build: 856:   }
+apps/manager build: 857:
+apps/manager build: 858:   .node.group-port-activate .port-row {
+apps/manager build:        ^
+apps/manager build: 859:     padding: 0 10px;
+apps/manager build: 860:     gap: 10px;
+apps/display build:   ✔ done
+apps/display build: Done
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/ui/CurveEditor.svelte:126:0 A11y: <div> with mousedown handler must have an ARIA role
+apps/manager build: 124: </script>
+apps/manager build: 125:
+apps/manager build: 126: <div
+apps/manager build:      ^
+apps/manager build: 127:   class="curve-editor"
+apps/manager build: 128:   class:readonly
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../block";
+apps/manager build:   │           ^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Menu.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 4 │   @import "../context-vars";
+apps/manager build:   │           ^^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Menu.svelte.vite-preprocess.scss 4:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../vars";
+apps/manager build:   │           ^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../vars";
+apps/manager build:   │           ^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Node.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Connection.svelte:1:29 Connection has unused export property 'data'. If it is for external reference only, please consider using `export const data`
+apps/manager build: 1: <script lang="ts">export let data;
+apps/manager build:                                 ^
+apps/manager build: 2: export let start;
+apps/manager build: 3: export let end;
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Connection.svelte:2:11 Connection has unused export property 'start'. If it is for external reference only, please consider using `export const start`
+apps/manager build: 1: <script lang="ts">export let data;
+apps/manager build: 2: export let start;
+apps/manager build:               ^
+apps/manager build: 3: export let end;
+apps/manager build: 4: export let path;
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Connection.svelte:3:11 Connection has unused export property 'end'. If it is for external reference only, please consider using `export const end`
+apps/manager build: 1: <script lang="ts">export let data;
+apps/manager build: 2: export let start;
+apps/manager build: 3: export let end;
+apps/manager build:               ^
+apps/manager build: 4: export let path;
+apps/manager build: 5: </script>
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 1 │ @import "./context-vars";
+apps/manager build:   │         ^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/block.scss 1:9                                    @import
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Menu.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [global-builtin]: Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: Use color.adjust instead.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:    ╷
+apps/manager build: 20 │       background: lighten($node-color, 4%);
+apps/manager build:    │                   ^^^^^^^^^^^^^^^^^^^^^^^^
+apps/manager build:    ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Node.svelte.vite-preprocess.scss 20:19  root stylesheet
+apps/manager build: DEPRECATION WARNING [color-functions]: lighten() is deprecated. Suggestions:
+apps/manager build: color.scale($color, $lightness: 14.0689655172%)
+apps/manager build: color.adjust($color, $lightness: 4%)
+apps/manager build: More info: https://sass-lang.com/d/color-functions
+apps/manager build:    ╷
+apps/manager build: 20 │       background: lighten($node-color, 4%);
+apps/manager build:    │                   ^^^^^^^^^^^^^^^^^^^^^^^^
+apps/manager build:    ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Node.svelte.vite-preprocess.scss 20:19  root stylesheet
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte:22:0 Unused CSS selector ".socket.multiple"
+apps/manager build: 20:   border-width: 4px;
+apps/manager build: 21: }
+apps/manager build: 22: .socket.multiple {
+apps/manager build:     ^
+apps/manager build: 23:   border-color: yellow;
+apps/manager build: 24: }
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte:25:0 Unused CSS selector ".socket.output"
+apps/manager build: 23:   border-color: yellow;
+apps/manager build: 24: }
+apps/manager build: 25: .socket.output {
+apps/manager build:     ^
+apps/manager build: 26:   margin-right: -12px;
+apps/manager build: 27: }
+apps/manager build: 9:26:49 PM [vite-plugin-svelte] /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/classic/components/Socket.svelte:28:0 Unused CSS selector ".socket.input"
+apps/manager build: 26:   margin-right: -12px;
+apps/manager build: 27: }
+apps/manager build: 28: .socket.input {
+apps/manager build:     ^
+apps/manager build: 29:   margin-left: -12px;
+apps/manager build: 30: }</style>
+apps/client build:   ✔ done
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [legacy-js-api]: The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+apps/manager build: More info: https://sass-lang.com/d/legacy-js-api
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 2 │   @import "../block";
+apps/manager build:   │           ^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Item.svelte.vite-preprocess.scss 2:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 3 │   @import "../context-vars";
+apps/manager build:   │           ^^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Item.svelte.vite-preprocess.scss 3:11  root stylesheet
+apps/manager build: DEPRECATION WARNING [import]: Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+apps/manager build: More info and automated migrator: https://sass-lang.com/d/import
+apps/manager build:   ╷
+apps/manager build: 1 │ @import "./context-vars";
+apps/manager build:   │         ^^^^^^^^^^^^^^^^
+apps/manager build:   ╵
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/block.scss 1:9                                    @import
+apps/manager build:     ../../node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/context-menu/components/Item.svelte.vite-preprocess.scss 2:11  root stylesheet
+apps/client build: Done
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (317:13): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js (320:15): "hydratable" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/shared.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (5:23): "untrack" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (348:26): "fork" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: ../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js (1252:30): "settled" is not exported by "../../node_modules/.pnpm/svelte@4.2.20/node_modules/svelte/src/runtime/index.js", imported by "../../node_modules/.pnpm/@sveltejs+kit@2.58.0_@sveltejs+vite-plugin-svelte@3.1.2_svelte@4.2.20_vite@5.4.21_@type_ed5d5fd2226244a5295ebc35df6634cd/node_modules/@sveltejs/kit/src/runtime/client/client.js".
+apps/manager build: ✓ 1460 modules transformed.
+apps/manager build: rendering chunks...
+apps/manager build: [plugin:vite:reporter] [plugin vite:reporter]
+apps/manager build: (!) /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-area-plugin@2.1.5_rete@2.0.6/node_modules/rete-area-plugin/rete-area-plugin.esm.js is dynamically imported by /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/node-canvas/adapters/rete-adapter.ts but also statically imported by /Users/ziqi/Desktop/FluffyFoundation/apps/manager/src/lib/components/nodes/NodeCanvas.svelte, /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-connection-plugin@2.0.5_rete-area-plugin@2.1.5_rete@2.0.6__rete@2.0.6/node_modules/rete-connection-plugin/rete-connection-plugin.esm.js, /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-history-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete@2.0.6/node_modules/rete-history-plugin/rete-history-plugin.esm.js, /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-render-utils@2.0.3_rete-area-plugin@2.1.5_rete@2.0.6__rete@2.0.6/node_modules/rete-render-utils/rete-render-utils.esm.js, /Users/ziqi/Desktop/FluffyFoundation/node_modules/.pnpm/rete-svelte-plugin@2.1.1_rete-area-plugin@2.1.5_rete@2.0.6__rete-render-utils@2.0.3_ret_953ddc87b2ce9f448f873d67c1b3e87b/node_modules/rete-svelte-plugin/svelte/presets/reroute/index.js, dynamic import will not move module into another chunk.
+apps/manager build: computing gzip size...
+apps/manager build: .svelte-kit-manager/output/client/_app/version.json                                0.03 kB │ gzip:   0.05 kB
+apps/manager build: .svelte-kit-manager/output/client/.vite/manifest.json                              3.77 kB │ gzip:   0.72 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/assets/2.73NVzkbK.css             4.77 kB │ gzip:   1.18 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/assets/GeoControl.BC6dKodd.css   22.38 kB │ gzip:   4.78 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/assets/3.OYujX_S_.css            83.42 kB │ gzip:  13.44 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/entry/start.Bm6riQ0J.js           0.08 kB │ gzip:   0.09 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/nodes/0.DXlX1Mg2.js               0.58 kB │ gzip:   0.38 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/chunks/Bj4J9_OE.js                0.92 kB │ gzip:   0.57 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/nodes/1.CMw1saZZ.js               1.00 kB │ gzip:   0.58 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/chunks/C1FmrZbK.js                1.14 kB │ gzip:   0.68 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/chunks/C7zwt4ZJ.js                4.84 kB │ gzip:   2.42 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/entry/app.bomheJn_.js             5.68 kB │ gzip:   2.14 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/chunks/BXES11en.js                9.56 kB │ gzip:   3.77 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/nodes/2.s3rQIkld.js              21.57 kB │ gzip:   7.19 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/chunks/CmhsmqrS.js               27.19 kB │ gzip:  10.56 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/chunks/Xb7lG1TN.js              132.75 kB │ gzip:  40.00 kB
+apps/manager build: .svelte-kit-manager/output/client/_app/immutable/nodes/3.CR0bn6VS.js             878.57 kB │ gzip: 247.95 kB
+apps/manager build: (!) Some chunks are larger than 500 kB after minification. Consider:
+apps/manager build: - Using dynamic import() to code-split the application
+apps/manager build: - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+apps/manager build: - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+apps/manager build: ✓ built in 2.16s
+apps/manager build: .svelte-kit-manager/output/server/.vite/manifest.json                                4.76 kB
+apps/manager build: .svelte-kit-manager/output/server/_app/immutable/assets/_page.73NVzkbK.css           4.77 kB
+apps/manager build: .svelte-kit-manager/output/server/_app/immutable/assets/GeoControl.lvH-kD07.css     22.01 kB
+apps/manager build: .svelte-kit-manager/output/server/_app/immutable/assets/_page.CYVyXRUy.css          82.04 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/false.js                                    0.05 kB
+apps/manager build: .svelte-kit-manager/output/server/entries/pages/_page.ts.js                          0.08 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/ssr2.js                                     0.10 kB
+apps/manager build: .svelte-kit-manager/output/server/entries/fallbacks/layout.svelte.js                 0.24 kB
+apps/manager build: .svelte-kit-manager/output/server/internal.js                                        0.33 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/environment.js                              0.63 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/utils.js                                    1.15 kB
+apps/manager build: .svelte-kit-manager/output/server/entries/fallbacks/error.svelte.js                  1.40 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/index.js                                    2.58 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/ssr.js                                      5.09 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/exports.js                                  5.54 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/internal.js                                 6.96 kB
+apps/manager build: .svelte-kit-manager/output/server/remote-entry.js                                   23.81 kB
+apps/manager build: .svelte-kit-manager/output/server/entries/pages/_page.svelte.js                     37.81 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/shared.js                                  50.48 kB
+apps/manager build: .svelte-kit-manager/output/server/chunks/GeoControl.js                             113.00 kB
+apps/manager build: .svelte-kit-manager/output/server/index.js                                         146.04 kB
+apps/manager build: .svelte-kit-manager/output/server/entries/pages/root/_page.svelte.js             1,293.06 kB
+apps/manager build: ✓ built in 4.51s
+apps/manager build: Run npm run preview to preview your production build locally.
+apps/manager build: > Using @sveltejs/adapter-node
+apps/manager build:   ✔ done
+apps/manager build: Done
+
+> shugu3@1.0.0 test:node-core /Users/ziqi/Desktop/FluffyFoundation
+> pnpm --filter @shugu/node-core run test
+
+
+> @shugu/node-core@1.0.0 test /Users/ziqi/Desktop/FluffyFoundation/packages/node-core
+> pnpm run build && node --test test/*.test.mjs
+
+
+> @shugu/node-core@1.0.0 build /Users/ziqi/Desktop/FluffyFoundation/packages/node-core
+> pnpm exec tsc
+
+✔ command sink receives only changed commands when bundled (4.427208ms)
+✔ effect-ascii appends {type:"ascii"} to the chain (3.434791ms)
+✔ effect-out sends visualEffects and clears on stop (2.2165ms)
+✔ old project fixtures migrate to the current schema deterministically (1.924ms)
+✔ invalid connections and param overflow produce structured validation errors (0.377167ms)
+✔ group boundaries and deployability validation use registry metadata (0.119125ms)
+✔ semantic history records meaningful changes but excludes layout-only noise (0.322416ms)
+✔ rollback restores output behavior and returns structured recovery status (5.808792ms)
+✔ applyGraphChanges adds and removes nodes + connections (1.267625ms)
+✔ validateGraphState flags missing node refs (1.424417ms)
+✔ group-gate: returns boolean active (boolean-only) (3.330208ms)
+✔ group-proxy: forwards input to out (0.367917ms)
+✔ illegal actor can view public Group but cannot mutate it (1.767709ms)
+✔ Manager can reclaim a transferable public Group and then mutate it (3.80425ms)
+✔ Root has emergency authority to stop all partitions across Group ownership (6.6605ms)
+✔ Group delete archives by default and restore reactivates the Group (0.213208ms)
+✔ AI actor can create proposals but cannot directly mutate Canvas graph or read secrets (0.179458ms)
+✔ logic-for runs once per rising edge and respects wait (5.489333ms)
+✔ logic-and (4.762125ms)
+✔ logic-or (0.414792ms)
+✔ logic-xor (0.352334ms)
+✔ logic-nand (0.25ms)
+✔ logic-nor (0.219417ms)
+✔ logic-if routes boolean input based on condition (4.181042ms)
+✔ logic-not inverts boolean input (2.824375ms)
+✔ logic-number-to-boolean: >= trigger => true (3.272792ms)
+✔ logic-number-to-boolean: non-finite inputs fall back to defaults (0.337583ms)
+✔ registerNodeDefinitionFactories registers a new fixture node without a global switch edit (1.441167ms)
+✔ AI context snapshot includes an auto-registered fixture node summary (0.420625ms)
+✔ note has no ports and no outputs (3.639791ms)
+✔ compile orders nodes topologically (1.314375ms)
+✔ loadGraph drops connections to unknown ports (0.102417ms)
+✔ compile detects cycles on non-sink edges (0.186666ms)
+✔ compile allows multiple edges between the same nodes (0.078333ms)
+✔ compile allows sink edges in feedback loops (0.098542ms)
+✔ disabled nodes with matching in/out act as a wire (1.177792ms)
+✔ input override TTL expires and restores base values (0.346084ms)
+✔ watchdog triggers on sink burst (0.224167ms)
+✔ watchdog triggers on oscillation (alternating sink signatures) (0.305958ms)
+✔ scene-box appends {type:"box"} to the chain (2.635334ms)
+✔ scene-out sends visualScenes and clears on stop (1.767833ms)
+✔ SemanticGraphSnapshot includes semantic fields and excludes UI noise (1.364041ms)
+✔ command bus applies transaction lifecycle with dry-run, policy, audit, history, and rollback token (1.80075ms)
+✔ command bus handles groups, partitions, params, disconnect, and proposals transactionally (5.475084ms)
+✔ partition lifecycle commands bind target platform, status, rollback, and revision (0.261166ms)
+✔ partition lifecycle rejects revision mismatch and records structured failure reports (0.499125ms)
+✔ show-anything formats primitive values (2.796208ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 179.962916
+
+> shugu3@1.0.0 test:ff08 /Users/ziqi/Desktop/FluffyFoundation
+> pnpm tsx --test apps/manager/src/lib/stores/group-controls.spec.ts
+
+✔ normalizePublishedGroups keeps only publishable Group records (0.923458ms)
+✔ createPublishedGroup exposes a stable lightweight Group summary (0.047125ms)
+✔ buildPublishedGroupControl targets the published Group instead of selected clients (0.150083ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 131.169375
+
+> shugu3@1.0.0 test:ff09 /Users/ziqi/Desktop/FluffyFoundation
+> pnpm --filter @shugu/node-core run test && pnpm tsx --test apps/manager/src/lib/components/nodes/node-canvas/adapters/semantic-command-adapter.spec.ts && node .harness/evidence/FF-09/semantic-cli-fixture.mjs && node .harness/evidence/FF-09/ui-semantic-mutation-guard.mjs
+
+
+> @shugu/node-core@1.0.0 test /Users/ziqi/Desktop/FluffyFoundation/packages/node-core
+> pnpm run build && node --test test/*.test.mjs
+
+
+> @shugu/node-core@1.0.0 build /Users/ziqi/Desktop/FluffyFoundation/packages/node-core
+> pnpm exec tsc
+
+✔ command sink receives only changed commands when bundled (3.337417ms)
+✔ effect-ascii appends {type:"ascii"} to the chain (3.296083ms)
+✔ effect-out sends visualEffects and clears on stop (2.3305ms)
+✔ old project fixtures migrate to the current schema deterministically (1.989708ms)
+✔ invalid connections and param overflow produce structured validation errors (0.562792ms)
+✔ group boundaries and deployability validation use registry metadata (0.1445ms)
+✔ semantic history records meaningful changes but excludes layout-only noise (0.333375ms)
+✔ rollback restores output behavior and returns structured recovery status (5.015666ms)
+✔ applyGraphChanges adds and removes nodes + connections (0.690291ms)
+✔ validateGraphState flags missing node refs (0.887125ms)
+✔ group-gate: returns boolean active (boolean-only) (3.1125ms)
+✔ group-proxy: forwards input to out (0.345083ms)
+✔ illegal actor can view public Group but cannot mutate it (1.651375ms)
+✔ Manager can reclaim a transferable public Group and then mutate it (2.089542ms)
+✔ Root has emergency authority to stop all partitions across Group ownership (7.188125ms)
+✔ Group delete archives by default and restore reactivates the Group (0.292667ms)
+✔ AI actor can create proposals but cannot directly mutate Canvas graph or read secrets (0.289792ms)
+✔ logic-for runs once per rising edge and respects wait (3.444292ms)
+✔ logic-and (3.284833ms)
+✔ logic-or (0.346125ms)
+✔ logic-xor (0.291416ms)
+✔ logic-nand (0.292291ms)
+✔ logic-nor (0.302ms)
+✔ logic-if routes boolean input based on condition (3.580042ms)
+✔ logic-not inverts boolean input (3.181291ms)
+✔ logic-number-to-boolean: >= trigger => true (3.985792ms)
+✔ logic-number-to-boolean: non-finite inputs fall back to defaults (0.427625ms)
+✔ registerNodeDefinitionFactories registers a new fixture node without a global switch edit (1.433583ms)
+✔ AI context snapshot includes an auto-registered fixture node summary (0.461334ms)
+✔ note has no ports and no outputs (3.293417ms)
+✔ compile orders nodes topologically (1.529666ms)
+✔ loadGraph drops connections to unknown ports (0.124ms)
+✔ compile detects cycles on non-sink edges (0.345458ms)
+✔ compile allows multiple edges between the same nodes (0.136375ms)
+✔ compile allows sink edges in feedback loops (0.137083ms)
+✔ disabled nodes with matching in/out act as a wire (1.33875ms)
+✔ input override TTL expires and restores base values (0.407834ms)
+✔ watchdog triggers on sink burst (0.247583ms)
+✔ watchdog triggers on oscillation (alternating sink signatures) (0.309625ms)
+✔ scene-box appends {type:"box"} to the chain (2.7495ms)
+✔ scene-out sends visualScenes and clears on stop (1.897417ms)
+✔ SemanticGraphSnapshot includes semantic fields and excludes UI noise (1.545ms)
+✔ command bus applies transaction lifecycle with dry-run, policy, audit, history, and rollback token (1.7655ms)
+✔ command bus handles groups, partitions, params, disconnect, and proposals transactionally (5.998417ms)
+✔ partition lifecycle commands bind target platform, status, rollback, and revision (0.289792ms)
+✔ partition lifecycle rejects revision mismatch and records structured failure reports (0.541334ms)
+✔ show-anything formats primitive values (2.999125ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 194.22225
+✔ Canvas add/connect adapter dispatches semantic commands without direct graph mutation (2.525875ms)
+✔ Canvas and CLI fixture command path produce the same semantic snapshot (5.482708ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 150.118584
+FF-09 semantic CLI parity fixture wrote /Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-09/semantic-cli-result.json
+FF-09 UI semantic mutation guard wrote /Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-09/ui-semantic-mutation-guard-result.json
+
+> shugu3@1.0.0 validate:node-specs /Users/ziqi/Desktop/FluffyFoundation
+> node scripts/validate-node-specs.mjs
+
+[33mwarn[0m apps/manager/src/lib/nodes/specs/array-filter.json: runtime is ignored for node-core types ("array-filter")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/client-count.json: runtime is ignored for node-core types ("client-count")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/client-object.json: runtime is ignored for node-core types ("client-object")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-add.json: runtime is ignored for node-core types ("logic-add")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-divide.json: runtime is ignored for node-core types ("logic-divide")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-for.json: runtime is ignored for node-core types ("logic-for")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-if.json: runtime is ignored for node-core types ("logic-if")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-multiple.json: runtime is ignored for node-core types ("logic-multiple")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-number-to-boolean.json: runtime is ignored for node-core types ("logic-number-to-boolean")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-sleep.json: runtime is ignored for node-core types ("logic-sleep")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-subtract.json: runtime is ignored for node-core types ("logic-subtract")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/math.json: runtime is ignored for node-core types ("math")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/number-script.json: runtime is ignored for node-core types ("number-script")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/number-stabilizer.json: runtime is ignored for node-core types ("number-stabilizer")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/number.json: runtime is ignored for node-core types ("number")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/play-media.json: runtime is ignored for node-core types ("play-media")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-client-sensors.json: runtime is ignored for node-core types ("proc-client-sensors")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-flashlight.json: runtime is ignored for node-core types ("proc-flashlight")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-screen-color.json: runtime is ignored for node-core types ("proc-screen-color")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-synth-update.json: runtime is ignored for node-core types ("proc-synth-update")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-delay.json: runtime is ignored for node-core types ("tone-delay")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-granular.json: runtime is ignored for node-core types ("tone-granular")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-osc.json: runtime is ignored for node-core types ("tone-osc")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-pitch.json: runtime is ignored for node-core types ("tone-pitch")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-resonator.json: runtime is ignored for node-core types ("tone-resonator")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-reverb.json: runtime is ignored for node-core types ("tone-reverb")
+[90mnode-specs[0m 49 files, 26 warnings, 0 errors
+
+> shugu3@1.0.0 e2e:node-executor:offline /Users/ziqi/Desktop/FluffyFoundation
+> pnpm --filter @shugu/sdk-client exec node scripts/e2e/node-executor.offline.mjs
+
+[node-executor] deployed {
+  loopId: 'loop_e2e_offline',
+  tickIntervalMs: 10,
+  requiredCapabilities: []
+}
+[node-executor] deployed {
+  loopId: 'loop_e2e_offline',
+  tickIntervalMs: 10,
+  requiredCapabilities: []
+}
+[e2e-offline] ✅ node-executor deploy/stop/redeploy/remove OK { commands: 23, reports: 4 }
+
+> shugu3@1.0.0 guard:ff08 /Users/ziqi/Desktop/FluffyFoundation
+> node .harness/scripts/ff08/guard-manager-boundary.mjs
+
+FF-08 Manager boundary guard passed
+
+> shugu3@1.0.0 harness:verify /Users/ziqi/Desktop/FluffyFoundation
+> pnpm harness:validate && pnpm harness:hotspots && pnpm validate:node-specs
+
+
+> shugu3@1.0.0 harness:validate /Users/ziqi/Desktop/FluffyFoundation
+> python3 .harness/scripts/validate_harness.py
+
+[harness] WARN: validate_harness checks structure, not product correctness; run pnpm verify for product gates.
+[harness] PASS: harness structure is valid
+
+> shugu3@1.0.0 harness:hotspots /Users/ziqi/Desktop/FluffyFoundation
+> python3 .harness/scripts/check_hotspots.py
+
+[hotspots] WARN: apps/client/src/lib/components/StartScreen.svelte: 327 lines >= 250; watch growth
+[hotspots] WARN: apps/client/src/lib/stores/client/client-screenshot.ts: 332 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/routes/root/RootWorkspace.svelte: 272 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/patch-export.ts: 310 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/asset-manifest.ts: 385 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/project/projectManager.ts: 311 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/CurveEditor.svelte: 357 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/NodePickerOverlay.svelte: 284 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/NodeCanvasLayout.svelte: 278 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/rete/rete-controls.ts: 322 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/rete/rete-sync.ts: 259 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/runtime/client-selection-binding.ts: 338 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/controllers/picker-controller.ts: 317 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/controllers/focus-controller.ts: 250 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.ts: 279 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/panels/ModelDistributionPanel.svelte: 345 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/features/location/GeoControl.svelte: 398 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/features/assets/media-timeline-preview.ts: 308 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/custom-nodes/io.ts: 287 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/custom-nodes/flatten.ts: 314 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/geo/geo.service.ts: 278 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/message-router/message-router.service.ts: 342 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/events/events.gateway.command-envelope.spec.ts: 331 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/events/client-control-transfer.ts: 319 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/assets/assets.controller.ts: 280 lines >= 250; watch growth
+[hotspots] WARN: packages/sdk-client/src/tone-adapter/types.ts: 253 lines >= 250; watch growth
+[hotspots] WARN: packages/sdk-client/src/tone-adapter/engine-host.ts: 375 lines >= 250; watch growth
+[hotspots] WARN: packages/visual-plugins/src/mel-ascii-scene.ts: 345 lines >= 250; watch growth
+[hotspots] WARN: packages/protocol/src/control-plane.ts: 255 lines >= 250; watch growth
+[hotspots] WARN: packages/protocol/src/helpers.ts: 280 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/semantic-command-apply.ts: 315 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/semantic-command-bus.ts: 388 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/graph-state/validate.ts: 314 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/definitions/nodes/audio.ts: 365 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/definitions/nodes/client.ts: 286 lines >= 250; watch growth
+[hotspots] WARN: packages/visual-effects/src/pipeline.ts: 251 lines >= 250; watch growth
+[hotspots] WARN: packages/visual-effects/src/convolution.ts: 275 lines >= 250; watch growth
+[hotspots] top files:
+ 2701 apps/manager/src/lib/components/nodes/node-canvas/rete/ReteControl.svelte
+ 2666 apps/manager/src/lib/components/nodes/NodeCanvas.svelte
+ 1936 apps/manager/src/lib/components/AssetsManager.svelte
+ 1870 apps/manager/src/lib/components/nodes/node-canvas/controllers/group-controller.ts
+ 1568 apps/manager/src/lib/nodes/specs/register.ts
+ 1561 apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte
+ 1487 packages/sdk-client/src/tone-adapter/register.ts
+ 1417 apps/manager/src/lib/components/nodes/node-canvas/runtime/patch-runtime.ts
+ 1371 packages/sdk-client/src/action-executors.ts
+ 1364 apps/manager/src/lib/nodes/engine.ts
+ 1253 packages/sdk-client/src/tone-adapter/nodes.ts
+ 1238 apps/display/src/lib/stores/display.ts
+ 1135 apps/manager/src/lib/components/nodes/node-canvas/controllers/group-port-nodes-controller.ts
+  979 packages/node-core/src/runtime.ts
+  840 packages/node-core/src/definitions/nodes/assets.ts
+  794 packages/node-core/src/definitions/nodes/logic.ts
+  760 packages/sdk-manager/src/manager-sdk.ts
+  737 apps/manager/src/lib/stores/manager.ts
+  726 apps/manager/src/lib/components/nodes/node-canvas/rete/rete-builder.ts
+  718 apps/manager/src/lib/components/RegistryMidiPanel.svelte
+[hotspots] FAIL:
+- apps/client/src/lib/stores/client/client-runtime.ts: 426 lines exceeds ratchet max 415
+- apps/client/src/lib/stores/client/client-control.ts: 458 lines exceeds ratchet max 452
+- apps/display/src/lib/stores/display.ts: 1238 lines exceeds ratchet max 1208
+- apps/manager/src/lib/display/display-bridge.ts: 653 lines exceeds ratchet max 652
+- apps/server/src/assets/assets.service.ts: 507 lines exceeds ratchet max 492
+- packages/sdk-client/src/node-executor.ts: 546 lines exceeds ratchet max 541
+- packages/multimedia-core/src/multimedia-core.ts: 542 lines exceeds ratchet max 483
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.

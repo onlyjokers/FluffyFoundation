@@ -1,0 +1,38 @@
+ M .looooper/workflow.yaml
+ M apps/client/src/lib/stores/client.ts
+ M apps/client/src/lib/stores/client/client-control.ts
+ M apps/client/src/lib/stores/client/client-media.ts
+ M apps/client/src/lib/stores/client/client-runtime.ts
+ M apps/display/src/lib/stores/display.ts
+ M apps/manager/src/lib/display/display-bridge.ts
+ M apps/manager/src/lib/nodes/asset-manifest-store.ts
+ M apps/manager/src/lib/nodes/asset-manifest.ts
+ M apps/manager/src/lib/stores/assets.ts
+ M apps/server/src/assets/assets.service.ts
+ M apps/server/src/assets/assets.types.ts
+ M apps/server/src/events/client-control-transfer.ts
+ M apps/server/src/events/events.gateway.ts
+ M packages/multimedia-core/package.json
+ M packages/multimedia-core/src/media-engine.ts
+ M packages/multimedia-core/src/multimedia-core.ts
+ M packages/protocol/src/index.ts
+ M packages/sdk-client/src/index.ts
+ M packages/sdk-client/src/node-executor.ts
+ M pnpm-lock.yaml
+?? .claude/
+?? .gitnexus/
+?? CLAUDE.md
+?? apps/client/src/lib/stores/client/client-plugin-control.ts
+?? apps/client/src/lib/stores/client/client-stop-all.ts
+?? apps/display/src/lib/stores/display-asset-manifest.ts
+?? apps/display/src/lib/stores/display-stop-all.ts
+?? apps/manager/src/lib/nodes/asset-manifest-entries.ts
+?? apps/server/src/assets/asset-record-defaults.ts
+?? packages/multimedia-core/src/preload-errors.ts
+?? packages/multimedia-core/src/preload-readiness.spec.ts
+?? packages/multimedia-core/src/preload-state.ts
+?? packages/protocol/src/asset-manifest.spec.ts
+?? packages/protocol/src/asset-manifest.ts
+?? packages/protocol/src/stop-all.ts
+?? packages/sdk-client/src/stop-all-cleanup.spec.ts
+?? packages/sdk-client/src/stop-all-cleanup.ts

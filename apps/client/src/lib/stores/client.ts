@@ -22,7 +22,7 @@ export {
   visualEffects,
   type CameraFacing,
 } from './client/client-visual';
-export { audioStream, videoState, imageState } from './client/client-media';
+export { audioStream, videoState, imageState, audioPlaybackState } from './client/client-media';
 export { audioEnabled } from './client/client-tone';
 export {
   startEarlyPreload,

@@ -159,6 +159,14 @@ export class ClientControlTransferService {
     this.emitStatus = emitStatus;
   }
 
+  clear(reason = 'stop-all cleanup'): void {
+    for (const transferId of Array.from(this.offers.keys())) {
+      this.finish(transferId, { status: 'revoked', revokedAt: this.now(), reason });
+    }
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+  }
+
   offer(input: {
     groupId: string;
     targetClientId: string;

@@ -1,0 +1,11 @@
+✔ validateAssetManifest accepts a complete FF-16 manifest (0.463708ms)
+✔ validateAssetManifest rejects local-only assets without explicit localOnly reason (0.111584ms)
+✔ createAssetError produces actionable missing-asset errors (0.471459ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 104.631458

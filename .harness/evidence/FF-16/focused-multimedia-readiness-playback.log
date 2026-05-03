@@ -1,0 +1,17 @@
+(node:93397) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+[asset] preload ready manifest=m1-1777823376768
+[asset] preload ready manifest=configure-1777823376789
+[asset] preload error manifest=m2-1777823376789
+✔ preloadNow records timeout and succeeds on retry (20.766709ms)
+✔ setAssetManifest starts manifest-update preload without manual preloadNow (0.295791ms)
+✔ preloadNow reports actionable missing asset errors (0.386917ms)
+✔ MediaEngine executable proof covers image, video, audio playback and stop-all cleanup (0.159709ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 149.104208

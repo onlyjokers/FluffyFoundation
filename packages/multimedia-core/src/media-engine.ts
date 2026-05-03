@@ -33,9 +33,17 @@ export type ImageState = {
   opacity: number;
 };
 
+export type AudioState = {
+  url: string | null;
+  playing: boolean;
+  loop: boolean;
+  volume: number;
+};
+
 export type MediaEngineState = {
   video: VideoState;
   image: ImageState;
+  audio: AudioState;
 };
 
 type Listener = (state: MediaEngineState) => void;
@@ -57,6 +65,7 @@ export class MediaEngine {
       fit: 'contain',
     },
     image: { url: null, visible: false, duration: undefined, fit: 'contain', scale: 1, offsetX: 0, offsetY: 0, opacity: 1 },
+    audio: { url: null, playing: false, loop: false, volume: 1 },
   };
 
   constructor(private readonly opts: { resolveUrl?: (url: string) => string } = {}) {}
@@ -176,8 +185,28 @@ export class MediaEngine {
     });
   }
 
+  playAudio(payload: { url: string; playing?: boolean; loop?: boolean; volume?: number }): void {
+    const url = this.resolve(payload.url);
+    const playingRaw = payload.playing;
+    const playing =
+      typeof playingRaw === 'boolean' ? playingRaw : typeof playingRaw === 'number' ? playingRaw >= 0.5 : Boolean(url);
+    this.setState({
+      audio: {
+        url,
+        playing,
+        loop: Boolean(payload.loop ?? false),
+        volume: Math.max(0, Math.min(100, Number(payload.volume ?? 1) || 0)),
+      },
+    });
+  }
+
+  stopAudio(): void {
+    this.setState({ audio: { url: null, playing: false, loop: false, volume: 1 } });
+  }
+
   stopAllMedia(): void {
     this.stopVideo();
     this.hideImage();
+    this.stopAudio();
   }
 }

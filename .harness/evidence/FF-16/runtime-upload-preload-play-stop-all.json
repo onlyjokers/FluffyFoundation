@@ -1,0 +1,76 @@
+[asset] preload ready manifest=ff16-runtime-proof
+{
+  "manifest": {
+    "status": "ready",
+    "manifestId": "ff16-runtime-proof",
+    "loaded": 3,
+    "total": 3,
+    "error": null,
+    "lastError": null,
+    "attemptsByAsset": {
+      "image-proof": 1,
+      "video-proof": 1,
+      "audio-proof": 1
+    },
+    "updatedAt": 1777823393471
+  },
+  "uploadedPreloadedPlayed": {
+    "image": true,
+    "video": true,
+    "audio": true
+  },
+  "requests": [
+    {
+      "url": "https://server.test/api/assets/image-proof",
+      "method": "GET"
+    },
+    {
+      "url": "https://server.test/api/assets/video-proof",
+      "method": "GET"
+    },
+    {
+      "url": "https://server.test/api/assets/audio-proof",
+      "method": "GET"
+    },
+    {
+      "url": "https://server.test/api/assets/image-proof/content",
+      "method": "HEAD"
+    },
+    {
+      "url": "https://server.test/api/assets/video-proof/content",
+      "method": "HEAD"
+    },
+    {
+      "url": "https://server.test/api/assets/audio-proof/content",
+      "method": "HEAD"
+    },
+    {
+      "url": "https://server.test/api/assets/image-proof/content",
+      "method": "GET"
+    },
+    {
+      "url": "https://server.test/api/assets/video-proof/content",
+      "method": "GET"
+    },
+    {
+      "url": "https://server.test/api/assets/audio-proof/content",
+      "method": "GET"
+    }
+  ],
+  "stopAllCleared": {
+    "imageVisible": false,
+    "videoPlaying": false,
+    "audioPlaying": false,
+    "cleanup": [
+      "sound",
+      "modulatedSound",
+      "screen.clear",
+      "screen:0",
+      "visualScenes",
+      "visualEffects",
+      "nodeExecutor"
+    ]
+  }
+}
+(node:94751) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)

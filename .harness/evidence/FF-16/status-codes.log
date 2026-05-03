@@ -1,0 +1,9 @@
+git_diff_check=0
+protocol=0
+multimedia=0
+sdk_stop_all=0
+hotspots=0
+harness_verify=0
+lint=0
+build_all=0
+runtime_evidence=0

@@ -198,3 +198,14 @@ export const imageState = writable<{
   opacity: 1,
 });
 
+export const audioPlaybackState = writable<{
+  url: string | null;
+  playing: boolean;
+  loop: boolean;
+  volume: number;
+}>({
+  url: null,
+  playing: false,
+  loop: false,
+  volume: 1,
+});

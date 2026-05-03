@@ -22,6 +22,7 @@
     "dist-out"
   ],
   "dependencies": {
+    "@shugu/protocol": "workspace:*",
     "tone": "^14.8.49"
   },
   "devDependencies": {

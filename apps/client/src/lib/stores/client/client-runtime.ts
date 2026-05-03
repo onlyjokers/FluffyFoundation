@@ -18,23 +18,15 @@ import {
   type NodeCommand,
   type ClientSDKConfig,
 } from '@shugu/sdk-client';
-import {
-  MultimediaCore,
-  toneAudioEngine,
-  type MediaEngineState,
-} from '@shugu/multimedia-core';
+import { MultimediaCore, toneAudioEngine, type MediaEngineState } from '@shugu/multimedia-core';
 import { permissions, state, latency } from './client-state';
 import { clientControlTransfer } from './client-transfer';
 import { markTransferControlLost } from './client-lifecycle';
-import { audioStream, imageState, videoState } from './client-media';
+import { audioPlaybackState, audioStream, imageState, videoState } from './client-media';
 import { createClientControlHandlers } from './client-control';
-import {
-  enableToneAudio,
-  getLastToneReadyPayload,
-  reportToneReady,
-  type ToneReadyPayload,
-} from './client-tone';
+import { enableToneAudio, getLastToneReadyPayload, reportToneReady, type ToneReadyPayload } from './client-tone';
 import { getOrCreateClientIdentity, persistAssignedClientId } from './client-identity';
+import { stopAllClientSideEffects } from './client-stop-all';
 
 // SDK and controller instances
 let sdk: ClientSDK | null = null;
@@ -61,6 +53,8 @@ const controlHandlers = createClientControlHandlers({
   getToneModulatedSoundPlayer: () => toneModulatedSoundPlayer,
   getNodeExecutor: () => nodeExecutor,
   getMultimediaCore: () => multimediaCore,
+  stopAllCleanup: () =>
+    stopAllClientSideEffects({ multimediaCore, toneSoundPlayer, toneModulatedSoundPlayer, screenController, nodeExecutor }),
 });
 
 /**
@@ -167,6 +161,7 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
   mediaUnsub = multimediaCore.media.subscribeState((s: MediaEngineState) => {
     videoState.set(s.video);
     imageState.set(s.image);
+    audioPlaybackState.set(s.audio);
   });
   let lastReported = '';
   multimediaCore.subscribeState((s) => {

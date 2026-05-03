@@ -3,12 +3,11 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import * as fs from 'node:fs';
-import * as fsp from 'node:fs/promises';
-import * as path from 'node:path';
+import * as fs from 'node:fs'; import * as fsp from 'node:fs/promises'; import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { readAssetServiceConfig, type AssetServiceConfig } from './assets.config.js';
 import type { AssetIndexFile, AssetKind, AssetRecord, StoredAssetRecord } from './assets.types.js';
+import { defaultAssetRecordFields } from './asset-record-defaults.js';
 import { getErrorCode } from '../utils/error-utils.js';
 
 type UploadResult = { asset: AssetRecord; deduped: boolean };
@@ -443,6 +442,7 @@ export class AssetsService {
         originalName: safeName,
         createdAt: now,
         updatedAt: now,
+        ...defaultAssetRecordFields(),
         storageBackend: 'localfs',
         storageKey: sha256,
       };

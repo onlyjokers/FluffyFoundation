@@ -1,0 +1,40 @@
+
+> shugu3@1.0.0 lint /Users/ziqi/Desktop/FluffyFoundation
+> ESLINT_USE_FLAT_CONFIG=true pnpm -r run lint
+
+Scope: 14 of 15 workspace projects
+packages/ai-core lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/protocol lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/ai-core lint: Done
+packages/protocol lint: Done
+packages/multimedia-core lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/audio-plugins lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+apps/server lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/node-core lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/audio-plugins lint: Done
+packages/sdk-manager lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/multimedia-core lint: /Users/ziqi/Desktop/FluffyFoundation/packages/multimedia-core/src/multimedia-core.ts
+packages/multimedia-core lint:   288:20  warning  'reason' is assigned a value but never used  @typescript-eslint/no-unused-vars
+packages/multimedia-core lint: ✖ 1 problem (0 errors, 1 warning)
+packages/multimedia-core lint: Done
+packages/visual-effects lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+apps/server lint: Done
+packages/visual-plugins lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/node-core lint: Done
+packages/sdk-manager lint: Done
+packages/visual-effects lint: Done
+packages/visual-plugins lint: Done
+packages/ui-kit lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+packages/sdk-client lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.ts"
+packages/ui-kit lint: Done
+packages/sdk-client lint: /Users/ziqi/Desktop/FluffyFoundation/packages/sdk-client/src/tone-adapter/types.ts
+packages/sdk-client lint:   57:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+packages/sdk-client lint:   58:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+packages/sdk-client lint: ✖ 2 problems (0 errors, 2 warnings)
+packages/sdk-client lint: Done
+apps/display lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+apps/client lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+apps/manager lint$ ESLINT_USE_FLAT_CONFIG=true eslint "src/**/*.{ts,svelte}"
+apps/display lint: Done
+apps/client lint: Done
+apps/manager lint: Done

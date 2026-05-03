@@ -1,0 +1,3 @@
+
+> @shugu/server@1.0.0 build /Users/ziqi/Desktop/FluffyFoundation/apps/server
+> pnpm exec nest build

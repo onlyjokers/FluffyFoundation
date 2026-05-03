@@ -6,14 +6,8 @@
  */
 
 import type {
-  ClientSDK,
-  FlashlightController,
-  NodeExecutor,
-  ScreenController,
-  SensorManager,
-  ToneModulatedSoundPlayer,
-  ToneSoundPlayer,
-  VibrationController,
+  ClientSDK, FlashlightController, NodeExecutor, ScreenController, SensorManager, ToneModulatedSoundPlayer,
+  ToneSoundPlayer, VibrationController,
 } from '@shugu/sdk-client';
 import type { MultimediaCore } from '@shugu/multimedia-core';
 import type { GraphChange } from '@shugu/node-core';
@@ -44,6 +38,7 @@ import {
 } from './client-visual';
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
 import { handleClientControlTransferPayload } from './client-transfer-handler';
+import { applyMultimediaManifestPayload } from './client-plugin-control';
 
 export type ClientControlDeps = {
   getSDK: () => ClientSDK | null;
@@ -55,6 +50,7 @@ export type ClientControlDeps = {
   getToneModulatedSoundPlayer: () => ToneModulatedSoundPlayer | null;
   getNodeExecutor: () => NodeExecutor | null;
   getMultimediaCore: () => MultimediaCore | null;
+  stopAllCleanup?: () => void;
 };
 
 type AnyRecord = Record<string, unknown>;
@@ -230,9 +226,7 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
         }
 
         case 'stopMedia':
-          deps.getMultimediaCore()?.media.stopVideo();
-          deps.getToneSoundPlayer()?.stop();
-          break;
+          deps.getMultimediaCore()?.media.stopAllMedia(); deps.getToneSoundPlayer()?.stop(); break;
 
         case 'stopSound':
           deps.getToneSoundPlayer()?.stop();
@@ -268,6 +262,10 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
 
         case 'hideImage':
           deps.getMultimediaCore()?.media.hideImage();
+          break;
+
+        case 'shutdown':
+          deps.stopAllCleanup?.();
           break;
 
         case 'visualScenes':
@@ -443,7 +441,7 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
         if (list.length > 50) list.splice(0, list.length - 50);
       }
 
-      deps.getMultimediaCore()?.setAssetManifest({ manifestId, assets, updatedAt });
+      applyMultimediaManifestPayload(payloadRecord, deps.getMultimediaCore);
       return;
     }
   }

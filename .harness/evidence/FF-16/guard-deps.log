@@ -1,0 +1,6 @@
+
+> shugu3@1.0.0 guard:deps /Users/ziqi/Desktop/FluffyFoundation
+> node scripts/guard-deps.mjs && node scripts/guard-server-messages.mjs
+
+[deps-guard] ok (686 files scanned)
+[server-msg-guard] ok (53 files scanned)

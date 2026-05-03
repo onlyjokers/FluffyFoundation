@@ -20,9 +20,7 @@ export type NodeExecutorDeployPayload = {
 };
 
 export type NodeExecutorStatus = {
-  running: boolean;
-  loopId: string | null;
-  lastError: string | null;
+  running: boolean; loopId: string | null; lastError: string | null;
 };
 
 export type NodeExecutorOptions = {
@@ -206,6 +204,8 @@ export class NodeExecutor {
     this.lastError = null;
     this.report('destroyed', {});
   }
+
+  stopAll(): void { this.destroy(); }
 
   handlePluginControl(message: PluginControlMessage): void {
     if (message.pluginId !== 'node-executor') return;

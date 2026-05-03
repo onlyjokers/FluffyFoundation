@@ -12,6 +12,7 @@ export type AssetManifest = {
   manifestId: string;
   assets: string[];
   updatedAt: number;
+  entries?: unknown[];
 };
 
 export const assetManifestStore = writable<AssetManifest | null>(null);
@@ -27,4 +28,3 @@ export function getLatestManifest(): AssetManifest | null {
 export function subscribeLatestManifest(cb: (manifest: AssetManifest | null) => void): () => void {
   return assetManifestStore.subscribe(cb);
 }
-

@@ -6,8 +6,10 @@
 
 import { AssetMetaStore } from './indexeddb.js';
 import { parseAssetMetaResponse, parseAssetShaResponse, parseStoredManifest } from './asset-meta-parsing.js';
-import { parseAssetIdFromRef, resolveAssetRefToUrl } from './asset-url-resolver.js';
+import { resolveAssetRefToUrl } from './asset-url-resolver.js';
 import { MediaEngine } from './media-engine.js';
+import { retryAssetPreload, runAssetPreload, validateManifestEntries } from './preload-state.js';
+import type { AssetError } from '@shugu/protocol';
 
 export type MultimediaCoreStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -17,12 +19,15 @@ export type MultimediaCoreState = {
   loaded: number;
   total: number;
   error: string | null;
+  lastError: AssetError | null;
+  attemptsByAsset: Record<string, number>;
   updatedAt: number;
 };
 
 export type AssetManifestInput = {
   manifestId: string;
   assets: string[];
+  entries?: unknown[];
   updatedAt?: number;
 };
 
@@ -40,6 +45,8 @@ export type MultimediaCoreConfig = {
    * Display app may choose a higher value for aggressive preloading.
    */
   concurrency?: number;
+  timeoutMs?: number;
+  maxRetries?: number;
   /**
    * Load & start preloading the last manifest immediately.
    */
@@ -82,6 +89,8 @@ export class MultimediaCore {
   private readonly listeners = new Set<StateListener>();
   private readonly cacheName: string;
   private readonly concurrency: number;
+  private readonly timeoutMs: number;
+  private readonly maxRetries: number;
   private abort: AbortController | null = null;
   private runSeq = 0;
 
@@ -96,6 +105,8 @@ export class MultimediaCore {
     loaded: 0,
     total: 0,
     error: null,
+    lastError: null,
+    attemptsByAsset: {},
     updatedAt: Date.now(),
   };
 
@@ -109,6 +120,8 @@ export class MultimediaCore {
     this.assetReadToken = config.assetReadToken?.trim() ? config.assetReadToken.trim() : null;
     this.cacheName = config.cacheName ?? 'shugu-assets-v1';
     this.concurrency = Math.max(1, Math.min(MAX_CONCURRENCY, Math.floor(config.concurrency ?? 4)));
+    this.timeoutMs = Math.max(1, Math.floor(config.timeoutMs ?? 30000));
+    this.maxRetries = Math.max(0, Math.floor(config.maxRetries ?? 2));
 
     this.media = new MediaEngine({ resolveUrl: (url) => this.resolveAssetRef(url) });
 
@@ -146,8 +159,21 @@ export class MultimediaCore {
     const id = manifest.manifestId?.trim();
     if (!id) return;
     const assets = Array.isArray(manifest.assets) ? manifest.assets.map(String) : [];
+    const entries = Array.isArray(manifest.entries) ? manifest.entries : [];
+    const manifestError = validateManifestEntries({ manifestId: id, assets, entries, updatedAt: manifest.updatedAt });
+    if (manifestError) {
+      this.setState({
+        status: 'error',
+        manifestId: id,
+        loaded: 0,
+        total: assets.length,
+        error: manifestError.message,
+        lastError: manifestError,
+      });
+      return;
+    }
     if (this.manifest && this.manifest.manifestId === id) return;
-    this.manifest = { manifestId: id, assets, updatedAt: manifest.updatedAt ?? Date.now() };
+    this.manifest = { manifestId: id, assets, entries, updatedAt: manifest.updatedAt ?? Date.now() };
     this.persistLastManifest();
     void this.preloadNow('manifest-update');
   }
@@ -253,103 +279,43 @@ export class MultimediaCore {
   private async fetchAssetMeta(assetId: string, signal: AbortSignal): Promise<AssetMeta> {
     const url = this.resolveAssetMetaUrl(assetId);
     if (!url) return { sha256: null, mimeType: null, sizeBytes: null };
-    try {
-      const res = await fetch(url, { method: 'GET', signal });
-      if (!res.ok) return { sha256: null, mimeType: null, sizeBytes: null };
-      const json = (await res.json()) as unknown;
-      return parseAssetMetaResponse(json);
-    } catch {
-      return { sha256: null, mimeType: null, sizeBytes: null };
-    }
+    const res = await fetch(url, { method: 'GET', signal });
+    if (!res.ok) throw new Error(`asset metadata failed (${res.status})`);
+    const json = (await res.json()) as unknown;
+    return parseAssetMetaResponse(json);
   }
 
   async preloadNow(reason: 'startup' | 'manifest-update' | 'manual' = 'manual'): Promise<void> {
     const manifest = this.manifest;
     if (!manifest) return;
-
-    const assets = manifest.assets.slice();
-    const total = assets.length;
-
-    if (total === 0) {
-      this.setState({ status: 'ready', manifestId: manifest.manifestId, loaded: 0, total: 0, error: null });
-      console.log(`[asset] preload ready manifest=${manifest.manifestId} total=0 (reason=${reason})`);
-      return;
-    }
-
-    // Cancel previous run.
     this.abort?.abort();
     const abort = new AbortController();
     this.abort = abort;
     const runId = ++this.runSeq;
+    await runAssetPreload({
+      manifest, concurrency: this.concurrency, abort, runSeq: runId, getRunSeq: () => this.runSeq,
+      waitForPriorityResume: () => this.waitForPriorityResume(), isPriorityFetched: (url) => this.priorityFetchedUrls.has(url),
+      resolveAssetRef: (ref) => this.resolveAssetRef(ref), ensureCached: (assetId, ref, signal) => this.ensureCachedWithRetry(assetId, ref, signal),
+      setState: (patch) => this.setState(patch),
+    });
+    if (!abort.signal.aborted && this.runSeq === runId) console.log(`[asset] preload ${this.state.status} manifest=${manifest.manifestId}`);
+  }
 
-    this.setState({ status: 'loading', manifestId: manifest.manifestId, loaded: 0, total, error: null });
-    console.log(`[asset] preload start manifest=${manifest.manifestId} total=${total} (reason=${reason})`);
+  private async waitForPriorityResume(): Promise<void> {
+    if (!this.priorityPauseSignal) return;
+    await new Promise<void>((resolve) => this.priorityResumeResolvers.push(resolve));
+  }
 
-    let nextIndex = 0;
-    let loaded = 0;
-    const errors: string[] = [];
-
-    const worker = async () => {
-      while (!abort.signal.aborted) {
-        // Wait if a priority fetch is in progress.
-        if (this.priorityPauseSignal) {
-          await new Promise<void>((resolve) => {
-            this.priorityResumeResolvers.push(resolve);
-          });
-          // After resume, re-check abort state.
-          if (abort.signal.aborted) return;
-        }
-
-        const idx = nextIndex;
-        nextIndex += 1;
-        if (idx >= assets.length) return;
-
-        const ref = assets[idx];
-        const assetId = parseAssetIdFromRef(ref);
-        if (!assetId) {
-          // Non-asset URLs are ignored for now (MVP focuses on Asset Service).
-          loaded += 1;
-          this.setState({ status: 'loading', manifestId: manifest.manifestId, loaded, total, error: null });
-          console.log(`[asset] preload progress ${loaded}/${total} (skip non-asset)`);
-          continue;
-        }
-
-        // Skip if already fetched via prioritizeFetch.
-        const resolvedUrl = this.resolveAssetRef(ref);
-        if (this.priorityFetchedUrls.has(resolvedUrl)) {
-          loaded += 1;
-          this.setState({ status: 'loading', manifestId: manifest.manifestId, loaded, total, error: null });
-          console.log(`[asset] preload progress ${loaded}/${total} (skip priority-fetched)`);
-          continue;
-        }
-
-        try {
-          const bytesApprox = await this.ensureCached(assetId, ref, abort.signal);
-          loaded += 1;
-          this.setState({ status: 'loading', manifestId: manifest.manifestId, loaded, total, error: null });
-          const bytesText = bytesApprox ? ` bytes~${bytesApprox}` : '';
-          console.log(`[asset] preload progress ${loaded}/${total} asset:${assetId}${bytesText}`);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          errors.push(`asset:${assetId} ${message}`);
-          return;
-        }
-      }
-    };
-
-    await Promise.all(Array.from({ length: this.concurrency }, () => worker()));
-
-    if (abort.signal.aborted || this.runSeq !== runId) return;
-
-    if (errors.length > 0) {
-      const error = errors[0] ?? 'unknown error';
-      this.setState({ status: 'error', manifestId: manifest.manifestId, loaded, total, error });
-      console.warn(`[asset] preload error manifest=${manifest.manifestId}`, error);
-      return;
-    }
-
-    this.setState({ status: 'ready', manifestId: manifest.manifestId, loaded: total, total, error: null });
-    console.log(`[asset] preload ready manifest=${manifest.manifestId} total=${total}`);
+  private async ensureCachedWithRetry(assetId: string, ref: string, signal: AbortSignal): Promise<number | null> {
+    return retryAssetPreload({
+      assetId,
+      signal,
+      timeoutMs: this.timeoutMs,
+      maxRetries: this.maxRetries,
+      state: this.state,
+      setState: (patch) => this.setState(patch),
+      load: () => this.ensureCached(assetId, ref, signal),
+    });
   }
 
   private async ensureCached(assetId: string, ref: string, signal: AbortSignal): Promise<number | null> {
@@ -460,12 +426,13 @@ export class MultimediaCore {
 
   private loadLastManifest(): void {
     if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage.getItem !== 'function') return;
     const raw = localStorage.getItem(LAST_MANIFEST_KEY);
     if (!raw) return;
     try {
       const parsed = parseStoredManifest(JSON.parse(raw));
       if (!parsed) return;
-      this.manifest = { manifestId: parsed.manifestId, assets: parsed.assets, updatedAt: parsed.updatedAt };
+      this.manifest = { manifestId: parsed.manifestId, assets: parsed.assets, entries: [], updatedAt: parsed.updatedAt };
     } catch {
       // ignore
     }
@@ -473,6 +440,7 @@ export class MultimediaCore {
 
   private persistLastManifest(): void {
     if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage.setItem !== 'function') return;
     if (!this.manifest) return;
     try {
       localStorage.setItem(LAST_MANIFEST_KEY, JSON.stringify(this.manifest));

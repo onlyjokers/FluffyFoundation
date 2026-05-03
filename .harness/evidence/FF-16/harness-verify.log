@@ -1,0 +1,104 @@
+
+> shugu3@1.0.0 harness:verify /Users/ziqi/Desktop/FluffyFoundation
+> pnpm harness:validate && pnpm harness:hotspots && pnpm validate:node-specs
+
+
+> shugu3@1.0.0 harness:validate /Users/ziqi/Desktop/FluffyFoundation
+> python3 .harness/scripts/validate_harness.py
+
+[harness] WARN: validate_harness checks structure, not product correctness; run pnpm verify for product gates.
+[harness] PASS: harness structure is valid
+
+> shugu3@1.0.0 harness:hotspots /Users/ziqi/Desktop/FluffyFoundation
+> python3 .harness/scripts/check_hotspots.py
+
+[hotspots] WARN: apps/client/src/lib/components/StartScreen.svelte: 327 lines >= 250; watch growth
+[hotspots] WARN: apps/client/src/lib/stores/client/client-screenshot.ts: 332 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/routes/root/RootWorkspace.svelte: 272 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/patch-export.ts: 310 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/asset-manifest.ts: 385 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/project/projectManager.ts: 311 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/CurveEditor.svelte: 357 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/NodePickerOverlay.svelte: 284 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/NodeCanvasLayout.svelte: 278 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/rete/rete-controls.ts: 322 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/rete/rete-sync.ts: 259 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/runtime/client-selection-binding.ts: 338 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/controllers/picker-controller.ts: 317 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/controllers/focus-controller.ts: 250 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.ts: 279 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/components/nodes/node-canvas/ui/panels/ModelDistributionPanel.svelte: 345 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/features/location/GeoControl.svelte: 398 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/features/assets/media-timeline-preview.ts: 308 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/custom-nodes/io.ts: 287 lines >= 250; watch growth
+[hotspots] WARN: apps/manager/src/lib/nodes/custom-nodes/flatten.ts: 314 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/geo/geo.service.ts: 278 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/message-router/message-router.service.ts: 342 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/events/events.gateway.command-envelope.spec.ts: 331 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/events/client-control-transfer.ts: 319 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/assets/assets.controller.ts: 280 lines >= 250; watch growth
+[hotspots] WARN: packages/sdk-client/src/tone-adapter/types.ts: 253 lines >= 250; watch growth
+[hotspots] WARN: packages/sdk-client/src/tone-adapter/engine-host.ts: 375 lines >= 250; watch growth
+[hotspots] WARN: packages/visual-plugins/src/mel-ascii-scene.ts: 345 lines >= 250; watch growth
+[hotspots] WARN: packages/protocol/src/control-plane.ts: 255 lines >= 250; watch growth
+[hotspots] WARN: packages/protocol/src/helpers.ts: 280 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/semantic-command-apply.ts: 315 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/semantic-command-bus.ts: 388 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/graph-state/validate.ts: 314 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/definitions/nodes/audio.ts: 365 lines >= 250; watch growth
+[hotspots] WARN: packages/node-core/src/definitions/nodes/client.ts: 286 lines >= 250; watch growth
+[hotspots] WARN: packages/visual-effects/src/pipeline.ts: 251 lines >= 250; watch growth
+[hotspots] WARN: packages/visual-effects/src/convolution.ts: 275 lines >= 250; watch growth
+[hotspots] top files:
+ 2701 apps/manager/src/lib/components/nodes/node-canvas/rete/ReteControl.svelte
+ 2666 apps/manager/src/lib/components/nodes/NodeCanvas.svelte
+ 1936 apps/manager/src/lib/components/AssetsManager.svelte
+ 1870 apps/manager/src/lib/components/nodes/node-canvas/controllers/group-controller.ts
+ 1568 apps/manager/src/lib/nodes/specs/register.ts
+ 1561 apps/manager/src/lib/components/nodes/node-canvas/rete/ReteNode.svelte
+ 1487 packages/sdk-client/src/tone-adapter/register.ts
+ 1417 apps/manager/src/lib/components/nodes/node-canvas/runtime/patch-runtime.ts
+ 1371 packages/sdk-client/src/action-executors.ts
+ 1364 apps/manager/src/lib/nodes/engine.ts
+ 1253 packages/sdk-client/src/tone-adapter/nodes.ts
+ 1194 apps/display/src/lib/stores/display.ts
+ 1135 apps/manager/src/lib/components/nodes/node-canvas/controllers/group-port-nodes-controller.ts
+  979 packages/node-core/src/runtime.ts
+  840 packages/node-core/src/definitions/nodes/assets.ts
+  794 packages/node-core/src/definitions/nodes/logic.ts
+  760 packages/sdk-manager/src/manager-sdk.ts
+  737 apps/manager/src/lib/stores/manager.ts
+  726 apps/manager/src/lib/components/nodes/node-canvas/rete/rete-builder.ts
+  718 apps/manager/src/lib/components/RegistryMidiPanel.svelte
+[hotspots] PASS: hotspot ratchet satisfied
+
+> shugu3@1.0.0 validate:node-specs /Users/ziqi/Desktop/FluffyFoundation
+> node scripts/validate-node-specs.mjs
+
+[33mwarn[0m apps/manager/src/lib/nodes/specs/array-filter.json: runtime is ignored for node-core types ("array-filter")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/client-count.json: runtime is ignored for node-core types ("client-count")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/client-object.json: runtime is ignored for node-core types ("client-object")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-add.json: runtime is ignored for node-core types ("logic-add")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-divide.json: runtime is ignored for node-core types ("logic-divide")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-for.json: runtime is ignored for node-core types ("logic-for")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-if.json: runtime is ignored for node-core types ("logic-if")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-multiple.json: runtime is ignored for node-core types ("logic-multiple")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-number-to-boolean.json: runtime is ignored for node-core types ("logic-number-to-boolean")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-sleep.json: runtime is ignored for node-core types ("logic-sleep")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/logic-subtract.json: runtime is ignored for node-core types ("logic-subtract")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/math.json: runtime is ignored for node-core types ("math")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/number-script.json: runtime is ignored for node-core types ("number-script")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/number-stabilizer.json: runtime is ignored for node-core types ("number-stabilizer")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/number.json: runtime is ignored for node-core types ("number")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/play-media.json: runtime is ignored for node-core types ("play-media")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-client-sensors.json: runtime is ignored for node-core types ("proc-client-sensors")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-flashlight.json: runtime is ignored for node-core types ("proc-flashlight")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-screen-color.json: runtime is ignored for node-core types ("proc-screen-color")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/proc-synth-update.json: runtime is ignored for node-core types ("proc-synth-update")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-delay.json: runtime is ignored for node-core types ("tone-delay")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-granular.json: runtime is ignored for node-core types ("tone-granular")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-osc.json: runtime is ignored for node-core types ("tone-osc")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-pitch.json: runtime is ignored for node-core types ("tone-pitch")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-resonator.json: runtime is ignored for node-core types ("tone-resonator")
+[33mwarn[0m apps/manager/src/lib/nodes/specs/tone-reverb.json: runtime is ignored for node-core types ("tone-reverb")
+[90mnode-specs[0m 49 files, 26 warnings, 0 errors

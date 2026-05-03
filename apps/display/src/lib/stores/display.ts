@@ -17,29 +17,13 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import {
-  MultimediaCore,
-  toneAudioEngine,
-  type MultimediaCoreState,
-  type MediaEngineState,
-  type MediaFit,
-} from '@shugu/multimedia-core';
-import {
-  PROTOCOL_VERSION,
-  type ControlAction,
-  type ControlPayload,
-  type ControlMessage,
-  type PluginControlMessage,
-  type PluginCommand,
-  type MediaMetaMessage,
-  type PlayMediaPayload,
-  type ScreenColorPayload,
-  type ShowImagePayload,
-  type TargetSelector,
-} from '@shugu/protocol';
+import { MultimediaCore, toneAudioEngine, type MultimediaCoreState, type MediaEngineState, type MediaFit } from '@shugu/multimedia-core';
+import { PROTOCOL_VERSION, type ControlAction, type ControlPayload, type ControlMessage, type PluginControlMessage, type PluginCommand, type MediaMetaMessage, type PlayMediaPayload, type ScreenColorPayload, type ShowImagePayload, type TargetSelector } from '@shugu/protocol';
 import type { GraphChange } from '@shugu/node-core';
 import { ClientSDK, NodeExecutor, type NodeCommand, type ClientState, type ClientIdentity } from '@shugu/sdk-client';
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
+import { stopAllDisplaySideEffects } from './display-stop-all';
+import { applyDisplayAssetManifest } from './display-asset-manifest';
 
 export type DisplayInitConfig = {
   serverUrl: string;
@@ -468,6 +452,8 @@ export const coreState = writable<MultimediaCoreState>({
   loaded: 0,
   total: 0,
   error: null,
+  lastError: null,
+  attemptsByAsset: {},
   updatedAt: Date.now(),
 });
 
@@ -495,6 +481,8 @@ export const imageState = writable<MediaEngineState['image']>({
   offsetY: 0,
   opacity: 1,
 });
+
+export const audioPlaybackState = writable<MediaEngineState['audio']>({ url: null, playing: false, loop: false, volume: 1 });
 
 export const screenOverlay = writable<ScreenOverlayState>({
   visible: false,
@@ -782,20 +770,14 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   mediaUnsub = multimediaCore.media.subscribeState((s: MediaEngineState) => {
     videoState.set(s.video);
     imageState.set(s.image);
+    audioPlaybackState.set(s.audio);
   });
 
   teardownLocalTransport();
   teardownServerTransport();
 
   const handleAssetManifest = (payload: Record<string, unknown> | undefined) => {
-    const snapshot = payload ?? {};
-    const manifestId = typeof snapshot.manifestId === 'string' ? snapshot.manifestId : '';
-    const assets = Array.isArray(snapshot.assets) ? snapshot.assets.map(String) : [];
-    const updatedAtRaw = snapshot.updatedAt;
-    const updatedAt =
-      typeof updatedAtRaw === 'number' && Number.isFinite(updatedAtRaw) ? updatedAtRaw : undefined;
-    if (!manifestId) return;
-    multimediaCore?.setAssetManifest({ manifestId, assets, updatedAt });
+    applyDisplayAssetManifest(payload, () => multimediaCore);
   };
 
   const identity = getOrCreateDisplayIdentity();
@@ -1151,10 +1133,7 @@ function executeNow(action: ControlAction, payload: ControlPayload): void {
         Boolean(parseDisplayFileId(url)) ||
         /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(resolvedUrlString);
 
-      if (!isVideo) {
-        console.info('[Display] playMedia(audio) noop:', mediaPayload.url);
-        return;
-      }
+      if (!isVideo) { multimediaCore?.media.playAudio({ url: resolvedUrlString, loop: mediaPayload.loop ?? false, volume: mediaPayload.volume ?? 1, playing: true }); return; }
 
       const loop = clip?.loop ?? mediaPayload.loop ?? false;
       const playing = clip?.play ?? Boolean(resolvedUrlString);
@@ -1181,12 +1160,19 @@ function executeNow(action: ControlAction, payload: ControlPayload): void {
     }
 
     case 'stopMedia':
-      multimediaCore?.media.stopVideo();
+      multimediaCore?.media.stopAllMedia();
       return;
 
     case 'screenColor': {
       const colorPayload = payload as ScreenColorPayload;
       setScreenColor(colorPayload);
+      return;
+    }
+
+    case 'shutdown': {
+      const record = asRecord(payload);
+      if (record?.reason !== 'root-stop-all' && record?.kind !== 'stop-all') return;
+      stopAllDisplaySideEffects({ multimediaCore, nodeExecutor, screenOverlay, setScreenColor, clearActiveImageObjectUrl });
       return;
     }
 

@@ -295,6 +295,9 @@ importers:
 
   packages/multimedia-core:
     dependencies:
+      '@shugu/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       tone:
         specifier: ^14.8.49
         version: 14.9.17
