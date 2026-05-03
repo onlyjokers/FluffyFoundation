@@ -31,6 +31,11 @@ import { requireAssetReadAuth, requireAssetWriteAuth } from './assets.auth.js';
 import { parseByteRangeHeader } from './range.js';
 import { readAssetServiceConfig } from './assets.config.js';
 import { getBodyString } from '../utils/request-utils.js';
+import {
+  cacheControlForAsset,
+  toAssetManifest,
+  toMissingAssetErrorBody,
+} from './asset-manifest-response.js';
 
 const UPLOAD_TMP_DIR = path.join(os.tmpdir(), 'shugu-assets-upload');
 try {
@@ -103,6 +108,12 @@ export class AssetsController {
     return { assets: this.assets.listAssets() };
   }
 
+  @Get('manifest')
+  async manifest(@Req() req: Request): Promise<import('@shugu/protocol').AssetManifest> {
+    requireAssetReadAuth(req, this.assets.config.readToken);
+    return toAssetManifest('asset-service-current', this.assets.listStoredAssets());
+  }
+
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
@@ -171,7 +182,7 @@ export class AssetsController {
   async getMeta(@Param('id') id: string, @Req() req: Request): Promise<AssetRecord> {
     requireAssetReadAuth(req, this.assets.config.readToken);
     const asset = this.assets.getAssetRecord(id);
-    if (!asset) throw new NotFoundException('asset not found');
+    if (!asset) throw new NotFoundException(toMissingAssetErrorBody(id));
     return asset;
   }
 
@@ -183,19 +194,19 @@ export class AssetsController {
   ): Promise<void> {
     requireAssetReadAuth(req, this.assets.config.readToken);
     const info = this.assets.getContentHeaders(id);
-    if (!info) throw new NotFoundException('asset not found');
+    if (!info) throw new NotFoundException(toMissingAssetErrorBody(id));
 
     const stored = info.stored;
     const filePath = info.filePath;
     const stat = await fsp.stat(filePath).catch(() => null);
-    if (!stat || !stat.isFile()) throw new NotFoundException('asset content not found');
+    if (!stat || !stat.isFile()) throw new NotFoundException(toMissingAssetErrorBody(id));
 
     const etag = `"${stored.sha256}"`;
     const ifNoneMatch = normalizeEtag(req.header('if-none-match'));
     if (ifNoneMatch && ifNoneMatch === stored.sha256) {
       res.status(304);
       res.setHeader('ETag', etag);
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Cache-Control', cacheControlForAsset(stored));
       res.end();
       return;
     }
@@ -205,7 +216,7 @@ export class AssetsController {
     res.setHeader('Content-Length', String(stat.size));
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', cacheControlForAsset(stored));
     res.setHeader('Content-Disposition', buildContentDisposition(stored.originalName));
     res.end();
   }
@@ -218,19 +229,19 @@ export class AssetsController {
   ): Promise<void> {
     requireAssetReadAuth(req, this.assets.config.readToken);
     const info = this.assets.getContentHeaders(id);
-    if (!info) throw new NotFoundException('asset not found');
+    if (!info) throw new NotFoundException(toMissingAssetErrorBody(id));
 
     const stored = info.stored;
     const filePath = info.filePath;
     const stat = await fsp.stat(filePath).catch(() => null);
-    if (!stat || !stat.isFile()) throw new NotFoundException('asset content not found');
+    if (!stat || !stat.isFile()) throw new NotFoundException(toMissingAssetErrorBody(id));
 
     const etag = `"${stored.sha256}"`;
     const ifNoneMatch = normalizeEtag(req.header('if-none-match'));
     if (ifNoneMatch && ifNoneMatch === stored.sha256) {
       res.status(304);
       res.setHeader('ETag', etag);
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Cache-Control', cacheControlForAsset(stored));
       res.end();
       return;
     }
@@ -247,7 +258,7 @@ export class AssetsController {
     res.setHeader('Content-Type', stored.mimeType);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', cacheControlForAsset(stored));
     res.setHeader('Content-Disposition', buildContentDisposition(stored.originalName));
 
     if (!range) {

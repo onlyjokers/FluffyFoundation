@@ -26,7 +26,7 @@
 [hotspots] WARN: apps/server/src/message-router/message-router.service.ts: 342 lines >= 250; watch growth
 [hotspots] WARN: apps/server/src/events/events.gateway.command-envelope.spec.ts: 331 lines >= 250; watch growth
 [hotspots] WARN: apps/server/src/events/client-control-transfer.ts: 319 lines >= 250; watch growth
-[hotspots] WARN: apps/server/src/assets/assets.controller.ts: 280 lines >= 250; watch growth
+[hotspots] WARN: apps/server/src/assets/assets.controller.ts: 287 lines >= 250; watch growth
 [hotspots] WARN: packages/sdk-client/src/tone-adapter/types.ts: 253 lines >= 250; watch growth
 [hotspots] WARN: packages/sdk-client/src/tone-adapter/engine-host.ts: 375 lines >= 250; watch growth
 [hotspots] WARN: packages/visual-plugins/src/mel-ascii-scene.ts: 345 lines >= 250; watch growth

@@ -1,0 +1,24 @@
+✔ toAssetManifest projects stored records into the stable FF-16 manifest contract (0.97175ms)
+✔ cacheControlForAsset follows each asset cache policy (0.070875ms)
+✔ toMissingAssetErrorBody returns an actionable structured asset error (0.061167ms)
+(node:83360) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+[asset] preload ready manifest=m1-1777828164534
+[asset] preload ready manifest=configure-1777828164554
+[asset] preload error manifest=m2-1777828164554
+✔ preloadNow records timeout and succeeds on retry (20.589125ms)
+✔ setAssetManifest starts manifest-update preload without manual preloadNow (0.344834ms)
+✔ preloadNow reports actionable missing asset errors (0.3355ms)
+✔ MediaEngine executable proof covers image, video, audio playback and stop-all cleanup (0.171667ms)
+✔ validateAssetManifest accepts a complete FF-16 manifest (0.526458ms)
+✔ validateAssetManifest rejects local-only assets without explicit localOnly reason (0.126708ms)
+✔ createAssetError produces actionable missing-asset errors (0.683ms)
+✔ executeStopAllCleanup clears media, sound, color, visual scenes, and node executors (0.952083ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 171.716834

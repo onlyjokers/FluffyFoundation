@@ -3,7 +3,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import * as fs from 'node:fs'; import * as fsp from 'node:fs/promises'; import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { readAssetServiceConfig, type AssetServiceConfig } from './assets.config.js';
 import type { AssetIndexFile, AssetKind, AssetRecord, StoredAssetRecord } from './assets.types.js';
@@ -386,6 +388,10 @@ export class AssetsService {
 
   getStoredAsset(id: string): StoredAssetRecord | null {
     return this.index.byId.get(id) ?? null;
+  }
+
+  listStoredAssets(): StoredAssetRecord[] {
+    return Array.from(this.index.byId.values());
   }
 
   getContentHeaders(id: string): { filePath: string; stored: StoredAssetRecord } | null {
