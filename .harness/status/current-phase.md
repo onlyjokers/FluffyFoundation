@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-08 - Root/Manager Product Split
+FF-09 - Semantic Graph Object Model And Command Bus
 
 ## Previous Acceptance
 
-FF-07 was accepted and committed as `45ee4ea Add realtime delivery contract`.
+FF-08 was accepted and committed as `4f12010 Split root and manager surfaces`.
 
 ## Active Claim
 
-Root becomes the heavy authoring environment; Manager becomes a lightweight performance console.
+Establish one semantic operation layer for Canvas, CLI/API, and AI.
 
 ## Work Status
 
-FF-08 Work implementation is prepared for Review. Root/Manager route separation, Manager bundle guards, published
-Group control proof, and full verification evidence are captured under `.harness/evidence/FF-08/`.
+FF-09 is active for the next bounded Plan-dispatched Work session. The FF-08 acceptance is recorded, and this
+status-transition boundary did not implement FF-09.

@@ -4,45 +4,47 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-08 - Root/Manager Product Split
+FF-09 - Semantic Graph Object Model And Command Bus
 
 ## Previous Acceptance
 
-FF-07 was accepted and committed as `45ee4ea Add realtime delivery contract`.
+FF-08 was accepted and committed as `4f12010 Split root and manager surfaces`.
 
 ## Current Boundary
 
-Root/Manager product split scope from `docs/harness/PLAN.md`:
+Semantic graph object model and command bus scope from `docs/harness/PLAN.md`:
 
-- `/root` owns graph authoring, Group publishing, permissions, recovery, and global stop.
-- `/manager` consumes published Groups and does not load heavy Rete/NodeCanvas bundles by default.
-- Shared stores are split into connection, client registry view, display status, group controls, and root authoring
-  domains.
-- Bundle and import guards prevent Manager from reabsorbing Root code.
-- Verification target includes build/bundle evidence showing Manager path excludes NodeCanvas/Rete and Manager can
-  perform existing control paths through published Group controls.
+- `SemanticGraphSnapshot` excludes UI noise but includes nodes, definitions, ports, params, Group boundaries,
+  connections, execution partitions, runtime status, device capabilities, errors, permissions, and current revision.
+- Command bus supports add/remove/archive node, connect/disconnect, update params, create/update/archive Group,
+  deploy/stop partition, and proposal workflow.
+- Commands are transactional: dry-run validation, policy check, apply, audit, history, and rollback token.
+- Canvas adapters translate UI gestures into commands instead of mutating graph internals directly.
+- Verification target includes a CLI fixture performing the same semantic operation as Canvas and a UI-only semantic
+  mutation guard that fails on direct graph mutation.
 
-Allowed FF-08 implementation boundary for a future bounded Work dispatch:
+Allowed FF-09 implementation boundary for a future bounded Work dispatch:
 
-- `/root` graph authoring, Group publishing, permissions, recovery, and global stop surfaces
-- `/manager` consumption of published Groups without loading heavy Rete/NodeCanvas bundles by default
-- split shared stores for connection, client registry view, display status, group controls, and root authoring domains
-- bundle and import guards preventing Manager from reabsorbing Root code
-- build/bundle evidence showing Manager path excludes NodeCanvas/Rete
-- verification that Manager can perform existing control paths through published Group controls
+- Semantic graph snapshot model for nodes, definitions, ports, params, Group boundaries, connections, execution
+  partitions, runtime status, device capabilities, errors, permissions, and current revision
+- Command bus operations for add/remove/archive node, connect/disconnect, update params, create/update/archive Group,
+  deploy/stop partition, and proposal workflow
+- Transactional command lifecycle with dry-run validation, policy check, apply, audit, history, and rollback token
+- Canvas adapters that translate UI gestures into commands instead of mutating graph internals directly
+- CLI fixture proving the same semantic operation as Canvas
+- UI-only semantic mutation guard that fails on direct graph mutation
 - `package.json` only for verification script wiring if required
-- `docs/harness/**` only for FF-08 policy/evidence/ADR references
+- `docs/harness/**` only for FF-09 policy/evidence/ADR references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-08/**`
+- `.harness/evidence/FF-09/**`
 
 ## Work Result
 
-FF-08 Work implementation is prepared for Review. The candidate separates `/manager` and `/manager/root`, adds
-published Group controls, splits Manager store domains, and wires FF-08 tests and bundle/import guards into
-`pnpm verify`.
+FF-08 has been accepted and committed. FF-09 is now active; this transition updates harness status only and does not
+implement the semantic graph object model or command bus.
 
 ## Next Expected Action
 
-Review should verify the FF-08 implementation candidate and decide accept-and-commit or return a bounded revision.
+The next Plan dispatch may start bounded FF-09 Work using the boundary above.
