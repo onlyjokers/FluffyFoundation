@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-16 - Asset, Media, Audio, And Visual Pipeline Hardening
+FF-17 - Plugin Host And Capability Lifecycle
 
 ## Previous Acceptance
 
-FF-15 was accepted and committed as `94dc057`.
+FF-16 was accepted and committed as `59661aa`.
 
 ## Active Claim
 
-Make performance media reliable under rehearsal and show conditions.
+Stop Tone, multimedia, visual, AI, and future integrations from each inventing lifecycle rules.
 
 ## Work Status
 
-FF-16 is active for the next bounded Plan-dispatched Work session. The FF-15 acceptance is recorded, and this
-status-transition boundary did not implement FF-16.
+FF-17 is active for the next bounded Plan-dispatched Work session. The FF-16 acceptance is recorded, and this
+status-transition boundary did not implement FF-17.
