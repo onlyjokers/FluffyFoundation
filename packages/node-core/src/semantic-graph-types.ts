@@ -127,6 +127,13 @@ export type CommandAuditEntry = {
   createdAt: string;
 };
 
+export type RollbackRecoveryStatus = {
+  status: 'redeployed' | 'stopped' | 'partial' | 'error';
+  stoppedPartitionIds: string[];
+  redeployedPartitionIds: string[];
+  errors: SemanticError[];
+};
+
 export type SemanticCommandResult =
   | {
       ok: true;
@@ -160,6 +167,13 @@ export type SemanticCommandBus = {
   rollback: (rollbackToken: string) => {
     ok: boolean;
     message?: string;
+    recovery?: RollbackRecoveryStatus;
+    snapshot: SemanticGraphSnapshot;
+  };
+  rollbackToRevision: (revision: number) => {
+    ok: boolean;
+    message?: string;
+    recovery?: RollbackRecoveryStatus;
     snapshot: SemanticGraphSnapshot;
   };
   getSnapshot: () => SemanticGraphSnapshot;

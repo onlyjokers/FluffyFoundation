@@ -5,6 +5,7 @@
 import type {
   CommandAuditEntry,
   CommandState,
+  RollbackRecoveryStatus,
   SemanticCommand,
   SemanticCommandBus,
   SemanticCommandBusInput,
@@ -20,6 +21,7 @@ import {
   normalizeGroups,
 } from './semantic-graph-snapshot.js';
 import { applySemanticCommand, validateSemanticCommand } from './semantic-command-apply.js';
+import { createSemanticHistory, type SemanticHistoryEntry } from './graph-state/history.js';
 
 export * from './semantic-graph-types.js';
 export { createSemanticGraphSnapshot } from './semantic-graph-snapshot.js';
@@ -37,6 +39,44 @@ const defaultPolicy: SemanticCommandPolicy = { canExecute: () => true };
 
 const commandOperation = (command: SemanticCommand): string => command.type;
 
+const cloneCommandState = (state: CommandState): CommandState => ({
+  graph: cloneGraph(state.graph),
+  groups: cloneGroups(state.groups),
+  partitions: clonePartitions(state.partitions),
+  proposals: cloneProposals(state.proposals),
+  revision: state.revision,
+});
+
+const recoveryForRollback = (current: CommandState, restored: CommandState): RollbackRecoveryStatus => {
+  const currentDeployed = current.partitions
+    .filter((partition) => partition.status === 'deployed')
+    .map((partition) => partition.id)
+    .sort();
+  const restoredDeployed = restored.partitions
+    .filter((partition) => partition.status === 'deployed')
+    .map((partition) => partition.id)
+    .sort();
+
+  return {
+    status: restoredDeployed.length > 0 ? 'redeployed' : 'stopped',
+    stoppedPartitionIds: currentDeployed,
+    redeployedPartitionIds: restoredDeployed,
+    errors: [],
+  };
+};
+
+const stateFromHistoryEntry = (
+  entry: SemanticHistoryEntry,
+  proposals: CommandState['proposals'],
+  nextRevision: number
+): CommandState => ({
+  graph: cloneGraph(entry.graph),
+  groups: cloneGroups(entry.groups ?? []),
+  partitions: clonePartitions(entry.partitions ?? []),
+  proposals: cloneProposals(proposals),
+  revision: nextRevision,
+});
+
 export function createSemanticCommandBus(input: SemanticCommandBusInput): SemanticCommandBus {
   const definitions = normalizeDefinitions(input.definitions);
   const auditLog: CommandAuditEntry[] = [];
@@ -49,6 +89,12 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     proposals: cloneProposals(input.proposals ?? []),
     revision: Number.isFinite(input.revision) ? Number(input.revision) : 0,
   };
+  const semanticHistory = createSemanticHistory({
+    graph: state.graph,
+    groups: state.groups,
+    partitions: state.partitions,
+    revision: state.revision,
+  });
 
   const snapshot = () =>
     createSemanticGraphSnapshot({
@@ -130,15 +176,15 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     };
 
     auditLog.push(audit);
-    if (!dryRun) {
-      rollbackSnapshots.set(rollbackToken, {
-        graph: cloneGraph(state.graph),
-        groups: cloneGroups(state.groups),
-        partitions: clonePartitions(state.partitions),
-        proposals: cloneProposals(state.proposals),
+      if (!dryRun) {
+      rollbackSnapshots.set(rollbackToken, cloneCommandState(state));
+      state = nextState;
+      semanticHistory.record({
+        graph: state.graph,
+        groups: state.groups,
+        partitions: state.partitions,
         revision: state.revision,
       });
-      state = nextState;
       history.push(audit);
     }
 
@@ -157,6 +203,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
   const rollback: SemanticCommandBus['rollback'] = (rollbackToken) => {
     const previous = rollbackSnapshots.get(String(rollbackToken));
     if (!previous) return { ok: false, message: 'Rollback token not found.', snapshot: snapshot() };
+    const recovery = recoveryForRollback(state, previous);
     state = {
       graph: cloneGraph(previous.graph),
       groups: cloneGroups(previous.groups),
@@ -164,12 +211,40 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       proposals: cloneProposals(previous.proposals),
       revision: state.revision + 1,
     };
-    return { ok: true, snapshot: snapshot() };
+    semanticHistory.record({
+      graph: state.graph,
+      groups: state.groups,
+      partitions: state.partitions,
+      revision: state.revision,
+    });
+    return { ok: true, recovery, snapshot: snapshot() };
+  };
+
+  const rollbackToRevision: SemanticCommandBus['rollbackToRevision'] = (revision) => {
+    const targetRevision = Number(revision);
+    if (!Number.isFinite(targetRevision)) {
+      return { ok: false, message: 'Rollback revision is invalid.', snapshot: snapshot() };
+    }
+    const previous = semanticHistory.getRevision(targetRevision);
+    if (!previous) {
+      return { ok: false, message: 'Semantic revision not found.', snapshot: snapshot() };
+    }
+    const restored = stateFromHistoryEntry(previous, state.proposals, state.revision + 1);
+    const recovery = recoveryForRollback(state, restored);
+    state = restored;
+    semanticHistory.record({
+      graph: state.graph,
+      groups: state.groups,
+      partitions: state.partitions,
+      revision: state.revision,
+    });
+    return { ok: true, recovery, snapshot: snapshot() };
   };
 
   return {
     dispatch,
     rollback,
+    rollbackToRevision,
     getSnapshot: snapshot,
     getHistory: () => [...history],
     getAuditLog: () => [...auditLog],
