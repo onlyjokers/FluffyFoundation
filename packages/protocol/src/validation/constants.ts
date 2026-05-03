@@ -35,6 +35,10 @@ export const PLUGIN_COMMANDS = [
   'deploy',
   'graph-changes',
   'remove',
+  'reclaim',
+  'release',
+  'archive',
+  'restore',
   'override-set',
   'override-remove',
 ] as const;

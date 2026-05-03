@@ -299,7 +299,7 @@ export interface ControlMessage extends BaseMessage {
 
 export type CommandEnvelopeFields = {
   actor: string;
-  role: ConnectionRole | 'system';
+  role: import('./control-plane.js').ControlPlaneActorRole | ConnectionRole | 'system';
   scopeGroupId: string;
   correlationId: string;
   idempotencyKey: string;
@@ -414,16 +414,7 @@ export type PluginId = AudioPluginId | VisualPluginId | SystemPluginId;
 /**
  * Plugin commands
  */
-export type PluginCommand =
-  | 'init'
-  | 'start'
-  | 'stop'
-  | 'configure'
-  | 'deploy'
-  | 'graph-changes'
-  | 'remove'
-  | 'override-set'
-  | 'override-remove';
+export type PluginCommand = 'init' | 'start' | 'stop' | 'configure' | 'deploy' | 'graph-changes' | 'remove' | 'reclaim' | 'release' | 'archive' | 'restore' | 'override-set' | 'override-remove';
 
 /**
  * Payload shape for incremental graph updates (opaque to protocol).

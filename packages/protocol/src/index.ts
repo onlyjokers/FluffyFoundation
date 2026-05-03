@@ -12,6 +12,9 @@ export * from './helpers.js';
 // Export command envelope contracts
 export * from './command-envelope.js';
 
+// Export ControlPlane V2 contracts
+export * from './control-plane.js';
+
 // Export state strategy contracts
 export * from './state-strategy.js';
 

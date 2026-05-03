@@ -32,7 +32,10 @@ export class AppController {
             clients,
             managers: this.clientRegistry.getAllManagers(),
             stateStrategy: createStateStrategyStatus(createStateStrategyConfigFromEnv()),
-            controlPlane: createControlPlaneSnapshot(clients),
+            controlPlane: createControlPlaneSnapshot(
+                clients,
+                this.clientRegistry.getAllGroupOwnershipEntries()
+            ),
             count: {
                 clients: this.clientRegistry.getClientCount(),
                 managers: this.clientRegistry.getManagerCount(),

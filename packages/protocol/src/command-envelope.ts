@@ -7,11 +7,12 @@ import {
   type MessageWithoutServerTimestamp,
   type NonSystemMutatingCommandMessage,
 } from './types.js';
+import type { ControlPlaneActorRole } from './control-plane.js';
 import { now } from './helpers.js';
 
 export interface CommandEnvelope {
   actor: string;
-  role: ConnectionRole | 'system';
+  role: ConnectionRole | ControlPlaneActorRole | 'system';
   scopeGroupId: string;
   correlationId: string;
   idempotencyKey: string;

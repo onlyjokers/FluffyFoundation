@@ -24,7 +24,17 @@ test('getControlPlaneSnapshot exposes selected client ownership from the registr
     },
     ownership: {
       'stage-left': {
-        owner: 'server-process',
+        groupId: 'stage-left',
+        owner: {
+          actorId: 'server-process',
+          role: 'service',
+          capabilities: ['group.view', 'partition.deploy', 'partition.stop'],
+        },
+        ownerStack: [],
+        transferable: true,
+        surface: 'public',
+        visibility: { defaultAccess: 'visible-readonly' },
+        archived: undefined,
         selectedClientIds: ['client-1'],
       },
     },

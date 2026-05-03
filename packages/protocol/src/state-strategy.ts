@@ -18,5 +18,5 @@ export interface ControlPlaneSnapshot {
     selectedClientIds: string[];
     revision: number;
   };
-  ownership: Record<string, { owner: 'server-process'; selectedClientIds: string[] }>;
+  ownership: Record<string, import('./control-plane.js').GroupOwnershipEntry>;
 }

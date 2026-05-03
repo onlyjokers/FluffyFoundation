@@ -11,6 +11,8 @@ export type ValidationRejectCode =
   | 'protocol.field.invalid'
   | 'protocol.scope.ambiguous'
   | 'server.policy.scope_mismatch'
+  | 'server.policy.ownership_denied'
+  | 'server.policy.capability_denied'
   | 'server.policy.unauthorized';
 
 export interface ValidationRejectReason {

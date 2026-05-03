@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { ClientInfo, ConnectionRole } from '@shugu/protocol';
+import type { ClientInfo, ConnectionRole, ControlPlaneActor, GroupOwnershipEntry } from '@shugu/protocol';
+import { GroupOwnershipRegistry } from './group-ownership-registry.js';
 
 interface ConnectionInfo {
     socketId: string;
@@ -24,6 +25,7 @@ export class ClientRegistryService {
     private managers: Map<string, ConnectionInfo> = new Map();
     private socketToClientId: Map<string, string> = new Map();
     private clientIdCounter = 0;
+    private readonly groupOwnership = new GroupOwnershipRegistry();
     private graceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
     private readonly gracePeriodMs = (() => {
         const raw = Number(process.env.SHUGU_CLIENT_GRACE_MS);
@@ -35,20 +37,12 @@ export class ClientRegistryService {
         this.clientExpiredHandlers.add(handler);
         return () => this.clientExpiredHandlers.delete(handler);
     }
-
-    /**
-     * Generate unique client ID
-     */
     private generateClientId(): string {
         this.clientIdCounter++;
         const timestamp = Date.now().toString(36);
         const counter = this.clientIdCounter.toString(36).padStart(4, '0');
         return `c_${timestamp}_${counter}`;
     }
-
-    /**
-     * Generate manager ID
-     */
     private generateManagerId(): string {
         const timestamp = Date.now().toString(36);
         return `m_${timestamp}`;
@@ -90,10 +84,6 @@ export class ClientRegistryService {
         });
         console.log(`[Registry] client expired: ${clientId}`);
     }
-
-    /**
-     * Register a new connection
-     */
     registerConnection(
         socketId: string,
         role: ConnectionRole,
@@ -234,10 +224,6 @@ export class ClientRegistryService {
     private isClientIdInUse(clientId: string): boolean {
         return this.clients.has(clientId) || this.managers.has(clientId);
     }
-
-    /**
-     * Unregister a connection by socket ID
-     */
     unregisterBySocketId(socketId: string): ConnectionInfo | null {
         const clientId = this.socketToClientId.get(socketId);
         if (!clientId) return null;
@@ -265,17 +251,9 @@ export class ClientRegistryService {
 
         return null;
     }
-
-    /**
-     * Get client info by client ID
-     */
     getClient(clientId: string): ConnectionInfo | undefined {
         return this.clients.get(clientId);
     }
-
-    /**
-     * Get socket ID by client ID
-     */
     getSocketId(clientId: string): string | undefined {
         const client = this.clients.get(clientId);
         if (client && client.connected) return client.socketId;
@@ -283,53 +261,29 @@ export class ClientRegistryService {
         if (manager && manager.connected) return manager.socketId;
         return undefined;
     }
-
-    /**
-     * Get client ID by socket ID
-     */
     getClientIdBySocketId(socketId: string): string | undefined {
         return this.socketToClientId.get(socketId);
     }
-
-    /**
-     * Check if socket is a manager
-     */
     isManager(socketId: string): boolean {
         const clientId = this.socketToClientId.get(socketId);
         if (!clientId) return false;
         return this.managers.has(clientId);
     }
-
-    /**
-     * Get all connections for a list of client IDs
-     */
     getSocketIds(clientIds: string[]): string[] {
         return clientIds
             .map(id => this.getSocketId(id))
             .filter((id): id is string => id !== undefined);
     }
-
-    /**
-     * Get all client socket IDs
-     */
     getAllClientSocketIds(): string[] {
         return Array.from(this.clients.values())
             .filter(c => c.connected)
             .map(c => c.socketId);
     }
-
-    /**
-     * Get all manager socket IDs
-     */
     getAllManagerSocketIds(): string[] {
         return Array.from(this.managers.values())
             .filter(m => m.connected)
             .map(m => m.socketId);
     }
-
-    /**
-     * Get all clients as ClientInfo array
-     */
     getAllClients(): ClientInfo[] {
         return Array.from(this.clients.values()).map(c => ({
             clientId: c.clientId,
@@ -341,62 +295,58 @@ export class ClientRegistryService {
             connected: c.connected,
         }));
     }
-
-    /**
-     * Get all managers
-     */
     getAllManagers(): { clientId: string; connectedAt: number }[] {
         return Array.from(this.managers.values()).map(m => ({
             clientId: m.clientId,
             connectedAt: m.connectedAt,
         }));
     }
-
-    /**
-     * Get client count
-     */
     getClientCount(): number {
         return this.clients.size;
     }
-
-    /**
-     * Get manager count
-     */
     getManagerCount(): number {
         return this.managers.size;
     }
-
-    /**
-     * Set client group
-     */
     setClientGroup(clientId: string, group: string): void {
         const client = this.clients.get(clientId);
         if (client) {
             client.group = group;
+            this.groupOwnership.ensure(group);
         }
     }
-
-    /**
-     * Set client selected state
-     */
     setClientSelected(clientId: string, selected: boolean): void {
         const client = this.clients.get(clientId);
         if (client && client.selected !== selected) {
             client.selected = selected;
         }
     }
-
-    /**
-     * Get clients by group
-     */
     getClientsByGroup(groupId: string): ConnectionInfo[] {
         return Array.from(this.clients.values()).filter(c => c.group === groupId && c.connected);
     }
-
-    /**
-     * Get selected clients
-     */
     getSelectedClients(): ConnectionInfo[] {
         return Array.from(this.clients.values()).filter(c => c.selected);
+    }
+    getGroupOwnershipEntry(groupId: string): GroupOwnershipEntry | undefined {
+        return this.groupOwnership.get(groupId);
+    }
+
+    getAllGroupOwnershipEntries(): GroupOwnershipEntry[] {
+        return this.groupOwnership.getAll();
+    }
+
+    reclaimGroupOwnership(groupId: string, owner: ControlPlaneActor): GroupOwnershipEntry {
+        return this.groupOwnership.reclaim(groupId, owner);
+    }
+
+    releaseGroupOwnership(groupId: string, actorId: string): GroupOwnershipEntry | undefined {
+        return this.groupOwnership.release(groupId, actorId);
+    }
+
+    archiveGroupOwnership(groupId: string): GroupOwnershipEntry {
+        return this.groupOwnership.archive(groupId);
+    }
+
+    restoreGroupOwnership(groupId: string): GroupOwnershipEntry {
+        return this.groupOwnership.restore(groupId);
     }
 }

@@ -28,6 +28,7 @@ import {
   validateMessage,
 } from '@shugu/protocol';
 import { sendServerControl } from '../protocol/server-messages.js';
+import { enforceGroupOwnership, isRootStopAll } from './group-ownership-policy.js';
 import { createSocketCorsOptions, resolveManagerRole } from '../bootstrap/security-policy.js';
 import {
   createStateStrategyConfigFromEnv,
@@ -242,6 +243,16 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         this.logRejectedMessage(client.id, [scopeRejectReason]);
         return;
       }
+
+      const ownershipRejectReason = enforceGroupOwnership({
+        message: validatedMessage,
+        registry: this.clientRegistry,
+        commandName: (msg) => this.commandName(msg),
+      });
+      if (ownershipRejectReason) {
+        this.logRejectedMessage(client.id, [ownershipRejectReason]);
+        return;
+      }
     }
 
     this.auditMutatingCommand(validatedMessage);
@@ -252,6 +263,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   private validateCommandScope(message: MessageWithoutServerTimestamp): ValidationRejectReason | null {
     if (!isNonSystemMutatingCommandMessage(message)) return null;
+
+    if (isRootStopAll(message)) return null;
 
     if (message.target.mode !== 'group') {
       return createPolicyRejectReason({

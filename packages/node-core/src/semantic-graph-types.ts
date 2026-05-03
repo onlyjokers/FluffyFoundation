@@ -4,6 +4,12 @@
 
 import type { Connection, GraphState, NodeDefinition, NodeInstance } from './types.js';
 import type { AgentNodeDefinitionSummary } from './node-definition-metadata.js';
+import type {
+  ControlPlaneActorRole,
+  ControlPlaneCapability,
+  ControlPlaneSurface,
+  ControlPlaneVisibilityAccess,
+} from '@shugu/protocol';
 
 export type SemanticActor = { id: string; role: string };
 
@@ -33,6 +39,19 @@ export type SemanticGroup = {
   disabled: boolean;
   archived?: boolean;
   runtimeActive?: boolean;
+  owner?: {
+    actorId: string;
+    role: ControlPlaneActorRole;
+    capabilities: ControlPlaneCapability[];
+  };
+  ownerStack?: Array<{
+    actorId: string;
+    role: ControlPlaneActorRole;
+    capabilities: ControlPlaneCapability[];
+  }>;
+  transferable?: boolean;
+  surface?: ControlPlaneSurface;
+  visibility?: { defaultAccess: ControlPlaneVisibilityAccess };
 };
 
 export type SemanticPartition = {
@@ -97,6 +116,10 @@ export type SemanticCommand =
   | { type: 'group.create'; group: SemanticGroup }
   | { type: 'group.update'; groupId: string; patch: Partial<SemanticGroup> }
   | { type: 'group.archive'; groupId: string }
+  | { type: 'group.delete'; groupId: string }
+  | { type: 'group.restore'; groupId: string }
+  | { type: 'group.reclaim'; groupId: string }
+  | { type: 'group.release'; groupId: string }
   | {
       type: 'partition.deploy';
       partitionId: string;
@@ -104,6 +127,7 @@ export type SemanticCommand =
       requiredCapabilities?: string[];
     }
   | { type: 'partition.stop'; partitionId: string }
+  | { type: 'partition.stop.all' }
   | { type: 'proposal.create'; proposal: SemanticProposal };
 
 export type SemanticCommandPolicy = {

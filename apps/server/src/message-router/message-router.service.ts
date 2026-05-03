@@ -216,7 +216,10 @@ export class MessageRouterService {
             payload: {
                 clients,
                 stateStrategy: createStateStrategyStatus(createStateStrategyConfigFromEnv()),
-                controlPlane: createControlPlaneSnapshot(clients),
+                controlPlane: createControlPlaneSnapshot(
+                    clients,
+                    this.clientRegistry.getAllGroupOwnershipEntries()
+                ),
             },
         }, Date.now());
 

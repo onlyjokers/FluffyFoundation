@@ -63,6 +63,10 @@ export function validateSemanticCommand(
       return isNonEmpty(command.group.id) ? null : 'Group id is required.';
     case 'group.update':
     case 'group.archive':
+    case 'group.delete':
+    case 'group.restore':
+    case 'group.reclaim':
+    case 'group.release':
       return groupIds.has(String(command.groupId)) ? null : `Group not found: ${command.groupId}`;
     case 'partition.deploy':
       if (!isNonEmpty(command.partitionId)) return 'Partition id is required.';
@@ -71,6 +75,8 @@ export function validateSemanticCommand(
         : 'Partition references unknown nodes.';
     case 'partition.stop':
       return isNonEmpty(command.partitionId) ? null : 'Partition id is required.';
+    case 'partition.stop.all':
+      return null;
     case 'proposal.create':
       return isNonEmpty(command.proposal.id) ? null : 'Proposal id is required.';
     default: {
@@ -145,9 +151,37 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
       );
       break;
     case 'group.archive':
+    case 'group.delete':
       next.groups = next.groups.map((group) =>
         group.id === command.groupId ? { ...group, archived: true } : group
       );
+      break;
+    case 'group.restore':
+      next.groups = next.groups.map((group) =>
+        group.id === command.groupId ? { ...group, archived: false } : group
+      );
+      break;
+    case 'group.reclaim':
+      next.groups = next.groups.map((group) => {
+        if (group.id !== command.groupId) return group;
+        return {
+          ...group,
+          ownerStack: group.owner ? [...(group.ownerStack ?? []), group.owner] : [...(group.ownerStack ?? [])],
+          owner: undefined,
+        };
+      });
+      break;
+    case 'group.release':
+      next.groups = next.groups.map((group) => {
+        if (group.id !== command.groupId) return group;
+        const ownerStack = [...(group.ownerStack ?? [])];
+        const owner = ownerStack.pop();
+        return {
+          ...group,
+          owner,
+          ownerStack,
+        };
+      });
       break;
     case 'partition.deploy':
       next.partitions = [
@@ -169,6 +203,9 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
       if (!next.partitions.some((partition) => partition.id === command.partitionId)) {
         next.partitions.push({ id: command.partitionId, nodeIds: [], status: 'stopped' });
       }
+      break;
+    case 'partition.stop.all':
+      next.partitions = next.partitions.map((partition) => ({ ...partition, status: 'stopped' }));
       break;
     case 'proposal.create':
       next.proposals = [

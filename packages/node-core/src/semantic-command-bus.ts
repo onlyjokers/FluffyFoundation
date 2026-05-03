@@ -10,6 +10,8 @@ import type {
   SemanticCommandBus,
   SemanticCommandBusInput,
   SemanticCommandPolicy,
+  SemanticActor,
+  SemanticGraphSnapshot,
 } from './semantic-graph-types.js';
 import {
   cloneGraph,
@@ -22,6 +24,11 @@ import {
 } from './semantic-graph-snapshot.js';
 import { applySemanticCommand, validateSemanticCommand } from './semantic-command-apply.js';
 import { createSemanticHistory, type SemanticHistoryEntry } from './graph-state/history.js';
+import {
+  CONTROL_PLANE_CAPABILITIES_BY_ROLE,
+  type ControlPlaneActorRole,
+  type ControlPlaneCapability,
+} from '@shugu/protocol';
 
 export * from './semantic-graph-types.js';
 export { createSemanticGraphSnapshot } from './semantic-graph-snapshot.js';
@@ -149,6 +156,16 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     let nextState: CommandState;
     try {
       nextState = applySemanticCommand(state, command);
+      if (command.type === 'group.reclaim') {
+        nextState.groups = nextState.groups.map((group) =>
+          group.id === command.groupId
+            ? {
+                ...group,
+                owner: ownershipActorForSemanticActor(actor),
+              }
+            : group
+        );
+      }
     } catch (err) {
       return {
         ok: false,
@@ -249,4 +266,117 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     getHistory: () => [...history],
     getAuditLog: () => [...auditLog],
   };
+}
+
+export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
+  return {
+    canExecute: ({ actor, command, snapshot }) => {
+      const role = normalizeRole(actor.role);
+      const capabilities = new Set(CONTROL_PLANE_CAPABILITIES_BY_ROLE[role] ?? []);
+
+      if (command.type === 'proposal.create') {
+        return capabilities.has('proposal.create')
+          ? { allowed: true }
+          : { allowed: false, reason: 'Actor lacks proposal.create capability.' };
+      }
+
+      if (command.type === 'partition.stop.all') {
+        return role === 'root' && capabilities.has('root.stopAll')
+          ? { allowed: true }
+          : { allowed: false, reason: 'Root stop-all emergency authority is required.' };
+      }
+
+      const group = groupForCommand(snapshot.groups, command);
+      if (!group) {
+        const capability = requiredCapability(command);
+        return capability && !capabilities.has(capability)
+          ? { allowed: false, reason: `Actor lacks ${capability} capability.` }
+          : { allowed: true };
+      }
+
+      if (role === 'root') return { allowed: true };
+
+      if (command.type === 'group.reclaim') {
+        if (!capabilities.has('group.reclaim')) {
+          return { allowed: false, reason: 'Actor lacks group.reclaim capability.' };
+        }
+        if (!group.transferable) {
+          return { allowed: false, reason: 'Group is not transferable.' };
+        }
+        return { allowed: true };
+      }
+
+      if (command.type === 'group.release') {
+        if (!isOwner(actor.id, group)) {
+          return { allowed: false, reason: 'Only the current Group owner can release ownership.' };
+        }
+        return capabilities.has('group.release')
+          ? { allowed: true }
+          : { allowed: false, reason: 'Actor lacks group.release capability.' };
+      }
+
+      const capability = requiredCapability(command);
+      if (capability && !capabilities.has(capability)) {
+        return { allowed: false, reason: role === 'ai'
+          ? 'AI actors must use proposal workflow for direct Canvas mutations.'
+          : `Actor lacks ${capability} capability.` };
+      }
+
+      if (!isOwner(actor.id, group)) {
+        const access = group.visibility?.defaultAccess ?? 'visible-readonly';
+        return {
+          allowed: false,
+          reason: `Group is ${access}; actor is not the owner.`,
+        };
+      }
+
+      return { allowed: true };
+    },
+  };
+}
+
+function normalizeRole(role: string): ControlPlaneActorRole {
+  return role === 'root' ||
+    role === 'manager' ||
+    role === 'client' ||
+    role === 'service' ||
+    role === 'ai'
+    ? role
+    : 'client';
+}
+
+function ownershipActorForSemanticActor(actor: SemanticActor) {
+  const role = normalizeRole(actor.role);
+  return {
+    actorId: actor.id,
+    role,
+    capabilities: [...(CONTROL_PLANE_CAPABILITIES_BY_ROLE[role] ?? [])],
+  };
+}
+
+function isOwner(actorId: string, group: { owner?: { actorId: string } }): boolean {
+  return group.owner?.actorId === actorId;
+}
+
+function requiredCapability(command: SemanticCommand): ControlPlaneCapability | null {
+  if (command.type.startsWith('node.') || command.type === 'group.update') return 'group.mutate';
+  if (command.type === 'group.archive' || command.type === 'group.delete') return 'group.archive';
+  if (command.type === 'group.restore') return 'group.restore';
+  if (command.type === 'partition.deploy') return 'partition.deploy';
+  if (command.type === 'partition.stop') return 'partition.stop';
+  return null;
+}
+
+function groupForCommand(groups: SemanticGraphSnapshot['groups'], command: SemanticCommand) {
+  if ('groupId' in command) {
+    return groups.find((group) => group.id === command.groupId) ?? null;
+  }
+  if ('nodeId' in command) {
+    return groups.find((group) => group.nodeIds.includes(command.nodeId)) ?? null;
+  }
+  if (command.type === 'node.connect') {
+    return groups.find((group) => group.nodeIds.includes(command.connection.sourceNodeId)) ?? null;
+  }
+  if (command.type === 'node.add') return null;
+  return null;
 }

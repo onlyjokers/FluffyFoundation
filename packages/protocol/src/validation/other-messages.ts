@@ -129,5 +129,35 @@ function validateControlPlaneSnapshot(value: unknown, ctx: MutableValidationCont
 
   if (value.ownership !== undefined && !isRecord(value.ownership)) {
     addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership', 'payload.controlPlane.ownership', 'payload.controlPlane.ownership must be an object');
+  } else if (isRecord(value.ownership)) {
+    Object.entries(value.ownership).forEach(([groupId, entry]) => {
+      validateControlPlaneOwnershipEntry(entry, ctx, `payload.controlPlane.ownership.${groupId}`);
+    });
+  }
+}
+
+function validateControlPlaneOwnershipEntry(
+  entry: unknown,
+  ctx: MutableValidationContext,
+  path: string
+): void {
+  if (!isRecord(entry)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership', path, `${path} must be an object`);
+    return;
+  }
+  if (!isRecord(entry.owner) && entry.owner !== 'server-process') {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership.owner', `${path}.owner`, `${path}.owner must be an object`);
+  }
+  if (entry.ownerStack !== undefined && !Array.isArray(entry.ownerStack)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership.ownerStack', `${path}.ownerStack`, `${path}.ownerStack must be an array`);
+  }
+  if (entry.transferable !== undefined && typeof entry.transferable !== 'boolean') {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership.transferable', `${path}.transferable`, `${path}.transferable must be a boolean`);
+  }
+  if (entry.surface !== undefined && !isOneOf(entry.surface, ['public', 'internal'] as const)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership.surface', `${path}.surface`, `${path}.surface must be public or internal`);
+  }
+  if (entry.selectedClientIds !== undefined && (!Array.isArray(entry.selectedClientIds) || entry.selectedClientIds.some((id) => typeof id !== 'string'))) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.controlPlane.ownership.selectedClientIds', `${path}.selectedClientIds`, `${path}.selectedClientIds must be a string array`);
   }
 }

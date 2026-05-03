@@ -82,6 +82,22 @@ test('ManagerSDK sendMedia preserves caller scope envelope', () => {
   assert.equal((emitted[0] as { role?: string }).role, 'manager');
 });
 
+test('ManagerSDK sendPluginControl preserves reclaim command envelope for Group ownership', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'manager-reclaim', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.sendPluginControl({ mode: 'group', groupId: 'stage-left' }, 'node-executor', 'reclaim');
+
+  assert.equal(emitted.length, 1);
+  assert.equal((emitted[0] as { type?: string }).type, 'plugin');
+  assert.equal((emitted[0] as { command?: string }).command, 'reclaim');
+  assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'stage-left');
+  assert.equal((emitted[0] as { actor?: string }).actor, 'manager-reclaim');
+});
+
 test('ManagerSDK coalesces latest-state controls and flushes the last value after throttle', async () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',
