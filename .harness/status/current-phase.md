@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-07 - Realtime Delivery Contract, Backpressure, And Final-Value Semantics
+FF-08 - Root/Manager Product Split
 
 ## Previous Acceptance
 
-FF-06 was accepted and committed as `74aa818 Add single-server state strategy guard`.
+FF-07 was accepted and committed as `45ee4ea Add realtime delivery contract`.
 
 ## Active Claim
 
-Make realtime throttling predictable instead of two layers silently dropping state.
+Root becomes the heavy authoring environment; Manager becomes a lightweight performance console.
 
 ## Work Status
 
-FF-07 implementation is ready for Review. Work added the shared delivery contract, SDK/server backpressure behavior,
-latest-state replay/removal semantics, metrics, deterministic tests, and bounded load evidence.
+FF-08 is the active next task. The next Plan dispatch may start bounded FF-08 Work, but the FF-07 to FF-08
+status-transition boundary must not implement FF-08.
