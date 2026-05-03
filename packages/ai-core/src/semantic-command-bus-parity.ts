@@ -126,6 +126,7 @@ const changedTargetsFor = (command: AiSemanticCommand): string[] => {
   if (command.type === 'group.create') return [String(command.group.id)];
   if ('groupId' in command) return [String(command.groupId)];
   if ('partitionId' in command) return [String(command.partitionId)];
+  if (command.type === 'proposal.approve') return [String(command.proposalId)];
   return [];
 };
 

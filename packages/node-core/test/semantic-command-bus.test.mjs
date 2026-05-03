@@ -253,6 +253,53 @@ test('command bus handles groups, partitions, params, disconnect, and proposals 
   assert.equal(snapshot.proposals?.[0].id, 'proposal:1');
 });
 
+test('command bus restores archived nodes and approves proposals with audit history', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'n1',
+          type: 'number',
+          position: { x: 50, y: 80 },
+          config: { value: 2, archived: true },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions,
+    revision: 20,
+    proposals: [
+      {
+        id: 'proposal:restore',
+        title: 'Restore number node',
+        status: 'proposed',
+        commands: [{ type: 'node.restore', nodeId: 'n1' }],
+      },
+    ],
+  });
+
+  const restored = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.restore', nodeId: 'n1' },
+  });
+
+  assert.equal(restored.ok, true);
+  assert.equal(bus.getSnapshot().nodes.find((node) => node.id === 'n1')?.params.archived, false);
+  assert.equal(restored.audit.lifecycle.includes('rollback-token'), true);
+
+  const approved = bus.dispatch({
+    actor: { id: 'manager', role: 'manager' },
+    command: { type: 'proposal.approve', proposalId: 'proposal:restore', approvedBy: 'manager' },
+  });
+
+  assert.equal(approved.ok, true);
+  assert.equal(bus.getSnapshot().proposals?.[0].status, 'accepted');
+  assert.equal(bus.getSnapshot().proposals?.[0].approvedBy, 'manager');
+  assert.equal(bus.getHistory().length, 2);
+});
+
 test('partition lifecycle commands bind target platform, status, rollback, and revision', () => {
   const bus = createSemanticCommandBus({
     graph: baseGraph,

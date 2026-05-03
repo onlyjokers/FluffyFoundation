@@ -143,3 +143,34 @@ test('AI actor can create proposals but cannot directly mutate Canvas graph or r
   assert.equal(direct.ok, false);
   assert.match(direct.message, /proposal/);
 });
+
+test('unauthorized actor cannot approve proposals through semantic command bus policy', () => {
+  const bus = createSemanticCommandBus({
+    graph,
+    groups: [ownedGroup],
+    definitions: [{ type: 'number', label: 'Number', category: 'Values', inputs: [], outputs: [], configSchema: [] }],
+    policy: createGroupSovereigntyPolicy(),
+    revision: 40,
+    proposals: [
+      {
+        id: 'proposal:restricted',
+        title: 'Restricted approval',
+        status: 'proposed',
+        commands: [{ type: 'node.params.update', nodeId: 'n1', params: { value: 7 } }],
+      },
+    ],
+  });
+
+  const denied = bus.dispatch({
+    actor: { id: 'ai-1', role: 'ai' },
+    command: { type: 'proposal.approve', proposalId: 'proposal:restricted', approvedBy: 'ai-1' },
+  });
+
+  assert.equal(denied.ok, false);
+  assert.equal(denied.stage, 'policy');
+  assert.match(denied.message, /approval authority/);
+  assert.equal(bus.getSnapshot().proposals?.[0]?.status, 'proposed');
+  assert.equal(bus.getSnapshot().revision, 40);
+  assert.equal(bus.getHistory().length, 0);
+  assert.equal(bus.getAuditLog().length, 0);
+});

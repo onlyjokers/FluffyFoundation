@@ -20,6 +20,7 @@ export type AiSemanticCommand =
     }
   | { type: 'node.remove'; nodeId: string }
   | { type: 'node.archive'; nodeId: string }
+  | { type: 'node.restore'; nodeId: string }
   | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown> }
   | { type: 'node.disconnect'; connectionId: string }
   | {
@@ -54,7 +55,8 @@ export type AiSemanticCommand =
       requiredCapabilities?: string[];
       expectedRevision?: number;
     }
-  | { type: 'partition.stop'; partitionId: string; expectedRevision?: number };
+  | { type: 'partition.stop'; partitionId: string; expectedRevision?: number }
+  | { type: 'proposal.approve'; proposalId: string; approvedBy?: string };
 
 export type AiCommandProposal = {
   id: string;

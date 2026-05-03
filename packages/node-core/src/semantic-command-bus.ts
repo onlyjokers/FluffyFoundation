@@ -281,6 +281,12 @@ export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
           : { allowed: false, reason: 'Actor lacks proposal.create capability.' };
       }
 
+      if (command.type === 'proposal.approve') {
+        return role === 'manager' || role === 'root' || role === 'service'
+          ? { allowed: true }
+          : { allowed: false, reason: 'Manager, service, or root approval authority is required.' };
+      }
+
       if (command.type === 'partition.stop.all') {
         return role === 'root' && capabilities.has('root.stopAll')
           ? { allowed: true }

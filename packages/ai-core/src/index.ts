@@ -9,3 +9,4 @@ export * from './golden-scenario-fixtures.js';
 export * from './semantic-command-bus-parity.js';
 export * from './operator-acceptance-fixtures.js';
 export * from './group-partition-parity-fixtures.js';
+export * from './remaining-command-surfaces-fixtures.js';

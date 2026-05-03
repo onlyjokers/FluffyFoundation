@@ -118,6 +118,7 @@ export type SemanticCommand =
   | { type: 'node.add'; node: NodeInstance }
   | { type: 'node.remove'; nodeId: string }
   | { type: 'node.archive'; nodeId: string }
+  | { type: 'node.restore'; nodeId: string }
   | { type: 'node.connect'; connection: Connection }
   | { type: 'node.disconnect'; connectionId: string }
   | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown> }
@@ -144,7 +145,8 @@ export type SemanticCommand =
   | { type: 'partition.redeploy'; partitionId: string; expectedRevision?: number }
   | { type: 'partition.report.failure'; partitionId: string; report: PartitionFailureReport }
   | { type: 'partition.stop.all' }
-  | { type: 'proposal.create'; proposal: SemanticProposal };
+  | { type: 'proposal.create'; proposal: SemanticProposal }
+  | { type: 'proposal.approve'; proposalId: string; approvedBy?: string };
 
 export type SemanticCommandPolicy = {
   canExecute: (input: {

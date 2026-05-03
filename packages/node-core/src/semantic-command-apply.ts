@@ -128,6 +128,7 @@ export function validateSemanticCommandDetailed(
     }
     case 'node.remove':
     case 'node.archive':
+    case 'node.restore':
       return nodeIds.has(String(command.nodeId)) ? [] : [missingNode(String(command.nodeId), 'node')];
     case 'node.params.update': {
       if (!nodeIds.has(String(command.nodeId))) return [missingNode(String(command.nodeId), 'node')];
@@ -333,6 +334,14 @@ export function validateSemanticCommandDetailed(
               'Provide a non-empty proposal id.',
             ]),
           ];
+    case 'proposal.approve':
+      return isNonEmpty(command.proposalId) && state.proposals.some((proposal) => proposal.id === command.proposalId)
+        ? []
+        : [
+            validationError('POLICY.PROPOSAL_NOT_FOUND', `proposals.${command.proposalId}`, 'Proposal not found.', [
+              'Refresh proposals and choose an existing proposal id.',
+            ]),
+          ];
   }
 }
 
@@ -355,6 +364,8 @@ const commandToChanges = (command: SemanticCommand): GraphChange[] => {
       return [{ type: 'remove-node', nodeId: command.nodeId }];
     case 'node.archive':
       return [{ type: 'update-node-config', nodeId: command.nodeId, config: { archived: true } }];
+    case 'node.restore':
+      return [{ type: 'update-node-config', nodeId: command.nodeId, config: { archived: false } }];
     case 'node.connect':
       return [{ type: 'add-connection', connection: command.connection }];
     case 'node.disconnect':
@@ -391,6 +402,13 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
       next.graph.nodes = next.graph.nodes.map((node) =>
         String(node.id) === String(command.nodeId)
           ? { ...node, config: { ...(node.config ?? {}), archived: true } }
+          : node
+      );
+      break;
+    case 'node.restore':
+      next.graph.nodes = next.graph.nodes.map((node) =>
+        String(node.id) === String(command.nodeId)
+          ? { ...node, config: { ...(node.config ?? {}), archived: false } }
           : node
       );
       break;
@@ -534,6 +552,13 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
         ...next.proposals.filter((proposal) => proposal.id !== command.proposal.id),
         { ...command.proposal, status: command.proposal.status ?? 'proposed' },
       ];
+      break;
+    case 'proposal.approve':
+      next.proposals = next.proposals.map((proposal) =>
+        proposal.id === command.proposalId
+          ? { ...proposal, status: 'accepted', ...(command.approvedBy ? { approvedBy: command.approvedBy } : {}) }
+          : proposal
+      );
       break;
   }
 
