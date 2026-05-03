@@ -31,7 +31,30 @@ export type AiSemanticCommand =
         targetNodeId: string;
         targetPortId: string;
       };
-    };
+    }
+  | {
+      type: 'group.create';
+      group: {
+        id: string;
+        parentId: string | null;
+        name: string;
+        nodeIds: string[];
+        disabled: boolean;
+        [key: string]: unknown;
+      };
+    }
+  | { type: 'group.update'; groupId: string; patch: Record<string, unknown> }
+  | { type: 'group.archive'; groupId: string }
+  | { type: 'group.restore'; groupId: string }
+  | {
+      type: 'partition.deploy';
+      partitionId: string;
+      nodeIds: string[];
+      targetPlatform?: string;
+      requiredCapabilities?: string[];
+      expectedRevision?: number;
+    }
+  | { type: 'partition.stop'; partitionId: string; expectedRevision?: number };
 
 export type AiCommandProposal = {
   id: string;

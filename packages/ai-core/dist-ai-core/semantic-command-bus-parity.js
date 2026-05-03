@@ -43,6 +43,12 @@ const changedTargetsFor = (command) => {
         return [String(command.connection.id)];
     if (command.type === 'node.disconnect')
         return [String(command.connectionId)];
+    if (command.type === 'group.create')
+        return [String(command.group.id)];
+    if ('groupId' in command)
+        return [String(command.groupId)];
+    if ('partitionId' in command)
+        return [String(command.partitionId)];
     return [];
 };
 export function runAiSemanticCommandBusParityFixture(input) {
@@ -64,7 +70,7 @@ export function runAiSemanticCommandBusParityFixture(input) {
         });
         const execution = createAiProposalExecutionCore({
             bus: aiBus,
-            policy: {
+            policy: input.policyForCase?.(item) ?? {
                 allowedOperations: [item.command.type],
                 approvalRequiredOperations: [],
                 deniedOperations: [],

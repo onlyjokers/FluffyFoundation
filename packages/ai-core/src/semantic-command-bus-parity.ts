@@ -20,6 +20,7 @@ import {
 } from './observation-repair.js';
 import {
   createAiProposalExecutionCore,
+  type AiProposalExecutionPolicy,
   type AiProposalExecutionResult,
 } from './proposal-execution.js';
 
@@ -122,6 +123,9 @@ const changedTargetsFor = (command: AiSemanticCommand): string[] => {
   if (command.type === 'node.add') return [String(command.node.id)];
   if (command.type === 'node.connect') return [String(command.connection.id)];
   if (command.type === 'node.disconnect') return [String(command.connectionId)];
+  if (command.type === 'group.create') return [String(command.group.id)];
+  if ('groupId' in command) return [String(command.groupId)];
+  if ('partitionId' in command) return [String(command.partitionId)];
   return [];
 };
 
@@ -129,6 +133,7 @@ export function runAiSemanticCommandBusParityFixture(input: {
   actor?: AiSemanticActor;
   directActor?: AiSemanticActor;
   cases: AiSemanticCommandBusParityCase[];
+  policyForCase?: (item: AiSemanticCommandBusParityCase) => AiProposalExecutionPolicy;
 }): AiSemanticCommandBusParityTrace[] {
   const actor = input.actor ?? defaultActor;
   const directActor = input.directActor ?? defaultDirectActor;
@@ -149,7 +154,7 @@ export function runAiSemanticCommandBusParityFixture(input: {
     });
     const execution = createAiProposalExecutionCore({
       bus: aiBus,
-      policy: {
+      policy: input.policyForCase?.(item) ?? {
         allowedOperations: [item.command.type],
         approvalRequiredOperations: [],
         deniedOperations: [],

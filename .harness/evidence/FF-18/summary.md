@@ -478,3 +478,123 @@ Verification notes:
 - Browser/runtime proof remains intentionally deferred for WP6 because Plan scoped this packet to deterministic source/tests only.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
+
+## WP7 - AI Group And Partition Semantic Runtime Parity
+
+Implemented:
+- `@shugu/ai-core` now exposes `runAiGroupPartitionParityFixtures`, a deterministic fixture runner for Group internals and execution partition semantic command coverage.
+- The fixture composes the existing semantic context, raw-command planner/proposal execution, observation evaluator, command-bus parity runner, and real `@shugu/node-core` command bus instances.
+- Covered Group surfaces: `group.create`, `group.update`, `group.archive`, and `group.restore`.
+- Covered partition surfaces: `partition.deploy` and `partition.stop`, including an approval-required stop case that dry-runs but stops before apply/history/rollback.
+- AI-visible traces include command sequence, dry-run/apply policy, apply/approval status, audit/history/rollback metadata, expected output/effect text, risk level, parity flags, and an explicit structured runtime-observation deferral note.
+- `AiSemanticCommand` now includes the bounded Group and partition command shapes needed for WP7 raw-command proposals. No Canvas/Rete/UI mutation path or server/runtime wiring was added.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/group-partition-parity.test.mjs
+PASS: 1 test, 0 failures
+
+node --test packages/ai-core/test/*.test.mjs
+PASS: 24 tests, 0 failures
+```
+
+Deterministic Group/partition parity fixture output:
+
+```json
+[
+  {
+    "caseId": "group-create",
+    "commandType": "group.create",
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "policy": "allowed",
+    "historyStatus": "applied",
+    "rollbackReference": "ai-rollback:proposal:wp5:group-create:rollback:70:3",
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "observed": "success",
+    "risk": "medium",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  },
+  {
+    "caseId": "group-update",
+    "commandType": "group.update",
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "policy": "allowed",
+    "historyStatus": "applied",
+    "rollbackReference": "ai-rollback:proposal:wp5:group-update:rollback:80:3",
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "observed": "success",
+    "risk": "medium",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  },
+  {
+    "caseId": "group-archive",
+    "commandType": "group.archive",
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "policy": "allowed",
+    "historyStatus": "applied",
+    "rollbackReference": "ai-rollback:proposal:wp5:group-archive:rollback:90:3",
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "observed": "success",
+    "risk": "medium",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  },
+  {
+    "caseId": "group-restore",
+    "commandType": "group.restore",
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "policy": "allowed",
+    "historyStatus": "applied",
+    "rollbackReference": "ai-rollback:proposal:wp5:group-restore:rollback:100:3",
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "observed": "success",
+    "risk": "medium",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  },
+  {
+    "caseId": "partition-deploy",
+    "commandType": "partition.deploy",
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "policy": "allowed",
+    "historyStatus": "applied",
+    "rollbackReference": "ai-rollback:proposal:wp5:partition-deploy:rollback:110:3",
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "observed": "success",
+    "risk": "high",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  },
+  {
+    "caseId": "partition-stop",
+    "commandType": "partition.stop",
+    "status": { "dryRun": "dry-run-passed", "apply": "applied" },
+    "policy": "allowed",
+    "historyStatus": "applied",
+    "rollbackReference": "ai-rollback:proposal:wp5:partition-stop:rollback:120:3",
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "observed": "success",
+    "risk": "high",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  },
+  {
+    "caseId": "partition-stop-approval",
+    "commandType": "partition.stop",
+    "approvalRequired": true,
+    "status": { "dryRun": "dry-run-passed", "apply": "approval-required" },
+    "policy": "approval-required",
+    "historyStatus": null,
+    "rollbackReference": null,
+    "parity": { "appliedRevisionMatches": false, "snapshotMatches": false, "commandTypeMatches": true },
+    "observed": "failed",
+    "risk": "high",
+    "runtimeObservation": { "deferred": true, "reasonCode": "BROWSER_RUNTIME_PROOF_DEFERRED" }
+  }
+]
+```
+
+Verification notes:
+- Browser/runtime proof remains intentionally deferred for WP7 because Plan scoped this packet to deterministic source/tests only.
+- Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
+- `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.

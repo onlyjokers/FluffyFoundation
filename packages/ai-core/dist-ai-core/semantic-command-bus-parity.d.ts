@@ -4,7 +4,7 @@
 import { type AiContextRedactionMetadata, type AiSemanticContext } from './semantic-context.js';
 import { createDeterministicSemanticPlanner, type AiDryRunCommandResult, type AiSemanticActor, type AiSemanticCommand } from './deterministic-planner.js';
 import { type AiObservationEvaluation } from './observation-repair.js';
-import { type AiProposalExecutionResult } from './proposal-execution.js';
+import { type AiProposalExecutionPolicy, type AiProposalExecutionResult } from './proposal-execution.js';
 type ParityBus = {
     getSnapshot: () => Record<string, unknown>;
     dispatch: (input: {
@@ -67,6 +67,7 @@ export declare function runAiSemanticCommandBusParityFixture(input: {
     actor?: AiSemanticActor;
     directActor?: AiSemanticActor;
     cases: AiSemanticCommandBusParityCase[];
+    policyForCase?: (item: AiSemanticCommandBusParityCase) => AiProposalExecutionPolicy;
 }): AiSemanticCommandBusParityTrace[];
 export {};
 //# sourceMappingURL=semantic-command-bus-parity.d.ts.map
