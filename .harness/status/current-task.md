@@ -4,43 +4,43 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-15 - Display Transport Unification And Multi-Display Routing
+FF-16 - Asset, Media, Audio, And Visual Pipeline Hardening
 
 ## Previous Acceptance
 
-FF-14 was accepted and committed as `cbe7528 Add execution partition lifecycle`.
+FF-15 was accepted and committed as `94dc057`.
 
 ## Current Boundary
 
-Display Transport Unification And Multi-Display Routing scope from `docs/harness/PLAN.md`:
+Asset, Media, Audio, And Visual Pipeline Hardening scope from `docs/harness/PLAN.md`:
 
-- Local MessagePort and server fallback implement the same transport interface.
-- Display status distinguishes discovered, paired, reachable, degraded, fallback, and failed.
-- Multi-display routing supports groups, named displays, capabilities, local media limits, and server-deliverable assets.
-- Display operations report ack/nack with reason.
-- Verification targets are local bridge success, forced local bridge failure fallback through server with visible output
-  update, and a multi-display routing fixture sending different outputs to two displays.
+- Asset manifest with IDs, checksums, MIME, kind, duration/dimensions, variants, cache policy, and permissions.
+- Preload/readiness model for client/display with timeout and retry.
+- Unified media/audio/visual node side effects and cleanup.
+- Local-media references are portable or clearly marked local-only.
+- Verification targets are upload/preload/play scenarios for image, video, and audio; missing asset actionable error;
+  and stop-all clearing media, sound, color, visual scenes, and node executors.
 
-Allowed FF-15 implementation boundary for a future bounded Work dispatch:
+Allowed FF-16 implementation boundary for a future bounded Work dispatch:
 
-- Local MessagePort and server fallback transport unification behind one transport interface
-- Display status states for discovered, paired, reachable, degraded, fallback, and failed
-- Multi-display routing for groups, named displays, capabilities, local media limits, and server-deliverable assets
-- Structured ack/nack with reason for Display operations
-- Tests proving local bridge success, forced local bridge failure fallback through server with visible output update, and
-  different outputs routed to two displays
-- `docs/harness/**` only for FF-15 policy/evidence/ADR references
+- Asset manifest fields for IDs, checksums, MIME, kind, duration/dimensions, variants, cache policy, and permissions
+- Client/display preload and readiness behavior with timeout and retry
+- Unified cleanup for media/audio/visual node side effects
+- Portable local-media references, or explicit local-only marking when portability is not possible
+- Tests proving upload/preload/play for image, video, and audio; actionable missing asset errors; and stop-all clearing
+  media, sound, color, visual scenes, and node executors
+- `docs/harness/**` only for FF-16 policy/evidence/ADR references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-15/**`
+- `.harness/evidence/FF-16/**`
 
 ## Work Result
 
-FF-14 has been accepted and committed. FF-15 is now active; this transition updates harness status only and does not
-implement Display transport unification, local MessagePort behavior, server fallback behavior, Display status states,
-multi-display routing, media routing limits, server-deliverable asset handling, or Display operation ack/nack behavior.
+FF-15 has been accepted and committed as `94dc057`. FF-16 is now active; this transition updates harness status only
+and does not implement asset manifest behavior, preload/readiness behavior, media/audio/visual side-effect cleanup,
+local-media portability behavior, upload/preload/play behavior, missing asset errors, or stop-all cleanup behavior.
 
 ## Next Expected Action
 
-The next Plan dispatch may start bounded FF-15 Work using the boundary above.
+The next Plan dispatch may start bounded FF-16 Work using the boundary above.

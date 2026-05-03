@@ -76,6 +76,7 @@ apps/**/data/
 .harness/handoffs/*
 !.harness/handoffs/.gitkeep
 !.harness/handoffs/2026-05-03-FF-08-root-manager-product-split.md
+!.harness/handoffs/2026-05-03-FF-15-to-FF-16-status-transition.md
 
 # Python Cache
 **/__pycache__/
