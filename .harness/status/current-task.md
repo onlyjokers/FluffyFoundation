@@ -4,44 +4,43 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-11 - Graph Validation, Migrations, History, And Rollback
+FF-12 - Group Sovereignty And ControlPlane V2
 
 ## Previous Acceptance
 
-FF-10 was accepted and committed as `19f6b2b Add node registry v2 metadata`.
+FF-11 was accepted and committed as `4616ab8 Add graph validation history and rollback`.
 
 ## Current Boundary
 
-Graph Validation, Migrations, History, And Rollback scope from `docs/harness/PLAN.md`:
+Group Sovereignty And ControlPlane V2 scope from `docs/harness/PLAN.md`:
 
-- Validator checks endpoint existence, port compatibility, param bounds, Group boundaries, execution platform,
-  side effects, cycles, disabled nodes, and deployability.
-- Versioned graph/project schema with migrations and fixtures.
-- Semantic history captures meaningful changes but excludes layout-only noise.
-- Rollback restores previous semantic revision and stops/redeploys partitions safely.
-- Verification target includes old fixtures migrating to current, bad connections and param overflow failing with
-  structured errors, and a rollback scenario restoring output behavior.
+- Group owner, owner stack, transferable flag, public/internal surfaces, visible-but-not-editable policy, reclaim,
+  release, archive, and restore.
+- Root always has emergency authority.
+- Manager, client, service, and AI operators have explicit capabilities and scope.
+- Server enforces Group ownership for commands.
+- Verification target includes illegal actor denial tests, Manager reclaim and Root stop-all scenario, and Group archive
+  as default delete behavior.
 
-Allowed FF-11 implementation boundary for a future bounded Work dispatch:
+Allowed FF-12 implementation boundary for a future bounded Work dispatch:
 
-- Graph validator checks for endpoint existence, port compatibility, param bounds, Group boundaries, execution platform,
-  side effects, cycles, disabled nodes, and deployability
-- Versioned graph/project schema, migrations, and migration fixtures
-- Semantic history that captures meaningful graph changes and excludes layout-only noise
-- Rollback that restores the previous semantic revision and safely stops/redeploys execution partitions
-- Tests/fixtures proving old fixtures migrate, invalid connections and param overflow produce structured errors, and
-  rollback restores output behavior
-- `docs/harness/**` only for FF-11 policy/evidence/ADR references
+- Group owner, owner stack, transferable flag, public/internal surfaces, visible-but-not-editable policy, reclaim,
+  release, archive, and restore
+- Root emergency authority across Group ownership
+- Explicit Manager/client/service/AI operator capabilities and scope
+- Server-side Group ownership enforcement for commands
+- Tests proving illegal actor denial, Manager reclaim, Root stop-all, and Group archive as default delete behavior
+- `docs/harness/**` only for FF-12 policy/evidence/ADR references
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
-- `.harness/evidence/FF-11/**`
+- `.harness/evidence/FF-12/**`
 
 ## Work Result
 
-FF-10 has been accepted and committed. FF-11 is now active; this transition updates harness status only and does not
-implement graph validation, migrations, semantic history, rollback, or runtime behavior.
+FF-11 has been accepted and committed. FF-12 is now active; this transition updates harness status only and does not
+implement Group sovereignty, ControlPlane V2, server ownership enforcement, or runtime behavior.
 
 ## Next Expected Action
 
-The next Plan dispatch may start bounded FF-11 Work using the boundary above.
+The next Plan dispatch may start bounded FF-12 Work using the boundary above.

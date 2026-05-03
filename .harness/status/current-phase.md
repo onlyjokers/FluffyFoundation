@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-11 - Graph Validation, Migrations, History, And Rollback
+FF-12 - Group Sovereignty And ControlPlane V2
 
 ## Previous Acceptance
 
-FF-10 was accepted and committed as `19f6b2b Add node registry v2 metadata`.
+FF-11 was accepted and committed as `4616ab8 Add graph validation history and rollback`.
 
 ## Active Claim
 
-Make graph state safe to evolve and recover.
+Make Group ownership the central authorization unit.
 
 ## Work Status
 
-FF-11 is active for the next bounded Plan-dispatched Work session. The FF-10 acceptance is recorded, and this
-status-transition boundary did not implement FF-11.
+FF-12 is active for the next bounded Plan-dispatched Work session. The FF-11 acceptance is recorded, and this
+status-transition boundary did not implement FF-12.
