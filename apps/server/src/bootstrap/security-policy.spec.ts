@@ -84,3 +84,16 @@ test('HTTP and Socket.IO CORS options fail closed in production and preserve exp
     'https://control.example.test',
   ]);
 });
+
+test('Socket.IO CORS uses a real wildcard origin for local development defaults', () => {
+  assert.equal(
+    createSocketCorsOptions({
+      nodeEnv: undefined,
+      managerKey: undefined,
+      allowInsecureManager: undefined,
+      corsOrigins: undefined,
+      hasHttps: true,
+    }).origin,
+    '*'
+  );
+});

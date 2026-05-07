@@ -10,6 +10,7 @@
         "dev:dlx": "pnpm dlx @nestjs/cli@^10 nest start --watch --path tsconfig.dev.json",
         "start": "node dist-out/main.js",
         "start:prod": "node dist-out/main.js",
+        "test": "pnpm run build && node --test test/*.test.mjs",
         "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\"",
         "clean": "rm -rf dist-local dist-dev"
     },

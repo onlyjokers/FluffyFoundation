@@ -12,7 +12,7 @@ export type ServerSecurityConfig = {
 };
 
 export type SocketCorsOptions = {
-  origin: string[];
+  origin: string[] | string;
   methods: string[];
 };
 
@@ -117,7 +117,7 @@ export function createSocketCorsOptions(config: ServerSecurityConfig): SocketCor
   const origins = parseCorsOrigins(config.corsOrigins);
 
   return {
-    origin: production ? origins : origins.length > 0 ? origins : ['*'],
+    origin: production ? origins : origins.length > 0 ? origins : '*',
     methods: ['GET', 'POST'],
   };
 }
