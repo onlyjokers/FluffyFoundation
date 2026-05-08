@@ -720,8 +720,8 @@ Implemented:
   shared validation helpers.
 - Split large AI Operator acceptance fixtures into focused support, type, and fixture-bus modules.
 - Split FF-18 golden scenario and remaining command surface fixture helpers into smaller files.
-- Updated FF-18 evidence/status/handoff to record that deterministic proof remains strong, but runtime/browser/product
-  proof is still blocked.
+- Updated FF-18 evidence/status/handoff to record that deterministic proof remains strong and the previous Manager
+  socket certificate blocker is no longer current, but GS-12/GS-13 product proof is still blocked.
 
 Focused proof:
 
@@ -751,7 +751,7 @@ git diff --check
 PASS
 ```
 
-Runtime/browser proof:
+Runtime/browser proof from the earlier 2026-05-08 check:
 
 ```text
 curl -k -I https://localhost:3001/health
@@ -773,6 +773,29 @@ chrome-devtools network
 FAIL: Socket.IO polling to https://localhost:3001/socket.io/?role=manager... fails with NET::ERR_CERT_AUTHORITY_INVALID.
 ```
 
+Clean runtime/browser recheck:
+
+```text
+browser-use browser_navigate https://localhost:3001/health
+PASS: health JSON rendered in the browser.
+
+browser-use browser_click Connect
+PASS: reached the main Manager UI with Published Group Controls, Clients (0), Display, Performance Mode, and Server
+State panels.
+
+chrome-devtools list_console_messages includePreservedMessages=false
+PASS: no certificate or SDK connection errors after navigation; only Svelte unknown-prop warnings.
+
+chrome-devtools list_network_requests includePreservedRequests=false
+PASS: Socket.IO polling requests to https://localhost:3001/socket.io returned HTTP 200.
+
+chrome-devtools navigate to https://localhost:5173/manager/root + Connect + click Node Graph
+PASS: Root Node Graph rendered Start, minimap controls, and Minimap canvas.
+
+chrome-devtools take_screenshot
+PASS: saved .harness/evidence/FF-18/root-node-graph-2026-05-08.png.
+```
+
 Blocking proof:
 
 ```text
@@ -786,6 +809,9 @@ FAIL: harness:hotspots fails on apps/server/src/assets/assets.service.ts
 Verification notes:
 - The FF-18 refactor removed newly introduced AI/node-core hotspot warnings; the remaining hotspot failure is in
   `apps/server/**`, outside the active FF-18 review contract allowed implementation paths.
-- Browser/runtime/product proof for GS-12 and GS-13 remains blocked; deterministic fixtures are not counted as product
-  proof.
+- The earlier Manager Socket.IO certificate blocker is superseded by the clean recheck. Browser proof now covers
+  Manager connectivity and Root Node Graph visibility.
+- Browser/runtime/product proof for GS-12 and GS-13 remains blocked because Manager/root visibility is not a live
+  gyro/client/device/output scenario and is not live display visual-output observation. Deterministic fixtures are not
+  counted as product proof.
 - No manager key or password is recorded in evidence.

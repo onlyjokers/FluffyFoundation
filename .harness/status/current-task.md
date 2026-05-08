@@ -87,11 +87,14 @@ The next Plan dispatch must choose one of these paths:
 ## Runtime Browser Investigation Update
 
 2026-05-08 real runtime/browser checking confirms that chrome-devtools MCP and browser-use MCP are available, Manager
-and Server are both reachable by `curl -k`, and Manager login reaches the connect panel as user Eureka.
+and Server are both reachable by `curl -k`, browser-use can render the server health JSON, Manager login reaches the
+connect panel as user Eureka, Manager connects to the server with Socket.IO polling HTTP 200, and the Root Node Graph
+renders Start/minimap controls.
 
-FF-18 remains blocked because the browser Manager socket connection to `https://localhost:3001/socket.io` fails with
-`NET::ERR_CERT_AUTHORITY_INVALID`, so workspace/canvas proof for GS-12 and GS-13 is still missing. Current validation
-also stops at `harness:hotspots` because `apps/server/src/assets/assets.service.ts` exceeds its ratchet max; that path
-is outside the FF-18 review contract allowed implementation scope.
+FF-18 remains blocked because GS-12 and GS-13 still lack product scenario proof: current browser proof only covers
+Manager/root reachability, not live gyro/client/device/output behavior or live display visual-output observation.
+Runtime override set/clear remains explicitly deferred. Current validation also stops at `harness:hotspots` because
+`apps/server/src/assets/assets.service.ts` exceeds its ratchet max; that path is outside the FF-18 review contract
+allowed implementation scope.
 
 Evidence: `.harness/evidence/FF-18/runtime-browser-investigation.md`.

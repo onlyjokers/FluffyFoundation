@@ -24,8 +24,8 @@ This reconciliation does not implement FF-18 product/runtime behavior and does n
 | AI-visible mutations pass through policy, validation, audit, history, rollback, and redaction | deterministic | WP2, WP5, WP6, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | In-memory command bus path is covered. |
 | Required FF-18 command surfaces are represented | deterministic | WP5, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | deferred | missing | Runtime override set/clear are explicitly `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`. |
 | AI cannot mutate Canvas/Rete/Svelte/UI internals directly | deterministic/static | Recorded `rg` checks in WP2-WP8 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | No UI mutation path is claimed. |
-| GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | missing | `.harness/evidence/FF-18/summary.md` | blocked | missing | Fixture proves command/effect trace only, not real sensor/client output. |
-| GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | missing | `.harness/evidence/FF-18/summary.md` | blocked | missing | Fixture proves structured observation only, not live display/browser visual change. |
+| GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | Manager socket and Root Node Graph visible, but no live gyro/client/device/output scenario | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves command/effect trace only; current browser proof only proves Manager/root reachability. |
+| GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | Manager socket and Root Node Graph visible, but no live display visual-output scenario | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves structured observation only; current browser proof does not prove live display visual change. |
 | GS-14 AI repairs param overflow or incompatible graph using structured validation errors | deterministic | `packages/ai-core/test/golden-scenario-contract.test.mjs`; `packages/ai-core/test/observation-repair.test.mjs` | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Structured validation/repair proof exists. |
 | Prompt-injection-like registry/context data is inert and cannot bypass policy | deterministic | `packages/ai-core/test/operator-acceptance.test.mjs`; WP6 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records non-execution and policy denial. |
 | Secret-like values and private local paths are redacted before AI-visible context | deterministic | WP1, WP4, WP6 fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records redaction counts and examples. |
@@ -35,8 +35,8 @@ This reconciliation does not implement FF-18 product/runtime behavior and does n
 
 - Required runtime, browser, or product proof is missing and no valid dated risk acceptance exists.
 - Browser/runtime proof would be substituted with deterministic fixtures if FF-18 were marked complete now.
-- Completing the missing proof appears to require product/browser/runtime integration beyond the current reconciliation
-  step.
+- Completing the missing GS-12/GS-13 proof may require client/display/device/runtime orchestration beyond the current
+  FF-18 review contract.
 - `pnpm harness:verify` currently fails on hotspot ratchets in product/source files outside this reconciliation scope.
 
 ## Runtime Browser Investigation Update
@@ -54,7 +54,7 @@ Object at index [0] is available in the EventsModule context.
 
 See `.harness/evidence/FF-18/runtime-browser-investigation.md`.
 
-2026-05-08 follow-up checking improved the runtime picture but did not resolve FF-18 acceptance:
+An earlier 2026-05-08 follow-up check improved the runtime picture but did not resolve FF-18 acceptance:
 
 ```text
 curl -k -I https://localhost:3001/health
@@ -73,9 +73,38 @@ chrome-devtools network
 FAIL: Socket.IO polling to https://localhost:3001/socket.io/?role=manager... fails with NET::ERR_CERT_AUTHORITY_INVALID.
 ```
 
-This keeps the current blocker active rather than resolving it: obtaining required browser/runtime/product proof appears
-to require a bounded dev-certificate, manager connection, or server runtime change outside the current FF-18 review
-contract implementation scope.
+That earlier check kept the then-current blocker active rather than resolving it: obtaining required
+browser/runtime/product proof appeared to require a bounded dev-certificate, manager connection, or server runtime
+change outside the current FF-18 review contract implementation scope.
+
+2026-05-08 clean recheck supersedes the Manager socket certificate blocker:
+
+```text
+browser-use browser_navigate https://localhost:3001/health
+PASS: health JSON rendered in the browser.
+
+browser-use browser_navigate https://localhost:5173/manager/
+PASS: reached the Manager connect screen while logged in as Eureka.
+
+browser-use browser_click Connect
+PASS: reached the main Manager UI with Published Group Controls, Clients (0), Display, Performance Mode, and Server
+State panels.
+
+chrome-devtools list_console_messages includePreservedMessages=false
+PASS: no certificate or SDK connection errors after navigation; only Svelte unknown-prop warnings.
+
+chrome-devtools list_network_requests includePreservedRequests=false
+PASS: Socket.IO polling requests to https://localhost:3001/socket.io returned HTTP 200.
+
+chrome-devtools navigate to https://localhost:5173/manager/root + Connect + click Node Graph
+PASS: Root Node Graph rendered Start, minimap controls, and Minimap canvas.
+
+chrome-devtools take_screenshot
+PASS: saved .harness/evidence/FF-18/root-node-graph-2026-05-08.png.
+```
+
+This improves runtime evidence but does not complete FF-18: GS-12 and GS-13 still lack product scenario proof, and
+runtime override set/clear remains explicitly deferred.
 
 ## Validation Snapshot
 
