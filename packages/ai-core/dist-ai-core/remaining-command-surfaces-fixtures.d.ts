@@ -3,7 +3,7 @@
  */
 import type { AiSemanticActor } from './deterministic-planner.js';
 import type { AiRemainingCommandSurfaceCase, AiRemainingCommandSurfaceTrace } from './remaining-command-surfaces-types.js';
-export type { AiRemainingCommandSurfaceCase, AiRemainingCommandSurfaceTrace, AiRollbackRevisionTrace, AiRuntimeOverrideTrace, } from './remaining-command-surfaces-types.js';
+export type { AiRemainingCommandSurfaceCase, AiRemainingCommandSurfaceTrace, AiRollbackRevisionTrace, } from './remaining-command-surfaces-types.js';
 export declare function runAiRemainingCommandSurfaceFixtures(input: {
     actor?: AiSemanticActor;
     directActor?: AiSemanticActor;

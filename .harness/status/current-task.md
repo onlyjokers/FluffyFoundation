@@ -183,8 +183,6 @@ flashlight permission gates remain intact by deterministic test.
 
 Remaining blockers are not GS-12 deploy/capability blockers:
 
-- runtime override set/clear remains deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` without dated risk
-  acceptance;
 - GS-13 is still only partial because the bounded Manager Published Display `screenColor` chain is proven, but the full
   breathing-like AI scenario and AI observation loop are not product-proven.
 
@@ -216,3 +214,18 @@ Fresh validation after the 2026-05-09 GS-12 capability/runtime proof:
   `Deploy failed: missing required capabilities: flashlight` and no `Deploy timeout`
 - Runtime/browser positive proof: PASS, explicit DEV e2e proof flag deploys the GS-12 loop and records a `flashlight`
   command in the client e2e command log
+
+Fresh validation after the 2026-05-09 runtime override semantic surface update:
+
+- `corepack pnpm@8.15.9 --filter @shugu/node-core run build`: PASS
+- `node --test packages/node-core/test/semantic-command-bus.test.mjs`: PASS, 9 tests, 0 failures
+- `corepack pnpm@8.15.9 --filter @shugu/ai-core run build`: PASS
+- `node --test packages/ai-core/test/remaining-command-surfaces.test.mjs`: PASS, 1 test, 0 failures
+- `python3 .harness/scripts/check_hotspots.py`: FAIL only at the known out-of-scope baseline
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`; no new hotspot failure remains
+- `corepack pnpm@8.15.9 verify`: FAIL only at the same known out-of-scope hotspot after dependency guards, lint,
+  build, node-core tests, FF-08 tests, FF-09 tests, node spec validation, offline node-executor e2e, and FF-08 Manager
+  boundary guard pass
+- Runtime override set/clear is now a deterministic semantic command surface with validation, audit, history,
+  `runtimeStatus.runtimeOverrides`, and rollback metadata. This does not claim browser/live Manager runtime delivery
+  proof.

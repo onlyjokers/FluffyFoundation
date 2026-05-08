@@ -9,6 +9,7 @@ import {
   cloneGroups,
   clonePartitions,
   cloneProposals,
+  cloneRuntimeStatus,
 } from './semantic-graph-snapshot.js';
 
 const commandToChanges = (command: SemanticCommand): GraphChange[] => {
@@ -36,6 +37,7 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
     groups: cloneGroups(state.groups),
     partitions: clonePartitions(state.partitions),
     proposals: cloneProposals(state.proposals),
+    runtimeStatus: cloneRuntimeStatus(state.runtimeStatus),
     revision: state.revision,
   };
 
@@ -201,6 +203,38 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
         status: 'stopped',
         boundRevision: state.revision + 1,
       }));
+      break;
+    case 'runtime.override.set':
+      next.runtimeStatus = {
+        ...next.runtimeStatus,
+        runtimeOverrides: [
+          ...(next.runtimeStatus.runtimeOverrides ?? []).filter(
+            (override) =>
+              override.nodeId !== command.nodeId ||
+              override.portId !== command.portId ||
+              (override.kind ?? 'input') !== (command.kind ?? 'input')
+          ),
+          {
+            nodeId: command.nodeId,
+            portId: command.portId,
+            kind: command.kind ?? 'input',
+            value: command.value,
+            ...(command.ttlMs === undefined ? {} : { ttlMs: command.ttlMs }),
+            updatedAtRevision: state.revision + 1,
+          },
+        ],
+      };
+      break;
+    case 'runtime.override.clear':
+      next.runtimeStatus = {
+        ...next.runtimeStatus,
+        runtimeOverrides: (next.runtimeStatus.runtimeOverrides ?? []).filter(
+          (override) =>
+            override.nodeId !== command.nodeId ||
+            override.portId !== command.portId ||
+            (override.kind ?? 'input') !== (command.kind ?? 'input')
+        ),
+      };
       break;
     case 'proposal.create':
       next.proposals = [

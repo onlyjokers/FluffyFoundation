@@ -69,6 +69,25 @@ export const effectFor = (command: AiSemanticCommand): AiProposalDryRunResult['e
       params: { status: 'accepted' },
     };
   }
+  if (command.type === 'runtime.override.set') {
+    return {
+      summary: 'Runtime override set is routed through the semantic command bus and recorded as runtime status intent.',
+      targetNodeId: command.nodeId,
+      params: {
+        portId: command.portId,
+        kind: command.kind ?? 'input',
+        value: command.value,
+        ...(command.ttlMs === undefined ? {} : { ttlMs: command.ttlMs }),
+      },
+    };
+  }
+  if (command.type === 'runtime.override.clear') {
+    return {
+      summary: 'Runtime override clear is routed through the semantic command bus and removes runtime status intent.',
+      targetNodeId: command.nodeId,
+      params: { portId: command.portId, kind: command.kind ?? 'input' },
+    };
+  }
   return {
     summary: `Semantic command bus operation: ${command.type}.`,
     targetNodeId: 'nodeId' in command ? String(command.nodeId) : null,
@@ -79,6 +98,8 @@ export const effectFor = (command: AiSemanticCommand): AiProposalDryRunResult['e
 export const riskFor = (command: AiSemanticCommand): AiProposalDryRunResult['risk'] =>
   command.type === 'proposal.approve'
     ? { level: 'medium', reasons: ['Approving proposals changes human approval state and must preserve audit history.'] }
+    : command.type === 'runtime.override.set' || command.type === 'runtime.override.clear'
+      ? { level: 'medium', reasons: ['Runtime overrides can affect live deployed behavior and require audit/rollback metadata.'] }
     : { level: 'low', reasons: ['Restoring an archived node changes semantic graph availability through reversible metadata.'] };
 
 export const redacted = <T>(value: T): T => redactAiContextValue(value).value as T;

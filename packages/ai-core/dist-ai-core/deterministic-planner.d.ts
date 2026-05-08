@@ -76,6 +76,18 @@ export type AiSemanticCommand = {
     partitionId: string;
     expectedRevision?: number;
 } | {
+    type: 'runtime.override.set';
+    nodeId: string;
+    portId: string;
+    kind?: 'input' | 'output' | 'param';
+    value: unknown;
+    ttlMs?: number;
+} | {
+    type: 'runtime.override.clear';
+    nodeId: string;
+    portId: string;
+    kind?: 'input' | 'output' | 'param';
+} | {
     type: 'proposal.approve';
     proposalId: string;
     approvedBy?: string;

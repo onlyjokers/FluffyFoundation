@@ -22,7 +22,7 @@ This reconciliation does not implement FF-18 product/runtime behavior and does n
 | AI semantic context excludes UI noise and includes required graph/runtime/policy/redaction fields | deterministic | `packages/ai-core/test/semantic-context.test.mjs`; WP1 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records redaction and layout-noise exclusion. |
 | AI proposals dry-run semantic operations through shared command bus/API shape | deterministic | WP1, WP2, WP5, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence is command-bus/fixture proof, not live product proof. |
 | AI-visible mutations pass through policy, validation, audit, history, rollback, and redaction | deterministic | WP2, WP5, WP6, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | In-memory command bus path is covered. |
-| Required FF-18 command surfaces are represented | deterministic | WP5, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | deferred | missing | Runtime override set/clear are explicitly `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`. |
+| Required FF-18 command surfaces are represented | deterministic | WP5, WP7, WP8 tests and fixture outputs; 2026-05-09 runtime override semantic command bus tests | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Runtime override set/clear are now executable semantic command bus traces with audit/history/rollback metadata. |
 | AI cannot mutate Canvas/Rete/Svelte/UI internals directly | deterministic/static | Recorded `rg` checks in WP2-WP8 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | No UI mutation path is claimed. |
 | GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; Node Graph deploy lane TDD tests | Manager socket and Root Node Graph visible; client e2e page opens; managed client Group registration is proven; Node Graph `node-executor/reclaim` and `node-executor/deploy` are accepted by server policy/ownership for `client:<clientId>`; live flashlight execution is still rejected because the current e2e client lacks `flashlight` capability | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves command/effect trace only; current browser proof narrows the product blocker to capability/runtime device proof, not server scope/ownership. |
 | GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; SDK/group-control TDD coverage for the product-proof lane | Bounded Manager Published Display `screenColor` product chain is proven: server accepts `reclaim` and `screenColor` for `scopeGroupId=display`, and Display changes from black to full-viewport blue-purple | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | partial | missing | Live Display output proof exists for the bounded product chain, but the full breathing-like AI scenario and AI observation loop are not product-proven. |
@@ -355,7 +355,90 @@ Acceptance impact:
 | --- | --- | --- |
 | GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Runtime/browser proof shows live deploy reaches client NodeExecutor and executes a flashlight command in explicit DEV e2e proof mode; deterministic proof shows production camera-denied runtime remains blocked | proven for FF-18 e2e proof lane |
 | Deterministic fixtures are separated from runtime proof | Deterministic tests cover ordering and capability gate logic; separate browser runtime scripts prove Manager/Client/Server interaction | proven |
-| Deferred proof governed by dated risk acceptance | No new dated risk acceptance was created; runtime override set/clear and full GS-13 AI observation remain unaccepted blockers | blocked |
-| FF-18 completion | Still incomplete because runtime override set/clear remains unproven/deferred and full GS-13 AI observation remains partial | incomplete |
+| Deferred proof governed by dated risk acceptance | No new dated risk acceptance was created; full GS-13 AI observation remains an unaccepted blocker | blocked |
+| FF-18 completion | Still incomplete because full GS-13 AI observation remains partial | incomplete |
 
 FF-19 must not start yet.
+
+## 2026-05-09 Runtime Override Semantic Surface Update
+
+The FF-18 deterministic semantic command surface now covers runtime override set/clear without entering Manager runtime
+or browser delivery code.
+
+TDD proof:
+
+```text
+RED:
+node --test packages/node-core/test/semantic-command-bus.test.mjs
+FAIL: runtime.override.set/clear commands were not validated or applied.
+
+RED:
+node --test packages/ai-core/test/remaining-command-surfaces.test.mjs
+FAIL: runtime-override-set remained status="deferred" instead of "executable".
+
+GREEN:
+corepack pnpm@8.15.9 --filter @shugu/node-core run build
+PASS
+
+node --test packages/node-core/test/semantic-command-bus.test.mjs
+PASS: 9 tests, 0 failures
+
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+node --test packages/ai-core/test/remaining-command-surfaces.test.mjs
+PASS: 1 test, 0 failures
+```
+
+Implementation evidence:
+
+```text
+packages/node-core/src/semantic-graph-types.ts
+PASS: SemanticCommand includes runtime.override.set and runtime.override.clear.
+
+packages/node-core/src/semantic-command-runtime-validation.ts
+PASS: runtime override commands validate node id, port id, and ttl boundaries.
+
+packages/node-core/src/semantic-command-mutations.ts
+PASS: set records runtimeStatus.runtimeOverrides; clear removes matching override intent.
+
+packages/node-core/src/semantic-command-state.ts
+PASS: command bus rollback state is split out so semantic-command-bus.ts remains below the hotspot ratchet.
+
+packages/ai-core/src/remaining-command-surfaces-fixtures.ts
+PASS: WP8 runtime override traces now use the executable command-bus parity path.
+```
+
+Acceptance impact:
+
+| Criterion | Evidence | Status |
+| --- | --- | --- |
+| Runtime override set/clear command surface | Deterministic command bus and AI parity tests prove validation, audit, history, runtime status snapshot, and rollback metadata | proven-deterministic |
+| Browser/live Manager runtime override delivery | Not claimed; no `apps/manager/**/patch-runtime.ts` or browser delivery path was modified | not-required-for-this deterministic surface update |
+| Hotspot ratchets | `semantic-command-bus.ts` was split to `semantic-command-state.ts`; fresh hotspot check shows only the existing `apps/server/src/assets/assets.service.ts` baseline failure | no new hotspot failure |
+
+Fresh validation:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run lint
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/node-core run lint
+PASS
+
+node --test packages/ai-core/test/*.test.mjs packages/node-core/test/semantic-command-bus.test.mjs packages/node-core/test/group-ownership-policy.test.mjs
+PASS: 40 tests, 0 failures
+
+corepack pnpm@8.15.9 validate:node-specs
+PASS: 49 files, 26 warnings, 0 errors
+
+python3 .harness/scripts/validate_acceptance_contracts.py
+PASS
+
+git diff --check
+PASS
+
+corepack pnpm@8.15.9 verify
+FAIL: all prior guard/lint/build/test/e2e steps passed; harness:hotspots failed only at the known out-of-scope
+baseline `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`.
+```

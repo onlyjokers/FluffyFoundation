@@ -411,6 +411,99 @@ test('partition lifecycle rejects revision mismatch and records structured failu
   assert.equal(partition?.failureReport?.resourceBudget?.observedTickHz, 75);
 });
 
+test('runtime override commands record live override intent with audit and rollback', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions,
+    runtimeStatus: { running: true, deployedPartitionIds: ['partition:client'] },
+    revision: 30,
+  });
+
+  const setOverride = bus.dispatch({
+    actor: { id: 'ai:runtime', role: 'ai' },
+    command: {
+      type: 'runtime.override.set',
+      nodeId: 'n1',
+      portId: 'value',
+      kind: 'input',
+      value: 0.9,
+      ttlMs: 5000,
+    },
+  });
+
+  assert.equal(setOverride.ok, true);
+  assert.equal(setOverride.audit.command.type, 'runtime.override.set');
+  assert.equal(setOverride.audit.lifecycle.includes('rollback-token'), true);
+  assert.deepEqual(bus.getSnapshot().runtimeStatus.runtimeOverrides, [
+    {
+      nodeId: 'n1',
+      portId: 'value',
+      kind: 'input',
+      value: 0.9,
+      ttlMs: 5000,
+      updatedAtRevision: 31,
+    },
+  ]);
+
+  const clearOverride = bus.dispatch({
+    actor: { id: 'ai:runtime', role: 'ai' },
+    command: {
+      type: 'runtime.override.clear',
+      nodeId: 'n1',
+      portId: 'value',
+      kind: 'input',
+    },
+  });
+
+  assert.equal(clearOverride.ok, true);
+  assert.deepEqual(bus.getSnapshot().runtimeStatus.runtimeOverrides, []);
+
+  const rolledBack = bus.rollback(clearOverride.rollbackToken);
+  assert.equal(rolledBack.ok, true);
+  assert.deepEqual(bus.getSnapshot().runtimeStatus.runtimeOverrides, [
+    {
+      nodeId: 'n1',
+      portId: 'value',
+      kind: 'input',
+      value: 0.9,
+      ttlMs: 5000,
+      updatedAtRevision: 31,
+    },
+  ]);
+});
+
+test('runtime override commands validate node, port, and ttl boundaries', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions,
+    revision: 40,
+  });
+
+  const missingNode = bus.dispatch({
+    actor: { id: 'ai:runtime', role: 'ai' },
+    command: { type: 'runtime.override.set', nodeId: 'missing', portId: 'value', value: 1 },
+    dryRun: true,
+  });
+  assert.equal(missingNode.ok, false);
+  assert.equal(missingNode.validationErrors[0].code, 'GRAPH.MISSING_NODE');
+
+  const missingPort = bus.dispatch({
+    actor: { id: 'ai:runtime', role: 'ai' },
+    command: { type: 'runtime.override.set', nodeId: 'n1', portId: '', value: 1 },
+    dryRun: true,
+  });
+  assert.equal(missingPort.ok, false);
+  assert.equal(missingPort.validationErrors[0].code, 'RUNTIME.INVALID_OVERRIDE');
+
+  const invalidTtl = bus.dispatch({
+    actor: { id: 'ai:runtime', role: 'ai' },
+    command: { type: 'runtime.override.set', nodeId: 'n1', portId: 'value', value: 1, ttlMs: -1 },
+    dryRun: true,
+  });
+  assert.equal(invalidTtl.ok, false);
+  assert.equal(invalidTtl.validationErrors[0].code, 'RUNTIME.INVALID_OVERRIDE_TTL');
+});
+
 test('semantic command dry-run returns structured validation errors for param overflow and incompatible ports', () => {
   const bus = createSemanticCommandBus({
     graph: {

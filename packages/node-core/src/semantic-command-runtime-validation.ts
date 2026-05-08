@@ -60,6 +60,9 @@ export const validateRuntimeCommand = (
       return validateFailureReport(command);
     case 'partition.stop.all':
       return [];
+    case 'runtime.override.set':
+    case 'runtime.override.clear':
+      return validateRuntimeOverride(command, nodeIds);
     case 'proposal.create':
       return isNonEmpty(command.proposal.id)
         ? []
@@ -77,6 +80,37 @@ export const validateRuntimeCommand = (
             ]),
           ];
   }
+};
+
+const validateRuntimeOverride = (
+  command: Extract<SemanticCommand, { type: 'runtime.override.set' | 'runtime.override.clear' }>,
+  nodeIds: Set<string>
+): SemanticValidationError[] => {
+  if (!nodeIds.has(String(command.nodeId))) {
+    return [
+      validationError('GRAPH.MISSING_NODE', `nodes.${command.nodeId}`, `Node not found: ${command.nodeId}`, [
+        'Refresh the semantic snapshot and choose an existing node id.',
+      ]),
+    ];
+  }
+  if (!isNonEmpty(command.portId)) {
+    return [
+      validationError('RUNTIME.INVALID_OVERRIDE', `runtimeOverrides.${command.nodeId}.portId`, 'Override port id is required.', [
+        'Provide the input, output, or parameter port id to override.',
+      ]),
+    ];
+  }
+  if ('ttlMs' in command && command.ttlMs !== undefined && (!Number.isFinite(command.ttlMs) || command.ttlMs < 0)) {
+    return [
+      validationError(
+        'RUNTIME.INVALID_OVERRIDE_TTL',
+        `runtimeOverrides.${command.nodeId}.${command.portId}.ttlMs`,
+        'Override ttlMs must be a non-negative finite number.',
+        ['Use a non-negative ttlMs value or omit ttlMs for a persistent override.']
+      ),
+    ];
+  }
+  return [];
 };
 
 const validateRevision = (

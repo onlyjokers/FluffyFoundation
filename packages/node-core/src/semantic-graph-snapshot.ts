@@ -71,6 +71,15 @@ export const clonePartitions = (partitions: SemanticPartition[]): SemanticPartit
 export const cloneProposals = (proposals: SemanticProposal[]): SemanticProposal[] =>
   proposals.map((proposal) => ({ ...proposal, commands: [...(proposal.commands ?? [])] }));
 
+export const cloneRuntimeStatus = (runtimeStatus: RuntimeStatus = defaultRuntimeStatus): RuntimeStatus => ({
+  ...defaultRuntimeStatus,
+  ...runtimeStatus,
+  deployedPartitionIds: [...(runtimeStatus.deployedPartitionIds ?? [])],
+  runtimeOverrides: runtimeStatus.runtimeOverrides
+    ? runtimeStatus.runtimeOverrides.map((override) => ({ ...override }))
+    : undefined,
+});
+
 const defaultRuntimeStatus: RuntimeStatus = { running: false, deployedPartitionIds: [] };
 
 export const normalizeDefinitions = (
@@ -159,11 +168,7 @@ export function createSemanticGraphSnapshot(input: SemanticSnapshotInput): Seman
     connections: graph.connections,
     groups: normalizeGroups(input.groups),
     partitions: clonePartitions(input.partitions ?? []),
-    runtimeStatus: {
-      ...defaultRuntimeStatus,
-      ...(input.runtimeStatus ?? {}),
-      deployedPartitionIds: [...(input.runtimeStatus?.deployedPartitionIds ?? [])],
-    },
+    runtimeStatus: cloneRuntimeStatus(input.runtimeStatus),
     deviceCapabilities: (input.deviceCapabilities ?? []).map((capability) => ({
       ...capability,
       capabilities: [...(capability.capabilities ?? [])],

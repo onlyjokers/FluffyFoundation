@@ -64,7 +64,17 @@ export type SemanticPartition = ExecutionPartition;
 export type RuntimeStatus = {
   running: boolean;
   deployedPartitionIds: string[];
+  runtimeOverrides?: RuntimeOverride[];
   [key: string]: unknown;
+};
+
+export type RuntimeOverride = {
+  nodeId: string;
+  portId: string;
+  kind?: 'input' | 'output' | 'param';
+  value?: unknown;
+  ttlMs?: number;
+  updatedAtRevision: number;
 };
 
 export type DeviceCapability = { deviceId: string; capabilities: string[]; status?: string };
@@ -145,6 +155,20 @@ export type SemanticCommand =
   | { type: 'partition.redeploy'; partitionId: string; expectedRevision?: number }
   | { type: 'partition.report.failure'; partitionId: string; report: PartitionFailureReport }
   | { type: 'partition.stop.all' }
+  | {
+      type: 'runtime.override.set';
+      nodeId: string;
+      portId: string;
+      kind?: 'input' | 'output' | 'param';
+      value: unknown;
+      ttlMs?: number;
+    }
+  | {
+      type: 'runtime.override.clear';
+      nodeId: string;
+      portId: string;
+      kind?: 'input' | 'output' | 'param';
+    }
   | { type: 'proposal.create'; proposal: SemanticProposal }
   | { type: 'proposal.approve'; proposalId: string; approvedBy?: string };
 
@@ -231,5 +255,8 @@ export type CommandState = {
   groups: SemanticGroup[];
   partitions: SemanticPartition[];
   proposals: SemanticProposal[];
+  runtimeStatus: RuntimeStatus;
   revision: number;
 };
+
+export type SemanticHistoryState = Pick<CommandState, 'runtimeStatus'>;

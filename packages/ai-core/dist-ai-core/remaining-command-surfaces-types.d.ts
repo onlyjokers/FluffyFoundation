@@ -5,7 +5,6 @@ import type { AiSemanticCommandBusParityCase, AiSemanticCommandBusParityTrace } 
 import type { AiDryRunCommandResult, AiProposalDryRunResult, AiSemanticCommand } from './deterministic-planner.js';
 import type { AiContextRedactionMetadata, AiSemanticContext } from './semantic-context.js';
 import type { AiObservationEvaluation } from './observation-repair.js';
-import type { AiProposalExecutionResult } from './proposal-execution.js';
 export type RollbackBus = AiSemanticCommandBusParityCase['createBus'] extends () => infer T ? T & {
     rollbackToRevision?: (revision: number) => {
         ok: boolean;
@@ -19,42 +18,13 @@ export type AiRuntimeObservationDeferred = {
     deferred: true;
     reasonCode: 'BROWSER_RUNTIME_PROOF_DEFERRED';
 };
-export type AiRuntimeOverrideTrace = {
-    caseId: string;
-    status: 'deferred';
-    commandType: 'runtime.override.set' | 'runtime.override.clear';
-    semanticContext: AiSemanticContext;
-    runtimeOverride: {
-        action: 'set' | 'clear';
-        nodeId: string;
-        portId: string;
-        value?: unknown;
-        ttlMs?: number;
-    };
-    ai: {
-        commandSequence: [];
-        status: {
-            dryRun: 'unsupported-intent';
-            apply: AiProposalExecutionResult['status'];
-        };
-        policy: {
-            dryRun: AiProposalDryRunResult['policy'];
-            apply: AiProposalExecutionResult['policy'];
-        };
-        audit: {
-            executionAudit: AiProposalExecutionResult['audit'];
-            rollback: AiProposalExecutionResult['rollback'];
-            historyEntry: AiProposalExecutionResult['historyEntry'];
-        };
-        snapshot: Record<string, unknown>;
-        redactionSummary: AiContextRedactionMetadata;
-    };
-    deferred: {
-        deferred: true;
-        reasonCode: 'RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED';
-        message: string;
-    };
-    runtimeObservation: AiRuntimeObservationDeferred;
+export type AiRuntimeOverrideInput = {
+    action: 'set' | 'clear';
+    nodeId: string;
+    portId: string;
+    kind?: 'input' | 'output' | 'param';
+    value?: unknown;
+    ttlMs?: number;
 };
 export type AiRollbackRevisionTrace = {
     caseId: string;
@@ -107,12 +77,18 @@ export type AiRemainingCommandSurfaceCase = AiSemanticCommandBusParityCase | {
 } | {
     id: string;
     createBus: () => RollbackBus;
-    runtimeOverride: AiRuntimeOverrideTrace['runtimeOverride'];
+    runtimeOverride: AiRuntimeOverrideInput;
 };
 export type AiRemainingCommandSurfaceTrace = (AiSemanticCommandBusParityTrace & {
     status: 'executable';
     expectedEffect: AiProposalDryRunResult['expectedEffect'];
     risk: AiProposalDryRunResult['risk'];
     runtimeObservation: AiRuntimeObservationDeferred;
-}) | AiRollbackRevisionTrace | AiRuntimeOverrideTrace;
+}) | AiRollbackRevisionTrace | (AiSemanticCommandBusParityTrace & {
+    status: 'executable';
+    runtimeOverride: AiRuntimeOverrideInput;
+    expectedEffect: AiProposalDryRunResult['expectedEffect'];
+    risk: AiProposalDryRunResult['risk'];
+    runtimeObservation: AiRuntimeObservationDeferred;
+});
 //# sourceMappingURL=remaining-command-surfaces-types.d.ts.map

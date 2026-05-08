@@ -117,12 +117,23 @@ test('AI remaining command surface fixtures prove executable and deferred WP8 tr
   assert.equal(rollback.rollbackRevision.audit.historyLengthAfterSetup, 1);
   assert.equal(rollback.rollbackRevision.observedResult.classification, 'rollback-needed');
 
-  for (const trace of traces.filter((item) => item.status === 'deferred')) {
-    assert.equal(trace.deferred.reasonCode, 'RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED');
-    assert.equal(trace.ai.policy.apply.status, 'approval-required');
-    assert.equal(trace.ai.audit.rollback.reference, null);
-    assert.equal(trace.runtimeObservation.deferred, true);
-  }
+  const overrideSet = traces.find((trace) => trace.caseId === 'runtime-override-set');
+  assert.equal(overrideSet.status, 'executable');
+  assert.equal(overrideSet.commandType, 'runtime.override.set');
+  assert.equal(overrideSet.ai.status.apply, 'applied');
+  assert.equal(overrideSet.direct.result.ok, true);
+  assert.equal(overrideSet.parity.snapshotMatches, true);
+  assert.equal(overrideSet.ai.snapshot.runtimeStatus.runtimeOverrides[0].value, 0.9);
+  assert.equal(overrideSet.ai.observedResult.classification, 'success');
+
+  const overrideClear = traces.find((trace) => trace.caseId === 'runtime-override-clear');
+  assert.equal(overrideClear.status, 'executable');
+  assert.equal(overrideClear.commandType, 'runtime.override.clear');
+  assert.equal(overrideClear.ai.status.apply, 'applied');
+  assert.equal(overrideClear.direct.result.ok, true);
+  assert.equal(overrideClear.parity.snapshotMatches, true);
+  assert.deepEqual(overrideClear.ai.snapshot.runtimeStatus.runtimeOverrides, []);
+  assert.equal(overrideClear.ai.observedResult.classification, 'success');
 
   assert.equal(JSON.stringify(traces).includes('/Users/'), false);
   assert.equal(JSON.stringify(traces).includes('shugu_secret'), false);

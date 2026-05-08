@@ -5,7 +5,6 @@
 import type {
   CommandAuditEntry,
   CommandState,
-  RollbackRecoveryStatus,
   SemanticCommand,
   SemanticCommandBus,
   SemanticCommandBusInput,
@@ -18,12 +17,18 @@ import {
   cloneGroups,
   clonePartitions,
   cloneProposals,
+  cloneRuntimeStatus,
   createSemanticGraphSnapshot,
   normalizeDefinitions,
   normalizeGroups,
 } from './semantic-graph-snapshot.js';
 import { applySemanticCommand, validateSemanticCommandDetailed } from './semantic-command-apply.js';
-import { createSemanticHistory, type SemanticHistoryEntry } from './graph-state/history.js';
+import { createSemanticHistory } from './graph-state/history.js';
+import {
+  cloneCommandState,
+  recoveryForRollback,
+  stateFromHistoryEntry,
+} from './semantic-command-state.js';
 import {
   CONTROL_PLANE_CAPABILITIES_BY_ROLE,
   type ControlPlaneActorRole,
@@ -46,44 +51,6 @@ const defaultPolicy: SemanticCommandPolicy = { canExecute: () => true };
 
 const commandOperation = (command: SemanticCommand): string => command.type;
 
-const cloneCommandState = (state: CommandState): CommandState => ({
-  graph: cloneGraph(state.graph),
-  groups: cloneGroups(state.groups),
-  partitions: clonePartitions(state.partitions),
-  proposals: cloneProposals(state.proposals),
-  revision: state.revision,
-});
-
-const recoveryForRollback = (current: CommandState, restored: CommandState): RollbackRecoveryStatus => {
-  const currentDeployed = current.partitions
-    .filter((partition) => partition.status === 'deployed')
-    .map((partition) => partition.id)
-    .sort();
-  const restoredDeployed = restored.partitions
-    .filter((partition) => partition.status === 'deployed')
-    .map((partition) => partition.id)
-    .sort();
-
-  return {
-    status: restoredDeployed.length > 0 ? 'redeployed' : 'stopped',
-    stoppedPartitionIds: currentDeployed,
-    redeployedPartitionIds: restoredDeployed,
-    errors: [],
-  };
-};
-
-const stateFromHistoryEntry = (
-  entry: SemanticHistoryEntry,
-  proposals: CommandState['proposals'],
-  nextRevision: number
-): CommandState => ({
-  graph: cloneGraph(entry.graph),
-  groups: cloneGroups(entry.groups ?? []),
-  partitions: clonePartitions(entry.partitions ?? []),
-  proposals: cloneProposals(proposals),
-  revision: nextRevision,
-});
-
 export function createSemanticCommandBus(input: SemanticCommandBusInput): SemanticCommandBus {
   const definitions = normalizeDefinitions(input.definitions);
   const auditLog: CommandAuditEntry[] = [];
@@ -94,6 +61,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     groups: normalizeGroups(input.groups),
     partitions: clonePartitions(input.partitions ?? []),
     proposals: cloneProposals(input.proposals ?? []),
+    runtimeStatus: cloneRuntimeStatus(input.runtimeStatus),
     revision: Number.isFinite(input.revision) ? Number(input.revision) : 0,
   };
   const semanticHistory = createSemanticHistory({
@@ -111,6 +79,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       groups: state.groups,
       partitions: state.partitions,
       proposals: state.proposals,
+      runtimeStatus: state.runtimeStatus,
       revision: state.revision,
     });
 
@@ -194,7 +163,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     };
 
     auditLog.push(audit);
-      if (!dryRun) {
+    if (!dryRun) {
       rollbackSnapshots.set(rollbackToken, cloneCommandState(state));
       state = nextState;
       semanticHistory.record({
@@ -227,6 +196,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       groups: cloneGroups(previous.groups),
       partitions: clonePartitions(previous.partitions),
       proposals: cloneProposals(previous.proposals),
+      runtimeStatus: cloneRuntimeStatus(previous.runtimeStatus),
       revision: state.revision + 1,
     };
     semanticHistory.record({

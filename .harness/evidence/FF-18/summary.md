@@ -150,8 +150,10 @@ Implemented:
 - `@shugu/ai-core` now exposes `runAiRemainingCommandSurfaceFixtures`, a deterministic fixture runner for the remaining AI Operator command API surfaces not proven by WP1-WP7.
 - Executable WP8 traces prove AI proposals use the same command bus path as direct callers for node restore/archive recovery and proposal approval.
 - Rollback revision is represented as an executable trace through the existing command-bus `rollbackToRevision` contract, preserving setup command audit/history and parity with direct callers.
-- Runtime override set/clear is represented as explicit structured deferred traces because the underlying live runtime override surface is not a semantic graph mutation in WP8 scope.
-- All WP8 traces include AI-visible command sequence or deferred command placeholder, expected effect/risk where executable, dry-run/policy/apply status, audit/history/rollback metadata, structured observation or runtime observation deferral, and redaction summary.
+- Runtime override set/clear is now represented as executable semantic command bus traces that record override intent in
+  `runtimeStatus.runtimeOverrides` with validation, audit, history, revision, and rollback-token metadata.
+- All WP8 traces include AI-visible command sequence, expected effect/risk, dry-run/policy/apply status,
+  audit/history/rollback metadata, structured observation or runtime observation deferral, and redaction summary.
 - Review fix: added semantic command-bus policy coverage proving unauthorized `proposal.approve` by an AI actor returns a policy-stage denial and leaves proposal status, revision, audit log, and history unchanged.
 
 Focused proof:
@@ -164,7 +166,7 @@ corepack pnpm@8.15.9 --filter @shugu/ai-core run build
 PASS
 
 node --test packages/node-core/test/semantic-command-bus.test.mjs
-PASS: 7 tests, 0 failures
+PASS: 9 tests, 0 failures
 
 node --test packages/node-core/test/group-ownership-policy.test.mjs
 PASS: 6 tests, 0 failures
@@ -226,32 +228,35 @@ Deterministic remaining command surface fixture output:
   },
   {
     "caseId": "runtime-override-set",
-    "status": "deferred",
+    "status": "executable",
     "commandType": "runtime.override.set",
-    "apply": "approval-required",
-    "dryRun": "unsupported-intent",
-    "rollbackReference": null,
-    "observed": "BROWSER_RUNTIME_PROOF_DEFERRED",
-    "deferredReason": "RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED",
+    "apply": "applied",
+    "dryRun": "dry-run-passed",
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:runtime-override-set:rollback:240:3",
+    "observed": "success",
     "redactions": 2
   },
   {
     "caseId": "runtime-override-clear",
-    "status": "deferred",
+    "status": "executable",
     "commandType": "runtime.override.clear",
-    "apply": "approval-required",
-    "dryRun": "unsupported-intent",
-    "rollbackReference": null,
-    "observed": "BROWSER_RUNTIME_PROOF_DEFERRED",
-    "deferredReason": "RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED",
+    "apply": "applied",
+    "dryRun": "dry-run-passed",
+    "directOk": true,
+    "parity": { "appliedRevisionMatches": true, "snapshotMatches": true, "commandTypeMatches": true },
+    "rollbackReference": "ai-rollback:proposal:wp5:runtime-override-clear:rollback:250:3",
+    "observed": "success",
     "redactions": 2
   }
 ]
 ```
 
 Verification notes:
-- Browser/runtime proof remains intentionally deferred for WP8 because Plan scoped this packet to deterministic source/tests only.
-- Runtime override set/clear is not faked as graph state; it is reported as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` until an approved semantic runtime override surface exists.
+- Browser/live product proof remains intentionally separated from WP8 deterministic proof; runtime override set/clear is
+  now represented in the semantic command bus and runtime status snapshot, but this does not claim Manager
+  `patch-runtime.ts` browser delivery proof.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test packages/node-core/src packages/node-core/test` found only existing comments/test names about excluding Canvas/Svelte UI paths and no runtime DOM/UI imports or mutation code.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
 

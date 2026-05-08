@@ -40,6 +40,8 @@ export function validateSemanticCommandDetailed(
     case 'partition.stop':
     case 'partition.report.failure':
     case 'partition.stop.all':
+    case 'runtime.override.set':
+    case 'runtime.override.clear':
     case 'proposal.create':
     case 'proposal.approve':
       return validateRuntimeCommand(state, command);

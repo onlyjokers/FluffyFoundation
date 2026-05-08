@@ -64,15 +64,24 @@ PASS: client e2e command capture records action="flashlight".
 
 ## Remaining Blockers
 
-- Runtime override set/clear remains deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` without dated risk
-  acceptance.
 - GS-13 remains partial: the bounded Manager Published Display `screenColor` product chain is proven, but the full
   breathing-like AI scenario and AI observation loop are not product-proven.
 - `pnpm verify` is expected to fail at the known out-of-scope hotspot
   `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492` unless that baseline changes.
 
+## Runtime Override Follow-up
+
+The later 2026-05-09 FF-18 runtime override semantic surface update removed the prior
+`RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` blocker from deterministic command-surface proof:
+
+- `runtime.override.set` and `runtime.override.clear` now dispatch through `@shugu/node-core` semantic command bus.
+- The commands validate node id, port id, and ttl boundaries.
+- The commands record `runtimeStatus.runtimeOverrides`, audit/history/revision, and rollback metadata.
+- `@shugu/ai-core` WP8 traces now prove the runtime override surfaces through the executable command-bus parity path.
+
+This does not claim browser/live Manager `patch-runtime.ts` delivery proof.
+
 ## Next Action
 
-Continue FF-18 only. Either implement/prove runtime override set/clear within an approved FF-18 lane, complete the full
-GS-13 AI observation product proof, or create a strict dated risk acceptance if the user approves deferral. Do not begin
-FF-19.
+Continue FF-18 only. Complete the full GS-13 AI observation product proof, or create a strict dated risk acceptance if
+the user approves deferral. Do not begin FF-19.

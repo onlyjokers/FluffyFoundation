@@ -4,7 +4,7 @@
 import { buildAiSemanticContext, } from './semantic-context.js';
 import { createAiObservationEvaluator, } from './observation-repair.js';
 import { runAiSemanticCommandBusParityFixture, } from './semantic-command-bus-parity.js';
-import { createdAt, effectFor, getAuditLength, getHistoryLength, redacted, revisionOf, riskFor, runtimeObservation, snapshotForParity, stableJson, } from './remaining-command-surfaces-support.js';
+import { effectFor, getAuditLength, getHistoryLength, redacted, revisionOf, riskFor, runtimeObservation, snapshotForParity, stableJson, } from './remaining-command-surfaces-support.js';
 const defaultActor = { id: 'ai:wp8', role: 'ai' };
 const defaultDirectActor = { id: 'cli:wp8', role: 'service' };
 const runExecutableCommand = (item, actor, directActor) => {
@@ -111,70 +111,30 @@ const runRollbackRevision = (item, actor, directActor) => {
         runtimeObservation: runtimeObservation(),
     };
 };
-const runDeferredRuntimeOverride = (item, actor) => {
-    const bus = item.createBus();
-    const semanticContext = buildAiSemanticContext({
-        snapshot: bus.getSnapshot(),
-        actor,
-        policy: { mode: 'proposal-only', approvalRequired: [`runtime.override.${item.runtimeOverride.action}`] },
-    });
-    const operation = `runtime.override.${item.runtimeOverride.action}`;
-    const previousRevision = revisionOf(bus.getSnapshot()) ?? 0;
-    const policy = {
-        status: 'approval-required',
-        decisions: [
-            {
-                operation,
-                status: 'approval-required',
-                reason: 'Runtime override set/clear is deferred until a semantic runtime override command exists.',
-            },
-        ],
+const commandForRuntimeOverride = (runtimeOverride) => runtimeOverride.action === 'set'
+    ? {
+        type: 'runtime.override.set',
+        nodeId: runtimeOverride.nodeId,
+        portId: runtimeOverride.portId,
+        kind: runtimeOverride.kind,
+        value: runtimeOverride.value,
+        ttlMs: runtimeOverride.ttlMs,
+    }
+    : {
+        type: 'runtime.override.clear',
+        nodeId: runtimeOverride.nodeId,
+        portId: runtimeOverride.portId,
+        kind: runtimeOverride.kind,
     };
-    const executionAudit = {
-        id: `audit:ai:wp8:${item.id}:deferred`,
-        type: 'proposal-execution',
-        proposalId: `proposal:wp8:${item.id}:deferred`,
-        actor,
-        lifecycle: ['policy', 'dry-run', 'apply', 'audit', 'history', 'rollback-token'],
-        policy,
-        commandAudits: [],
-        previousRevision,
-        appliedRevision: null,
-        rollbackReference: null,
-        createdAt: createdAt(),
-    };
+const runRuntimeOverride = (item, actor, directActor) => {
+    const trace = runExecutableCommand({
+        id: item.id,
+        command: commandForRuntimeOverride(item.runtimeOverride),
+        createBus: item.createBus,
+    }, actor, directActor);
     return {
-        caseId: item.id,
-        status: 'deferred',
-        commandType: item.runtimeOverride.action === 'set' ? 'runtime.override.set' : 'runtime.override.clear',
-        semanticContext,
+        ...trace,
         runtimeOverride: redacted(item.runtimeOverride),
-        ai: {
-            commandSequence: [],
-            status: { dryRun: 'unsupported-intent', apply: 'approval-required' },
-            policy: {
-                dryRun: { status: 'proposal-only', dryRun: true, allowed: false, reason: 'Runtime override semantic command is deferred.' },
-                apply: policy,
-            },
-            audit: {
-                executionAudit,
-                rollback: {
-                    reference: null,
-                    commandRollbackTokens: [],
-                    previousRevision,
-                    appliedRevision: null,
-                },
-                historyEntry: null,
-            },
-            snapshot: redacted(bus.getSnapshot()),
-            redactionSummary: semanticContext.redactions,
-        },
-        deferred: {
-            deferred: true,
-            reasonCode: 'RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED',
-            message: 'Runtime override set/clear remains a live runtime surface and is not represented as a semantic graph mutation in WP8.',
-        },
-        runtimeObservation: runtimeObservation(),
     };
 };
 export function runAiRemainingCommandSurfaceFixtures(input) {
@@ -182,7 +142,7 @@ export function runAiRemainingCommandSurfaceFixtures(input) {
     const directActor = input.directActor ?? defaultDirectActor;
     return input.cases.map((item) => {
         if ('runtimeOverride' in item)
-            return runDeferredRuntimeOverride(item, actor);
+            return runRuntimeOverride(item, actor, directActor);
         if ('rollbackRevision' in item)
             return runRollbackRevision(item, actor, directActor);
         return runExecutableCommand(item, actor, directActor);
