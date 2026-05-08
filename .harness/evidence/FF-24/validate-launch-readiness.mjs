@@ -30,6 +30,7 @@ const checks = [
   checkPriorItemsComplete(),
   checkAcceptedRisks(),
   checkLaunchReview(),
+  checkLaunchDecisionConsistency(),
 ];
 
 const proofMatrix = checks.map((check) => ({
@@ -173,6 +174,32 @@ function checkLaunchReview() {
       missing.length === 0
         ? 'final launch review includes decision, blockers, commands, and dogfood paths'
         : `missing ${missing.join(', ')}`,
+  });
+}
+
+function checkLaunchDecisionConsistency() {
+  const files = [
+    path.join(EVIDENCE_DIR, 'summary.md'),
+    path.join(EVIDENCE_DIR, 'final-launch-review.md'),
+    '.harness/status/current-task.md',
+    '.harness/status/current-phase.md',
+    '.harness/handoffs/2026-05-09-FF-24-launch-readiness.md',
+  ];
+  const staleBlockedClaims = files.filter((file) => {
+    const text = readText(file);
+    return text.includes('blocked, not production ready') || text.includes('blocked decision');
+  });
+  return launchCheck({
+    id: 'launch-decision-consistency',
+    status: staleBlockedClaims.length === 0 ? 'pass' : 'fail',
+    requiredProofType: 'release-operational',
+    deterministicProof: 'machine-checked-status-consistency',
+    runtimeBrowserProof: 'covered-by-final-launch-review',
+    evidencePath: files.join(', '),
+    reviewerNotes:
+      staleBlockedClaims.length === 0
+        ? 'FF-24 summary, final review, status, and handoff use the same production-ready decision'
+        : `stale blocked launch decision remains in ${staleBlockedClaims.join(', ')}`,
   });
 }
 

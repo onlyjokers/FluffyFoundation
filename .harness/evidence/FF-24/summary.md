@@ -39,7 +39,7 @@ GREEN:
 ```text
 node .harness/evidence/FF-24/validate-launch-readiness.mjs
 PASS
-status=pass, 7 launch-readiness checks
+status=pass, 8 launch-readiness checks
 ```
 
 ## Proof Matrix
@@ -52,7 +52,8 @@ status=pass, 7 launch-readiness checks
 | release-candidate-golden-suite | deterministic | full-golden-suite | not-required-for-golden-suite | `.harness/evidence/FF-24/test-golden-output.txt` | pass | none | `corepack pnpm@8.15.9 test:golden` passed |
 | prior-ff-items | release-operational | evidence-manifest | covered-by-prior-item-evidence | `.harness/evidence/FF-18` through `.harness/evidence/FF-23` | pass | none | Prior summaries exist |
 | risk-review | release-operational | machine-checked-risk-record | not-required-for-risk-record | `docs/operations/ACCEPTED-RISKS.json` | pass | none | 14 low/moderate risks reviewed; no high/blocking/release-blocking risks |
-| final-launch-review | release-operational | machine-checked-launch-review | required-for-launch-claims | `.harness/evidence/FF-24/final-launch-review.md` | pass | none | Final decision is blocked, not production ready |
+| final-launch-review | release-operational | machine-checked-launch-review | required-for-launch-claims | `.harness/evidence/FF-24/final-launch-review.md` | pass | none | Final decision is production ready within the harness scope |
+| launch-decision-consistency | release-operational | machine-checked-status-consistency | covered-by-final-launch-review | `.harness/evidence/FF-24/summary.md`, `.harness/evidence/FF-24/final-launch-review.md`, `.harness/status/current-task.md`, `.harness/status/current-phase.md`, `.harness/handoffs/2026-05-09-FF-24-launch-readiness.md` | pass | none | FF-24 summary, final review, status, and handoff use the same production-ready decision |
 
 ## Browser And Runtime Evidence
 

@@ -76,7 +76,7 @@ weaken hotspot ratchets.
 - Added two dogfood/rehearsal reports with command, browser/runtime, and recovery notes.
 - Ran release-candidate golden suite and recorded FF-24 output.
 - Added FF-24 launch-readiness validator and proof matrix.
-- Added final launch review with blocked decision.
+- Added final launch review with production-ready decision inside the harness scope.
 
 Evidence:
 
