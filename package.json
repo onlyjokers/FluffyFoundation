@@ -14,6 +14,7 @@
     "test:core": "pnpm test:node-core && pnpm e2e:node-executor:offline",
     "validate:node-specs": "node scripts/validate-node-specs.mjs",
     "harness:validate": "python3 .harness/scripts/validate_harness.py",
+    "harness:acceptance": "python3 .harness/scripts/validate_acceptance_contracts.py",
     "harness:hotspots": "python3 .harness/scripts/check_hotspots.py",
     "harness:verify": "pnpm harness:validate && pnpm harness:hotspots && pnpm validate:node-specs",
     "guard:ff08": "node .harness/scripts/ff08/guard-manager-boundary.mjs",

@@ -17,6 +17,10 @@ Every task must state:
 - Whether semantic Canvas/CLI/API parity is affected
 - Whether AI visibility/policy/audit is affected
 
+Long-running Codex `/goal` work must also satisfy the completion model, proof matrix, dated risk acceptance format, and
+stop conditions in [ACCEPTANCE.md](ACCEPTANCE.md). Status files, deterministic fixtures, and partial contract tests are
+not sufficient completion proof by themselves.
+
 ## PR Gate
 
 Every PR must include:

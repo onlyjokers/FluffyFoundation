@@ -10,6 +10,7 @@ This harness is the operating system for taking FluffyFoundation from its curren
 
 - Product and architecture direction: [PLAN.md](PLAN.md)
 - Hard architectural boundaries: [BOUNDARIES.md](BOUNDARIES.md)
+- Codex-ready completion contracts: [ACCEPTANCE.md](ACCEPTANCE.md)
 - AI semantic operator contract: [AI-OPERATOR.md](AI-OPERATOR.md)
 - Required gates and review evidence: [QUALITY-GATES.md](QUALITY-GATES.md)
 - End-to-end acceptance scenarios: [GOLDEN-SCENARIOS.md](GOLDEN-SCENARIOS.md)
@@ -27,6 +28,8 @@ Runtime workflow state lives under `.harness/status/`. Looooper orchestration li
 5. Every mutating command must validate before apply, emit audit/history after apply, and provide a rollback or recovery path.
 6. Every phase exit requires evidence: commands run, scenario proof, known risks, rollback notes, and reviewer verification.
 7. Large hotspot files are frozen by ratchet. They may shrink freely; they may grow only inside an approved split/retirement task.
+8. Status transitions, deterministic fixtures, and partial contract tests do not prove completion without the acceptance
+   evidence required by [ACCEPTANCE.md](ACCEPTANCE.md).
 
 ## Completion Definition
 

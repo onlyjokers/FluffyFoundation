@@ -8,6 +8,10 @@ Purpose: Define module boundaries, ownership lanes, and forbidden coupling for l
 
 Every layer should have one reason to change. UI renders and captures intent; command/API validates and mutates semantics; runtime executes; transport moves messages; policy decides authority; registry describes available behavior.
 
+Acceptance contracts under `.harness/goals/` and [ACCEPTANCE.md](ACCEPTANCE.md) may narrow scope or require more proof.
+They must not weaken the architecture, security, policy, audit, rollback, redaction, dependency, or hotspot boundaries in
+this file.
+
 ## Layers
 
 | Layer | Owns | Must Not Own |

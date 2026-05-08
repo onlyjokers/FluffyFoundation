@@ -22,6 +22,8 @@ REQUIRED_FILES = [
     "docs/harness/GOLDEN-SCENARIOS.md",
     "docs/harness/VERIFY.md",
     "docs/harness/REFERENCES.md",
+    "docs/harness/ACCEPTANCE.md",
+    ".harness/scripts/validate_acceptance_contracts.py",
     ".harness/status/current-phase.md",
     ".harness/status/current-task.md",
     ".harness/hotspots-allowlist.json",
@@ -152,6 +154,14 @@ def check_local_markdown_links() -> None:
                 fail(f"broken local markdown link in {md_path.relative_to(ROOT)}: {target}")
 
 
+def check_acceptance_contracts() -> None:
+    import validate_acceptance_contracts
+
+    errors = validate_acceptance_contracts.collect_errors()
+    if errors:
+        fail("automatic acceptance contract validation failed:\n" + "\n".join(f"- {error}" for error in errors))
+
+
 def main() -> None:
     check_required_files()
     check_plan_ids()
@@ -160,6 +170,7 @@ def main() -> None:
     check_json_files()
     check_package_scripts()
     check_local_markdown_links()
+    check_acceptance_contracts()
     warn("validate_harness checks structure, not product correctness; run pnpm verify for product gates.")
     print("[harness] PASS: harness structure is valid")
 
