@@ -77,17 +77,21 @@ missing and is not covered by dated risk acceptance. Do not start FF-19 until th
 
 ## Next Expected Action
 
-The next Plan dispatch must choose one of these paths. The currently actionable implementation path is the bounded
-GS-12 deploy lane requested in `.harness/evidence/FF-18/contract-revision-request.md`; it is not approved yet.
+The next `/goal` dispatch may continue FF-18 under the adaptive execution lane in
+`.harness/goals/FF-18-review-contract.md`.
 
-- approve the bounded FF-18 GS-12 deploy lane before touching Node Graph loop deployment, broader server policy, SDK
-  command-envelope behavior, or related product/runtime code;
-- approve a dated risk acceptance for the remaining missing FF-18 runtime/browser/product proof;
-- reject the GS-12 deploy lane and keep FF-18 blocked;
-- revise the FF-18 contract if the missing proof is intentionally deferred to a later FF item.
+Allowed continuation is limited to the current FF-18 work package:
 
-Until the GS-12 deploy lane is approved, Codex must not modify `apps/manager/src/lib/components/nodes/**`,
-`apps/server/**` outside the already approved files, `apps/client/**`, `apps/display/**`, or start FF-19.
+- classify the remaining GS-12 runtime blocker;
+- update FF-18 contract/evidence/status/handoff files as part of the same work package;
+- use TDD inside the approved client e2e/runtime proof lane only;
+- prove that live Manager/Client/Server deployment reaches the client NodeExecutor command path;
+- prove production camera, flashlight, motion, microphone, permission, and capability gates remain intact;
+- commit code and evidence together after validation.
+
+Codex must still stop before starting FF-19, weakening security/policy/audit/rollback/redaction/hotspot gates,
+weakening production permission/capability checks, expanding beyond the approved lane, or substituting fixtures for
+browser/runtime proof.
 
 ## Runtime Browser Investigation Update
 

@@ -18,6 +18,8 @@ REQUIRED_ACCEPTANCE_TERMS = [
     "## Automatic Acceptance Decision Model",
     "Codex has no discretionary acceptance authority",
     "default decision is `stop`",
+    "## Adaptive Goal Execution",
+    "adaptive execution lane",
     "deferred proof is rejected by default",
     "## Automatic Risk Severity Matrix",
     "## Failure Fingerprint Gate",
@@ -48,6 +50,7 @@ REQUIRED_MACHINE_FIELDS = [
     "Failure fingerprint policy:",
     "Next item start policy:",
     "Automated validation command:",
+    "Adaptive execution policy:",
 ]
 
 
@@ -97,6 +100,8 @@ def collect_errors() -> list[str]:
             errors.append(f"{path.relative_to(ROOT)} must forbid starting the next item until complete")
         if "Failure fingerprint policy: `exact-baseline-required`" not in text:
             errors.append(f"{path.relative_to(ROOT)} must require exact baseline failure fingerprints")
+        if "Adaptive execution policy:" not in text:
+            errors.append(f"{path.relative_to(ROOT)} must declare an adaptive execution policy")
 
     return errors
 

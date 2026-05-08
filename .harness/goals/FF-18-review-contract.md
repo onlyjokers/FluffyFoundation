@@ -39,6 +39,14 @@ Allowed implementation lanes:
   - `apps/server/src/events/events.gateway.spec.ts`
   - `apps/server/src/events/group-ownership-policy.ts`
   - `apps/server/src/events/display-routing.spec.ts`
+- Approved adaptive FF-18 client e2e/runtime proof lane for GS-12 flashlight/sensors proof only:
+  - `apps/client/src/routes/+page.svelte`
+  - `apps/client/src/lib/stores/client/client-runtime.ts`
+  - `apps/client/src/lib/stores/client/client-control.ts`
+  - `apps/client/src/lib/stores/client/client-*.spec.ts`
+  - `packages/sdk-client/src/node-executor.ts`
+  - `packages/sdk-client/src/node-executor.spec.ts`
+  - `packages/sdk-client/scripts/e2e/node-executor.offline.mjs`
 
 Read-only context:
 
@@ -56,6 +64,8 @@ Read-only context:
 - Do not implement direct AI mutation paths outside the semantic command bus.
 - Do not treat deterministic fixtures as browser/runtime proof.
 - Do not mark deferred browser/runtime work complete.
+- Do not weaken production camera, flashlight, motion, microphone, permission, or capability gates to make GS-12 pass.
+- Do not make e2e/dev-only proof paths reachable in production runtime.
 
 ## Acceptance criteria
 
@@ -76,6 +86,8 @@ FF-18 can be marked complete only if all applicable criteria are proven:
 - Secret-like values and private local paths are redacted before AI-visible context.
 - Remaining unsupported runtime surfaces are implemented or blocked.
 - Evidence distinguishes deterministic source/test proof from browser/runtime/product proof.
+- GS-12 flashlight/sensors proof may use a dev/e2e-only runtime proof lane, but the final evidence must show that the
+  deployed graph reaches the client NodeExecutor command path and that production capability checks remain intact.
 
 ## Validation
 
@@ -111,9 +123,14 @@ Allowed paths: `packages/ai-core/**`, `packages/node-core/**`, `docs/harness/AI-
 `packages/sdk-manager/src/command-envelope.ts`, `packages/sdk-manager/src/manager-sdk.ts`,
 `packages/sdk-manager/src/manager-sdk.spec.ts`, `apps/server/src/events/events.gateway.ts`,
 `apps/server/src/events/events.gateway.command-envelope.spec.ts`, `apps/server/src/events/events.gateway.spec.ts`,
-`apps/server/src/events/group-ownership-policy.ts`, `apps/server/src/events/display-routing.spec.ts`
+`apps/server/src/events/group-ownership-policy.ts`, `apps/server/src/events/display-routing.spec.ts`,
+`apps/client/src/routes/+page.svelte`, `apps/client/src/lib/stores/client/client-runtime.ts`,
+`apps/client/src/lib/stores/client/client-control.ts`, `apps/client/src/lib/stores/client/client-*.spec.ts`,
+`packages/sdk-client/src/node-executor.ts`, `packages/sdk-client/src/node-executor.spec.ts`,
+`packages/sdk-client/scripts/e2e/node-executor.offline.mjs`
 Forbidden paths: `apps/manager/src/lib/components/nodes/**` outside the approved loop-helper files above,
-`apps/client/**`, `apps/display/**`, `apps/server/**` outside the approved 2026-05-08 bounded product-proof files above
+`apps/client/**` outside the approved adaptive client e2e/runtime proof files above, `apps/display/**`,
+`apps/server/**` outside the approved 2026-05-08 bounded product-proof files above
 Required proof types: `implementation`, `deterministic`, `runtime-browser`
 Runtime/browser proof: `required-for-runtime-claims`
 Deferred proof policy: `reject-by-default`
@@ -121,6 +138,7 @@ Risk severity policy: `blocking/high/release-blocking stop; medium requires cont
 Failure fingerprint policy: `exact-baseline-required`
 Next item start policy: `forbidden-until-complete`
 Automated validation command: `python3 .harness/scripts/validate_acceptance_contracts.py && pnpm verify && git diff --check`
+Adaptive execution policy: `allowed-for-FF-18-only; may update this contract/evidence/status/handoff plus allowed implementation lanes in one goal run; must stop on security/policy/audit/rollback/redaction/hotspot weakening, production permission bypass, FF-19 scope, or missing runtime-browser proof`
 
 ## Stop conditions
 
@@ -129,8 +147,12 @@ Stop and report if:
 - FF-18 requires product/browser/runtime integration beyond the allowed scope.
 - The product-proof lane expands beyond Manager published Group control, SDK command envelope scope preservation, server
   scoped-command policy tests, runtime evidence, or evidence/status/handoff updates.
+- The adaptive client proof lane expands beyond dev/e2e GS-12 proof, client NodeExecutor status/command-path
+  visibility, or tests that prove production permission gates remain intact.
 - A required semantic command surface belongs to FF-19 or later.
 - Passing requires weakening policy, validation, audit, rollback, redaction, dependency boundaries, or hotspot ratchets.
+- Passing requires weakening production camera, flashlight, motion, microphone, permission, or capability gates.
+- Browser/runtime proof is replaced by deterministic e2e fixtures instead of live Manager/Client/Server interaction.
 - Evidence shows FF-18 was marked complete only by status-transition files.
 - `pnpm verify` fails for a reason that does not exactly match an approved baseline failure fingerprint.
 

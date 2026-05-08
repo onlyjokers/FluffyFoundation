@@ -47,6 +47,29 @@ Allowed machine decisions:
 `complete-with-dated-risk-acceptance` is not a free-form Codex judgment. It is allowed only when the active contract
 sets `Deferred proof policy` to an allowlisted value and every deferred item satisfies the severity matrix below.
 
+## Adaptive Goal Execution
+
+Long-running Codex `/goal` work may complete a full bounded FF work package in one run. The run may inspect the
+runtime, classify blockers, update the active contract, write implementation/tests, collect runtime/browser proof,
+update evidence/status/handoff files, and commit the result together.
+
+This is allowed only inside the current `FF-*` item and only when the active contract explicitly authorizes an
+adaptive execution lane. The lane must name:
+
+- the exact implementation paths that may change;
+- the exact documentation, evidence, status, and handoff paths that may change;
+- the proof type that the lane is meant to unblock;
+- the tests and browser/runtime checks that must run;
+- the stop conditions that still override automatic continuation.
+
+An adaptive lane does not let Codex accept business risk, weaken boundaries, start the next `FF-*` item, or treat
+fixtures as runtime proof. It only removes unnecessary human pauses for work that is already inside a named contract
+lane.
+
+When an adaptive lane is active, documentation and code changes should normally be committed together after validation
+instead of as repeated evidence-only commits. Evidence-only commits are reserved for true stop decisions, rejected scope
+expansions, or externally reviewed risk acceptances.
+
 ## Machine Contract Fields
 
 Each `.harness/goals/FF-18..FF-24` contract must contain a `## Machine contract` section with these exact fields:
@@ -62,6 +85,7 @@ Each `.harness/goals/FF-18..FF-24` contract must contain a `## Machine contract`
 - `Failure fingerprint policy`
 - `Next item start policy`
 - `Automated validation command`
+- `Adaptive execution policy`
 
 The harness validator checks that these fields exist. Future goal-specific validators may parse the field values and
 block completion when current diff, proof, validation output, or evidence paths do not match them.

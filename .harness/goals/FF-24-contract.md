@@ -58,6 +58,7 @@ Risk severity policy: `blocking/high/release-blocking stop; medium requires cont
 Failure fingerprint policy: `exact-baseline-required`
 Next item start policy: `forbidden-until-complete`
 Automated validation command: `python3 .harness/scripts/validate_acceptance_contracts.py && pnpm verify && git diff --check`
+Adaptive execution policy: `disabled-by-default; contract revision required before combining scope expansion with implementation`
 
 ## Stop conditions
 
