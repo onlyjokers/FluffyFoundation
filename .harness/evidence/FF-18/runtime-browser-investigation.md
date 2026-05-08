@@ -352,3 +352,53 @@ runtime when the server is started with local insecure manager authorization. Th
 scenario proof. Current live checks show a stable audience client is unavailable for GS-12 and the display control path
 is rejected by server policy for GS-13. Fixing those product-chain blockers would require changes outside the active
 FF-18 review contract scope.
+
+## 2026-05-08 GS-12 Runtime Recheck
+
+This recheck used only runtime/browser actions. No source files were modified.
+
+```text
+SHUGU_ALLOW_INSECURE_MANAGER=1 corepack pnpm@8.15.9 dev:server
+PASS: local server listens on https://localhost:3001.
+PASS: server grants requested=manager as granted=manager.
+
+browser-use browser_navigate https://localhost:5174/?e2e=1&server=https%3A%2F%2Flocalhost%3A3001
+PASS: client e2e page opens.
+
+browser-use browser_get_html https://localhost:3001/clients
+PASS: a normal audience client remains registered and connected.
+
+chrome-devtools Manager /manager/root + Connect + Node Graph
+PASS: Manager reaches Node Graph and exposes the runtime NodeEngine.
+
+chrome-devtools temporary graph load
+PASS: runtime-only GS-12 graph is present in Manager:
+- client-object targets the connected audience client
+- proc-client-sensors exposes gyro outputs
+- proc-flashlight consumes gyro gamma as frequencyHz
+- proc-flashlight command output returns to the client-object sink
+PASS: Manager detects one local loop with requiredCapabilities=["flashlight","sensors"].
+
+chrome-devtools click Deploy
+FAIL: server rejects node-executor deploy:
+code=server.policy.scope_mismatch
+path=target.mode
+message="scoped commands must target their scope group"
+```
+
+The latest GS-12 blocker is therefore no longer "no stable audience client." A stable connected audience client can be
+observed in the current runtime. The remaining blocker is the Manager Node Graph deployment path: loop deploy uses a
+client-targeted `node-executor` plugin command (`target.mode=clientIds`), while the current server ingress policy
+requires scoped manager mutating commands to target their scope Group.
+
+This is a valid FF-18 stop condition. Fixing the live GS-12 product chain would require changing the Node Graph loop
+deployment path under `apps/manager/src/lib/components/nodes/**`, changing broader server policy, or adding a new
+approved scope lane. Those paths are forbidden by `.harness/goals/FF-18-review-contract.md`.
+
+Updated acceptance impact:
+
+| Criterion | Runtime result | Status |
+| --- | --- | --- |
+| GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Runtime client and Manager graph proof improved; live deploy is blocked by `server.policy.scope_mismatch` on `target.mode=clientIds` | blocked |
+| GS-13 display visual becomes breathing-like and AI observes output change | Bounded Manager Published Display `screenColor` product chain is proven; full breathing-like AI scenario and AI observation loop are not product-proven | partial |
+| Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |

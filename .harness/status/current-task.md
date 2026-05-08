@@ -136,3 +136,18 @@ Fresh validation after this evidence update:
 - `git diff --check`: PASS
 - `corepack pnpm@8.15.9 verify`: FAIL at the known out-of-scope hotspot
   `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`
+
+## GS-12 Runtime Recheck Update
+
+2026-05-08 runtime-only recheck narrows the remaining GS-12 blocker:
+
+- Browser-use confirmed a normal audience client can remain registered and connected in `/clients`.
+- Chrome DevTools confirmed Manager Node Graph can load a GS-12-shaped runtime graph:
+  `client-object -> proc-client-sensors gyroG -> proc-flashlight frequencyHz -> client-object`.
+- Manager detects a local loop requiring `flashlight` and `sensors`.
+- Clicking Deploy is rejected by server policy:
+  `server.policy.scope_mismatch`, `path=target.mode`, `message="scoped commands must target their scope group"`.
+
+This is a stop condition under the current FF-18 contract. Fixing it would require changing Node Graph loop deployment
+under `apps/manager/src/lib/components/nodes/**`, broader server policy, or another explicitly approved product-proof
+lane. FF-18 remains incomplete; do not start FF-19.

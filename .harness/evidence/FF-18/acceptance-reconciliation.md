@@ -153,6 +153,28 @@ runtime.
 GS-12 remains blocked: a stable audience client/device/output chain was not proven. Runtime override set/clear remains
 explicitly deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`.
 
+2026-05-08 GS-12 runtime recheck narrows the blocker:
+
+```text
+browser-use client e2e page
+PASS: a normal audience client remains registered and connected in /clients.
+
+chrome-devtools Manager Node Graph runtime-only graph load
+PASS: GS-12-shaped graph is present: client-object -> proc-client-sensors gyroG -> proc-flashlight frequencyHz ->
+client-object command sink.
+PASS: Manager detects a local loop requiring flashlight and sensors.
+
+chrome-devtools click Deploy
+FAIL: server rejects node-executor deploy with code=server.policy.scope_mismatch, path=target.mode,
+message="scoped commands must target their scope group".
+```
+
+This replaces the earlier "no stable audience client" diagnosis for the latest runtime. GS-12 is still blocked, but the
+current root blocker is deployment policy: Node Graph loop deploy sends a client-targeted `node-executor` plugin command
+while the server requires scoped manager mutating commands to target their scope Group. Fixing this would require
+changes in `apps/manager/src/lib/components/nodes/**`, broader server policy, or a newly approved contract lane, so
+Codex must stop under the current FF-18 contract instead of modifying product/runtime code.
+
 ## Validation Snapshot
 
 Recent validation run during FF-18 hotspot/runtime reconciliation:
@@ -231,6 +253,6 @@ The next valid path is one of:
 - approve a dated risk acceptance for the missing FF-18 runtime/browser/product proof, with owner, date, follow-up item,
   severity, and revisit condition; or
 - approve a bounded FF-18 runtime/browser/product proof task that starts with failing tests or executable scenario proof
-  and revises the contract before touching `apps/server/**`, Manager product controls, client runtime, or display
-  runtime; or
+  and revises the contract before touching `apps/server/**`, Manager product controls, Node Graph loop deployment,
+  client runtime, or display runtime; or
 - revise the FF-18 contract if the missing proof is intentionally deferred to a later FF item.
