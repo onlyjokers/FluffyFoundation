@@ -77,12 +77,17 @@ missing and is not covered by dated risk acceptance. Do not start FF-19 until th
 
 ## Next Expected Action
 
-The next Plan dispatch must choose one of these paths:
+The next Plan dispatch must choose one of these paths. The currently actionable implementation path is the bounded
+GS-12 deploy lane requested in `.harness/evidence/FF-18/contract-revision-request.md`; it is not approved yet.
 
-- approve a dated risk acceptance for the missing FF-18 runtime/browser/product proof;
-- approve a bounded FF-18 runtime/browser/product proof task that starts with failing tests or executable scenario proof,
-  including a scope revision if fixing the current `apps/server/**` startup blocker is required;
+- approve the bounded FF-18 GS-12 deploy lane before touching Node Graph loop deployment, broader server policy, SDK
+  command-envelope behavior, or related product/runtime code;
+- approve a dated risk acceptance for the remaining missing FF-18 runtime/browser/product proof;
+- reject the GS-12 deploy lane and keep FF-18 blocked;
 - revise the FF-18 contract if the missing proof is intentionally deferred to a later FF item.
+
+Until the GS-12 deploy lane is approved, Codex must not modify `apps/manager/src/lib/components/nodes/**`,
+`apps/server/**` outside the already approved files, `apps/client/**`, `apps/display/**`, or start FF-19.
 
 ## Runtime Browser Investigation Update
 
