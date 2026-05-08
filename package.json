@@ -12,6 +12,7 @@
     "e2e:node-executor:offline": "pnpm --filter @shugu/sdk-client exec node scripts/e2e/node-executor.offline.mjs",
     "test:golden": "pnpm --filter @shugu/ai-core run build && node scripts/test-golden.mjs",
     "test:ff22": "pnpm --filter @shugu/protocol run build && pnpm --filter @shugu/server run build && node scripts/test-ff22-load-drill.mjs",
+    "test:ff23": "node scripts/test-ff23-release-security.mjs",
     "test:node-core": "pnpm --filter @shugu/node-core run test",
     "test:core": "pnpm test:node-core && pnpm e2e:node-executor:offline",
     "validate:node-specs": "node scripts/validate-node-specs.mjs",
@@ -44,6 +45,7 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^8.57.1",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.1",
@@ -55,5 +57,13 @@
     "socket.io-client": "^4.7.2",
     "svelte-eslint-parser": "^1.4.1",
     "tsx": "^4.21.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "^3.1.2",
+      "glob": "^13.0.6",
+      "multer": "^2.1.1",
+      "picomatch": "^4.0.4"
+    }
   }
 }

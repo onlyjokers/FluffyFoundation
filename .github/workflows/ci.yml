@@ -42,3 +42,31 @@ jobs:
 
     - name: Verify
       run: pnpm verify
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+
+    - name: Install dependencies
+      run: pnpm install
+
+    - name: Dependency review
+      run: pnpm test:ff23
+
+    - name: Secret scan
+      run: node scripts/security/scan-secrets.mjs $(git ls-files)
+
+    - name: CodeQL-equivalent static gates
+      run: pnpm guard:deps && pnpm harness:acceptance
