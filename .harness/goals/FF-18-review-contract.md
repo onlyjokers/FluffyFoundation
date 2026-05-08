@@ -48,6 +48,12 @@ Allowed implementation lanes:
   - `packages/sdk-client/src/node-executor.ts`
   - `packages/sdk-client/src/node-executor.spec.ts`
   - `packages/sdk-client/scripts/e2e/node-executor.offline.mjs`
+- Approved adaptive FF-18 Display runtime proof lane for GS-13 screenColor modulation proof only:
+  - `apps/display/src/lib/stores/display-screen-overlay.ts`
+  - `apps/display/src/lib/stores/display-screen-overlay.spec.ts`
+  - `apps/display/src/lib/stores/display.ts`
+  - `apps/display/src/lib/stores/display-stop-all.ts`
+  - `apps/display/src/routes/+page.svelte`
 
 Read-only context:
 
@@ -67,6 +73,8 @@ Read-only context:
 - Do not mark deferred browser/runtime work complete.
 - Do not weaken production camera, flashlight, motion, microphone, permission, or capability gates to make GS-12 pass.
 - Do not make e2e/dev-only proof paths reachable in production runtime.
+- Do not broaden GS-13 Display work into Display transport, media playback, local pairing, server routing, SDK protocol,
+  or Node Graph authoring changes unless this contract is revised again.
 
 ## Acceptance criteria
 
@@ -89,6 +97,8 @@ FF-18 can be marked complete only if all applicable criteria are proven:
 - Evidence distinguishes deterministic source/test proof from browser/runtime/product proof.
 - GS-12 flashlight/sensors proof may use a dev/e2e-only runtime proof lane, but the final evidence must show that the
   deployed graph reaches the client NodeExecutor command path and that production capability checks remain intact.
+- GS-13 Display proof must show that a live Display runtime can render `screenColor` `mode="modulate"` as a
+  breathing-like output change, while the existing solid color Display path and stop-all cleanup remain intact.
 
 ## Validation
 
@@ -129,9 +139,13 @@ Allowed paths: `packages/ai-core/**`, `packages/node-core/**`, `docs/harness/AI-
 `apps/client/src/lib/stores/client/client-runtime-capabilities.ts`,
 `apps/client/src/lib/stores/client/client-control.ts`, `apps/client/src/lib/stores/client/client-*.spec.ts`,
 `packages/sdk-client/src/node-executor.ts`, `packages/sdk-client/src/node-executor.spec.ts`,
-`packages/sdk-client/scripts/e2e/node-executor.offline.mjs`
+`packages/sdk-client/scripts/e2e/node-executor.offline.mjs`,
+`apps/display/src/lib/stores/display-screen-overlay.ts`,
+`apps/display/src/lib/stores/display-screen-overlay.spec.ts`, `apps/display/src/lib/stores/display.ts`,
+`apps/display/src/lib/stores/display-stop-all.ts`, `apps/display/src/routes/+page.svelte`
 Forbidden paths: `apps/manager/src/lib/components/nodes/**` outside the approved loop-helper files above,
-`apps/client/**` outside the approved adaptive client e2e/runtime proof files above, `apps/display/**`,
+`apps/client/**` outside the approved adaptive client e2e/runtime proof files above,
+`apps/display/**` outside the approved adaptive Display GS-13 modulation proof files above,
 `apps/server/**` outside the approved 2026-05-08 bounded product-proof files above
 Required proof types: `implementation`, `deterministic`, `runtime-browser`
 Runtime/browser proof: `required-for-runtime-claims`
@@ -151,6 +165,8 @@ Stop and report if:
   scoped-command policy tests, runtime evidence, or evidence/status/handoff updates.
 - The adaptive client proof lane expands beyond dev/e2e GS-12 proof, client NodeExecutor status/command-path
   visibility, or tests that prove production permission gates remain intact.
+- The adaptive Display proof lane expands beyond `screenColor` overlay state calculation, Display store integration,
+  Display route rendering, stop-all cleanup, focused tests, and browser/runtime proof for GS-13 modulation.
 - A required semantic command surface belongs to FF-19 or later.
 - Passing requires weakening policy, validation, audit, rollback, redaction, dependency boundaries, or hotspot ratchets.
 - Passing requires weakening production camera, flashlight, motion, microphone, permission, or capability gates.
