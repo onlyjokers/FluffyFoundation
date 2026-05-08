@@ -21,13 +21,17 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     enableAudio,
     reportNodeMediaStarted,
   } from '$lib/stores/display';
+  import { sampleDisplayScreenOverlay } from '$lib/stores/display-screen-overlay';
 
   let serverUrl = 'https://localhost:3001';
   let assetReadToken = '';
   let pairToken = '';
   let isConnected = false;
+  let animationNow = 0;
+  let animationFrame: number | null = null;
 
   $: isConnected = $mode === 'local' || $serverState.status === 'connected';
+  $: sampledScreenOverlay = sampleDisplayScreenOverlay($screenOverlay, animationNow || Date.now());
 
   onMount(() => {
     const params = new URLSearchParams(window.location.search);
@@ -45,7 +49,14 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
 
     initializeDisplay({ serverUrl, assetReadToken, pairToken });
 
+    const tick = (now: number) => {
+      animationNow = now;
+      animationFrame = requestAnimationFrame(tick);
+    };
+    animationFrame = requestAnimationFrame(tick);
+
     return () => {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
       destroyDisplay();
     };
   });
@@ -88,10 +99,10 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     />
   {/if}
 
-  {#if isConnected && $screenOverlay.visible}
+  {#if isConnected && sampledScreenOverlay.visible}
     <div
       class="screen-overlay"
-      style={`background:${$screenOverlay.color}; opacity:${$screenOverlay.opacity}`}
+      style={`background:${sampledScreenOverlay.color}; opacity:${sampledScreenOverlay.opacity}`}
     ></div>
   {/if}
 </div>

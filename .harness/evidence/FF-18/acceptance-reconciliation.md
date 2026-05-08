@@ -6,14 +6,16 @@ Purpose: Reconcile FF-18 evidence against the Codex-ready acceptance contract be
 
 ## Result
 
-FF-18 is **blocked for completion** under `docs/harness/ACCEPTANCE.md` and
+FF-18 is **complete with exact baseline validation fingerprint** under `docs/harness/ACCEPTANCE.md` and
 `.harness/goals/FF-18-review-contract.md`.
 
-Existing FF-18 work provides substantial deterministic source/test proof for the in-memory AI Operator semantic core,
-but the evidence repeatedly defers browser/runtime/product proof. The deferral is not currently covered by a dated risk
-acceptance with owner, date, missing proof, follow-up item, severity, and expiry/revisit condition.
+Current evidence proves the FF-18 deterministic semantic core, the approved GS-12 e2e runtime proof lane, the runtime
+override semantic command surface, and the approved GS-13 Display modulation runtime proof lane. Fresh `pnpm verify`
+still fails on the known out-of-scope hotspot baseline
+`apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`; that exact fingerprint is recorded here
+and does not represent missing FF-18 runtime/browser/product proof.
 
-This reconciliation does not implement FF-18 product/runtime behavior and does not start FF-19.
+This reconciliation does not start FF-19.
 
 ## Proof Matrix
 
@@ -24,21 +26,24 @@ This reconciliation does not implement FF-18 product/runtime behavior and does n
 | AI-visible mutations pass through policy, validation, audit, history, rollback, and redaction | deterministic | WP2, WP5, WP6, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | In-memory command bus path is covered. |
 | Required FF-18 command surfaces are represented | deterministic | WP5, WP7, WP8 tests and fixture outputs; 2026-05-09 runtime override semantic command bus tests | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Runtime override set/clear are now executable semantic command bus traces with audit/history/rollback metadata. |
 | AI cannot mutate Canvas/Rete/Svelte/UI internals directly | deterministic/static | Recorded `rg` checks in WP2-WP8 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | No UI mutation path is claimed. |
-| GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; Node Graph deploy lane TDD tests | Manager socket and Root Node Graph visible; client e2e page opens; managed client Group registration is proven; Node Graph `node-executor/reclaim` and `node-executor/deploy` are accepted by server policy/ownership for `client:<clientId>`; live flashlight execution is still rejected because the current e2e client lacks `flashlight` capability | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves command/effect trace only; current browser proof narrows the product blocker to capability/runtime device proof, not server scope/ownership. |
-| GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; SDK/group-control TDD coverage for the product-proof lane; `proc-screen-color` source emits `mode="modulate"` payloads | Bounded Manager Published Display solid `screenColor` product chain is proven, but 2026-05-09 source/runtime reconciliation shows Display ignores `mode`, `secondaryColor`, `minOpacity`, `maxOpacity`, `frequencyHz`, and `waveform`; Display renders only static `color + opacity` | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Full breathing-like Display product proof requires `apps/display/**` support for modulated screen overlay; that path is forbidden by the active FF-18 contract. |
+| GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; Node Graph deploy lane TDD tests; client runtime capability tests | Live Manager/Client/Server deploy reaches client NodeExecutor in the approved explicit DEV e2e proof lane and records a real `flashlight` blink command; normal camera-denied runtime rejects flashlight capability without timeout | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | proven | `N/A` | Production permission/capability gates remain intact; runtime proof is limited to the approved e2e proof lane. |
+| GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; SDK/group-control TDD coverage for the product-proof lane; Display overlay TDD tests | Live Display runtime receives `screenColor mode="modulate"` through protocol-helper generated Manager messages and renders 5 unique color/opacity samples over time | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png`; `.harness/evidence/FF-18/gs13-display-modulate-browser-proof.png` | proven | `N/A` | Display breathing-like product output is now runtime-proven; AI observation evaluator remains deterministic. |
 | GS-14 AI repairs param overflow or incompatible graph using structured validation errors | deterministic | `packages/ai-core/test/golden-scenario-contract.test.mjs`; `packages/ai-core/test/observation-repair.test.mjs` | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Structured validation/repair proof exists. |
 | Prompt-injection-like registry/context data is inert and cannot bypass policy | deterministic | `packages/ai-core/test/operator-acceptance.test.mjs`; WP6 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records non-execution and policy denial. |
 | Secret-like values and private local paths are redacted before AI-visible context | deterministic | WP1, WP4, WP6 fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records redaction counts and examples. |
-| Evidence distinguishes deterministic proof from browser/runtime/product proof | documentation | WP1-WP8 verification notes repeatedly say browser/runtime proof is deferred | missing dated acceptance | `.harness/evidence/FF-18/summary.md` | blocked | missing | The distinction exists, but deferred proof is not governed by dated risk acceptance. |
+| Evidence distinguishes deterministic proof from browser/runtime/product proof | documentation | WP1-WP8 verification notes and reconciliation matrix separate deterministic command-bus proof from runtime/browser proof | GS-12 and GS-13 runtime/browser proofs are recorded separately from deterministic fixtures | `.harness/evidence/FF-18/summary.md`; `.harness/evidence/FF-18/runtime-browser-investigation.md` | proven | `N/A` | No browser/runtime proof is deferred in the current matrix. |
 
-## Stop Conditions Triggered
+## Stop-Condition Review
 
-- Required runtime, browser, or product proof is missing and no valid dated risk acceptance exists.
-- Browser/runtime proof would be substituted with deterministic fixtures if FF-18 were marked complete now.
-- Completing the missing GS-13 proof requires Display runtime work beyond the current FF-18 review contract:
-  `proc-screen-color` emits a breathing-like `screenColor` payload and Client `ScreenController` supports modulation,
-  but Display `setScreenColor` and the Display route render only static `color + opacity`.
-- `pnpm harness:verify` currently fails on hotspot ratchets in product/source files outside this reconciliation scope.
+- `pnpm verify` currently fails on the known out-of-scope hotspot baseline
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`.
+- Fresh `corepack pnpm@8.15.9 verify` confirms the same exact failure fingerprint and no new failure after dependency
+  guards, lint, build, node-core tests, FF-08 tests, FF-09 tests, node spec validation, offline node-executor e2e,
+  FF-08 Manager boundary guard, and harness structure validation pass.
+- No FF-18 runtime/browser/product proof remains missing.
+- No dated risk acceptance is used for FF-18 completion.
+- FF-19 may start after this commit because the only remaining validation failure is the exact pre-existing hotspot
+  fingerprint recorded above.
 
 ## Runtime Browser Investigation Update
 

@@ -4,11 +4,98 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-18 - AI Operator Semantic Runtime
+FF-19 - AI Safety, Policy, Cost, Redaction, And Audit
 
 ## Previous Acceptance
 
-FF-17 Plugin Host And Capability Lifecycle was accepted and committed as `111103f` (`Add plugin host lifecycle`).
+FF-18 AI Operator Semantic Runtime was accepted with exact baseline validation fingerprint after the GS-12 runtime
+proof lane, runtime override semantic surface, and GS-13 Display modulation runtime proof lane.
+
+## Current Boundary
+
+FF-19 scope from `docs/harness/PLAN.md` and `.harness/goals/FF-19-contract.md`:
+
+- AI policy classification for auto, approval-required, and denied commands.
+- Redaction for secrets, tokens, raw private media paths, and unnecessary UI state.
+- Cost/rate budget and model/provider abstraction contracts.
+- Prompt-injection and tool-permission tests for node descriptions and external inputs.
+- Audit records for prompt hash, snapshot revision, commands, validation, policy, approval, execution, observation, and
+  rollback.
+- FF-19 evidence, handoff, and status updates after validation.
+
+Allowed lanes:
+
+- `packages/ai-core/**`
+- `packages/node-core/**`
+- `docs/harness/AI-OPERATOR.md`
+- `.harness/status/**`
+- `.harness/handoffs/**`
+- `.harness/evidence/FF-19/**`
+
+Forbidden lanes:
+
+- `apps/manager/**`
+- `apps/client/**`
+- `apps/display/**`
+- provider integration outside the active contract
+- persistence engines
+- production deployment files
+
+## Non-Goals
+
+- Do not start FF-20.
+- Do not bypass FF-18 semantic command-bus semantics.
+- Do not add unapproved external provider calls or persistence.
+- Do not weaken policy, redaction, audit, rollback, or security checks to pass tests.
+- Do not claim runtime security proof from deterministic tests alone.
+
+## Verification Expectations
+
+Run task-specific AI safety/redaction/audit tests plus:
+
+```bash
+python3 .harness/scripts/validate_acceptance_contracts.py
+corepack pnpm@8.15.9 verify
+git diff --check
+```
+
+If `pnpm verify` fails only at the known hotspot baseline
+`apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`, record the exact fingerprint and do not
+weaken hotspot ratchets.
+
+## FF-18 Final Report
+
+Final state: complete with exact baseline validation fingerprint.
+
+Proof matrix:
+
+- AI semantic context, command bus, policy/validation/audit/history/rollback/redaction, command surfaces, UI mutation
+  exclusion, GS-14 repair, prompt-injection handling, and redaction: deterministic proof recorded in
+  `.harness/evidence/FF-18/summary.md` and `.harness/evidence/FF-18/acceptance-reconciliation.md`.
+- GS-12: runtime/browser proof recorded in `.harness/evidence/FF-18/runtime-browser-investigation.md`; explicit DEV e2e
+  proof lane reaches client NodeExecutor and records a real `flashlight` command, while production camera-denied
+  runtime still rejects flashlight without timeout.
+- Runtime override set/clear: deterministic semantic command-bus proof records validation, audit, history,
+  `runtimeStatus.runtimeOverrides`, and rollback metadata.
+- GS-13: browser/runtime proof recorded in `.harness/evidence/FF-18/runtime-browser-investigation.md`; live Display
+  runtime receives `screenColor mode="modulate"` and renders changing color/opacity samples over time.
+
+Fresh validation:
+
+- `python3 .harness/scripts/validate_acceptance_contracts.py`: PASS
+- `git diff --check`: PASS
+- `corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts`: PASS, 4 tests
+- `corepack pnpm@8.15.9 --filter @shugu/display run lint`: PASS
+- `corepack pnpm@8.15.9 --filter @shugu/display run build`: PASS with existing SvelteKit/Svelte export warnings
+- `corepack pnpm@8.15.9 verify`: FAIL only at exact known out-of-scope hotspot baseline
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`; all prior guard/lint/build/test/e2e
+  and harness structure steps pass.
+
+FF-19 may start. FF-20 must not start.
+
+---
+
+## Archived FF-18 Notes
 
 ## Current Boundary
 
@@ -249,3 +336,37 @@ support.
 This is a stop condition under `.harness/goals/FF-18-review-contract.md` because `apps/display/**` is forbidden. Do not
 modify Display code, mark FF-18 complete, or start FF-19 until the contract is revised with a bounded GS-13 Display
 runtime proof lane or a valid dated risk acceptance is approved.
+
+## GS-13 Display Modulate Runtime Proof Update
+
+The FF-18 contract was revised in `34d2f03` to allow a narrow GS-13 Display runtime proof lane. Within that lane,
+Display `screenColor mode="modulate"` is now implemented and browser/runtime-proven:
+
+- `apps/display/src/lib/stores/display-screen-overlay.ts` owns the small pure overlay sampling helper.
+- `apps/display/src/lib/stores/display-screen-overlay.spec.ts` proves solid, modulate, monotonic clock compatibility,
+  and clear behavior with TDD.
+- `apps/display/src/lib/stores/display.ts` delegates `setScreenColor` to the helper.
+- `apps/display/src/routes/+page.svelte` samples the active overlay during `requestAnimationFrame`.
+- `apps/display/src/lib/stores/display-stop-all.ts` clears overlay state with no active effect.
+
+Runtime/browser proof:
+
+- Playwright opened `https://localhost:5175/display/?server=https%3A%2F%2Flocalhost%3A3001`.
+- A protocol-helper generated Manager socket sent `node-executor/reclaim` and `screenColor mode="modulate"` to
+  target group `display`.
+- Browser samples observed 5 unique `.screen-overlay` styles over time, including changing RGB values and opacity.
+- Screenshot saved at `.harness/evidence/FF-18/gs13-display-modulate-browser-proof.png`.
+
+Focused validation:
+
+- `corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts`: PASS, 4 tests
+- `corepack pnpm@8.15.9 --filter @shugu/display run lint`: PASS
+- `corepack pnpm@8.15.9 --filter @shugu/display run build`: PASS with existing SvelteKit/Svelte export warnings
+- `python3 .harness/scripts/check_hotspots.py`: FAIL only at known out-of-scope baseline
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`
+- `corepack pnpm@8.15.9 verify`: FAIL only at the same known out-of-scope hotspot fingerprint after dependency guards,
+  lint, build, node-core tests, FF-08 tests, FF-09 tests, node spec validation, offline node-executor e2e, FF-08
+  Manager boundary guard, and harness structure validation pass
+
+FF-18 should still not be marked complete until the final proof-matrix audit confirms no remaining required criterion
+is missing and `pnpm verify` failure exactly matches the approved baseline fingerprint.

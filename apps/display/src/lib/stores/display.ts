@@ -24,17 +24,16 @@ import { ClientSDK, NodeExecutor, type NodeCommand, type ClientState, type Clien
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
 import { stopAllDisplaySideEffects } from './display-stop-all';
 import { applyDisplayAssetManifest } from './display-asset-manifest';
+import {
+  createClearedDisplayScreenOverlayState,
+  createDisplayScreenOverlayState,
+  type ScreenOverlayState,
+} from './display-screen-overlay';
 
 export type DisplayInitConfig = {
   serverUrl: string;
   assetReadToken?: string | null;
   pairToken?: string | null;
-};
-
-export type ScreenOverlayState = {
-  visible: boolean;
-  color: string;
-  opacity: number;
 };
 
 type MediaClipParams = {
@@ -484,11 +483,7 @@ export const imageState = writable<MediaEngineState['image']>({
 
 export const audioPlaybackState = writable<MediaEngineState['audio']>({ url: null, playing: false, loop: false, volume: 1 });
 
-export const screenOverlay = writable<ScreenOverlayState>({
-  visible: false,
-  color: '#000000',
-  opacity: 0,
-});
+export const screenOverlay = writable<ScreenOverlayState>(createClearedDisplayScreenOverlayState());
 
 export const isReady = derived(coreState, ($coreState) => $coreState.status === 'ready');
 
@@ -1060,16 +1055,7 @@ export function destroyDisplay(): void {
 }
 
 function setScreenColor(payload: ScreenColorPayload): void {
-  const color = typeof payload.color === 'string' && payload.color.trim() ? payload.color.trim() : '#000000';
-  const opacityRaw = payload.opacity ?? 1;
-  const opacity =
-    typeof opacityRaw === 'number' && Number.isFinite(opacityRaw) ? Math.max(0, Math.min(1, opacityRaw)) : 1;
-
-  screenOverlay.set({
-    visible: opacity > 0,
-    color,
-    opacity,
-  });
+  screenOverlay.set(createDisplayScreenOverlayState(payload));
 }
 
 function executeNow(action: ControlAction, payload: ControlPayload): void {

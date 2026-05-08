@@ -652,3 +652,129 @@ Stop condition:
 Codex must stop instead of modifying Display code under the current contract. A future continuation needs an approved
 bounded GS-13 Display runtime proof lane or a dated risk acceptance that explicitly leaves full Display breathing-like
 product proof incomplete.
+
+## 2026-05-09 GS-13 Display Modulate Runtime Proof
+
+The FF-18 contract was revised in commit `34d2f03` to allow a narrow Display runtime proof lane for GS-13
+`screenColor` modulation. This work stayed inside that lane and did not modify Display transport, media playback,
+server routing, SDK protocol, or Node Graph authoring.
+
+TDD proof:
+
+```text
+RED:
+corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts
+FAIL: Cannot find module './display-screen-overlay'.
+
+GREEN:
+corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts
+PASS: 3 tests, 0 failures.
+PASS: solid overlay state remains static.
+PASS: modulate overlay samples produce changing color/opacity.
+PASS: clear removes active modulation effect.
+```
+
+Follow-up TDD proof for browser animation clock compatibility:
+
+```text
+RED:
+corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts
+FAIL: getDisplayScreenOverlayNow is not exported.
+
+GREEN:
+corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts
+PASS: 4 tests, 0 failures.
+PASS: overlay effect timestamps use a monotonic clock compatible with requestAnimationFrame timestamps.
+```
+
+Implementation evidence:
+
+```text
+apps/display/src/lib/stores/display-screen-overlay.ts
+PASS: small pure helper owns Display overlay state creation and sampling for solid, blink, pulse, cycle, and modulate.
+
+apps/display/src/lib/stores/display.ts
+PASS: setScreenColor delegates to the helper and stores effect metadata with the overlay state.
+
+apps/display/src/routes/+page.svelte
+PASS: route samples the overlay during requestAnimationFrame and renders current background/opacity.
+
+apps/display/src/lib/stores/display-stop-all.ts
+PASS: stop-all clears the overlay with no active effect.
+```
+
+Runtime/browser proof against the live Display route and server:
+
+```text
+Playwright page:
+https://localhost:5175/display/?server=https%3A%2F%2Flocalhost%3A3001
+PASS: page loads with ignoreHTTPSErrors and connects to the server runtime.
+
+Socket.IO Manager proof sender:
+PASS: connected to https://localhost:3001 as role=manager.
+PASS: sent protocol-helper generated node-executor/reclaim to target group=display.
+PASS: sent protocol-helper generated screenColor payload:
+  mode="modulate", color="#000000", secondaryColor="#ffffff", minOpacity=0.2, maxOpacity=1,
+  frequencyHz=1, waveform="sine".
+
+Display browser samples:
+PASS: .screen-overlay exists and stays visible.
+PASS: 5 unique style samples were observed over time:
+- rgb(85, 85, 85), opacity 0.465688
+- rgb(10, 10, 10), opacity 0.230448
+- rgb(178, 178, 178), opacity 0.759551
+- rgb(244, 244, 244), opacity 0.966299
+- rgb(76, 76, 76), opacity 0.439067
+
+Screenshot:
+.harness/evidence/FF-18/gs13-display-modulate-browser-proof.png
+```
+
+Focused validation:
+
+```text
+corepack pnpm@8.15.9 exec tsx --test apps/display/src/lib/stores/display-screen-overlay.spec.ts
+PASS: 4 tests, 0 failures
+
+corepack pnpm@8.15.9 --filter @shugu/display run lint
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/display run build
+PASS with existing SvelteKit/Svelte export warnings; no build failure.
+
+python3 .harness/scripts/check_hotspots.py
+FAIL only at known out-of-scope baseline:
+apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492.
+No new hotspot failure was introduced by the Display helper.
+```
+
+Fresh full verification:
+
+```text
+corepack pnpm@8.15.9 verify
+FAIL: harness:hotspots only.
+
+Passed before the hotspot gate:
+- guard:deps
+- lint
+- build:all
+- test:node-core
+- test:ff08
+- test:ff09
+- validate:node-specs
+- e2e:node-executor:offline
+- guard:ff08
+- harness:validate
+
+Exact remaining failure fingerprint:
+[hotspots] FAIL:
+- apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492
+```
+
+Updated acceptance impact:
+
+| Criterion | Runtime result | Status |
+| --- | --- | --- |
+| GS-13 display visual becomes breathing-like | Live Display runtime receives `screenColor mode="modulate"` and renders changing color/opacity samples over time | runtime-proven |
+| GS-13 AI observes output change | Deterministic AI observation evaluator remains proven; Display product output change now exists as browser/runtime proof | runtime output proven; AI observation remains deterministic |
+| Display solid color and stop-all cleanup | Focused tests prove solid stays static and stop-all clears active effect | proven |

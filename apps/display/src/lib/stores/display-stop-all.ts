@@ -6,7 +6,7 @@ import type { Writable } from 'svelte/store';
 import { executeStopAllCleanup, type NodeExecutor } from '@shugu/sdk-client';
 import type { MultimediaCore } from '@shugu/multimedia-core';
 import type { ScreenColorPayload } from '@shugu/protocol';
-import type { ScreenOverlayState } from './display';
+import { createClearedDisplayScreenOverlayState, type ScreenOverlayState } from './display-screen-overlay';
 
 export function stopAllDisplaySideEffects(input: {
   multimediaCore: MultimediaCore | null;
@@ -19,7 +19,7 @@ export function stopAllDisplaySideEffects(input: {
   executeStopAllCleanup({
     media: input.multimediaCore?.media ?? null,
     screen: {
-      clear: () => input.screenOverlay.set({ visible: false, color: '#000000', opacity: 0 }),
+      clear: () => input.screenOverlay.set(createClearedDisplayScreenOverlayState()),
       setColor: input.setScreenColor,
     },
     nodeExecutor: input.nodeExecutor,
