@@ -27,6 +27,7 @@ import { createClientControlHandlers } from './client-control';
 import { enableToneAudio, getLastToneReadyPayload, reportToneReady, type ToneReadyPayload } from './client-tone';
 import { getOrCreateClientIdentity, persistAssignedClientId } from './client-identity';
 import { stopAllClientSideEffects } from './client-stop-all';
+import { canRunClientRuntimeCapability } from './client-runtime-capabilities';
 
 // SDK and controller instances
 let sdk: ClientSDK | null = null;
@@ -211,17 +212,19 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
     {
       canRunCapability: (capability) => {
         const p = get(permissions);
-        if (capability === 'flashlight') return p.camera === 'granted';
-        if (capability === 'sensors') return p.motion === 'granted' || p.microphone === 'granted';
-        if (capability === 'sound') {
-          const win =
-            typeof window !== 'undefined'
-              ? (window as Window & { webkitAudioContext?: typeof AudioContext })
-              : null;
-          const hasAudioContext = Boolean(win?.AudioContext || win?.webkitAudioContext);
-          return hasAudioContext;
-        }
-        return true;
+        const win =
+          typeof window !== 'undefined'
+            ? (window as Window & {
+                webkitAudioContext?: typeof AudioContext;
+                __SHUGU_E2E?: boolean;
+                __SHUGU_E2E_FLASHLIGHT_PROOF?: boolean;
+              })
+            : null;
+        return canRunClientRuntimeCapability(capability, {
+          permissions: p,
+          hasAudioContext: Boolean(win?.AudioContext || win?.webkitAudioContext),
+          e2eFlashlightProof: import.meta.env.DEV && Boolean(win?.__SHUGU_E2E && win.__SHUGU_E2E_FLASHLIGHT_PROOF),
+        });
       },
       resolveAssetRef: (ref: string) => multimediaCore?.resolveAssetRef(ref) ?? ref,
       prioritizeFetch: (url: string) => multimediaCore?.prioritizeFetch(url) ?? fetch(url),

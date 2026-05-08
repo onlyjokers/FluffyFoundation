@@ -42,6 +42,7 @@ Allowed implementation lanes:
 - Approved adaptive FF-18 client e2e/runtime proof lane for GS-12 flashlight/sensors proof only:
   - `apps/client/src/routes/+page.svelte`
   - `apps/client/src/lib/stores/client/client-runtime.ts`
+  - `apps/client/src/lib/stores/client/client-runtime-capabilities.ts`
   - `apps/client/src/lib/stores/client/client-control.ts`
   - `apps/client/src/lib/stores/client/client-*.spec.ts`
   - `packages/sdk-client/src/node-executor.ts`
@@ -125,6 +126,7 @@ Allowed paths: `packages/ai-core/**`, `packages/node-core/**`, `docs/harness/AI-
 `apps/server/src/events/events.gateway.command-envelope.spec.ts`, `apps/server/src/events/events.gateway.spec.ts`,
 `apps/server/src/events/group-ownership-policy.ts`, `apps/server/src/events/display-routing.spec.ts`,
 `apps/client/src/routes/+page.svelte`, `apps/client/src/lib/stores/client/client-runtime.ts`,
+`apps/client/src/lib/stores/client/client-runtime-capabilities.ts`,
 `apps/client/src/lib/stores/client/client-control.ts`, `apps/client/src/lib/stores/client/client-*.spec.ts`,
 `packages/sdk-client/src/node-executor.ts`, `packages/sdk-client/src/node-executor.spec.ts`,
 `packages/sdk-client/scripts/e2e/node-executor.offline.mjs`

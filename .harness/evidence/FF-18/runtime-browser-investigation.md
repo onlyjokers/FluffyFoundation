@@ -489,3 +489,80 @@ Updated acceptance impact:
 | GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Managed Group deploy is now accepted by server policy and ownership; live flashlight execution remains blocked because the current e2e client lacks `flashlight` capability | blocked |
 | GS-13 display visual becomes breathing-like and AI observes output change | Bounded Manager Published Display `screenColor` product chain is proven; full breathing-like AI scenario and AI observation loop are not product-proven | partial |
 | Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |
+
+## 2026-05-09 GS-12 Capability Runtime Proof
+
+This recheck used the approved adaptive FF-18 client e2e/runtime proof lane. It does not mark FF-18 complete and does
+not start FF-19.
+
+Focused TDD proof:
+
+```text
+wc -l apps/client/src/lib/stores/client/client-runtime.ts apps/client/src/lib/stores/client/client-runtime-capabilities.ts
+PASS: client-runtime.ts is 413 lines after pure capability-helper extraction, below the hotspot ratchet.
+
+corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts
+PASS: 5 tests, 0 failures
+PASS: deployLoop records pending state before dispatching node-executor/deploy, preventing fast rejected/deployed
+responses from being missed and misreported as deploy timeouts.
+
+corepack pnpm@8.15.9 exec tsx --test apps/client/src/lib/stores/client/client-runtime.spec.ts
+PASS: 2 tests, 0 failures
+PASS: normal runtime denies flashlight when camera permission is denied.
+PASS: explicit DEV e2e proof mode can allow flashlight capability without changing the production camera gate.
+```
+
+Runtime/browser proof against current source with temporary isolated server/manager/client ports:
+
+```text
+Temporary server env:
+PORT=<free> SHUGU_ALLOW_INSECURE_MANAGER=1
+
+Temporary manager env:
+VITE_SHUGU_MANAGER_DEV_PASSWORD=521184
+
+Manager route:
+https://localhost:<managerPort>/manager/root
+
+Client route:
+https://localhost:<clientPort>/?server=https%3A%2F%2Flocalhost%3A<serverPort>&e2e=1
+```
+
+Negative capability proof:
+
+```text
+PASS: Manager connects as manager and Root Node Graph exposes window.__shuguNodeEngine.
+PASS: Client e2e page registers as c_e2e_deploy_no_timeout.
+PASS: Manager loads GS-12-shaped graph:
+- client-object targets c_e2e_deploy_no_timeout
+- proc-client-sensors feeds proc-flashlight frequencyHz
+- proc-flashlight cmd returns to client-object sink
+PASS: Manager starts NodeEngine and sends node-executor/reclaim plus node-executor/deploy to the managed client Group.
+PASS: Client receives node-executor deploy.
+PASS: Client NodeExecutor rejects deploy with error "missing required capabilities: flashlight".
+PASS: Manager dialog is exactly "Deploy failed: missing required capabilities: flashlight".
+PASS: No "Deploy timeout" dialog appears.
+PASS: Client e2e command capture contains no flashlight command after rejection.
+```
+
+Positive DEV e2e proof-lane runtime proof:
+
+```text
+PASS: Client page explicitly sets window.__SHUGU_E2E=true and window.__SHUGU_E2E_FLASHLIGHT_PROOF=true.
+PASS: Manager connects as manager and client registers as c_e2e_flashlight_proof.
+PASS: Manager loads the same GS-12-shaped graph and detects a loop requiring ["flashlight","sensors"].
+PASS: Manager clicks Deploy and no deploy failure/timeout dialog appears.
+PASS: Client receives node-executor/reclaim and node-executor/deploy.
+PASS: Client NodeExecutor reports deployed for loop:node-client-e2e:1ct6gic.
+PASS: Manager UI shows Remote running/deployed and Stop Loop.
+PASS: Client e2e command capture records a real NodeExecutor command-path entry:
+  { action: "flashlight", payload: { mode: "blink", frequency: 1.4971606587399926, dutyCycle: 0.5 } }
+```
+
+Updated acceptance impact:
+
+| Criterion | Runtime result | Status |
+| --- | --- | --- |
+| GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Live Manager/Client/Server deploy reaches client NodeExecutor and records a `flashlight` command in explicit DEV e2e proof mode; normal camera-denied runtime still rejects flashlight capability without timeout | runtime-proven for e2e proof lane |
+| GS-13 display visual becomes breathing-like and AI observes output change | Bounded Manager Published Display `screenColor` product chain is proven; full breathing-like AI scenario and AI observation loop are not product-proven | partial |
+| Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |

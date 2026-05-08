@@ -299,3 +299,63 @@ The next valid path is one of:
   and revises the contract before touching `apps/server/**`, Manager product controls, Node Graph loop deployment,
   client runtime, or display runtime; or
 - revise the FF-18 contract if the missing proof is intentionally deferred to a later FF item.
+
+## 2026-05-09 GS-12 Acceptance Reconciliation Update
+
+The approved adaptive FF-18 client e2e/runtime proof lane has now produced both negative and positive runtime proof for
+GS-12 without weakening production permission gates.
+
+Implementation evidence:
+
+```text
+apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.ts
+PASS: deploy pending state is recorded before node-executor/deploy is dispatched.
+
+apps/client/src/lib/stores/client/client-runtime.ts
+PASS: flashlight remains gated by camera permission unless explicit DEV e2e proof mode is active.
+PASS: the e2e proof override requires import.meta.env.DEV plus window.__SHUGU_E2E plus
+window.__SHUGU_E2E_FLASHLIGHT_PROOF.
+
+apps/client/src/lib/stores/client/client-runtime-capabilities.ts
+PASS: capability evaluation is isolated in canRunClientRuntimeCapability() so client-runtime.ts remains below the
+hotspot ratchet without changing production behavior.
+```
+
+Deterministic validation:
+
+```text
+corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts
+PASS: 5 tests, 0 failures
+
+corepack pnpm@8.15.9 exec tsx --test apps/client/src/lib/stores/client/client-runtime.spec.ts
+PASS: 2 tests, 0 failures
+```
+
+Runtime/browser validation:
+
+```text
+Negative proof:
+PASS: live Manager/Client/Server deploy reaches client NodeExecutor with a GS-12-shaped flashlight/sensors graph.
+PASS: camera-denied e2e runtime rejects deploy with "missing required capabilities: flashlight".
+PASS: Manager reports "Deploy failed: missing required capabilities: flashlight".
+PASS: Manager does not report "Deploy timeout".
+PASS: no flashlight command executes after rejection.
+
+Positive DEV e2e proof-lane proof:
+PASS: live Manager/Client/Server deploy reaches client NodeExecutor with
+window.__SHUGU_E2E_FLASHLIGHT_PROOF=true.
+PASS: client NodeExecutor reports deployed.
+PASS: Manager UI reports Remote running/deployed and Stop Loop.
+PASS: client e2e command capture records action="flashlight" with blink payload.
+```
+
+Acceptance impact:
+
+| Criterion | Evidence | Status |
+| --- | --- | --- |
+| GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Runtime/browser proof shows live deploy reaches client NodeExecutor and executes a flashlight command in explicit DEV e2e proof mode; deterministic proof shows production camera-denied runtime remains blocked | proven for FF-18 e2e proof lane |
+| Deterministic fixtures are separated from runtime proof | Deterministic tests cover ordering and capability gate logic; separate browser runtime scripts prove Manager/Client/Server interaction | proven |
+| Deferred proof governed by dated risk acceptance | No new dated risk acceptance was created; runtime override set/clear and full GS-13 AI observation remain unaccepted blockers | blocked |
+| FF-18 completion | Still incomplete because runtime override set/clear remains unproven/deferred and full GS-13 AI observation remains partial | incomplete |
+
+FF-19 must not start yet.

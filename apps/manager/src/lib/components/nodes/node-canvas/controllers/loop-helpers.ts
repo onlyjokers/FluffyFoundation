@@ -196,9 +196,10 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
       const payload = exportGraphForLoop(loop.id);
       const target = managedClientGroupTarget(clientId);
       sdk.sendPluginControl(target, 'node-executor', 'reclaim', {});
-      sdk.sendPluginControl(target, 'node-executor', 'deploy', payload);
       setLoopDeployPending(loop.id, clientId);
+      sdk.sendPluginControl(target, 'node-executor', 'deploy', payload);
     } catch (err) {
+      clearLoopDeployPending(loop.id);
       onDeployError?.(err instanceof Error ? err.message : 'Deploy failed');
     }
   };

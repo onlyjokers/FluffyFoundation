@@ -175,10 +175,21 @@ deploy path without weakening server scope, ownership, audit, rollback, security
   `node-executor/reclaim` and `node-executor/deploy` with
   `target={ mode: 'group', groupId: 'client:<clientId>' }` and matching `scopeGroupId`.
 
-FF-18 is still incomplete. Do not start FF-19. The current GS-12 blocker is no longer server scope/ownership; it is
-capability/runtime product proof: the desktop e2e client used for verification does not advertise `flashlight`, so live
-flashlight command execution remains unproven. Runtime override set/clear also remains deferred as
-`RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` without dated risk acceptance.
+FF-18 is still incomplete. Do not start FF-19. The current GS-12 blocker has been resolved within the approved adaptive
+client e2e/runtime proof lane: live Manager/Client/Server deploy reaches the client NodeExecutor command path, a
+camera-denied runtime reports "Deploy failed: missing required capabilities: flashlight" without timing out, and an
+explicit DEV e2e proof flag records a real `flashlight` command in the client e2e command log. Production camera and
+flashlight permission gates remain intact by deterministic test.
+
+Remaining blockers are not GS-12 deploy/capability blockers:
+
+- runtime override set/clear remains deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` without dated risk
+  acceptance;
+- GS-13 is still only partial because the bounded Manager Published Display `screenColor` chain is proven, but the full
+  breathing-like AI scenario and AI observation loop are not product-proven.
+
+Do not mark FF-18 complete and do not start FF-19 until those remaining blockers are resolved or formally accepted by
+contract.
 
 Fresh validation after this fix:
 
@@ -195,3 +206,13 @@ Fresh validation after this fix:
 - `corepack pnpm@8.15.9 verify`: FAIL at the same known out-of-scope hotspot after dependency guards, lint, build,
   node-core tests, FF-08 tests, FF-09 tests, node spec validation, offline node-executor e2e, and FF-08 Manager
   boundary guard pass
+
+Fresh validation after the 2026-05-09 GS-12 capability/runtime proof:
+
+- `corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts`: PASS, 5 tests, 0 failures
+- `corepack pnpm@8.15.9 exec tsx --test apps/client/src/lib/stores/client/client-runtime.spec.ts`: PASS, 2 tests, 0 failures
+- `wc -l apps/client/src/lib/stores/client/client-runtime.ts apps/client/src/lib/stores/client/client-runtime-capabilities.ts`: PASS, `client-runtime.ts` is 413 lines after pure capability-helper extraction, below the hotspot ratchet
+- Runtime/browser negative proof: PASS, camera-denied client rejects deploy with
+  `Deploy failed: missing required capabilities: flashlight` and no `Deploy timeout`
+- Runtime/browser positive proof: PASS, explicit DEV e2e proof flag deploys the GS-12 loop and records a `flashlight`
+  command in the client e2e command log

@@ -83,6 +83,72 @@ test('deployLoop targets the managed client group instead of explicit client IDs
   assert.deepEqual(sent[1].target, { mode: 'group', groupId: 'client:client-1' });
 });
 
+test('deployLoop records pending state before dispatching deploy command', () => {
+  const pendingSnapshots: Map<string, unknown>[] = [];
+  const sent: { target: unknown; plugin: string; event: string; payload: Record<string, unknown> }[] = [];
+  let pending = new Map<string, unknown>();
+  const sdk: ManagerSdkLike = {
+    sendPluginControl: (target, plugin, event, payload) => {
+      sent.push({ target, plugin, event, payload });
+      if (event === 'deploy') {
+        pendingSnapshots.push(new Map(pending));
+      }
+    },
+    stopSound: () => undefined,
+    stopMedia: () => undefined,
+    hideImage: () => undefined,
+    flashlight: () => undefined,
+    screenColor: () => undefined,
+  };
+  const graph: Pick<GraphState, 'nodes'> = {
+    nodes: [
+      {
+        id: 'client-node',
+        type: 'client-object',
+        position: { x: 0, y: 0 },
+        config: { clientId: 'client-1' },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+  };
+  const loop: LocalLoop = {
+    id: 'loop:client-node',
+    nodeIds: ['client-node', 'sensor-node', 'flashlight-node'],
+    connectionIds: [],
+    clientsInvolved: ['client-node'],
+    requiredCapabilities: ['flashlight', 'sensors'],
+  };
+  const actions = createLoopActions({
+    getSDK: () => sdk,
+    getGraphState: () => graph,
+    getLocalLoops: () => [loop],
+    getDeployedLoopIds: () => new Set(),
+    getDeployPendingByLoopId: () => pending as Map<string, never>,
+    getDeployedLoopClientIdByLoopId: () => new Map(),
+    setDeployPendingByLoopId: (next) => (pending = next),
+    setDeployedLoopClientIdByLoopId: () => undefined,
+    markLoopDeployed: () => undefined,
+    exportGraphForLoop: () => ({
+      graph: { nodes: [], connections: [] },
+      meta: {
+        loopId: loop.id,
+        requiredCapabilities: loop.requiredCapabilities,
+        tickIntervalMs: 100,
+        protocolVersion: 1,
+        executorVersion: 'node-executor-v1',
+      },
+    }),
+    isRunning: () => true,
+  });
+
+  actions.deployLoop(loop);
+
+  assert.equal(sent.length, 2);
+  assert.equal(pendingSnapshots.length, 1);
+  assert.equal(pendingSnapshots[0].has(loop.id), true);
+});
+
 test('stopLoop targets the managed client group instead of explicit client IDs', () => {
   const { actions, deployed, loop, sent } = createHarness();
   deployed.add(loop.id);
