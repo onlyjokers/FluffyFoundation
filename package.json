@@ -10,6 +10,7 @@
     "dev:client": "pnpm --filter @shugu/client run dev",
     "e2e:node-executor": "node scripts/e2e/node-executor.mjs",
     "e2e:node-executor:offline": "pnpm --filter @shugu/sdk-client exec node scripts/e2e/node-executor.offline.mjs",
+    "test:golden": "pnpm --filter @shugu/ai-core run build && node scripts/test-golden.mjs",
     "test:node-core": "pnpm --filter @shugu/node-core run test",
     "test:core": "pnpm test:node-core && pnpm e2e:node-executor:offline",
     "validate:node-specs": "node scripts/validate-node-specs.mjs",

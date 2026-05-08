@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-21 - Executable Golden Scenarios
+FF-22 - Performance Budgets, Load, And Show Mode Resilience
 
 ## Previous Acceptance
 
-FF-20 Observability, Reporting, And Operator Console was accepted with exact baseline validation fingerprint.
+FF-21 Executable Golden Scenarios was accepted with exact baseline validation fingerprint.
 
 ## Active Claim
 
-Convert product-readiness scenarios into executable proof without treating non-end-to-end fixtures as release readiness.
+Prove the system holds under realistic device counts and failure conditions with explicit budgets and drill evidence.
 
 ## Work Status
 
-FF-21 is the next active task. Do not start FF-22. FF-21 work must stay inside
-`.harness/goals/FF-21-contract.md`.
+FF-22 is the next active task. Do not start FF-23. FF-22 work must stay inside
+`.harness/goals/FF-22-contract.md`.
