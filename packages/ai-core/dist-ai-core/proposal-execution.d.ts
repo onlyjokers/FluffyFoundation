@@ -1,5 +1,5 @@
 /**
- * Purpose: Execute approved FF-18 AI semantic proposals through an injected command bus with local policy and rollback metadata.
+ * Purpose: Execute approved FF-18/FF-19 AI semantic proposals through an injected command bus with local policy, audit, and rollback metadata.
  */
 import type { AiSemanticActor, AiSemanticCommand, AiDryRunCommandResult } from './deterministic-planner.js';
 export type AiProposalApproval = {
@@ -48,7 +48,30 @@ export type AiProposalExecutionAuditEntry = {
     proposalId: string;
     actor: AiSemanticActor;
     lifecycle: Array<'policy' | 'dry-run' | 'apply' | 'audit' | 'history' | 'rollback-token'>;
+    promptHash: string;
+    snapshotRevision: number;
+    validation: {
+        ok: boolean;
+        errorCount: number;
+    };
     policy: AiProposalExecutionPolicyResult;
+    approval: {
+        status: 'not-required' | 'missing' | 'approved';
+        approvedBy?: string;
+        approvedAt?: string;
+    };
+    execution: {
+        status: AiProposalExecutionResultStatus;
+        appliedCommandCount: number;
+    };
+    observation: {
+        status: 'not-provided' | 'observed';
+        summary?: string;
+    };
+    rollback: {
+        reference: string | null;
+        commandRollbackTokens: string[];
+    };
     commandAudits: unknown[];
     previousRevision: number;
     appliedRevision: number | null;
@@ -68,8 +91,9 @@ export type AiProposalRollbackMetadata = {
     previousRevision: number | null;
     appliedRevision: number | null;
 };
+export type AiProposalExecutionResultStatus = 'applied' | 'approval-required' | 'policy-denied' | 'dry-run-failed' | 'apply-failed';
 export type AiProposalExecutionResult = {
-    status: 'applied' | 'approval-required' | 'policy-denied' | 'dry-run-failed' | 'apply-failed';
+    status: AiProposalExecutionResultStatus;
     proposalId: string;
     commandSequence: AiSemanticCommand[];
     policy: AiProposalExecutionPolicyResult;
@@ -113,6 +137,11 @@ export type AiProposalExecutionCore = {
         actor: AiSemanticActor;
         proposal: AiExecutableProposal;
         approval?: AiProposalApproval;
+        prompt?: string;
+        observation?: {
+            status?: string;
+            summary?: string;
+        };
     }) => AiProposalExecutionResult;
     rollback: (rollbackReference: string | null | undefined) => AiProposalRollbackResult;
     getHistory: () => AiProposalExecutionHistoryEntry[];

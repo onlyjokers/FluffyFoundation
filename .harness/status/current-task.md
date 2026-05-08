@@ -4,54 +4,57 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-19 - AI Safety, Policy, Cost, Redaction, And Audit
+FF-20 - Observability, Reporting, And Operator Console
 
 ## Previous Acceptance
 
-FF-18 AI Operator Semantic Runtime was accepted with exact baseline validation fingerprint after the GS-12 runtime
-proof lane, runtime override semantic surface, and GS-13 Display modulation runtime proof lane.
+FF-19 deterministic AI safety contract work is complete with exact baseline validation fingerprint.
 
 ## Current Boundary
 
-FF-19 scope from `docs/harness/PLAN.md` and `.harness/goals/FF-19-contract.md`:
+FF-20 scope from `docs/harness/PLAN.md` and `.harness/goals/FF-20-contract.md`.
 
-- AI policy classification for auto, approval-required, and denied commands.
-- Redaction for secrets, tokens, raw private media paths, and unnecessary UI state.
-- Cost/rate budget and model/provider abstraction contracts.
-- Prompt-injection and tool-permission tests for node descriptions and external inputs.
-- Audit records for prompt hash, snapshot revision, commands, validation, policy, approval, execution, observation, and
-  rollback.
-- FF-19 evidence, handoff, and status updates after validation.
-
-Allowed lanes:
-
-- `packages/ai-core/**`
-- `packages/node-core/**`
-- `docs/harness/AI-OPERATOR.md`
-- `.harness/status/**`
-- `.harness/handoffs/**`
-- `.harness/evidence/FF-19/**`
-
-Forbidden lanes:
-
-- `apps/manager/**`
-- `apps/client/**`
-- `apps/display/**`
-- provider integration outside the active contract
-- persistence engines
-- production deployment files
+Allowed lanes are defined by `.harness/goals/FF-20-contract.md`. Do not infer completion from this status file.
 
 ## Non-Goals
 
-- Do not start FF-20.
-- Do not bypass FF-18 semantic command-bus semantics.
-- Do not add unapproved external provider calls or persistence.
-- Do not weaken policy, redaction, audit, rollback, or security checks to pass tests.
-- Do not claim runtime security proof from deterministic tests alone.
+FF-20 non-goals from `.harness/goals/FF-20-contract.md`:
+
+- Do not start FF-21.
+- Do not implement FF-22 load/show-mode budgets.
+- Do not hide runtime failures behind UI-only state.
+- Do not treat event type declarations as operator-console runtime proof.
+
+## FF-19 Final Report
+
+- AI policy classification now has deterministic `auto`, `approval-required`, and `denied` results.
+- Cost/rate/provider budget checks are bounded and deny over-budget proposal execution without provider calls.
+- Prompt-injection-like proposal titles, node descriptions, and external inputs are recorded as inert ignored signals
+  and cannot grant permissions.
+- Redaction covers bearer-style tokens, private media paths, and UI/layout noise before AI visibility.
+- AI proposal execution audit records prompt hash, snapshot revision, validation, policy, approval, execution,
+  observation, and rollback fields.
+
+Evidence:
+
+- `.harness/evidence/FF-19/summary.md`
+- `.harness/handoffs/2026-05-09-FF-19-safety-contract.md`
+
+Focused validation:
+
+- `corepack pnpm@8.15.9 --filter @shugu/ai-core run test -- safety-contract`: PASS, 29 tests, 0 failures
+- `corepack pnpm@8.15.9 --filter @shugu/ai-core run lint`: PASS
+- `python3 .harness/scripts/validate_acceptance_contracts.py`: PASS
+- `git diff --check`: PASS
+- `corepack pnpm@8.15.9 verify`: FAIL only at exact known out-of-scope hotspot baseline
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`; all prior guard/lint/build/test/e2e
+  and harness structure steps pass.
+
+FF-20 may start. FF-21 must not start.
 
 ## Verification Expectations
 
-Run task-specific AI safety/redaction/audit tests plus:
+Run task-specific observability/reporting/operator-console tests plus:
 
 ```bash
 python3 .harness/scripts/validate_acceptance_contracts.py

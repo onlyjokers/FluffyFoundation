@@ -1,8 +1,9 @@
 /**
- * Purpose: Execute approved FF-18 AI semantic proposals through an injected command bus with local policy and rollback metadata.
+ * Purpose: Execute approved FF-18/FF-19 AI semantic proposals through an injected command bus with local policy, audit, and rollback metadata.
  */
 
 import type { AiSemanticActor, AiSemanticCommand, AiDryRunCommandResult } from './deterministic-planner.js';
+import { hashAiPrompt } from './prompt-hash.js';
 
 export type AiProposalApproval = {
   approvedBy: string;
@@ -58,7 +59,14 @@ export type AiProposalExecutionAuditEntry =
       proposalId: string;
       actor: AiSemanticActor;
       lifecycle: Array<'policy' | 'dry-run' | 'apply' | 'audit' | 'history' | 'rollback-token'>;
+      promptHash: string;
+      snapshotRevision: number;
+      validation: { ok: boolean; errorCount: number };
       policy: AiProposalExecutionPolicyResult;
+      approval: { status: 'not-required' | 'missing' | 'approved'; approvedBy?: string; approvedAt?: string };
+      execution: { status: AiProposalExecutionResultStatus; appliedCommandCount: number };
+      observation: { status: 'not-provided' | 'observed'; summary?: string };
+      rollback: { reference: string | null; commandRollbackTokens: string[] };
       commandAudits: unknown[];
       previousRevision: number;
       appliedRevision: number | null;
@@ -81,8 +89,15 @@ export type AiProposalRollbackMetadata = {
   appliedRevision: number | null;
 };
 
+export type AiProposalExecutionResultStatus =
+  | 'applied'
+  | 'approval-required'
+  | 'policy-denied'
+  | 'dry-run-failed'
+  | 'apply-failed';
+
 export type AiProposalExecutionResult = {
-  status: 'applied' | 'approval-required' | 'policy-denied' | 'dry-run-failed' | 'apply-failed';
+  status: AiProposalExecutionResultStatus;
   proposalId: string;
   commandSequence: AiSemanticCommand[];
   policy: AiProposalExecutionPolicyResult;
@@ -123,6 +138,8 @@ export type AiProposalExecutionCore = {
     actor: AiSemanticActor;
     proposal: AiExecutableProposal;
     approval?: AiProposalApproval;
+    prompt?: string;
+    observation?: { status?: string; summary?: string };
   }) => AiProposalExecutionResult;
   rollback: (rollbackReference: string | null | undefined) => AiProposalRollbackResult;
   getHistory: () => AiProposalExecutionHistoryEntry[];
@@ -180,6 +197,25 @@ const evaluatePolicy = (
   return { status: 'allowed', decisions, approval };
 };
 
+const approvalAuditFor = (
+  policy: AiProposalExecutionPolicyResult,
+  approval?: AiProposalApproval
+): Extract<AiProposalExecutionAuditEntry, { type: 'proposal-execution' }>['approval'] => {
+  const requiresApproval = policy.decisions.some((decision) => decision.status === 'approval-required');
+  if (approval) {
+    return { status: 'approved', approvedBy: approval.approvedBy, approvedAt: approval.approvedAt };
+  }
+  if (requiresApproval) return { status: 'missing' };
+  return { status: 'not-required' };
+};
+
+const observationAuditFor = (
+  observation?: { status?: string; summary?: string }
+): Extract<AiProposalExecutionAuditEntry, { type: 'proposal-execution' }>['observation'] =>
+  observation
+    ? { status: 'observed', ...(observation.summary ? { summary: observation.summary } : {}) }
+    : { status: 'not-provided' };
+
 const dryRunCommands = (
   bus: AiExecutionCommandBusLike,
   actor: AiSemanticActor,
@@ -219,7 +255,13 @@ export function createAiProposalExecutionCore(input: {
   const auditLog: AiProposalExecutionAuditEntry[] = [];
   const rollbackTokens = new Map<string, string>();
 
-  const executeProposal: AiProposalExecutionCore['executeProposal'] = ({ actor, proposal, approval }) => {
+  const executeProposal: AiProposalExecutionCore['executeProposal'] = ({
+    actor,
+    proposal,
+    approval,
+    prompt,
+    observation,
+  }) => {
     const previousRevision = revisionOf(input.bus.getSnapshot());
     const policy = evaluatePolicy(proposal, input.policy, approval);
     const blockedStatus = policy.status === 'denied' ? 'policy-denied' : 'approval-required';
@@ -234,13 +276,33 @@ export function createAiProposalExecutionCore(input: {
     if (firstRollbackToken && rollbackReference) rollbackTokens.set(rollbackReference, firstRollbackToken);
 
     const commandAudits = appliedResults.flatMap((result) => (result.audit ? [result.audit] : []));
+    const status: AiProposalExecutionResultStatus = shouldStopBeforeDryRun
+      ? blockedStatus
+      : shouldStopBeforeApply
+        ? blockedStatus
+        : !dryRun.ok
+          ? 'dry-run-failed'
+          : failedApply
+            ? 'apply-failed'
+            : 'applied';
+    const validationErrors = dryRun.results.flatMap((result) => result.validationErrors ?? []);
+    const commandRollbackTokens = appliedResults.flatMap((result) =>
+      result.ok && result.rollbackToken ? [result.rollbackToken] : []
+    );
     const audit: Extract<AiProposalExecutionAuditEntry, { type: 'proposal-execution' }> = {
       id: `audit:ai:${proposal.id}:${auditLog.length + 1}`,
       type: 'proposal-execution',
       proposalId: proposal.id,
       actor: { ...actor },
       lifecycle: [...lifecycle],
+      promptHash: hashAiPrompt(prompt),
+      snapshotRevision: previousRevision,
+      validation: { ok: dryRun.ok, errorCount: validationErrors.length },
       policy,
+      approval: approvalAuditFor(policy, approval),
+      execution: { status, appliedCommandCount: appliedResults.filter((result) => result.ok).length },
+      observation: observationAuditFor(observation),
+      rollback: { reference: rollbackReference, commandRollbackTokens },
       commandAudits,
       previousRevision,
       appliedRevision,
@@ -266,15 +328,7 @@ export function createAiProposalExecutionCore(input: {
     }
 
     return {
-      status: shouldStopBeforeDryRun
-        ? blockedStatus
-        : shouldStopBeforeApply
-          ? blockedStatus
-        : !dryRun.ok
-          ? 'dry-run-failed'
-          : failedApply
-            ? 'apply-failed'
-            : 'applied',
+      status,
       proposalId: proposal.id,
       commandSequence: [...proposal.commands],
       policy,
@@ -286,9 +340,7 @@ export function createAiProposalExecutionCore(input: {
       historyEntry,
       rollback: {
         reference: rollbackReference,
-        commandRollbackTokens: appliedResults.flatMap((result) =>
-          result.ok && result.rollbackToken ? [result.rollbackToken] : []
-        ),
+        commandRollbackTokens,
         previousRevision,
         appliedRevision,
       },
