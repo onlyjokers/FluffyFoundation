@@ -1,0 +1,50 @@
+{
+  "status": "pass",
+  "url": "https://localhost:5177/?server=https%3A%2F%2Flocalhost%3A3001",
+  "title": "Fluffy Foundation",
+  "bodyTextSample": "Enter",
+  "consoleEntries": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "warning",
+      "text": "<Layout> was created with unknown prop 'params'"
+    },
+    {
+      "type": "warning",
+      "text": "<Page> was created with unknown prop 'params'"
+    },
+    {
+      "type": "log",
+      "text": "[Client] Early preload started"
+    },
+    {
+      "type": "warning",
+      "text": "Failed to execute 'requestFullscreen' on 'Element': API can only be initiated by a user gesture."
+    },
+    {
+      "type": "warning",
+      "text": "[Fullscreen] auto request failed TypeError: Permissions check failed"
+    },
+    {
+      "type": "log",
+      "text": "%c * Tone.js v14.9.17 *  background: #000; color: #fff"
+    },
+    {
+      "type": "warning",
+      "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio"
+    },
+    {
+      "type": "warning",
+      "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio"
+    }
+  ],
+  "screenshotPath": ".harness/evidence/FF-24/client-browser-proof.png",
+  "generatedAt": "2026-05-08T22:01:06.772Z"
+}

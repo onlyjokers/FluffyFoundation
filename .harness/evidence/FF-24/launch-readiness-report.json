@@ -1,0 +1,150 @@
+{
+  "id": "FF-24",
+  "status": "pass",
+  "generatedAt": "2026-05-08T22:04:47.151Z",
+  "checks": [
+    {
+      "id": "operator-manual",
+      "status": "pass",
+      "requiredProofType": "implementation",
+      "deterministicProof": "machine-checked-document",
+      "runtimeBrowserProof": "not-required-for-manual",
+      "evidencePath": "docs/operations/OPERATOR-MANUAL.md",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "docs/operations/OPERATOR-MANUAL.md covers required topics"
+    },
+    {
+      "id": "developer-guide",
+      "status": "pass",
+      "requiredProofType": "implementation",
+      "deterministicProof": "machine-checked-document",
+      "runtimeBrowserProof": "not-required-for-manual",
+      "evidencePath": "docs/operations/DEVELOPER-GUIDE.md",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "docs/operations/DEVELOPER-GUIDE.md covers required topics"
+    },
+    {
+      "id": "dogfood-rehearsals",
+      "status": "pass",
+      "requiredProofType": "runtime-browser",
+      "deterministicProof": "not-sufficient-alone",
+      "runtimeBrowserProof": "required",
+      "evidencePath": ".harness/evidence/FF-24/dogfood-session-1.md, .harness/evidence/FF-24/dogfood-session-2.md",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "two dogfood reports include real runtime proof and recovery notes"
+    },
+    {
+      "id": "release-candidate-golden-suite",
+      "status": "pass",
+      "requiredProofType": "deterministic",
+      "deterministicProof": "full-golden-suite",
+      "runtimeBrowserProof": "not-required-for-golden-suite",
+      "evidencePath": ".harness/evidence/FF-21/golden-suite.json, .harness/evidence/FF-24/test-golden-output.txt",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "golden suite passed on the FF-24 release-candidate run"
+    },
+    {
+      "id": "prior-ff-items",
+      "status": "pass",
+      "requiredProofType": "release-operational",
+      "deterministicProof": "evidence-manifest",
+      "runtimeBrowserProof": "covered-by-prior-item-evidence",
+      "evidencePath": ".harness/evidence/FF-18/summary.md, .harness/evidence/FF-19/summary.md, .harness/evidence/FF-20/summary.md, .harness/evidence/FF-21/summary.md, .harness/evidence/FF-22/summary.md, .harness/evidence/FF-23/summary.md",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "FF-18 through FF-23 evidence summaries exist"
+    },
+    {
+      "id": "risk-review",
+      "status": "pass",
+      "requiredProofType": "release-operational",
+      "deterministicProof": "machine-checked-risk-record",
+      "runtimeBrowserProof": "not-required-for-risk-record",
+      "evidencePath": "docs/operations/ACCEPTED-RISKS.json",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "14 accepted risks reviewed; no blocking/high/release-blocking risks"
+    },
+    {
+      "id": "final-launch-review",
+      "status": "pass",
+      "requiredProofType": "release-operational",
+      "deterministicProof": "machine-checked-launch-review",
+      "runtimeBrowserProof": "required-for-launch-claims",
+      "evidencePath": ".harness/evidence/FF-24/final-launch-review.md",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "final launch review includes decision, blockers, commands, and dogfood paths"
+    }
+  ],
+  "proofMatrix": [
+    {
+      "criterion": "operator-manual",
+      "requiredProofType": "implementation",
+      "deterministicProof": "machine-checked-document",
+      "runtimeBrowserProof": "not-required-for-manual",
+      "evidencePath": "docs/operations/OPERATOR-MANUAL.md",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "docs/operations/OPERATOR-MANUAL.md covers required topics"
+    },
+    {
+      "criterion": "developer-guide",
+      "requiredProofType": "implementation",
+      "deterministicProof": "machine-checked-document",
+      "runtimeBrowserProof": "not-required-for-manual",
+      "evidencePath": "docs/operations/DEVELOPER-GUIDE.md",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "docs/operations/DEVELOPER-GUIDE.md covers required topics"
+    },
+    {
+      "criterion": "dogfood-rehearsals",
+      "requiredProofType": "runtime-browser",
+      "deterministicProof": "not-sufficient-alone",
+      "runtimeBrowserProof": "required",
+      "evidencePath": ".harness/evidence/FF-24/dogfood-session-1.md, .harness/evidence/FF-24/dogfood-session-2.md",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "two dogfood reports include real runtime proof and recovery notes"
+    },
+    {
+      "criterion": "release-candidate-golden-suite",
+      "requiredProofType": "deterministic",
+      "deterministicProof": "full-golden-suite",
+      "runtimeBrowserProof": "not-required-for-golden-suite",
+      "evidencePath": ".harness/evidence/FF-21/golden-suite.json, .harness/evidence/FF-24/test-golden-output.txt",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "golden suite passed on the FF-24 release-candidate run"
+    },
+    {
+      "criterion": "prior-ff-items",
+      "requiredProofType": "release-operational",
+      "deterministicProof": "evidence-manifest",
+      "runtimeBrowserProof": "covered-by-prior-item-evidence",
+      "evidencePath": ".harness/evidence/FF-18/summary.md, .harness/evidence/FF-19/summary.md, .harness/evidence/FF-20/summary.md, .harness/evidence/FF-21/summary.md, .harness/evidence/FF-22/summary.md, .harness/evidence/FF-23/summary.md",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "FF-18 through FF-23 evidence summaries exist"
+    },
+    {
+      "criterion": "risk-review",
+      "requiredProofType": "release-operational",
+      "deterministicProof": "machine-checked-risk-record",
+      "runtimeBrowserProof": "not-required-for-risk-record",
+      "evidencePath": "docs/operations/ACCEPTED-RISKS.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "14 accepted risks reviewed; no blocking/high/release-blocking risks"
+    },
+    {
+      "criterion": "final-launch-review",
+      "requiredProofType": "release-operational",
+      "deterministicProof": "machine-checked-launch-review",
+      "runtimeBrowserProof": "required-for-launch-claims",
+      "evidencePath": ".harness/evidence/FF-24/final-launch-review.md",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "final launch review includes decision, blockers, commands, and dogfood paths"
+    }
+  ],
+  "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-24/launch-readiness-report.json"
+}

@@ -16,4 +16,5 @@ Exit the harness only after real rehearsal workflows pass repeatedly and final l
 
 ## Work Status
 
-FF-24 is the next active task. FF-24 work must stay inside `.harness/goals/FF-24-contract.md`.
+FF-24 launch-readiness evidence is complete as production ready within the harness scope. The known hotspot ratchet
+fingerprint remains recorded and was not weakened.

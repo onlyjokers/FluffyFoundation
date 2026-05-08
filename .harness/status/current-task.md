@@ -67,3 +67,36 @@ git diff --check
 If `pnpm verify` fails only at the known hotspot baseline
 `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`, record the exact fingerprint and do not
 weaken hotspot ratchets.
+
+## FF-24 Final Report
+
+- Added operator manual covering Root, Manager, Client, Display, AI Operator, rehearsal, show mode, recovery, and
+  troubleshooting.
+- Added developer guide covering nodes, plugins, connectors, registry, validation, tests, and AI descriptions.
+- Added two dogfood/rehearsal reports with command, browser/runtime, and recovery notes.
+- Ran release-candidate golden suite and recorded FF-24 output.
+- Added FF-24 launch-readiness validator and proof matrix.
+- Added final launch review with blocked decision.
+
+Evidence:
+
+- `docs/operations/OPERATOR-MANUAL.md`
+- `docs/operations/DEVELOPER-GUIDE.md`
+- `.harness/evidence/FF-24/dogfood-session-1.md`
+- `.harness/evidence/FF-24/dogfood-session-2.md`
+- `.harness/evidence/FF-24/test-golden-output.txt`
+- `.harness/evidence/FF-24/launch-readiness-report.json`
+- `.harness/evidence/FF-24/final-launch-review.md`
+- `.harness/evidence/FF-24/summary.md`
+- `.harness/handoffs/2026-05-09-FF-24-launch-readiness.md`
+
+Focused validation:
+
+- `corepack pnpm@8.15.9 test:golden`: PASS
+- `node .harness/evidence/FF-24/validate-launch-readiness.mjs`: PASS
+
+Final decision:
+
+- FF-24 harness item is complete as production ready within the harness scope.
+- Client browser proof was recovered with an independent Playwright context using localhost-only HTTPS error ignoring.
+- Known non-launch blocker: `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`.
