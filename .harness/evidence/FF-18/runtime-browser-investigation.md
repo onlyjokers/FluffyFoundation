@@ -119,6 +119,75 @@ Scope note:
   runtime.
 - This still does not prove GS-12 gyro/device/client behavior or GS-13 live display visual output change.
 
+## 2026-05-08 Manager Role And Product Chain Recheck
+
+The server was restarted locally with `SHUGU_ALLOW_INSECURE_MANAGER=1` to test whether the previous `managers: []`
+state was only runtime configuration. This did not modify source files.
+
+```text
+SHUGU_ALLOW_INSECURE_MANAGER=1 corepack pnpm@8.15.9 dev:server
+PASS: server starts on https://localhost:3001
+
+server log
+PASS: requested=manager granted=manager
+
+curl -k -s https://localhost:3001/clients
+PASS: managers array is non-empty
+PASS: display client is registered with group=display
+```
+
+This resolves the Manager role downgrade as a runtime configuration issue. It does not complete FF-18.
+
+Additional browser-use product-chain checks:
+
+```text
+browser-use browser_navigate https://localhost:5173/manager/
+PASS: Manager connect screen appears while logged in as Eureka.
+
+browser-use browser_click Connect
+PASS: Manager main UI appears.
+
+browser-use state
+PASS: Remote Display (Server group=display) is visible and connected.
+PASS: Clients panel still shows Clients (0) in the tested browser state.
+
+browser-use browser_navigate https://localhost:5174/?e2e=1&server=https%3A%2F%2Flocalhost%3A3001
+PASS: Client page opens in e2e mode.
+
+curl -k -s https://localhost:3001/clients
+PASS/blocked: a normal client briefly registers, then disconnects and expires; no stable audience client remains for
+GS-12 live gyro/flashlight proof.
+```
+
+Attempted display output proof through the existing Manager published group control:
+
+```text
+browser-use Manager: select Display group and click Send Color
+FAIL: display page remains black.
+
+server log
+FAIL: control message rejected:
+code=server.policy.scope_mismatch
+path=target.groupId
+message="target group must match scopeGroupId"
+```
+
+There are also repeated server rejects for existing plugin messages:
+
+```text
+code=server.policy.scope_mismatch
+path=target.mode
+message="scoped commands must target their scope group"
+```
+
+Scope note:
+- The rejected control path is in `apps/server/**` and Manager product control wiring, which are forbidden paths under
+  `.harness/goals/FF-18-review-contract.md` unless the contract is explicitly revised first.
+- Fixing the product-chain rejection would require TDD first, but it is not a valid FF-18 edit under the active
+  contract.
+- This check proves that browser-use can perform the runtime interaction, but the product chain currently blocks GS-13
+  live display visual-output proof.
+
 ## Checks
 
 ```text
@@ -188,14 +257,17 @@ Producing that proof may require client/display/device/runtime orchestration out
 | --- | --- | --- |
 | Manager socket connection | Browser Manager connects; Socket.IO polling requests return HTTP 200 | proven |
 | Root Node Graph visibility | Root Node Graph renders Start, minimap controls, and Minimap canvas; screenshot saved | proven |
-| GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Cannot prove from Manager/root visibility; no live gyro/client/device/output scenario executed | blocked |
-| GS-13 display visual becomes breathing-like and AI observes output change | Cannot prove from Manager/root visibility; no live display visual-output scenario executed | blocked |
+| Manager role authorization | Local restart with `SHUGU_ALLOW_INSECURE_MANAGER=1` grants Manager role and `/clients` reports managers | proven as runtime config |
+| GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Client e2e page opens but no stable audience client/device/output chain remains registered for live gyro/flashlight proof | blocked |
+| GS-13 display visual becomes breathing-like and AI observes output change | Display registers, but existing Manager Send Color path is rejected by server policy and display remains black | blocked |
 | Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |
 | Browser proof can replace deterministic fixtures | No; fixtures cannot substitute for missing runtime proof | blocked |
 
 ## Stop Condition
 
 Stop condition is triggered: required runtime/browser/product proof for GS-12, GS-13, and runtime override set/clear is
-missing. The previous browser Socket.IO certificate blocker is resolved in the current local runtime. The remaining
-missing proof is product scenario proof, and obtaining it may require client/display/device/runtime orchestration outside
-the FF-18 review contract scope.
+missing. The previous browser Socket.IO certificate blocker and Manager role downgrade are resolved in the current local
+runtime when the server is started with local insecure manager authorization. The remaining missing proof is product
+scenario proof. Current live checks show a stable audience client is unavailable for GS-12 and the display control path
+is rejected by server policy for GS-13. Fixing those product-chain blockers would require changes outside the active
+FF-18 review contract scope.

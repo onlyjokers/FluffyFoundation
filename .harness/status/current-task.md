@@ -98,3 +98,23 @@ Runtime override set/clear remains explicitly deferred. Current validation also 
 allowed implementation scope.
 
 Evidence: `.harness/evidence/FF-18/runtime-browser-investigation.md`.
+
+## Product Chain Recheck Update
+
+2026-05-08 follow-up runtime checking restarted the local server with `SHUGU_ALLOW_INSECURE_MANAGER=1` and confirmed
+that the previous `managers: []` state was runtime configuration: the server grants Manager role and `/clients` reports
+non-empty managers plus a connected display client.
+
+FF-18 remains blocked. Browser-use verified that a client e2e page can open, but no stable audience
+client/device/output chain remains registered for GS-12. Browser-use also verified that Manager can select Display and
+attempt Send Color, but the display stays black while the server rejects the control with
+`server.policy.scope_mismatch` at `target.groupId`. Fixing that path would require product/runtime changes in forbidden
+paths under the active FF-18 review contract, so Codex must stop instead of modifying them.
+
+Fresh validation after this evidence update:
+
+- `corepack pnpm@8.15.9 harness:validate`: PASS
+- `python3 .harness/scripts/validate_acceptance_contracts.py`: PASS
+- `git diff --check`: PASS
+- `corepack pnpm@8.15.9 verify`: FAIL at the known out-of-scope hotspot
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`
