@@ -566,3 +566,89 @@ Updated acceptance impact:
 | GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Live Manager/Client/Server deploy reaches client NodeExecutor and records a `flashlight` command in explicit DEV e2e proof mode; normal camera-denied runtime still rejects flashlight capability without timeout | runtime-proven for e2e proof lane |
 | GS-13 display visual becomes breathing-like and AI observes output change | Bounded Manager Published Display `screenColor` product chain is proven; full breathing-like AI scenario and AI observation loop are not product-proven | partial |
 | Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |
+
+## 2026-05-09 GS-13 Display Modulate Stop Condition
+
+This recheck attempted to convert the remaining GS-13 Display proof from partial to full product proof without changing
+source code. It does not mark FF-18 complete and does not start FF-19.
+
+Runtime setup:
+
+```text
+lsof -nP -iTCP:3001 -sTCP:LISTEN
+PASS: server is listening on https://localhost:3001.
+
+lsof -nP -iTCP:5175 -sTCP:LISTEN
+PASS: Display dev server is listening on https://localhost:5175.
+
+curl -k -sS https://localhost:3001/health
+PASS: status="ok".
+```
+
+Browser/runtime attempts:
+
+```text
+Playwright Display page:
+https://localhost:5175/display/?server=https%3A%2F%2Flocalhost%3A3001
+PASS: page loads with ignoreHTTPSErrors and connects to the server runtime.
+
+Console:
+PASS: [Display] transport -> server (pair timeout fallback)
+PASS: [SDK Client] Connected
+PASS: [SDK Client] Registered as: d_...
+```
+
+Diagnostic note:
+
+```text
+First temporary Socket.IO script:
+INVALID: emitted "message" instead of protocol event "msg"; result discarded.
+
+Second temporary Socket.IO script:
+PASS: used protocol event "msg", but hand-built message proof was still not accepted as product proof because it did
+not reuse the Manager SDK/runtime sending surface.
+
+ManagerSDK diagnostic script:
+BLOCKED: Node-side SDK connection to the local self-signed HTTPS Socket.IO endpoint failed with websocket/xhr poll
+certificate transport errors even with NODE_TLS_REJECT_UNAUTHORIZED=0. This was treated as a tooling/runtime
+diagnostic limitation, not product proof.
+```
+
+Source-of-truth product path comparison:
+
+```text
+packages/node-core/src/definitions/nodes/processors.ts
+PASS: proc-screen-color emits action="screenColor" with payload mode="modulate", color, secondaryColor, minOpacity,
+maxOpacity, frequencyHz, and waveform.
+
+packages/sdk-client/src/action-executors.ts
+PASS: Client ScreenController implements mode="modulate" with requestAnimationFrame, waveformValue, color mixing, and
+opacity modulation.
+
+apps/display/src/lib/stores/display.ts
+BLOCKED: Display setScreenColor only reads payload.color and payload.opacity, then writes a static screenOverlay.
+It ignores mode, secondaryColor, minOpacity, maxOpacity, frequencyHz, and waveform.
+
+apps/display/src/routes/+page.svelte
+BLOCKED: Display renders screenOverlay as a fixed div with static background and opacity style. There is no Display
+animation controller or modulation state equivalent to the Client ScreenController.
+```
+
+Acceptance impact:
+
+| Criterion | Runtime/source result | Status |
+| --- | --- | --- |
+| GS-13 display visual becomes breathing-like | `proc-screen-color` and Client ScreenController support `mode="modulate"`, but Display runtime only renders static `color + opacity` | blocked |
+| GS-13 AI observes Display output change | No full breathing-like Display product output exists to observe in the Display runtime | blocked |
+| Contract boundary | Fixing the root cause requires `apps/display/**`, which is forbidden by the active FF-18 contract | stop |
+
+Stop condition:
+
+- FF-18 required runtime/browser/product proof is still missing for full GS-13.
+- The missing proof cannot be completed by fixtures or by the bounded Manager Published Display solid-color proof.
+- Completing the product path requires changing `apps/display/**`, a forbidden path in
+  `.harness/goals/FF-18-review-contract.md`.
+
+Codex must stop instead of modifying Display code under the current contract. A future continuation needs an approved
+bounded GS-13 Display runtime proof lane or a dated risk acceptance that explicitly leaves full Display breathing-like
+product proof incomplete.

@@ -229,3 +229,23 @@ Fresh validation after the 2026-05-09 runtime override semantic surface update:
 - Runtime override set/clear is now a deterministic semantic command surface with validation, audit, history,
   `runtimeStatus.runtimeOverrides`, and rollback metadata. This does not claim browser/live Manager runtime delivery
   proof.
+
+## GS-13 Display Modulate Stop Update
+
+2026-05-09 runtime/source reconciliation confirms the remaining FF-18 blocker is now GS-13 Display breathing-like
+product proof:
+
+- `proc-screen-color` emits a valid `screenColor` payload with `mode="modulate"`, `secondaryColor`, `minOpacity`,
+  `maxOpacity`, `frequencyHz`, and `waveform`.
+- Client `ScreenController` already implements modulate/pulse/cycle animation with `requestAnimationFrame`, color
+  mixing, waveform evaluation, and opacity modulation.
+- Display `setScreenColor` only reads `color` and `opacity`.
+- Display route renders a static full-screen overlay with fixed background and opacity.
+
+Therefore the bounded Manager Published Display solid-color proof remains valid but insufficient for full GS-13. Full
+breathing-like Display output and AI observation cannot be product-proven without implementing Display-side modulation
+support.
+
+This is a stop condition under `.harness/goals/FF-18-review-contract.md` because `apps/display/**` is forbidden. Do not
+modify Display code, mark FF-18 complete, or start FF-19 until the contract is revised with a bounded GS-13 Display
+runtime proof lane or a valid dated risk acceptance is approved.
