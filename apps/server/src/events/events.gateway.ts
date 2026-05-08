@@ -55,6 +55,10 @@ function sanitizeGroup(value: unknown): string | null {
   return sanitized || null;
 }
 
+function managedClientGroupId(clientId: string): string {
+  return `client:${clientId}`;
+}
+
 @WebSocketGateway({
   cors: createSocketCorsOptions({
     nodeEnv: process.env.NODE_ENV,
@@ -180,8 +184,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
     );
 
-    if (role === 'client' && group) {
-      this.clientRegistry.setClientGroup(clientId, group);
+    if (role === 'client') {
+      this.clientRegistry.setClientGroup(clientId, group ?? managedClientGroupId(clientId));
     }
 
     if (replacedSocketId) {

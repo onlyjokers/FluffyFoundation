@@ -12,6 +12,7 @@ function createGateway() {
     {
       onClientExpired: () => () => undefined,
       isManager: () => true,
+      getDisplayDescriptors: () => [],
     } as never,
     { routeMessage: (message: unknown) => routed.push(message) } as never
   );
@@ -139,6 +140,60 @@ test('handleMessage rejects scoped manager commands targeting explicit client ID
   assert.equal(routed.length, 0);
   assert.equal(loggedMetadata(warnings).code, 'server.policy.scope_mismatch');
   assert.equal(loggedMetadata(warnings).path, 'target.mode');
+});
+
+test('handleMessage accepts node executor deploy commands scoped to a managed client group', () => {
+  const { gateway, routed } = createGateway();
+  const audits: unknown[][] = [];
+  const originalInfo = console.info;
+  console.info = (...args: unknown[]) => {
+    audits.push(args);
+  };
+  try {
+    gateway.handleMessage(
+      {
+        type: 'plugin',
+        version: 1,
+        from: 'manager',
+        target: { mode: 'group', groupId: 'client:client-1' },
+        pluginId: 'node-executor',
+        command: 'deploy',
+        payload: {
+          graph: { nodes: [], connections: [] },
+          meta: {
+            loopId: 'loop:client-node',
+            requiredCapabilities: ['flashlight', 'sensors'],
+            tickIntervalMs: 100,
+            protocolVersion: 1,
+            executorVersion: 'node-executor-v1',
+          },
+        },
+        scopeGroupId: 'client:client-1',
+        actor: 'manager',
+        role: 'manager',
+        correlationId: 'corr-managed-client',
+        idempotencyKey: 'idem-managed-client',
+      },
+      { id: 'socket-managed-client' } as never
+    );
+  } finally {
+    console.info = originalInfo;
+  }
+
+  assert.equal(routed.length, 1);
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0]?.[0], '[Gateway] Command audit');
+  assert.deepEqual(audits[0]?.[1], {
+    actor: 'manager',
+    role: 'manager',
+    scopeGroupId: 'client:client-1',
+    type: 'plugin',
+    command: 'deploy',
+    target: { mode: 'group', groupId: 'client:client-1' },
+    correlationId: 'corr-managed-client',
+    idempotencyKey: 'idem-managed-client',
+    decision: 'accept',
+  });
 });
 
 test('handleMessage rejects media messages with missing scope before routing', () => {

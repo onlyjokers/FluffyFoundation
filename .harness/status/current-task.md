@@ -156,3 +156,38 @@ Fresh validation after this evidence update:
 This is a stop condition under the current FF-18 contract. Fixing it would require changing Node Graph loop deployment
 under `apps/manager/src/lib/components/nodes/**`, broader server policy, or another explicitly approved product-proof
 lane. FF-18 remains incomplete; do not start FF-19.
+
+## Approved GS-12 Deploy Lane Fix Update
+
+The user approved the bounded FF-18 GS-12 deploy lane. Within that revised contract, Codex fixed the Node Graph loop
+deploy path without weakening server scope, ownership, audit, rollback, security, or hotspot boundaries:
+
+- Normal clients without an explicit group are registered into a managed per-client Group: `client:<clientId>`.
+- Node Graph loop deploy/stop/remove now target the managed client Group instead of `clientIds`.
+- Node Graph loop deploy sends `node-executor/reclaim` before `node-executor/deploy` so the Manager owns the
+  transferable managed client Group before mutating it.
+- Server command-envelope tests prove managed client Group deploy is accepted and audited.
+- Runtime/browser recheck against current source on `https://localhost:3301` proves the server accepts
+  `node-executor/reclaim` and `node-executor/deploy` with
+  `target={ mode: 'group', groupId: 'client:<clientId>' }` and matching `scopeGroupId`.
+
+FF-18 is still incomplete. Do not start FF-19. The current GS-12 blocker is no longer server scope/ownership; it is
+capability/runtime product proof: the desktop e2e client used for verification does not advertise `flashlight`, so live
+flashlight command execution remains unproven. Runtime override set/clear also remains deferred as
+`RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` without dated risk acceptance.
+
+Fresh validation after this fix:
+
+- `corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts`: PASS, 4 tests, 0 failures
+- `corepack pnpm@8.15.9 exec tsx --tsconfig apps/server/tsconfig.json --test apps/server/src/events/events.gateway.spec.ts`: PASS, 7 tests, 0 failures
+- `corepack pnpm@8.15.9 exec tsx --tsconfig apps/server/tsconfig.json --test apps/server/src/events/events.gateway.command-envelope.spec.ts`: PASS, 11 tests, 0 failures
+- `corepack pnpm@8.15.9 exec tsx --test packages/sdk-manager/src/manager-sdk.spec.ts`: PASS, 13 tests, 0 failures
+- `corepack pnpm@8.15.9 --filter @shugu/server run build`: PASS
+- `corepack pnpm@8.15.9 --filter @shugu/manager run build`: PASS with existing Svelte/Sass/Rete warnings
+- `python3 .harness/scripts/validate_acceptance_contracts.py`: PASS
+- `git diff --check`: PASS
+- `corepack pnpm@8.15.9 harness:verify`: FAIL at known out-of-scope hotspot
+  `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`
+- `corepack pnpm@8.15.9 verify`: FAIL at the same known out-of-scope hotspot after dependency guards, lint, build,
+  node-core tests, FF-08 tests, FF-09 tests, node spec validation, offline node-executor e2e, and FF-08 Manager
+  boundary guard pass

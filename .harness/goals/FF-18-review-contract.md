@@ -29,10 +29,14 @@ Allowed implementation lanes:
   - `apps/manager/src/routes/+page.svelte`
   - `apps/manager/src/lib/stores/group-controls.ts`
   - `apps/manager/src/lib/stores/group-controls.spec.ts`
+  - `apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.ts`
+  - `apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts`
   - `packages/sdk-manager/src/manager-sdk.ts`
   - `packages/sdk-manager/src/manager-sdk.spec.ts`
+  - `packages/sdk-manager/src/command-envelope.ts`
   - `apps/server/src/events/events.gateway.ts`
   - `apps/server/src/events/events.gateway.command-envelope.spec.ts`
+  - `apps/server/src/events/events.gateway.spec.ts`
   - `apps/server/src/events/group-ownership-policy.ts`
   - `apps/server/src/events/display-routing.spec.ts`
 
@@ -101,12 +105,15 @@ Allowed paths: `packages/ai-core/**`, `packages/node-core/**`, `docs/harness/AI-
 `docs/harness/QUALITY-GATES.md`, `docs/harness/BOUNDARIES.md`, `.harness/goals/FF-18-review-contract.md`,
 `.harness/status/**`, `.harness/handoffs/**`, `.harness/evidence/FF-18/**`,
 `apps/manager/src/routes/+page.svelte`, `apps/manager/src/lib/stores/group-controls.ts`,
-`apps/manager/src/lib/stores/group-controls.spec.ts`, `packages/sdk-manager/src/manager-sdk.ts`,
+`apps/manager/src/lib/stores/group-controls.spec.ts`,
+`apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.ts`,
+`apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts`,
+`packages/sdk-manager/src/command-envelope.ts`, `packages/sdk-manager/src/manager-sdk.ts`,
 `packages/sdk-manager/src/manager-sdk.spec.ts`, `apps/server/src/events/events.gateway.ts`,
-`apps/server/src/events/events.gateway.command-envelope.spec.ts`,
+`apps/server/src/events/events.gateway.command-envelope.spec.ts`, `apps/server/src/events/events.gateway.spec.ts`,
 `apps/server/src/events/group-ownership-policy.ts`, `apps/server/src/events/display-routing.spec.ts`
-Forbidden paths: `apps/manager/src/lib/components/nodes/**`, `apps/client/**`, `apps/display/**`,
-`apps/server/**` outside the approved 2026-05-08 bounded product-proof files above
+Forbidden paths: `apps/manager/src/lib/components/nodes/**` outside the approved loop-helper files above,
+`apps/client/**`, `apps/display/**`, `apps/server/**` outside the approved 2026-05-08 bounded product-proof files above
 Required proof types: `implementation`, `deterministic`, `runtime-browser`
 Runtime/browser proof: `required-for-runtime-claims`
 Deferred proof policy: `reject-by-default`

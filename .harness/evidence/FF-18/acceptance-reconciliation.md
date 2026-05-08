@@ -24,7 +24,7 @@ This reconciliation does not implement FF-18 product/runtime behavior and does n
 | AI-visible mutations pass through policy, validation, audit, history, rollback, and redaction | deterministic | WP2, WP5, WP6, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | In-memory command bus path is covered. |
 | Required FF-18 command surfaces are represented | deterministic | WP5, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | deferred | missing | Runtime override set/clear are explicitly `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`. |
 | AI cannot mutate Canvas/Rete/Svelte/UI internals directly | deterministic/static | Recorded `rg` checks in WP2-WP8 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | No UI mutation path is claimed. |
-| GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | Manager socket and Root Node Graph visible; client e2e page opens but no stable audience client/device/output chain remains registered | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves command/effect trace only; current browser proof does not prove live gyro/client/flashlight output. |
+| GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; Node Graph deploy lane TDD tests | Manager socket and Root Node Graph visible; client e2e page opens; managed client Group registration is proven; Node Graph `node-executor/reclaim` and `node-executor/deploy` are accepted by server policy/ownership for `client:<clientId>`; live flashlight execution is still rejected because the current e2e client lacks `flashlight` capability | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves command/effect trace only; current browser proof narrows the product blocker to capability/runtime device proof, not server scope/ownership. |
 | GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; SDK/group-control TDD coverage for the product-proof lane | Bounded Manager Published Display `screenColor` product chain is proven: server accepts `reclaim` and `screenColor` for `scopeGroupId=display`, and Display changes from black to full-viewport blue-purple | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | partial | missing | Live Display output proof exists for the bounded product chain, but the full breathing-like AI scenario and AI observation loop are not product-proven. |
 | GS-14 AI repairs param overflow or incompatible graph using structured validation errors | deterministic | `packages/ai-core/test/golden-scenario-contract.test.mjs`; `packages/ai-core/test/observation-repair.test.mjs` | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Structured validation/repair proof exists. |
 | Prompt-injection-like registry/context data is inert and cannot bypass policy | deterministic | `packages/ai-core/test/operator-acceptance.test.mjs`; WP6 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records non-execution and policy denial. |
@@ -153,7 +153,7 @@ runtime.
 GS-12 remains blocked: a stable audience client/device/output chain was not proven. Runtime override set/clear remains
 explicitly deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`.
 
-2026-05-08 GS-12 runtime recheck narrows the blocker:
+2026-05-08 GS-12 runtime recheck narrowed the blocker to server scope policy:
 
 ```text
 browser-use client e2e page
@@ -174,6 +174,49 @@ current root blocker is deployment policy: Node Graph loop deploy sends a client
 while the server requires scoped manager mutating commands to target their scope Group. Fixing this would require
 changes in `apps/manager/src/lib/components/nodes/**`, broader server policy, or a newly approved contract lane, so
 Codex must stop under the current FF-18 contract instead of modifying product/runtime code.
+
+After the approved 2026-05-08 GS-12 deploy lane fix, the Node Graph deployment path now satisfies server scope and
+ownership boundaries without weakening policy:
+
+```text
+corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts
+PASS: 4 tests, 0 failures
+PASS: deploy sends node-executor/reclaim and node-executor/deploy to target={ mode: "group", groupId: "client:client-1" }.
+PASS: stop/remove lifecycle commands target the same managed client Group.
+
+corepack pnpm@8.15.9 exec tsx --tsconfig apps/server/tsconfig.json --test apps/server/src/events/events.gateway.spec.ts
+PASS: 7 tests, 0 failures
+PASS: normal clients without explicit group receive group="client:<clientId>".
+
+corepack pnpm@8.15.9 exec tsx --tsconfig apps/server/tsconfig.json --test apps/server/src/events/events.gateway.command-envelope.spec.ts
+PASS: 11 tests, 0 failures
+PASS: node-executor deploy scoped to target={ mode: "group", groupId: "client:client-1" } is accepted and audited.
+
+corepack pnpm@8.15.9 exec tsx --test packages/sdk-manager/src/manager-sdk.spec.ts
+PASS: 13 tests, 0 failures
+```
+
+Runtime/browser recheck against current source on `https://localhost:3301`:
+
+```text
+chrome-devtools fetch https://localhost:3301/clients
+PASS: normal clients are connected with managed groups such as group="client:c_ed172239e034".
+
+chrome-devtools Manager Node Graph runtime-only graph load
+PASS: GS-12-shaped graph is present and Manager detects one local loop requiring ["flashlight","sensors"].
+
+chrome-devtools click Deploy
+PASS: server accepts node-executor/reclaim with scopeGroupId="client:c_ed172239e034" and
+target={ mode: "group", groupId: "client:c_ed172239e034" }.
+PASS: server accepts node-executor/deploy with scopeGroupId="client:c_ed172239e034" and
+target={ mode: "group", groupId: "client:c_ed172239e034" }.
+BLOCKED: Manager reports "Deploy failed: missing required capabilities: flashlight".
+PASS/BLOCKED: client e2e command capture shows no flashlight command executed after the capability rejection.
+```
+
+This supersedes the server-policy GS-12 blocker. GS-12 remains incomplete, but the current blocker is capability and
+device/runtime product proof: the desktop e2e client used in this check does not advertise `flashlight`, so it cannot
+prove live flashlight execution.
 
 ## Validation Snapshot
 

@@ -4,6 +4,7 @@
 import type { LocalLoop } from '$lib/nodes';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 import type { NodeEngine } from '$lib/nodes/engine';
+import type { TargetSelector } from '@shugu/protocol';
 
 export type DeployPendingEntry = { clientId: string; timeoutId: ReturnType<typeof setTimeout> | null };
 
@@ -28,7 +29,7 @@ export type ExecutorStatusMap = Map<string, ExecutorClientStatus>;
 
 export type ManagerSdkLike = {
   sendPluginControl: (
-    target: { mode: string; ids: string[] },
+    target: TargetSelector,
     plugin: string,
     event: string,
     payload: Record<string, unknown>
@@ -77,6 +78,10 @@ export function loopHasDisabledNodes(loop: LocalLoop, disabledNodeIds: Set<strin
     if (disabledNodeIds.has(String(nodeId))) return true;
   }
   return false;
+}
+
+function managedClientGroupTarget(clientId: string): TargetSelector {
+  return { mode: 'group', groupId: `client:${clientId}` };
 }
 
 export function updateExecutorStatus(
@@ -189,7 +194,9 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
 
     try {
       const payload = exportGraphForLoop(loop.id);
-      sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'deploy', payload);
+      const target = managedClientGroupTarget(clientId);
+      sdk.sendPluginControl(target, 'node-executor', 'reclaim', {});
+      sdk.sendPluginControl(target, 'node-executor', 'deploy', payload);
       setLoopDeployPending(loop.id, clientId);
     } catch (err) {
       onDeployError?.(err instanceof Error ? err.message : 'Deploy failed');
@@ -201,7 +208,7 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
     if (!clientId) return;
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'stop', {
+    sdk.sendPluginControl(managedClientGroupTarget(clientId), 'node-executor', 'stop', {
       loopId: loop.id,
     });
     markLoopDeployed(loop.id, false);
@@ -211,10 +218,11 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
     if (!loopId || !clientId) return;
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'stop', {
+    const target = managedClientGroupTarget(clientId);
+    sdk.sendPluginControl(target, 'node-executor', 'stop', {
       loopId,
     });
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'remove', {
+    sdk.sendPluginControl(target, 'node-executor', 'remove', {
       loopId,
     });
   };
@@ -247,7 +255,7 @@ export function createLoopActions(opts: LoopActionsOptions): LoopActions {
     if (!clientId) return;
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [clientId] }, 'node-executor', 'remove', {
+    sdk.sendPluginControl(managedClientGroupTarget(clientId), 'node-executor', 'remove', {
       loopId: loop.id,
     });
     markLoopDeployed(loop.id, false);

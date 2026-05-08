@@ -53,13 +53,16 @@ function withEnv(patch: Record<string, string | undefined>, fn: () => void): voi
 
 function createConnectionGateway() {
   let registeredRole: string | null = null;
+  const groupAssignments: { clientId: string; group: string }[] = [];
   const clientRegistry = {
     onClientExpired: () => () => undefined,
     registerConnection: (_socketId: string, role: string) => {
       registeredRole = role;
       return { clientId: 'registered-1', isNewClient: true };
     },
-    setClientGroup: () => undefined,
+    setClientGroup: (clientId: string, group: string) => {
+      groupAssignments.push({ clientId, group });
+    },
     getClient: () => ({ selected: false }),
   };
   const messageRouter = {
@@ -73,7 +76,7 @@ function createConnectionGateway() {
   const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
   gateway.server = { sockets: { sockets: new Map() } } as never;
 
-  return { gateway, getRegisteredRole: () => registeredRole };
+  return { gateway, getRegisteredRole: () => registeredRole, groupAssignments };
 }
 
 test('handleMessage rejects schema-invalid messages before routing and logs structured reasons', () => {
@@ -237,4 +240,36 @@ test('handleConnection allows explicit local insecure manager mode for local dev
       assert.equal(getRegisteredRole(), 'manager');
     }
   );
+});
+
+test('handleConnection assigns normal clients to their managed per-client group by default', () => {
+  const { gateway, groupAssignments } = createConnectionGateway();
+
+  gateway.handleConnection({
+    id: 'socket-client-default-group',
+    handshake: {
+      query: {},
+      headers: {},
+      auth: {},
+      address: '127.0.0.1',
+    },
+  } as never);
+
+  assert.deepEqual(groupAssignments, [{ clientId: 'registered-1', group: 'client:registered-1' }]);
+});
+
+test('handleConnection preserves explicit client groups instead of replacing them with managed groups', () => {
+  const { gateway, groupAssignments } = createConnectionGateway();
+
+  gateway.handleConnection({
+    id: 'socket-client-explicit-group',
+    handshake: {
+      query: { group: 'stage-left' },
+      headers: {},
+      auth: {},
+      address: '127.0.0.1',
+    },
+  } as never);
+
+  assert.deepEqual(groupAssignments, [{ clientId: 'registered-1', group: 'stage-left' }]);
 });

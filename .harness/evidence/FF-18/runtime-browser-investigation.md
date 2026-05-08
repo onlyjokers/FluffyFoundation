@@ -402,3 +402,90 @@ Updated acceptance impact:
 | GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Runtime client and Manager graph proof improved; live deploy is blocked by `server.policy.scope_mismatch` on `target.mode=clientIds` | blocked |
 | GS-13 display visual becomes breathing-like and AI observes output change | Bounded Manager Published Display `screenColor` product chain is proven; full breathing-like AI scenario and AI observation loop are not product-proven | partial |
 | Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |
+
+## 2026-05-08 GS-12 Deploy Lane Fix Recheck
+
+This recheck used the approved bounded FF-18 GS-12 deploy lane. It does not mark FF-18 complete and does not start
+FF-19.
+
+Focused TDD proof:
+
+```text
+corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/components/nodes/node-canvas/controllers/loop-helpers.spec.ts
+RED before implementation:
+Node Graph loop deploy/stop/remove used target={ mode: "clientIds", ids: ["client-1"] }.
+
+GREEN after implementation:
+PASS: 4 tests, 0 failures
+PASS: deploy sends node-executor/reclaim and node-executor/deploy to target={ mode: "group", groupId: "client:client-1" }.
+PASS: stop/remove lifecycle commands target the same managed client Group.
+```
+
+```text
+corepack pnpm@8.15.9 exec tsx --tsconfig apps/server/tsconfig.json --test apps/server/src/events/events.gateway.spec.ts
+PASS: 7 tests, 0 failures
+PASS: normal clients without an explicit group are assigned group="client:<clientId>".
+PASS: explicit client groups are preserved.
+
+corepack pnpm@8.15.9 exec tsx --tsconfig apps/server/tsconfig.json --test apps/server/src/events/events.gateway.command-envelope.spec.ts
+PASS: 11 tests, 0 failures
+PASS: node-executor deploy scoped to target={ mode: "group", groupId: "client:client-1" } is accepted and audited.
+
+corepack pnpm@8.15.9 exec tsx --test packages/sdk-manager/src/manager-sdk.spec.ts
+PASS: 13 tests, 0 failures
+```
+
+Runtime/browser proof against current source on `https://localhost:3301`:
+
+```text
+PORT=3301 SHUGU_ALLOW_INSECURE_MANAGER=1 NODE_ENV=development corepack pnpm@8.15.9 --filter @shugu/server run dev
+PASS: current source server starts on https://localhost:3301.
+
+chrome-devtools https://localhost:3301/health
+PASS: health JSON renders in the browser after accepting the local certificate.
+
+chrome-devtools client e2e page:
+https://localhost:5174/?e2e=1&server=https%3A%2F%2Flocalhost%3A3301
+PASS: client registers with the current source server.
+
+chrome-devtools fetch https://localhost:3301/clients
+PASS: normal clients are connected with managed groups:
+- group="client:c_ed172239e034"
+- group="client:c_ed172239e034_1"
+
+chrome-devtools Manager /manager/root + Connect + Node Graph
+PASS: Manager connects as manager and exposes window.__shuguNodeEngine.
+
+chrome-devtools temporary graph load
+PASS: runtime-only GS-12 graph is present in Manager:
+- client-object targets connected client c_ed172239e034
+- proc-client-sensors gyroG feeds proc-flashlight frequencyHz
+- proc-flashlight cmd returns to the client-object sink
+PASS: Manager detects one local loop requiring ["flashlight","sensors"].
+
+chrome-devtools click Deploy
+PASS: server no longer rejects node-executor deploy with server.policy.scope_mismatch path=target.mode.
+PASS: server no longer rejects node-executor deploy with server.policy.ownership_denied.
+PASS: server audit accepted node-executor/reclaim with
+scopeGroupId="client:c_ed172239e034" and target={ mode: "group", groupId: "client:c_ed172239e034" }.
+PASS: server audit accepted node-executor/deploy with
+scopeGroupId="client:c_ed172239e034" and target={ mode: "group", groupId: "client:c_ed172239e034" }.
+
+Manager dialog
+BLOCKED: Deploy failed: missing required capabilities: flashlight.
+
+chrome-devtools client e2e command capture
+PASS/BLOCKED: no flashlight command was executed after the capability rejection; only setSensorState was captured.
+```
+
+The latest GS-12 blocker is therefore narrowed again. The Node Graph deploy lane now satisfies the server scope and
+ownership boundaries. The remaining runtime blocker is capability/product proof: the desktop e2e client used for this
+check does not advertise `flashlight`, so the executor rejects the deploy before a flashlight command can execute.
+
+Updated acceptance impact:
+
+| Criterion | Runtime result | Status |
+| --- | --- | --- |
+| GS-12 gyro rotation drives tense flashlight rhythm through graph commands | Managed Group deploy is now accepted by server policy and ownership; live flashlight execution remains blocked because the current e2e client lacks `flashlight` capability | blocked |
+| GS-13 display visual becomes breathing-like and AI observes output change | Bounded Manager Published Display `screenColor` product chain is proven; full breathing-like AI scenario and AI observation loop are not product-proven | partial |
+| Runtime override set/clear surface | Still deferred by prior evidence; no live runtime path proven | blocked |
