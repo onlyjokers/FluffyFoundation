@@ -10,6 +10,7 @@ Purpose: Lightweight Manager performance console for published Group controls.
   import AppShell from '$lib/layouts/AppShell.svelte';
   import ClientSelector from '$lib/components/ClientSelector.svelte';
   import DisplayPanel from '$lib/components/DisplayPanel.svelte';
+  import OperatorConsole from '$lib/components/OperatorConsole.svelte';
   import PublishedGroupControls from '$lib/components/PublishedGroupControls.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -173,6 +174,9 @@ Purpose: Lightweight Manager performance console for published Group controls.
       <div class="dashboard-grid">
         <div class="grid-item wide">
           <PublishedGroupControls />
+        </div>
+        <div class="grid-item wide">
+          <OperatorConsole />
         </div>
         <div class="grid-item">
           <Card>

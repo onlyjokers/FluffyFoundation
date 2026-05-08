@@ -1,0 +1,94 @@
+- generic [ref=e27]:
+  - banner [ref=e28]:
+    - heading "Fluffy Manager" [level=1] [ref=e30]
+    - generic [ref=e32]:
+      - link "Manager" [ref=e33] [cursor=pointer]:
+        - /url: /manager/
+      - link "Root" [ref=e34] [cursor=pointer]:
+        - /url: /manager/root
+    - button "Connection menu" [ref=e37] [cursor=pointer]: ⋯
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e42]:
+        - heading "Published Group Controls" [level=3] [ref=e44]
+        - generic [ref=e46]:
+          - tablist "Published Groups" [ref=e47]:
+            - tab "Audience audience" [selected] [ref=e48] [cursor=pointer]
+            - tab "Display display" [ref=e51] [cursor=pointer]
+          - generic [ref=e54]:
+            - generic [ref=e55]
+            - button "Stop Group" [ref=e58] [cursor=pointer]
+          - generic [ref=e59]:
+            - generic [ref=e60]
+            - generic [ref=e63]
+            - button "Send Color" [ref=e68] [cursor=pointer]
+            - generic [ref=e69]
+            - button "Vibrate" [ref=e74] [cursor=pointer]
+            - generic [ref=e75] [cursor=pointer]
+            - button "Flashlight" [ref=e80] [cursor=pointer]
+          - button "Stop Published Groups" [ref=e82] [cursor=pointer]
+      - generic [ref=e84]:
+        - heading "Operator Console" [level=3] [ref=e86]
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - generic [ref=e90]
+            - generic [ref=e93]
+            - generic [ref=e96]
+            - generic [ref=e99]
+          - generic [ref=e102]:
+            - generic [ref=e103]
+            - generic [ref=e106]
+            - generic [ref=e109]
+            - generic [ref=e112]
+          - generic [ref=e115]:
+            - generic [ref=e116]: undiagnosed
+            - generic [ref=e117]: No structured display failure was found.
+      - generic [ref=e122]:
+        - generic [ref=e123]:
+          - heading "Clients (0)" [level=3] [ref=e124]
+          - generic [ref=e125]: View only
+        - generic [ref=e127]: No clients connected
+      - generic [ref=e129]:
+        - heading "🖥️ Display" [level=3] [ref=e131]
+        - generic [ref=e133]:
+          - generic [ref=e134]:
+            - generic [ref=e135]: Local Display (MessagePort)
+            - generic [ref=e136]
+            - generic [ref=e141]
+          - generic [ref=e146]:
+            - generic [ref=e147]: Remote Display (Server group=display)
+            - generic [ref=e150]
+          - generic [ref=e157] [cursor=pointer]:
+            - generic [ref=e158]
+            - generic [ref=e160]
+      - generic [ref=e164]:
+        - heading "Performance Mode" [level=3] [ref=e166]
+        - generic [ref=e167]:
+          - generic [ref=e168] [cursor=pointer]:
+            - generic [ref=e169]
+            - generic [ref=e171]
+          - paragraph [ref=e174]: Takes effect on next connect.
+      - generic [ref=e176]:
+        - heading "Server State" [level=3] [ref=e178]
+        - generic [ref=e180]:
+          - generic [ref=e181]:
+            - term [ref=e182]: Mode
+            - definition [ref=e183]: single-server
+          - generic [ref=e184]:
+            - term [ref=e185]: Registry
+            - definition [ref=e186]: server-process
+          - generic [ref=e187]:
+            - term [ref=e188]: Selection
+            - definition [ref=e189]: server-process
+      - generic [ref=e191]:
+        - heading "📍 地理位置" [level=3] [ref=e193]
+        - generic [ref=e195]:
+          - button "选择地理位置 (lat,lng)" [ref=e196] [cursor=pointer]:
+            - generic [ref=e198]: 选择地理位置 (lat,lng)
+          - generic [ref=e199]:
+            - generic [ref=e200]
+            - slider "范围" [ref=e203] [cursor=pointer]: "101"
+          - button "获取现在的位置 (Manager)" [ref=e204] [cursor=pointer]
+  - generic [ref=e209]:
+    - generic [ref=e210]: Offset
+    - generic [ref=e211]: 0ms

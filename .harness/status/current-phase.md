@@ -4,17 +4,17 @@ Purpose: Track the active harness phase for Looooper Plan/Work/Review sessions.
 
 # Current Phase
 
-FF-20 - Observability, Reporting, And Operator Console
+FF-21 - Executable Golden Scenarios
 
 ## Previous Acceptance
 
-FF-19 AI Safety, Policy, Cost, Redaction, And Audit was accepted with exact baseline validation fingerprint.
+FF-20 Observability, Reporting, And Operator Console was accepted with exact baseline validation fingerprint.
 
 ## Active Claim
 
-Make failures visible, structured, and actionable during a show.
+Convert product-readiness scenarios into executable proof without treating non-end-to-end fixtures as release readiness.
 
 ## Work Status
 
-FF-20 is the next active task. Do not start FF-21. FF-20 work must stay inside
-`.harness/goals/FF-20-contract.md`.
+FF-21 is the next active task. Do not start FF-22. FF-21 work must stay inside
+`.harness/goals/FF-21-contract.md`.

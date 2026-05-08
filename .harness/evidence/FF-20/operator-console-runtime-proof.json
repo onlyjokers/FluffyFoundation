@@ -1,0 +1,9 @@
+{
+  "url": "https://localhost:5176/manager/",
+  "title": "Fluffy Manager",
+  "operatorConsoleText": "Degraded\nconnected\n2/2\ndevices online\n2\ndisplays\n1\nfailed commands\nACTIVE PARTITIONS\n\nnone\n\nPENDING TRANSFERS\n\nnone\n\nKILL SWITCH\n\nclear\n\nFAILED COMMANDS\npermission-denial\nff20-display-proof: target group must match scopeGroupId\ndiagnosed\ntarget group must match scopeGroupId",
+  "health": "degraded connected",
+  "failedCommands": "Failed Commands permission-denial ff20-display-proof: target group must match scopeGroupId ",
+  "diagnosis": "diagnosed target group must match scopeGroupId",
+  "proofMatched": true
+}

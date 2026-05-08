@@ -1,0 +1,25 @@
+Degraded
+connected
+2/2
+devices online
+2
+displays
+1
+failed commands
+ACTIVE PARTITIONS
+
+none
+
+PENDING TRANSFERS
+
+none
+
+KILL SWITCH
+
+clear
+
+FAILED COMMANDS
+permission-denial
+ff20-display-proof: target group must match scopeGroupId
+diagnosed
+target group must match scopeGroupId
