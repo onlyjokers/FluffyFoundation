@@ -1,0 +1,409 @@
+
+> shugu3@1.0.0 test:ff22 /Users/ziqi/Desktop/FluffyFoundation
+> pnpm --filter @shugu/protocol run build && pnpm --filter @shugu/server run build && node scripts/test-ff22-load-drill.mjs
+
+
+> @shugu/protocol@1.0.0 build /Users/ziqi/Desktop/FluffyFoundation/packages/protocol
+> pnpm exec tsc
+
+
+> @shugu/server@1.0.0 build /Users/ziqi/Desktop/FluffyFoundation/apps/server
+> pnpm exec nest build
+
+[ff22:server] [env] loaded 1 keys from /Users/ziqi/Desktop/FluffyFoundation/secrets/server.env
+[ff22:server] 🔒 HTTPS enabled
+[ff22:server] [state] active server state strategy {
+  mode: [32m'single-server'[39m,
+  instanceId: [32m'6661'[39m,
+  registryOwner: [32m'server-process'[39m,
+  selectionOwner: [32m'server-process'[39m,
+  ownershipOwner: [32m'server-process'[39m,
+  controlPlaneSnapshotOwner: [32m'server-process'[39m,
+  unsupportedClusterEnv: [
+    [32m'REDIS_URL'[39m,
+    [32m'SHUGU_STATE_STRATEGY'[39m,
+    [32m'WEB_CONCURRENCY'[39m,
+    [32m'INSTANCES'[39m,
+    [32m'NODE_APP_INSTANCE'[39m
+  ]
+}
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [NestFactory] Starting Nest application...
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] ClientRegistryModule dependencies initialized +3ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] GeoModule dependencies initialized +1ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] MessageRouterModule dependencies initialized +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] LocalMediaModule dependencies initialized +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] AppModule dependencies initialized +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] EventsModule dependencies initialized +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [InstanceLoader] AssetsModule dependencies initialized +0ms
+[ff22:server] [Gateway] WebSocket server initialized
+[ff22:server] [Gateway] Active state strategy {
+  mode: [32m'single-server'[39m,
+  instanceId: [32m'6661'[39m,
+  registryOwner: [32m'server-process'[39m,
+  selectionOwner: [32m'server-process'[39m,
+  ownershipOwner: [32m'server-process'[39m,
+  controlPlaneSnapshotOwner: [32m'server-process'[39m,
+  unsupportedClusterEnv: [
+    [32m'REDIS_URL'[39m,
+    [32m'SHUGU_STATE_STRATEGY'[39m,
+    [32m'WEB_CONCURRENCY'[39m,
+    [32m'INSTANCES'[39m,
+    [32m'NODE_APP_INSTANCE'[39m
+  ]
+}
+[Gateway] Redis not configured (set REDIS_URL to enable)
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [WebSocketsController] EventsGateway subscribed to the "msg" message +13ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [WebSocketsController] EventsGateway subscribed to the "time:ping" message +0ms
+[Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [WebSocketsController] EventsGateway subscribed to the "select:clients" message +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RoutesResolver] AppController {/}: +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/health, GET} route +1ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/clients, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/time, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RoutesResolver] GeoController {/geo}: +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/geo/fence, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/geo/fence, POST} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/geo/reverse, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RoutesResolver] AssetsController {/api/assets}: +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets/manifest, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets, POST} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets/:id, DELETE} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets/:id, PATCH} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets/:id, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets/:id/content, HEAD} route +1ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/assets/:id/content, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RoutesResolver] LocalMediaController {/api/local-media}: +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/local-media, GET} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/local-media/validate, POST} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/local-media/content, HEAD} route +0ms
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [RouterExplorer] Mapped {/api/local-media/content, GET} route +0ms
+[ff22:server] (node:6661) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[ff22:server] [Nest] 6661  - 05/09/2026, 4:53:33 AM     LOG [NestApplication] Nest application successfully started +1ms
+[ff22:server] 🚀 Server running on https://localhost:3401 (host=127.0.0.1)
+[ff22:server] 📡 WebSocket ready for connections
+[ff22:server] [Gateway] Connection: NhGelCEV1r08SHHYAAAB requested=manager granted=manager
+[Registry] manager registered: m_moxe7205 (socket: NhGelCEV1r08SHHYAAAB)
+[ff22:server] [Gateway] Connection: HjQEOff69fzz2Bl-AAAQ requested=client granted=client
+[Registry] client registered: ff22-client-0 (socket: HjQEOff69fzz2Bl-AAAQ)
+[ff22:server] [Gateway] Connection: cOJeCh46Pk16n7jLAAAR requested=client granted=client
+[Registry] client registered: ff22-client-1 (socket: cOJeCh46Pk16n7jLAAAR)
+[ff22:server] [Gateway] Connection: WQ_cZY0Tfx_Hff_qAAAS requested=client granted=client
+[Registry] client registered: ff22-client-2 (socket: WQ_cZY0Tfx_Hff_qAAAS)
+[ff22:server] [Gateway] Connection: w5nxmQFfL-ZCdeLzAAAT requested=client granted=client
+[Registry] client registered: ff22-client-3 (socket: w5nxmQFfL-ZCdeLzAAAT)
+[ff22:server] [Gateway] Connection: 3FqPW62-zbk9gGF7AAAU requested=client granted=client
+[Registry] client registered: ff22-client-4 (socket: 3FqPW62-zbk9gGF7AAAU)
+[ff22:server] [Gateway] Connection: GTu-iFoSbot4TMEEAAAV requested=client granted=client
+[Registry] client registered: ff22-client-5 (socket: GTu-iFoSbot4TMEEAAAV)
+[ff22:server] [Gateway] Connection: ied9ZXbH1jjda2XxAAAW requested=client granted=client
+[Registry] client registered: ff22-client-6 (socket: ied9ZXbH1jjda2XxAAAW)
+[ff22:server] [Gateway] Connection: QIiPGPGXoChGV0k8AAAX requested=client granted=client
+[Registry] client registered: ff22-client-8 (socket: QIiPGPGXoChGV0k8AAAX)
+[ff22:server] [Gateway] Connection: NSp1yhLO-8lxAY6eAAAY requested=client granted=client
+[Registry] client registered: ff22-client-9 (socket: NSp1yhLO-8lxAY6eAAAY)
+[ff22:server] [Gateway] Connection: 1LmlDuoeFdn1HKzxAAAZ requested=client granted=client
+[ff22:server] [Registry] client registered: ff22-client-10 (socket: 1LmlDuoeFdn1HKzxAAAZ)
+[ff22:server] [Gateway] Connection: 7fep4V9GVcvTt77FAAAa requested=client granted=client
+[ff22:server] [Registry] client registered: ff22-client-11 (socket: 7fep4V9GVcvTt77FAAAa)
+[ff22:server] [Gateway] Connection: 3fqMNQNnC_FQEakOAAAb requested=client granted=client
+[ff22:server] [Registry] client registered: ff22-display-0 (socket: 3fqMNQNnC_FQEakOAAAb)
+[ff22:server] [Gateway] Connection: -KwjqHHE3U91hQqeAAAc requested=client granted=client
+[Registry] client registered: ff22-display-1 (socket: -KwjqHHE3U91hQqeAAAc)
+[ff22:server] [Gateway] Connection: DT3OFbpZkQ2Tm7bcAAAd requested=client granted=client
+[Registry] client registered: ff22-client-7 (socket: DT3OFbpZkQ2Tm7bcAAAd)
+[ff22:server] [Gateway] Command audit {
+  actor: [32m'ff22-manager'[39m,
+  role: [32m'manager'[39m,
+  scopeGroupId: [32m'stage-ff22'[39m,
+  type: [32m'plugin'[39m,
+  command: [32m'reclaim'[39m,
+  target: { mode: [32m'group'[39m, groupId: [32m'stage-ff22'[39m },
+  correlationId: [32m'ff22-corr-1778273613815-vvqx9czvuk'[39m,
+  idempotencyKey: [32m'ff22-idem-1778273613815-eri4s9md6g'[39m,
+  decision: [32m'accept'[39m
+}
+[ff22:server] [Gateway] Command audit {
+  actor: [32m'ff22-manager'[39m,
+  role: [32m'manager'[39m,
+  scopeGroupId: [32m'stage-ff22'[39m,
+  type: [32m'control'[39m,
+  command: [32m'screenColor'[39m,
+  target: { mode: [32m'group'[39m, groupId: [32m'stage-ff22'[39m },
+  correlationId: [32m'ff22-corr-1778273613816-u7ywse2p6o'[39m,
+  idempotencyKey: [32m'ff22-idem-1778273613816-zzszkeisma'[39m,
+  decision: [32m'accept'[39m
+}
+[ff22:server] [Gateway] Disconnection: HjQEOff69fzz2Bl-AAAQ
+[Registry] client disconnected: ff22-client-0 (grace 500ms)
+[ff22:server] [Gateway] Connection: GjfcjEKzVHRHUKGqAAAf requested=client granted=client
+[Registry] client reconnected: ff22-client-0 (socket: GjfcjEKzVHRHUKGqAAAf)
+[ff22:server] [Gateway] Disconnection: 3fqMNQNnC_FQEakOAAAb
+[Registry] client disconnected: ff22-display-0 (grace 500ms)
+[ff22:server] [Gateway] Connection: 82t3WHQK5v3wXsW8AAAh requested=client granted=client
+[Registry] client reconnected: ff22-display-0 (socket: 82t3WHQK5v3wXsW8AAAh)
+[ff22:server] [Gateway] Disconnection: cOJeCh46Pk16n7jLAAAR
+[Registry] client disconnected: ff22-client-1 (grace 500ms)
+[ff22:server] [Gateway] Connection: 8S6UZV4YdiZs-NLPAAAj requested=client granted=client
+[Registry] client reconnected: ff22-client-1 (socket: 8S6UZV4YdiZs-NLPAAAj)
+[ff22:server] [Gateway] Command audit {
+  actor: [32m'root'[39m,
+  role: [32m'root'[39m,
+  scopeGroupId: [32m'__root_emergency__'[39m,
+  type: [32m'control'[39m,
+  command: [32m'shutdown'[39m,
+  target: { mode: [32m'all'[39m },
+  correlationId: [32m'ff22-corr-1778273613823-vcxekv84nu'[39m,
+  idempotencyKey: [32m'ff22-idem-1778273613823-gs7t9o4plt5'[39m,
+  decision: [32m'accept'[39m
+}
+[ff22:server] [Gateway] Disconnection: NhGelCEV1r08SHHYAAAB
+[Registry] manager disconnected: m_moxe7205
+[Gateway] Disconnection: WQ_cZY0Tfx_Hff_qAAAS
+[Registry] client disconnected: ff22-client-2 (grace 500ms)
+[Gateway] Disconnection: w5nxmQFfL-ZCdeLzAAAT
+[Registry] client disconnected: ff22-client-3 (grace 500ms)
+[Gateway] Disconnection: 3FqPW62-zbk9gGF7AAAU
+[Registry] client disconnected: ff22-client-4 (grace 500ms)
+[Gateway] Disconnection: GTu-iFoSbot4TMEEAAAV
+[Registry] client disconnected: ff22-client-5 (grace 500ms)
+{
+  "id": "FF-22",
+  "status": "pass",
+  "generatedAt": "2026-05-08T20:53:33.823Z",
+  "serverUrl": "https://127.0.0.1:3401",
+  "realisticDeviceCounts": {
+    "managers": 1,
+    "clients": 12,
+    "displays": 2
+  },
+  "budgets": [
+    {
+      "id": "server-startup",
+      "measured": 506,
+      "threshold": 12000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "connect-all",
+      "measured": 17,
+      "threshold": 8000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "client-list-propagation",
+      "measured": 0,
+      "threshold": 2000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "control-delivery",
+      "measured": 1,
+      "threshold": 1500,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "network-recovery",
+      "measured": 2,
+      "threshold": 4000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "display-refresh-recovery",
+      "measured": 2,
+      "threshold": 4000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "client-reconnect-recovery",
+      "measured": 2,
+      "threshold": 4000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "root-stop-all-delivery",
+      "measured": 0,
+      "threshold": 1500,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "harness-rss",
+      "measured": 70.7,
+      "threshold": 512,
+      "unit": "MiB",
+      "status": "pass"
+    }
+  ],
+  "drills": [
+    {
+      "id": "network-interruption",
+      "measuredMs": 2,
+      "thresholdMs": 4000,
+      "status": "pass"
+    },
+    {
+      "id": "display-refresh",
+      "measuredMs": 2,
+      "thresholdMs": 4000,
+      "status": "pass"
+    },
+    {
+      "id": "client-reconnect",
+      "measuredMs": 2,
+      "thresholdMs": 4000,
+      "status": "pass"
+    },
+    {
+      "id": "root-stop-all",
+      "measuredMs": 0,
+      "thresholdMs": 1500,
+      "status": "pass"
+    }
+  ],
+  "proofMatrix": [
+    {
+      "criterion": "server-startup",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "506ms <= 12000ms"
+    },
+    {
+      "criterion": "connect-all",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "17ms <= 8000ms"
+    },
+    {
+      "criterion": "client-list-propagation",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "0ms <= 2000ms"
+    },
+    {
+      "criterion": "control-delivery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "1ms <= 1500ms"
+    },
+    {
+      "criterion": "network-recovery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "display-refresh-recovery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "client-reconnect-recovery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "root-stop-all-delivery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "0ms <= 1500ms"
+    },
+    {
+      "criterion": "harness-rss",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "70.7MiB <= 512MiB"
+    },
+    {
+      "criterion": "network-interruption",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "display-refresh",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "client-reconnect",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "root-stop-all",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "0ms <= 1500ms"
+    }
+  ],
+  "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+  "notes": [
+    "Started the real @shugu/server process.",
+    "Used Socket.IO manager/client/display connections over the runtime msg event.",
+    "No deterministic fixture was used as a substitute for runtime proof."
+  ]
+}

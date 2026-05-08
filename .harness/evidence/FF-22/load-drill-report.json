@@ -1,0 +1,240 @@
+{
+  "id": "FF-22",
+  "status": "pass",
+  "generatedAt": "2026-05-08T20:53:33.823Z",
+  "serverUrl": "https://127.0.0.1:3401",
+  "realisticDeviceCounts": {
+    "managers": 1,
+    "clients": 12,
+    "displays": 2
+  },
+  "budgets": [
+    {
+      "id": "server-startup",
+      "measured": 506,
+      "threshold": 12000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "connect-all",
+      "measured": 17,
+      "threshold": 8000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "client-list-propagation",
+      "measured": 0,
+      "threshold": 2000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "control-delivery",
+      "measured": 1,
+      "threshold": 1500,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "network-recovery",
+      "measured": 2,
+      "threshold": 4000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "display-refresh-recovery",
+      "measured": 2,
+      "threshold": 4000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "client-reconnect-recovery",
+      "measured": 2,
+      "threshold": 4000,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "root-stop-all-delivery",
+      "measured": 0,
+      "threshold": 1500,
+      "unit": "ms",
+      "status": "pass"
+    },
+    {
+      "id": "harness-rss",
+      "measured": 70.7,
+      "threshold": 512,
+      "unit": "MiB",
+      "status": "pass"
+    }
+  ],
+  "drills": [
+    {
+      "id": "network-interruption",
+      "measuredMs": 2,
+      "thresholdMs": 4000,
+      "status": "pass"
+    },
+    {
+      "id": "display-refresh",
+      "measuredMs": 2,
+      "thresholdMs": 4000,
+      "status": "pass"
+    },
+    {
+      "id": "client-reconnect",
+      "measuredMs": 2,
+      "thresholdMs": 4000,
+      "status": "pass"
+    },
+    {
+      "id": "root-stop-all",
+      "measuredMs": 0,
+      "thresholdMs": 1500,
+      "status": "pass"
+    }
+  ],
+  "proofMatrix": [
+    {
+      "criterion": "server-startup",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "506ms <= 12000ms"
+    },
+    {
+      "criterion": "connect-all",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "17ms <= 8000ms"
+    },
+    {
+      "criterion": "client-list-propagation",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "0ms <= 2000ms"
+    },
+    {
+      "criterion": "control-delivery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "1ms <= 1500ms"
+    },
+    {
+      "criterion": "network-recovery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "display-refresh-recovery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "client-reconnect-recovery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "root-stop-all-delivery",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "0ms <= 1500ms"
+    },
+    {
+      "criterion": "harness-rss",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "70.7MiB <= 512MiB"
+    },
+    {
+      "criterion": "network-interruption",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "display-refresh",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "client-reconnect",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "2ms <= 4000ms"
+    },
+    {
+      "criterion": "root-stop-all",
+      "requiredProofType": "product-runtime",
+      "deterministicProof": "not-used-as-substitute",
+      "runtimeBrowserProof": "real-socket.io-server-runtime",
+      "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+      "status": "pass",
+      "deferredRiskAcceptance": "none",
+      "reviewerNotes": "0ms <= 1500ms"
+    }
+  ],
+  "evidencePath": "/Users/ziqi/Desktop/FluffyFoundation/.harness/evidence/FF-22/load-drill-report.json",
+  "notes": [
+    "Started the real @shugu/server process.",
+    "Used Socket.IO manager/client/display connections over the runtime msg event.",
+    "No deterministic fixture was used as a substitute for runtime proof."
+  ]
+}

@@ -4,56 +4,55 @@ Purpose: Track the active harness task for Looooper Plan/Work/Review sessions.
 
 # Current Task
 
-FF-22 - Performance Budgets, Load, And Show Mode Resilience
+FF-23 - Security, Supply Chain, Release, And Operations
 
 ## Previous Acceptance
 
-FF-21 executable golden scenario work is complete with exact baseline validation fingerprint.
+FF-22 load, budget, and show-mode resilience work is complete with focused runtime proof.
 
 ## Current Boundary
 
-FF-22 scope from `docs/harness/PLAN.md` and `.harness/goals/FF-22-contract.md`.
+FF-23 scope from `docs/harness/PLAN.md` and `.harness/goals/FF-23-contract.md`.
 
-Allowed lanes are defined by `.harness/goals/FF-22-contract.md`. Do not infer completion from this status file.
+Allowed lanes are defined by `.harness/goals/FF-23-contract.md`. Do not infer completion from this status file.
 
 ## Non-Goals
 
-FF-22 non-goals from `.harness/goals/FF-22-contract.md`:
+FF-23 non-goals from `.harness/goals/FF-23-contract.md`:
 
-- Do not start FF-23.
-- Do not claim show-mode resilience from small deterministic tests alone.
-- Do not weaken thresholds to pass.
+- Do not start FF-24.
+- Do not treat checklist prose as passing security proof.
+- Do not weaken security, audit, rollback, or release gates to pass.
 
-## FF-21 Final Report
+## FF-22 Final Report
 
-- Added `pnpm test:golden` as the FF-21 phase command.
-- Added an executable golden scenario suite that verifies all required scenario ids, rejects manual proof status, checks
-  evidence paths, and requires both `slow` and `release` labels.
-- Added a machine-readable proof matrix for Manager->Client, Root publish, Display fallback, asset preload,
-  NodeExecutor deploy, ControlPlane transfer/reclaim, AI graph edit, rollback, and show stop.
-- Recorded FF-21 evidence without starting FF-22 load, budget, or show-mode implementation.
+- Added `pnpm test:ff22` as the FF-22 phase command.
+- Added a runtime load/drill harness that starts the real `@shugu/server` build output and connects one manager,
+  twelve stage clients, and two display clients over Socket.IO.
+- Exercised existing Group ownership policy by reclaiming the stage group before measuring manager control delivery.
+- Recorded budget and drill proof for network interruption, display refresh, client reconnect, and Root stop-all.
 
 Evidence:
 
-- `.harness/evidence/FF-21/golden-suite.json`
-- `.harness/evidence/FF-21/test-golden-output.txt`
-- `.harness/evidence/FF-21/summary.md`
-- `.harness/handoffs/2026-05-09-FF-21-golden-scenarios.md`
+- `.harness/evidence/FF-22/load-drill-report.json`
+- `.harness/evidence/FF-22/test-ff22-load-drill-output.txt`
+- `.harness/evidence/FF-22/summary.md`
+- `.harness/handoffs/2026-05-09-FF-22-load-drill.md`
 
 Focused validation:
 
-- `corepack pnpm@8.15.9 test:golden`: PASS, 9 scenarios, status=complete
+- `corepack pnpm@8.15.9 test:ff22`: PASS, status=pass
 - `python3 .harness/scripts/validate_acceptance_contracts.py`: PASS
 - `git diff --check`: PASS
 - `corepack pnpm@8.15.9 verify`: FAIL only at exact known out-of-scope hotspot baseline
   `apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492`; all prior guard/lint/build/test/e2e
   and harness structure steps pass.
 
-FF-22 may start. FF-23 must not start.
+FF-23 may start after final validation review. FF-24 must not start.
 
 ## Verification Expectations
 
-Run the FF-22 load/drill commands defined by the implementation plus:
+Run the FF-23 security/release commands defined by the implementation plus:
 
 ```bash
 python3 .harness/scripts/validate_acceptance_contracts.py
