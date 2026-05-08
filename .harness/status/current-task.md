@@ -67,6 +67,31 @@ FF-17 has been accepted and committed as `111103f`. FF-18 is now active; this tr
 and does not implement AI intent planning, semantic snapshot packing, registry summary generation, policy execution,
 validation, audit, rollback, command bus parity, proposal flow, observation, or repair behavior.
 
+## Acceptance Reconciliation
+
+FF-18 completion is currently blocked under `docs/harness/ACCEPTANCE.md` and
+`.harness/goals/FF-18-review-contract.md`.
+
+Current evidence proves substantial deterministic in-memory AI Operator behavior, but browser/runtime/product proof is
+missing and is not covered by dated risk acceptance. Do not start FF-19 until this is resolved.
+
 ## Next Expected Action
 
-The next Plan dispatch may start bounded FF-18 Work from `docs/harness/PLAN.md` using the boundary above.
+The next Plan dispatch must choose one of these paths:
+
+- approve a dated risk acceptance for the missing FF-18 runtime/browser/product proof;
+- approve a bounded FF-18 runtime/browser/product proof task that starts with failing tests or executable scenario proof,
+  including a scope revision if fixing the current `apps/server/**` startup blocker is required;
+- revise the FF-18 contract if the missing proof is intentionally deferred to a later FF item.
+
+## Runtime Browser Investigation Update
+
+2026-05-08 real runtime/browser checking confirms that chrome-devtools MCP and browser-use MCP are available, Manager
+and Server are both reachable by `curl -k`, and Manager login reaches the connect panel as user Eureka.
+
+FF-18 remains blocked because the browser Manager socket connection to `https://localhost:3001/socket.io` fails with
+`NET::ERR_CERT_AUTHORITY_INVALID`, so workspace/canvas proof for GS-12 and GS-13 is still missing. Current validation
+also stops at `harness:hotspots` because `apps/server/src/assets/assets.service.ts` exceeds its ratchet max; that path
+is outside the FF-18 review contract allowed implementation scope.
+
+Evidence: `.harness/evidence/FF-18/runtime-browser-investigation.md`.

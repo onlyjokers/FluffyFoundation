@@ -49,6 +49,8 @@ const changedTargetsFor = (command) => {
         return [String(command.groupId)];
     if ('partitionId' in command)
         return [String(command.partitionId)];
+    if (command.type === 'proposal.approve')
+        return [String(command.proposalId)];
     return [];
 };
 export function runAiSemanticCommandBusParityFixture(input) {

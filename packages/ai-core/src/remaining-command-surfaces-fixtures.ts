@@ -4,208 +4,46 @@
 
 import {
   buildAiSemanticContext,
-  redactAiContextValue,
-  type AiContextRedactionMetadata,
-  type AiSemanticContext,
 } from './semantic-context.js';
 import {
   createAiObservationEvaluator,
-  type AiObservationEvaluation,
 } from './observation-repair.js';
 import type { AiProposalExecutionResult } from './proposal-execution.js';
 import {
   runAiSemanticCommandBusParityFixture,
   type AiSemanticCommandBusParityCase,
-  type AiSemanticCommandBusParityTrace,
 } from './semantic-command-bus-parity.js';
 import type {
-  AiDryRunCommandResult,
-  AiProposalDryRunResult,
   AiSemanticActor,
-  AiSemanticCommand,
 } from './deterministic-planner.js';
+import {
+  createdAt,
+  effectFor,
+  getAuditLength,
+  getHistoryLength,
+  redacted,
+  revisionOf,
+  riskFor,
+  runtimeObservation,
+  snapshotForParity,
+  stableJson,
+} from './remaining-command-surfaces-support.js';
+import type {
+  AiRemainingCommandSurfaceCase,
+  AiRemainingCommandSurfaceTrace,
+  AiRollbackRevisionTrace,
+  AiRuntimeOverrideTrace,
+} from './remaining-command-surfaces-types.js';
 
-type RollbackBus = AiSemanticCommandBusParityCase['createBus'] extends () => infer T
-  ? T & {
-      rollbackToRevision?: (revision: number) => {
-        ok: boolean;
-        message?: string;
-        recovery?: unknown;
-        snapshot: Record<string, unknown>;
-      };
-    }
-  : never;
-
-export type AiRuntimeOverrideTrace = {
-  caseId: string;
-  status: 'deferred';
-  commandType: 'runtime.override.set' | 'runtime.override.clear';
-  semanticContext: AiSemanticContext;
-  runtimeOverride: {
-    action: 'set' | 'clear';
-    nodeId: string;
-    portId: string;
-    value?: unknown;
-    ttlMs?: number;
-  };
-  ai: {
-    commandSequence: [];
-    status: { dryRun: 'unsupported-intent'; apply: AiProposalExecutionResult['status'] };
-    policy: {
-      dryRun: AiProposalDryRunResult['policy'];
-      apply: AiProposalExecutionResult['policy'];
-    };
-    audit: {
-      executionAudit: AiProposalExecutionResult['audit'];
-      rollback: AiProposalExecutionResult['rollback'];
-      historyEntry: AiProposalExecutionResult['historyEntry'];
-    };
-    snapshot: Record<string, unknown>;
-    redactionSummary: AiContextRedactionMetadata;
-  };
-  deferred: {
-    deferred: true;
-    reasonCode: 'RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED';
-    message: string;
-  };
-  runtimeObservation: {
-    kind: 'runtime-observation-deferred';
-    deferred: true;
-    reasonCode: 'BROWSER_RUNTIME_PROOF_DEFERRED';
-  };
-};
-
-export type AiRollbackRevisionTrace = {
-  caseId: string;
-  status: 'executable';
-  commandType: 'rollback.revision';
-  semanticContext: AiSemanticContext;
-  rollbackRevision: {
-    revision: number;
-    setupCommandSequence: AiSemanticCommand[];
-    setupResults: AiDryRunCommandResult[];
-    ai: { ok: boolean; message?: string; recovery?: unknown; snapshot: Record<string, unknown> };
-    direct: { ok: boolean; message?: string; recovery?: unknown; snapshot: Record<string, unknown> };
-    parity: { snapshotMatches: boolean; revisionMatches: boolean };
-    audit: {
-      historyLengthAfterSetup: number | null;
-      auditLogLengthAfterSetup: number | null;
-      rollbackMetadata: { previousRevision: number; targetRevision: number; restoredRevision: number | null };
-    };
-    observedResult: AiObservationEvaluation;
-  };
-  ai: {
-    commandSequence: AiSemanticCommand[];
-    snapshot: Record<string, unknown>;
-    redactionSummary: AiContextRedactionMetadata;
-  };
-  runtimeObservation: {
-    kind: 'runtime-observation-deferred';
-    deferred: true;
-    reasonCode: 'BROWSER_RUNTIME_PROOF_DEFERRED';
-  };
-};
-
-export type AiRemainingCommandSurfaceCase =
-  | AiSemanticCommandBusParityCase
-  | {
-      id: string;
-      createBus: () => RollbackBus;
-      setupCommands: AiSemanticCommand[];
-      rollbackRevision: number;
-    }
-  | {
-      id: string;
-      createBus: () => RollbackBus;
-      runtimeOverride: AiRuntimeOverrideTrace['runtimeOverride'];
-    };
-
-export type AiRemainingCommandSurfaceTrace =
-  | (AiSemanticCommandBusParityTrace & {
-      status: 'executable';
-      expectedEffect: AiProposalDryRunResult['expectedEffect'];
-      risk: AiProposalDryRunResult['risk'];
-      runtimeObservation: AiRollbackRevisionTrace['runtimeObservation'];
-    })
-  | AiRollbackRevisionTrace
-  | AiRuntimeOverrideTrace;
+export type {
+  AiRemainingCommandSurfaceCase,
+  AiRemainingCommandSurfaceTrace,
+  AiRollbackRevisionTrace,
+  AiRuntimeOverrideTrace,
+} from './remaining-command-surfaces-types.js';
 
 const defaultActor: AiSemanticActor = { id: 'ai:wp8', role: 'ai' };
 const defaultDirectActor: AiSemanticActor = { id: 'cli:wp8', role: 'service' };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
-const sortedRecord = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(sortedRecord);
-  if (!isRecord(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, sortedRecord(value[key])])
-  );
-};
-
-const stableJson = (value: unknown): string => JSON.stringify(sortedRecord(value));
-
-const snapshotForParity = (snapshot: Record<string, unknown>): Record<string, unknown> => ({
-  revision: snapshot.revision,
-  nodes: snapshot.nodes,
-  connections: snapshot.connections,
-  groups: snapshot.groups,
-  partitions: snapshot.partitions,
-  proposals: snapshot.proposals,
-});
-
-const runtimeObservation = (): AiRollbackRevisionTrace['runtimeObservation'] => ({
-  kind: 'runtime-observation-deferred',
-  deferred: true,
-  reasonCode: 'BROWSER_RUNTIME_PROOF_DEFERRED',
-});
-
-const getAuditLength = (bus: RollbackBus): number | null => {
-  const method = (bus as RollbackBus & { getAuditLog?: () => unknown[] }).getAuditLog;
-  return method ? method().length : null;
-};
-
-const getHistoryLength = (bus: RollbackBus): number | null => {
-  const method = (bus as RollbackBus & { getHistory?: () => unknown[] }).getHistory;
-  return method ? method().length : null;
-};
-
-const revisionOf = (snapshot: Record<string, unknown>): number | null =>
-  Number.isFinite(snapshot.revision) ? Number(snapshot.revision) : null;
-
-const createdAt = (): string => new Date(0).toISOString();
-
-const effectFor = (command: AiSemanticCommand): AiProposalDryRunResult['expectedEffect'] => {
-  if (command.type === 'node.restore') {
-    return {
-      summary: 'Archived node recovery is routed through node.restore on the semantic command bus.',
-      targetNodeId: command.nodeId,
-      params: { archived: false },
-    };
-  }
-  if (command.type === 'proposal.approve') {
-    return {
-      summary: 'Proposal approval is routed through proposal.approve on the semantic command bus.',
-      targetNodeId: command.proposalId,
-      params: { status: 'accepted' },
-    };
-  }
-  return {
-    summary: `Semantic command bus operation: ${command.type}.`,
-    targetNodeId: 'nodeId' in command ? String(command.nodeId) : null,
-    params: {},
-  };
-};
-
-const riskFor = (command: AiSemanticCommand): AiProposalDryRunResult['risk'] =>
-  command.type === 'proposal.approve'
-    ? { level: 'medium', reasons: ['Approving proposals changes human approval state and must preserve audit history.'] }
-    : { level: 'low', reasons: ['Restoring an archived node changes semantic graph availability through reversible metadata.'] };
-
-const redacted = <T>(value: T): T => redactAiContextValue(value).value as T;
 
 const runExecutableCommand = (
   item: AiSemanticCommandBusParityCase,

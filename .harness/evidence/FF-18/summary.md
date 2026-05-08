@@ -710,3 +710,82 @@ Verification notes:
 - Browser/runtime proof remains intentionally deferred for WP7 because Plan scoped this packet to deterministic source/tests only.
 - Direct UI mutation paths were not introduced; `rg -n "Canvas|Rete|Svelte|svelte|apps/manager|node-canvas|document\.|window\." packages/ai-core/src packages/ai-core/test` only found the existing semantic-context purpose header reference to excluding Canvas/UI layout noise.
 - `.harness/evidence/FF-18/summary.md` is ignored by current gitignore policy; Review must force-add it if the evidence file should be included in the final commit.
+
+## WP9 - Hotspot Decomposition And Runtime Boundary Recheck
+
+Implemented:
+- Split `packages/node-core/src/semantic-command-apply.ts` into a public re-export shim plus focused validation and
+  mutation modules.
+- Split semantic command validation into node/connection validation, runtime/group/partition/proposal validation, and
+  shared validation helpers.
+- Split large AI Operator acceptance fixtures into focused support, type, and fixture-bus modules.
+- Split FF-18 golden scenario and remaining command surface fixture helpers into smaller files.
+- Updated FF-18 evidence/status/handoff to record that deterministic proof remains strong, but runtime/browser/product
+  proof is still blocked.
+
+Focused proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/ai-core run build
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/node-core run build
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/ai-core run lint
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/node-core run lint
+PASS
+
+node --test packages/ai-core/test/*.test.mjs packages/node-core/test/semantic-command-bus.test.mjs packages/node-core/test/group-ownership-policy.test.mjs
+PASS: 38 tests, 0 failures
+
+corepack pnpm@8.15.9 harness:validate
+PASS
+
+corepack pnpm@8.15.9 validate:node-specs
+PASS: 49 files, 26 warnings, 0 errors
+
+git diff --check
+PASS
+```
+
+Runtime/browser proof:
+
+```text
+curl -k -I https://localhost:3001/health
+PASS: HTTP/1.1 200 OK
+
+curl -k -I https://localhost:5173/manager/
+PASS: HTTP/2 200
+
+browser-use browser_navigate https://localhost:5173/manager/
+PASS: browser opened the Manager URL.
+
+chrome-devtools fill_form + Login
+PASS: authenticated to the Manager connect panel as user Eureka.
+
+chrome-devtools click Connect
+FAIL: page shows "Failed to connect. Please check the server URL."
+
+chrome-devtools network
+FAIL: Socket.IO polling to https://localhost:3001/socket.io/?role=manager... fails with NET::ERR_CERT_AUTHORITY_INVALID.
+```
+
+Blocking proof:
+
+```text
+corepack pnpm@8.15.9 harness:hotspots
+FAIL: apps/server/src/assets/assets.service.ts: 498 lines exceeds ratchet max 492
+
+corepack pnpm@8.15.9 verify
+FAIL: harness:hotspots fails on apps/server/src/assets/assets.service.ts
+```
+
+Verification notes:
+- The FF-18 refactor removed newly introduced AI/node-core hotspot warnings; the remaining hotspot failure is in
+  `apps/server/**`, outside the active FF-18 review contract allowed implementation paths.
+- Browser/runtime/product proof for GS-12 and GS-13 remains blocked; deterministic fixtures are not counted as product
+  proof.
+- No manager key or password is recorded in evidence.

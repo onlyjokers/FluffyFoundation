@@ -26,6 +26,9 @@ export type AiSemanticCommand = {
     type: 'node.archive';
     nodeId: string;
 } | {
+    type: 'node.restore';
+    nodeId: string;
+} | {
     type: 'node.params.update';
     nodeId: string;
     params: Record<string, unknown>;
@@ -72,6 +75,10 @@ export type AiSemanticCommand = {
     type: 'partition.stop';
     partitionId: string;
     expectedRevision?: number;
+} | {
+    type: 'proposal.approve';
+    proposalId: string;
+    approvedBy?: string;
 };
 export type AiCommandProposal = {
     id: string;
