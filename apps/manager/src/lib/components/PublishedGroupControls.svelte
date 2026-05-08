@@ -27,6 +27,7 @@ Purpose: Lightweight Manager controls for published Groups without loading Root 
     if (!sdk) return null;
     return {
       sendControl: sdk.sendControl.bind(sdk),
+      sendPluginControl: sdk.sendPluginControl.bind(sdk),
     };
   }
 

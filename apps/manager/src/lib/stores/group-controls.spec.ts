@@ -88,3 +88,37 @@ test('buildPublishedGroupControl targets the published Group instead of selected
     },
   ]);
 });
+
+test('buildPublishedGroupControl reclaims the published Group before mutating controls', () => {
+  const emitted: Array<{
+    type: 'control' | 'plugin';
+    target: TargetSelector;
+    action?: ControlAction;
+    payload?: ControlPayload;
+    pluginId?: string;
+    command?: string;
+  }> = [];
+  const group: PublishedGroup = { id: 'display', name: 'Display' };
+  const control = buildPublishedGroupControl(group, {
+    sendControl: (target, action, payload) => emitted.push({ type: 'control', target, action, payload }),
+    sendPluginControl: (target, pluginId, command) =>
+      emitted.push({ type: 'plugin', target, pluginId, command }),
+  });
+
+  control.screenColor({ color: '#6655ff', opacity: 1, mode: 'solid' });
+
+  assert.deepEqual(emitted, [
+    {
+      type: 'plugin',
+      target: { mode: 'group', groupId: 'display' },
+      pluginId: 'node-executor',
+      command: 'reclaim',
+    },
+    {
+      type: 'control',
+      target: { mode: 'group', groupId: 'display' },
+      action: 'screenColor',
+      payload: { color: '#6655ff', opacity: 1, mode: 'solid' },
+    },
+  ]);
+});

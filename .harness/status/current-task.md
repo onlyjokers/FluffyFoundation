@@ -111,6 +111,24 @@ attempt Send Color, but the display stays black while the server rejects the con
 `server.policy.scope_mismatch` at `target.groupId`. Fixing that path would require product/runtime changes in forbidden
 paths under the active FF-18 review contract, so Codex must stop instead of modifying them.
 
+## Approved Product-Proof Lane Update
+
+The user approved a 2026-05-08 bounded product-proof lane revision for FF-18. Within that revised contract, Codex fixed
+the Manager Published Display control chain without weakening server policy:
+
+- SDK Manager group-targeted controls and plugin controls now scope command envelopes to the target Group.
+- Manager Published Group controls send `node-executor/reclaim` for the selected Group before mutating controls.
+- Browser-use verified Manager `/manager/` -> Display published Group -> Send Color.
+- Server logs accepted `node-executor/reclaim` and `screenColor` with `actor=Eureka`, `role=manager`,
+  `scopeGroupId=display`, and `target={ mode: 'group', groupId: 'display' }`.
+- Display changed from black to a full-viewport blue-purple screen.
+
+This converts GS-13 from blocked to partial: the bounded Manager-to-Display product chain is proven, but the full
+breathing-like AI scenario and AI observation loop are not product-proven.
+
+FF-18 is still incomplete. Do not start FF-19. GS-12 still lacks stable audience client/device/output proof, and runtime
+override set/clear remains deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED` without dated risk acceptance.
+
 Fresh validation after this evidence update:
 
 - `corepack pnpm@8.15.9 harness:validate`: PASS

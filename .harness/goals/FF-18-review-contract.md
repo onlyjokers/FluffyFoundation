@@ -19,11 +19,22 @@ Allowed implementation lanes:
 - `docs/harness/AI-OPERATOR.md`
 - `docs/harness/QUALITY-GATES.md`
 - `docs/harness/BOUNDARIES.md`
+- `.harness/goals/FF-18-review-contract.md` for this approved 2026-05-08 bounded product-proof lane only
 - `.harness/status/current-phase.md`
 - `.harness/status/current-task.md`
 - `.harness/handoffs/**`
 - `.harness/evidence/FF-18/**`
 - FF-18-focused tests under `packages/ai-core/test/**` and `packages/node-core/test/**`
+- Approved 2026-05-08 bounded product-proof lane for GS-12/GS-13 runtime proof only:
+  - `apps/manager/src/routes/+page.svelte`
+  - `apps/manager/src/lib/stores/group-controls.ts`
+  - `apps/manager/src/lib/stores/group-controls.spec.ts`
+  - `packages/sdk-manager/src/manager-sdk.ts`
+  - `packages/sdk-manager/src/manager-sdk.spec.ts`
+  - `apps/server/src/events/events.gateway.ts`
+  - `apps/server/src/events/events.gateway.command-envelope.spec.ts`
+  - `apps/server/src/events/group-ownership-policy.ts`
+  - `apps/server/src/events/display-routing.spec.ts`
 
 Read-only context:
 
@@ -87,10 +98,15 @@ complete unless the failure exactly matches a baseline fingerprint allowed by th
 Contract ID: `FF-18`
 Completion decision: `complete | incomplete | stop`
 Allowed paths: `packages/ai-core/**`, `packages/node-core/**`, `docs/harness/AI-OPERATOR.md`,
-`docs/harness/QUALITY-GATES.md`, `docs/harness/BOUNDARIES.md`, `.harness/status/**`, `.harness/handoffs/**`,
-`.harness/evidence/FF-18/**`
+`docs/harness/QUALITY-GATES.md`, `docs/harness/BOUNDARIES.md`, `.harness/goals/FF-18-review-contract.md`,
+`.harness/status/**`, `.harness/handoffs/**`, `.harness/evidence/FF-18/**`,
+`apps/manager/src/routes/+page.svelte`, `apps/manager/src/lib/stores/group-controls.ts`,
+`apps/manager/src/lib/stores/group-controls.spec.ts`, `packages/sdk-manager/src/manager-sdk.ts`,
+`packages/sdk-manager/src/manager-sdk.spec.ts`, `apps/server/src/events/events.gateway.ts`,
+`apps/server/src/events/events.gateway.command-envelope.spec.ts`,
+`apps/server/src/events/group-ownership-policy.ts`, `apps/server/src/events/display-routing.spec.ts`
 Forbidden paths: `apps/manager/src/lib/components/nodes/**`, `apps/client/**`, `apps/display/**`,
-`apps/server/**` unless the FF-18 contract is explicitly revised before implementation
+`apps/server/**` outside the approved 2026-05-08 bounded product-proof files above
 Required proof types: `implementation`, `deterministic`, `runtime-browser`
 Runtime/browser proof: `required-for-runtime-claims`
 Deferred proof policy: `reject-by-default`
@@ -104,6 +120,8 @@ Automated validation command: `python3 .harness/scripts/validate_acceptance_cont
 Stop and report if:
 
 - FF-18 requires product/browser/runtime integration beyond the allowed scope.
+- The product-proof lane expands beyond Manager published Group control, SDK command envelope scope preservation, server
+  scoped-command policy tests, runtime evidence, or evidence/status/handoff updates.
 - A required semantic command surface belongs to FF-19 or later.
 - Passing requires weakening policy, validation, audit, rollback, redaction, dependency boundaries, or hotspot ratchets.
 - Evidence shows FF-18 was marked complete only by status-transition files.

@@ -188,6 +188,87 @@ Scope note:
 - This check proves that browser-use can perform the runtime interaction, but the product chain currently blocks GS-13
   live display visual-output proof.
 
+## 2026-05-08 Approved Product-Proof Lane Fix
+
+The FF-18 contract was revised and approved on 2026-05-08 to allow a bounded GS-12/GS-13 product-proof lane. The lane
+did not weaken server policy. It fixed the product chain by keeping group-targeted command envelopes scoped to the
+target Group and by making the Manager Published Group control reclaim the target Group before sending mutating
+controls.
+
+TDD proof:
+
+```text
+corepack pnpm@8.15.9 exec tsx --test packages/sdk-manager/src/manager-sdk.spec.ts
+RED before implementation:
+actual scopeGroupId="manager-performance"
+expected scopeGroupId="display"
+
+GREEN after implementation:
+PASS: 13 tests, 0 failures
+```
+
+```text
+corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/stores/group-controls.spec.ts
+RED before implementation:
+Published Group control emitted screenColor without a preceding node-executor/reclaim command.
+
+GREEN after implementation:
+PASS: 4 tests, 0 failures
+```
+
+Focused build proof:
+
+```text
+corepack pnpm@8.15.9 --filter @shugu/sdk-manager run build
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/server run build
+PASS
+
+corepack pnpm@8.15.9 --filter @shugu/manager run build
+PASS with existing Svelte/Sass/Rete warnings; no build failure.
+```
+
+Runtime/browser product proof:
+
+```text
+SHUGU_ALLOW_INSECURE_MANAGER=1 corepack pnpm@8.15.9 dev:server
+PASS: local server listens on https://localhost:3001 and grants requested=manager as granted=manager.
+
+browser-use browser_navigate https://localhost:5175/display/?server=https%3A%2F%2Flocalhost%3A3001
+PASS: Display tab opened and registered as group=display.
+
+browser-use browser_navigate https://localhost:5173/manager/
+PASS: Manager connect screen opened while logged in as Eureka.
+
+browser-use browser_click Connect
+PASS: Manager main UI opened with Published Group Controls.
+
+browser-use browser_click Display
+PASS: Display published Group selected.
+
+browser-use browser_click Send Color
+PASS: command accepted by server.
+
+server log
+PASS: node-executor/reclaim accepted with actor=Eureka, role=manager, scopeGroupId=display,
+target={ mode: 'group', groupId: 'display' }.
+PASS: screenColor accepted with actor=Eureka, role=manager, scopeGroupId=display,
+target={ mode: 'group', groupId: 'display' }.
+PASS: no server.policy.scope_mismatch or server.policy.ownership_denied for the accepted Display command.
+
+browser-use Display tab screenshot/state
+PASS: Display changed from black to a full-viewport blue-purple screen.
+```
+
+Acceptance impact:
+- GS-13 has bounded product-chain proof for Manager Published Display `screenColor` changing the live Display output.
+- This is not full proof of the natural-language "breathing-like" AI scenario or AI observation loop.
+- GS-12 remains blocked because a stable audience client/device/output chain was not proven.
+- Runtime override set/clear remains explicitly deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`.
+- FF-18 remains incomplete unless the remaining missing proof receives a valid dated risk acceptance or is implemented
+  under an approved contract.
+
 ## Checks
 
 ```text

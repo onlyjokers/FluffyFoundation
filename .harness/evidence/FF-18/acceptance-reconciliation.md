@@ -25,7 +25,7 @@ This reconciliation does not implement FF-18 product/runtime behavior and does n
 | Required FF-18 command surfaces are represented | deterministic | WP5, WP7, WP8 tests and fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | deferred | missing | Runtime override set/clear are explicitly `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`. |
 | AI cannot mutate Canvas/Rete/Svelte/UI internals directly | deterministic/static | Recorded `rg` checks in WP2-WP8 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | No UI mutation path is claimed. |
 | GS-12 gyro rotation drives tense flashlight rhythm | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | Manager socket and Root Node Graph visible; client e2e page opens but no stable audience client/device/output chain remains registered | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves command/effect trace only; current browser proof does not prove live gyro/client/flashlight output. |
-| GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output | Display registers, but Manager Send Color is rejected by server policy and display remains black | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | blocked | missing | Fixture proves structured observation only; current browser proof shows live display control is blocked, not a visual output change. |
+| GS-13 display visual becomes breathing-like and AI observes output change | deterministic + runtime-browser/product-runtime | `packages/ai-core/test/golden-scenario-contract.test.mjs`; WP4 fixture output; SDK/group-control TDD coverage for the product-proof lane | Bounded Manager Published Display `screenColor` product chain is proven: server accepts `reclaim` and `screenColor` for `scopeGroupId=display`, and Display changes from black to full-viewport blue-purple | `.harness/evidence/FF-18/runtime-browser-investigation.md`; `.harness/evidence/FF-18/root-node-graph-2026-05-08.png` | partial | missing | Live Display output proof exists for the bounded product chain, but the full breathing-like AI scenario and AI observation loop are not product-proven. |
 | GS-14 AI repairs param overflow or incompatible graph using structured validation errors | deterministic | `packages/ai-core/test/golden-scenario-contract.test.mjs`; `packages/ai-core/test/observation-repair.test.mjs` | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Structured validation/repair proof exists. |
 | Prompt-injection-like registry/context data is inert and cannot bypass policy | deterministic | `packages/ai-core/test/operator-acceptance.test.mjs`; WP6 evidence | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records non-execution and policy denial. |
 | Secret-like values and private local paths are redacted before AI-visible context | deterministic | WP1, WP4, WP6 fixture outputs | `N/A` | `.harness/evidence/FF-18/summary.md` | proven | `N/A` | Evidence records redaction counts and examples. |
@@ -126,9 +126,32 @@ browser-use client e2e page
 BLOCKED: a normal client can open, but no stable audience client/device/output chain remains registered for GS-12.
 ```
 
-This resolves the earlier Manager role downgrade as a runtime configuration issue, but it strengthens the FF-18 stop
-condition: the live product chain itself blocks GS-12/GS-13 proof. Fixing the rejected display control or stable client
-runtime path would require changes in forbidden product/runtime paths under the active FF-18 review contract.
+This resolved the earlier Manager role downgrade as a runtime configuration issue, but the first product-chain attempt
+strengthened the FF-18 stop condition: the live product chain itself blocked GS-12/GS-13 proof until the contract was
+revised.
+
+After the approved 2026-05-08 bounded product-proof lane, the GS-13 Display control chain was repaired without
+weakening server policy:
+
+```text
+corepack pnpm@8.15.9 exec tsx --test packages/sdk-manager/src/manager-sdk.spec.ts
+PASS: 13 tests, 0 failures
+
+corepack pnpm@8.15.9 exec tsx --test apps/manager/src/lib/stores/group-controls.spec.ts
+PASS: 4 tests, 0 failures
+
+browser-use Manager -> Display -> Send Color
+PASS: server accepted node-executor/reclaim for scopeGroupId=display.
+PASS: server accepted screenColor for scopeGroupId=display.
+PASS: Display changed from black to a full-viewport blue-purple screen.
+```
+
+This is valid product/browser proof for the bounded Manager Published Display control path. It is still only partial
+GS-13 acceptance because the full breathing-like AI scenario and AI observation loop are not proven in a live browser
+runtime.
+
+GS-12 remains blocked: a stable audience client/device/output chain was not proven. Runtime override set/clear remains
+explicitly deferred as `RUNTIME_OVERRIDE_SURFACE_NOT_IMPLEMENTED`.
 
 ## Validation Snapshot
 

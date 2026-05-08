@@ -2,7 +2,15 @@
  * Purpose: Published Group summaries and lightweight control helpers for the Manager console.
  */
 import { derived, writable } from 'svelte/store';
-import { targetGroup, type ControlAction, type ControlPayload, type ScreenColorPayload, type TargetSelector } from '@shugu/protocol';
+import {
+  targetGroup,
+  type ControlAction,
+  type ControlPayload,
+  type PluginCommand,
+  type PluginId,
+  type ScreenColorPayload,
+  type TargetSelector,
+} from '@shugu/protocol';
 
 export type PublishedGroup = {
   id: string;
@@ -16,6 +24,12 @@ export type GroupControlSender = {
     action: ControlAction,
     payload: ControlPayload,
     executeAt?: number
+  ) => void;
+  sendPluginControl?: (
+    target: TargetSelector,
+    pluginId: PluginId,
+    command: PluginCommand,
+    payload?: Record<string, unknown>
   ) => void;
 };
 
@@ -84,6 +98,7 @@ export function buildPublishedGroupControl(
 ): PublishedGroupControl {
   const target = targetGroup(group.id);
   const send = (action: ControlAction, payload: ControlPayload, executeAt?: number) => {
+    sender.sendPluginControl?.(target, 'node-executor', 'reclaim');
     sender.sendControl(target, action, payload, executeAt);
   };
 

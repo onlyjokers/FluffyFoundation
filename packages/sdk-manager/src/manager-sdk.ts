@@ -38,6 +38,7 @@ import {
 } from '@shugu/protocol';
 import {
     nextManagerCommandEnvelope,
+    nextManagerCommandEnvelopeForTarget,
     normalizeManagerCommandEnvelope,
     type CommandEnvelope,
     type CommandEnvelopeInput,
@@ -137,7 +138,7 @@ export class ManagerSDK {
             getSocket: () => this.socket,
             getClientCount: () => this.state.clients.length,
             getThrottleMs: () => this.config.highFreqThrottleMs,
-            nextCommandEnvelope: () => this.nextCommandEnvelope(),
+            nextCommandEnvelope: (target) => this.nextCommandEnvelope(target),
         });
 
         this.state = {
@@ -285,8 +286,10 @@ export class ManagerSDK {
         return this.deliveryQueue.getMetrics();
     }
 
-    private nextCommandEnvelope(): CommandEnvelope {
-        return nextManagerCommandEnvelope(this.commandEnvelope);
+    private nextCommandEnvelope(target?: TargetSelector): CommandEnvelope {
+        return target
+            ? nextManagerCommandEnvelopeForTarget(this.commandEnvelope, target)
+            : nextManagerCommandEnvelope(this.commandEnvelope);
     }
 
     /**
@@ -327,7 +330,7 @@ export class ManagerSDK {
         payload?: Record<string, unknown>
     ): void {
         if (!this.socket?.connected) return;
-        const message = createPluginControlMessage(this.nextCommandEnvelope(), target, pluginId, command, payload);
+        const message = createPluginControlMessage(this.nextCommandEnvelope(target), target, pluginId, command, payload);
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 

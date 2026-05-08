@@ -21,4 +21,14 @@ export function nextManagerCommandEnvelope(envelope: CommandEnvelope): CommandEn
   return createCommandEnvelope(envelope);
 }
 
+export function nextManagerCommandEnvelopeForTarget(
+  envelope: CommandEnvelope,
+  target?: { mode?: string; groupId?: string }
+): CommandEnvelope {
+  if (target?.mode === 'group' && typeof target.groupId === 'string' && target.groupId.trim()) {
+    return createCommandEnvelope({ ...envelope, scopeGroupId: target.groupId.trim() });
+  }
+  return nextManagerCommandEnvelope(envelope);
+}
+
 export type { CommandEnvelope, CommandEnvelopeInput };

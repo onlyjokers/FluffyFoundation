@@ -66,6 +66,24 @@ test('ManagerSDK sendControl preserves caller scope envelope while flushing a co
   assert.equal((emitted[0] as { role?: string }).role, 'manager');
 });
 
+test('ManagerSDK scopes group controls to the target group for server policy parity', async () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'operator-display', role: 'manager', scopeGroupId: 'manager-performance' },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.sendControl({ mode: 'group', groupId: 'display' }, 'screenColor', { color: '#6655ff', mode: 'solid' });
+  await flushMicrotasks();
+
+  assert.equal(emitted.length, 1);
+  assert.equal((emitted[0] as { target?: { mode?: string; groupId?: string } }).target?.mode, 'group');
+  assert.equal((emitted[0] as { target?: { groupId?: string } }).target?.groupId, 'display');
+  assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'display');
+  assert.equal((emitted[0] as { actor?: string }).actor, 'operator-display');
+  assert.equal((emitted[0] as { role?: string }).role, 'manager');
+});
+
 test('ManagerSDK sendMedia preserves caller scope envelope', () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',
@@ -96,6 +114,24 @@ test('ManagerSDK sendPluginControl preserves reclaim command envelope for Group 
   assert.equal((emitted[0] as { command?: string }).command, 'reclaim');
   assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'stage-left');
   assert.equal((emitted[0] as { actor?: string }).actor, 'manager-reclaim');
+});
+
+test('ManagerSDK scopes plugin controls to the target group for server policy parity', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'manager-plugin', role: 'manager', scopeGroupId: 'manager-performance' },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.sendPluginControl({ mode: 'group', groupId: 'display' }, 'display-router', 'display-operation', {
+    action: 'screenColor',
+  });
+
+  assert.equal(emitted.length, 1);
+  assert.equal((emitted[0] as { target?: { groupId?: string } }).target?.groupId, 'display');
+  assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'display');
+  assert.equal((emitted[0] as { actor?: string }).actor, 'manager-plugin');
+  assert.equal((emitted[0] as { role?: string }).role, 'manager');
 });
 
 test('ManagerSDK emits structured transfer lifecycle commands with manager actor envelope', () => {

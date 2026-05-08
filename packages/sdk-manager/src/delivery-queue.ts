@@ -36,7 +36,7 @@ type ManagerDeliveryQueueConfig = {
   getSocket: () => SocketLike | null;
   getClientCount: () => number;
   getThrottleMs: () => number;
-  nextCommandEnvelope: () => CommandEnvelopeInput;
+  nextCommandEnvelope: (target?: TargetSelector) => CommandEnvelopeInput;
 };
 
 const THROTTLED_ACTIONS = new Set<ControlAction>(['modulateSoundUpdate', 'screenColor', 'flashlight', 'vibrate']);
@@ -68,7 +68,7 @@ export class ManagerDeliveryQueue {
   queueControl(target: TargetSelector, item: ControlBatchItem): void {
     const throttleMs = this.config.getThrottleMs();
     const delivery = classifyDelivery(
-      createControlMessage(this.config.nextCommandEnvelope(), target, item.action, item.payload, item.executeAt)
+      createControlMessage(this.config.nextCommandEnvelope(target), target, item.action, item.payload, item.executeAt)
     );
 
     if (
@@ -94,7 +94,7 @@ export class ManagerDeliveryQueue {
   emit(target: TargetSelector, action: ControlAction, payload: BaseControlPayload | ControlBatchPayload, executeAt?: number): void {
     const socket = this.config.getSocket();
     if (!socket?.connected) return;
-    const message = createControlMessage(this.config.nextCommandEnvelope(), target, action, payload, executeAt);
+    const message = createControlMessage(this.config.nextCommandEnvelope(target), target, action, payload, executeAt);
     socket.emit(SOCKET_EVENTS.MSG, message);
     this.deliveryMetrics.delivered += 1;
   }
@@ -139,7 +139,7 @@ export class ManagerDeliveryQueue {
       items: [],
     };
     const delivery = classifyDelivery(
-      createControlMessage(this.config.nextCommandEnvelope(), target, item.action, item.payload, item.executeAt)
+      createControlMessage(this.config.nextCommandEnvelope(target), target, item.action, item.payload, item.executeAt)
     );
 
     if (delivery.coalesce) {
