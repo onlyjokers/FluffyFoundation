@@ -17,23 +17,20 @@ export {
   type PartitionWatchdogConfig,
 } from './partition-lifecycle.js';
 
-export type ControlPlaneActorRole = 'root' | 'manager' | 'client' | 'service' | 'ai';
+export type ControlPlaneActorRole = 'manager' | 'client' | 'service' | 'ai' | 'root';
 
 export type ControlPlaneCapability =
   | 'group.view'
   | 'group.mutate'
   | 'group.reclaim'
   | 'group.release'
-  | 'group.transfer.offer'
-  | 'group.transfer.accept'
-  | 'group.transfer.deny'
-  | 'group.transfer.revoke'
   | 'group.archive'
   | 'group.restore'
   | 'partition.deploy'
   | 'partition.stop'
-  | 'root.stopAll'
-  | 'proposal.create';
+  | 'proposal.create'
+  /** Historical compile compatibility only; Root is not an active runtime role. */
+  | 'root.stopAll';
 
 export type ControlPlaneSurface = 'public' | 'internal';
 export type ControlPlaneVisibilityAccess = 'hidden' | 'visible-readonly' | 'editable';
@@ -98,52 +95,36 @@ export interface ClientControlTransferOffer {
   reason?: string;
 }
 
-export const ROOT_EMERGENCY_SCOPE_GROUP_ID = '__root_emergency__' as const;
-
 export const CONTROL_PLANE_CAPABILITIES_BY_ROLE: Record<
   ControlPlaneActorRole,
   ControlPlaneCapability[]
 > = {
-  root: [
-    'group.view',
-    'group.mutate',
-    'group.reclaim',
-    'group.release',
-    'group.transfer.offer',
-    'group.transfer.accept',
-    'group.transfer.deny',
-    'group.transfer.revoke',
-    'group.archive',
-    'group.restore',
-    'partition.deploy',
-    'partition.stop',
-    'root.stopAll',
-    'proposal.create',
-  ],
   manager: [
     'group.view',
     'group.mutate',
     'group.reclaim',
     'group.release',
-    'group.transfer.offer',
-    'group.transfer.revoke',
     'group.archive',
     'group.restore',
     'partition.deploy',
     'partition.stop',
   ],
-  client: ['group.view', 'group.transfer.accept', 'group.transfer.deny'],
+  client: ['group.view'],
   service: ['group.view', 'partition.deploy', 'partition.stop'],
   ai: ['group.view', 'proposal.create'],
+  root: [],
 };
 
-const roles = new Set<ControlPlaneActorRole>(['root', 'manager', 'client', 'service', 'ai']);
+const roles = new Set<ControlPlaneActorRole>(['manager', 'client', 'service', 'ai']);
 
 export function isControlPlaneActorRole(value: unknown): value is ControlPlaneActorRole {
   return typeof value === 'string' && roles.has(value as ControlPlaneActorRole);
 }
 
 export function getControlPlaneCapabilities(role: ControlPlaneActorRole): ControlPlaneCapability[] {
+  if (!isControlPlaneActorRole(role)) {
+    throw new TypeError(`ControlPlane role is retired or unsupported: ${String(role)}`);
+  }
   return [...CONTROL_PLANE_CAPABILITIES_BY_ROLE[role]];
 }
 
@@ -153,6 +134,9 @@ export function createControlPlaneActor(input: {
   role: ControlPlaneActorRole;
   capabilities?: string[];
 }): ControlPlaneActor {
+  if (!isControlPlaneActorRole(input.role)) {
+    throw new TypeError(`ControlPlane role is retired or unsupported: ${String(input.role)}`);
+  }
   const id = normalizeRequiredString(input.id ?? input.actorId, 'actorId');
   const allowed = new Set(CONTROL_PLANE_CAPABILITIES_BY_ROLE[input.role]);
   const requested = input.capabilities ?? CONTROL_PLANE_CAPABILITIES_BY_ROLE[input.role];
@@ -196,6 +180,11 @@ export function createGroupOwnershipEntry(input: {
   };
 }
 
+/**
+ * Historical compatibility helper for persisted transfer-shaped UI state.
+ *
+ * Client control transfer is no longer an active product path and this helper grants view-only capability.
+ */
 export function createTransferOffer(input: {
   transferId?: string;
   groupId: string;
@@ -217,16 +206,17 @@ export function createTransferOffer(input: {
     groupId,
     offeredBy: normalizeOwnershipActor(input.offeredBy),
     targetClientId,
-    status: 'pending',
+    status: 'revoked',
     offeredAt: nowMs,
     expiresAt: nowMs + ttlMs,
     capability: {
       transferId,
       scopeGroupId: groupId,
       targetClientId,
-      capabilities: ['group.view', 'group.mutate', 'group.release'],
+      capabilities: ['group.view'],
       expiresAt: nowMs + ttlMs,
     },
+    reason: 'client control transfer is retired',
   };
 }
 

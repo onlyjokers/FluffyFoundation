@@ -134,28 +134,14 @@ test('ManagerSDK scopes plugin controls to the target group for server policy pa
   assert.equal((emitted[0] as { role?: string }).role, 'manager');
 });
 
-test('ManagerSDK emits structured transfer lifecycle commands with manager actor envelope', () => {
+test('ManagerSDK does not expose client control transfer lifecycle commands', () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',
     commandEnvelope: { actor: 'manager-transfer', role: 'manager', scopeGroupId: 'stage-left' },
   });
-  const emitted = connectFakeSocket(sdk);
 
-  sdk.offerClientControlTransfer({ groupId: 'stage-left', targetClientId: 'client-1', ttlMs: 30_000 });
-  sdk.revokeClientControlTransfer({ transferId: 'transfer-stage-left-client-1', groupId: 'stage-left' });
-
-  assert.equal(emitted.length, 2);
-  assert.deepEqual((emitted[0] as { payload?: unknown }).payload, {
-    kind: 'client-control-transfer',
-    action: 'offer',
-    groupId: 'stage-left',
-    targetClientId: 'client-1',
-    ttlMs: 30_000,
-  });
-  assert.equal((emitted[0] as { actor?: string }).actor, 'manager-transfer');
-  assert.equal((emitted[0] as { role?: string }).role, 'manager');
-  assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'stage-left');
-  assert.equal((emitted[1] as { payload?: { action?: string } }).payload?.action, 'revoke');
+  assert.equal('offerClientControlTransfer' in sdk, false);
+  assert.equal('revokeClientControlTransfer' in sdk, false);
 });
 
 test('ManagerSDK emits partition lifecycle commands through the semantic node-executor bus', () => {

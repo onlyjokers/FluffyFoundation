@@ -3,9 +3,9 @@
  */
 export {
   buildPublishedGroupControl,
+  publishedGroupSource,
   publishedGroups,
   publishGroups,
-  rootPublishedGroups,
   type GroupControlSender,
   type PublishedGroup,
   type PublishedGroupControl,

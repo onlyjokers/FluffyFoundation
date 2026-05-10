@@ -142,6 +142,27 @@ test('validateMessage rejects unsupported protocol versions with structured comp
   assert.equal(isValidMessage({ ...validFixtures[0], version: PROTOCOL_VERSION + 1 }), false);
 });
 
+test('validateMessage rejects retired client control transfer control actions', () => {
+  const result = validateMessage({
+    ...validFixtures[0],
+    action: 'clientControlTransfer',
+    payload: {
+      kind: 'client-control-transfer-status',
+      transferId: 'transfer-stage-left-client-1',
+      groupId: 'stage-left',
+      targetClientId: 'client-1',
+      offeredAt: 1_000,
+      expiresAt: 31_000,
+      status: 'pending',
+      capability: {},
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reasons[0]?.path, 'action');
+  assert.equal(result.reasons[0]?.code, 'protocol.field.invalid');
+});
+
 test('validateMessage rejects malformed control payloads with the failing field path', () => {
   const result = validateMessage({
     ...validFixtures[0],

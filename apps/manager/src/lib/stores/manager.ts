@@ -22,10 +22,6 @@ import {
     sendPlugin as sendLocalDisplayPlugin,
 } from '$lib/display/display-bridge';
 import { createDisplayTransport } from '$lib/display/display-transport';
-import {
-    offerClientControlTransferWithSdk,
-    revokeClientControlTransferWithSdk,
-} from './manager-transfer';
 import { getManagerSDK, setManagerSDK } from './manager-sdk-access';
 
 const SEND_TO_DISPLAY_STORAGE_KEY = 'shugu-send-to-display';
@@ -726,12 +722,4 @@ export function sendPluginControl(
  */
 export function getSDK(): ManagerSDK | null {
     return getManagerSDK();
-}
-
-export function offerClientControlTransfer(groupId: string, targetClientId: string, ttlMs = 30_000): void {
-    offerClientControlTransferWithSdk(getManagerSDK(), groupId, targetClientId, ttlMs);
-}
-
-export function revokeClientControlTransfer(transferId: string, groupId: string): void {
-    revokeClientControlTransferWithSdk(getManagerSDK(), transferId, groupId);
 }

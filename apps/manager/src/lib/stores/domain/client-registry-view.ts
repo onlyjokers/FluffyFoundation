@@ -8,8 +8,6 @@ export {
   clients,
   clearSelection,
   displayClients,
-  offerClientControlTransfer,
-  revokeClientControlTransfer,
   selectAllClients,
   selectedClients,
   selectClients,

@@ -1,22 +1,15 @@
 <!--
-Purpose: Lightweight Manager performance console for published Group controls.
+Purpose: Classic Manager control and authoring route.
 -->
 <script lang="ts">
   import '@shugu/ui-kit/styles';
   import { onMount } from 'svelte';
-  import { connect, disconnect, connectionStatus, state } from '$lib/stores/domain/connection';
+  import { connect, disconnect, connectionStatus } from '$lib/stores/domain/connection';
   import { auth } from '$lib/stores/auth';
 
-  import AppShell from '$lib/layouts/AppShell.svelte';
-  import ClientSelector from '$lib/components/ClientSelector.svelte';
-  import DisplayPanel from '$lib/components/DisplayPanel.svelte';
-  import OperatorConsole from '$lib/components/OperatorConsole.svelte';
-  import PublishedGroupControls from '$lib/components/PublishedGroupControls.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import Toggle from '$lib/components/ui/Toggle.svelte';
   import ManagerLoginPanel from '$lib/components/ManagerLoginPanel.svelte';
-  import GeoControl from '$lib/features/location/GeoControl.svelte';
+  import ManagerWorkspace from '$lib/components/ManagerWorkspace.svelte';
 
   let serverUrl = 'https://localhost:3001';
   let managerKey = '';
@@ -165,62 +158,7 @@ Purpose: Lightweight Manager performance console for published Group controls.
       </div>
     </div>
   {:else}
-    <AppShell>
-      <div slot="tabs" class="page-tabs">
-        <a class="active" href="/manager/">Manager</a>
-        <a href="/manager/root">Root</a>
-      </div>
-
-      <div class="dashboard-grid">
-        <div class="grid-item wide">
-          <PublishedGroupControls />
-        </div>
-        <div class="grid-item wide">
-          <OperatorConsole />
-        </div>
-        <div class="grid-item">
-          <Card>
-            <ClientSelector height={280} />
-          </Card>
-        </div>
-        <div class="grid-item">
-          <DisplayPanel />
-        </div>
-        <div class="grid-item">
-          <Card title="Performance Mode">
-            <Toggle
-              label="WebSocket-only"
-              description="Lower jitter when stable; may fail on restrictive networks."
-              bind:checked={performanceMode}
-            />
-            <p class="setting-hint">
-              Takes effect on next connect.
-            </p>
-          </Card>
-        </div>
-        <div class="grid-item">
-          <Card title="Server State">
-            <dl class="state-strategy-list">
-              <div>
-                <dt>Mode</dt>
-                <dd>{$state.stateStrategy?.mode ?? 'unknown'}</dd>
-              </div>
-              <div>
-                <dt>Registry</dt>
-                <dd>{$state.stateStrategy?.registryOwner ?? 'unknown'}</dd>
-              </div>
-              <div>
-                <dt>Selection</dt>
-                <dd>{$state.stateStrategy?.selectionOwner ?? 'unknown'}</dd>
-              </div>
-            </dl>
-          </Card>
-        </div>
-        <div class="grid-item">
-          <GeoControl {serverUrl} />
-        </div>
-      </div>
-    </AppShell>
+    <ManagerWorkspace bind:performanceMode {serverUrl} />
   {/if}
 </div>
 
@@ -301,83 +239,4 @@ Purpose: Lightweight Manager performance console for published Group controls.
     font-size: var(--text-sm);
   }
 
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--space-lg);
-    padding-bottom: var(--space-xl);
-  }
-
-  .grid-item.wide {
-    grid-column: 1 / -1;
-  }
-
-  .page-tabs {
-    --tabs-pad: 6px;
-    position: relative;
-    display: inline-flex;
-    gap: var(--space-sm);
-    padding: var(--tabs-pad);
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-  }
-
-  .page-tabs a {
-    position: relative;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 999px;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-weight: 600;
-    text-decoration: none;
-  }
-
-  .page-tabs a.active {
-    color: white;
-    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.35);
-  }
-
-  .setting-hint {
-    margin: var(--space-sm) 0 0 0;
-    font-size: var(--text-xs);
-    color: var(--text-muted);
-    line-height: 1.35;
-  }
-
-  .state-strategy-list {
-    display: grid;
-    gap: var(--space-sm);
-    margin: 0;
-  }
-
-  .state-strategy-list div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-    padding: var(--space-xs) 0;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .state-strategy-list div:last-child {
-    border-bottom: 0;
-  }
-
-  .state-strategy-list dt {
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-  }
-
-  .state-strategy-list dd {
-    margin: 0;
-    color: var(--text-primary);
-    font-size: var(--text-sm);
-    font-weight: 700;
-    text-align: right;
-  }
 </style>

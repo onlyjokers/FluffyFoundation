@@ -25,8 +25,8 @@ export function validatePartitionLifecycleIngress(
       scope: 'server.ingress.control-plane',
       type: message.type,
       path: 'role',
-      code: 'control-plane.capability_required',
-      message: 'client/display partition lifecycle commands must use ControlPlane transfer authority',
+      code: 'server.policy.manager_required',
+      message: 'manager role is required for partition lifecycle commands',
     });
   }
 
@@ -37,7 +37,7 @@ export function validatePartitionLifecycleIngress(
     partition,
     actor: createControlPlaneActor({
       id: commandMessage.actor ?? message.from,
-      role: role === 'root' || role === 'manager' || role === 'service' || role === 'ai' ? role : 'client',
+      role: role === 'manager' || role === 'service' || role === 'ai' ? role : 'client',
     }),
     availableCapabilities: Array.isArray(payload.availableCapabilities)
       ? payload.availableCapabilities.map(String)

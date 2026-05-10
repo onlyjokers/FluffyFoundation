@@ -49,6 +49,7 @@ export type ControlAction =
   | 'visualEffects'
   | 'setDataReportingRate'
   | 'setSensorState'
+  /** Legacy compile compatibility only; runtime validation rejects this retired action. */
   | 'clientControlTransfer'
   | 'custom';
 

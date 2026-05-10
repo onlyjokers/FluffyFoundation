@@ -114,10 +114,10 @@ export function buildPublishedGroupControl(
   };
 }
 
-export const rootPublishedGroups = writable<PublishedGroup[]>(DEFAULT_GROUPS);
-export const publishedGroups = derived(rootPublishedGroups, ($groups) => normalizePublishedGroups($groups));
+export const publishedGroupSource = writable<PublishedGroup[]>(DEFAULT_GROUPS);
+export const publishedGroups = derived(publishedGroupSource, ($groups) => normalizePublishedGroups($groups));
 
 export function publishGroups(groups: unknown): void {
   const normalized = normalizePublishedGroups(groups);
-  rootPublishedGroups.set(normalized.length > 0 ? normalized : DEFAULT_GROUPS);
+  publishedGroupSource.set(normalized.length > 0 ? normalized : DEFAULT_GROUPS);
 }

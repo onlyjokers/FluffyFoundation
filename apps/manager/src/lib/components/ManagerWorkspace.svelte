@@ -1,11 +1,10 @@
 <!--
-Purpose: Root authoring workspace for graph editing, publishing, recovery, and global stop.
+Purpose: Classic Manager workspace for graph editing, assets, runtime controls, and operator panels.
 -->
 <script lang="ts">
   import { tick } from 'svelte';
   import { spring } from 'svelte/motion';
   import { state, interruptMedia } from '$lib/stores/manager';
-  import { publishRootGroups, rootNodeEngine as nodeEngine } from '$lib/stores/root-authoring';
 
   import AppShell from '$lib/layouts/AppShell.svelte';
   import ClientSelector from '$lib/components/ClientSelector.svelte';
@@ -17,19 +16,19 @@ Purpose: Root authoring workspace for graph editing, publishing, recovery, and g
   import RegistryMidiPanel from '$lib/components/RegistryMidiPanel.svelte';
   import NodeCanvasRenderer from '$lib/components/nodes/NodeCanvasRenderer.svelte';
   import AssetsManager from '$lib/components/AssetsManager.svelte';
+  import OperatorConsole from '$lib/components/OperatorConsole.svelte';
 
   export let serverUrl = 'https://localhost:3001';
   export let performanceMode = false;
 
-  type WorkspaceTab = 'dashboard' | 'assets' | 'registry-midi' | 'nodes';
+  type WorkspaceTab = 'dashboard' | 'assets' | 'registry-midi' | 'nodes' | 'operator';
   let activePage: WorkspaceTab = 'dashboard';
-  const nodeGraphRunning = nodeEngine.isRunning;
-
   let tabsEl: HTMLDivElement | null = null;
   let tabDashboardEl: HTMLButtonElement | null = null;
   let tabAssetsEl: HTMLButtonElement | null = null;
   let tabRegistryMidiEl: HTMLButtonElement | null = null;
   let tabNodesEl: HTMLButtonElement | null = null;
+  let tabOperatorEl: HTMLButtonElement | null = null;
   const tabSlider = spring(
     { x: 0, width: 0 },
     {
@@ -43,6 +42,7 @@ Purpose: Root authoring workspace for graph editing, publishing, recovery, and g
     if (activePage === 'assets') return tabAssetsEl;
     if (activePage === 'registry-midi') return tabRegistryMidiEl;
     if (activePage === 'nodes') return tabNodesEl;
+    if (activePage === 'operator') return tabOperatorEl;
     return null;
   }
 
@@ -63,10 +63,9 @@ Purpose: Root authoring workspace for graph editing, publishing, recovery, and g
 
 <AppShell
   fullBleed={activePage === 'nodes' || activePage === 'assets'}
-  collapseHeader={activePage === 'nodes' && $nodeGraphRunning}
+  collapseHeader={activePage === 'nodes'}
 >
   <div slot="headerActions">
-    <Button variant="secondary" size="sm" on:click={publishRootGroups}>Publish Groups</Button>
     <Button variant="danger" size="sm" on:click={() => interruptMedia(true)}>Global Stop</Button>
   </div>
 
@@ -81,14 +80,21 @@ Purpose: Root authoring workspace for graph editing, publishing, recovery, and g
       class:active={activePage === 'dashboard'}
       on:click={() => (activePage = 'dashboard')}
     >
-      Root Console
+      Manager
+    </button>
+    <button
+      bind:this={tabOperatorEl}
+      class:active={activePage === 'operator'}
+      on:click={() => (activePage = 'operator')}
+    >
+      Operator
     </button>
     <button
       bind:this={tabAssetsEl}
       class:active={activePage === 'assets'}
       on:click={() => (activePage = 'assets')}
     >
-      Assets Manager
+      Assets
     </button>
     <button
       bind:this={tabRegistryMidiEl}
@@ -148,6 +154,10 @@ Purpose: Root authoring workspace for graph editing, publishing, recovery, and g
         <GeoControl {serverUrl} />
       </div>
     </div>
+  </div>
+
+  <div class:hide={activePage !== 'operator'}>
+    <OperatorConsole />
   </div>
 
   <div class="assets-pane" class:hide={activePage !== 'assets'}>
@@ -219,12 +229,18 @@ Purpose: Root authoring workspace for graph editing, publishing, recovery, and g
     margin-top: var(--space-sm);
   }
 
-  .nodes-page,
-  .assets-pane,
+  .assets-pane {
+    height: calc(100vh - 96px);
+  }
+
+  .nodes-page {
+    width: 100%;
+    min-height: calc(100vh - 76px);
+  }
+
   .nodes-pane {
-    flex: 1;
-    min-height: 0;
-    display: flex;
+    width: 100%;
+    height: calc(100vh - 76px);
   }
 
   .hide {

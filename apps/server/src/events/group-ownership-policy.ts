@@ -5,7 +5,6 @@ import {
   createControlPlaneActor,
   createPolicyRejectReason,
   isNonSystemMutatingCommandMessage,
-  ROOT_EMERGENCY_SCOPE_GROUP_ID,
   type ControlPlaneActor,
   type ControlPlaneActorRole,
   type GroupOwnershipEntry,
@@ -21,25 +20,13 @@ type GroupOwnershipRegistryLike = {
   restoreGroupOwnership?: (groupId: string) => GroupOwnershipEntry;
 };
 
-export function isRootStopAll(message: MessageWithoutServerTimestamp): boolean {
-  if (!isNonSystemMutatingCommandMessage(message)) return false;
-  return (
-    message.role === 'root' &&
-    message.actor === 'root' &&
-    message.scopeGroupId === ROOT_EMERGENCY_SCOPE_GROUP_ID &&
-    message.type === 'control' &&
-    message.action === 'shutdown' &&
-    message.target.mode === 'all'
-  );
-}
-
 export function enforceGroupOwnership(input: {
   message: MessageWithoutServerTimestamp;
   registry: GroupOwnershipRegistryLike;
   commandName: (message: MessageWithoutServerTimestamp) => string;
 }): ValidationRejectReason | null {
   const { message, registry, commandName } = input;
-  if (!isNonSystemMutatingCommandMessage(message) || isRootStopAll(message)) return null;
+  if (!isNonSystemMutatingCommandMessage(message)) return null;
   if (message.target.mode !== 'group') return null;
 
   const role = normalizeControlPlaneRole(message.role);
@@ -54,32 +41,32 @@ export function enforceGroupOwnership(input: {
     return null;
   }
   if (command === 'release') {
-    if (entry?.owner.actorId !== actor.id && role !== 'root')
+    if (entry?.owner.actorId !== actor.id)
       return createPolicyDeny(message, 'only the current Group owner can release ownership');
     registry.releaseGroupOwnership?.(groupId, actor.id);
     return null;
   }
   if (command === 'archive') {
-    if (entry?.owner.actorId !== actor.id && role !== 'root')
+    if (entry?.owner.actorId !== actor.id)
       return createPolicyDeny(message, 'only the Group owner can archive the Group');
     registry.archiveGroupOwnership?.(groupId);
     return null;
   }
   if (command === 'restore') {
-    if (entry?.owner.actorId !== actor.id && role !== 'root')
+    if (entry?.owner.actorId !== actor.id)
       return createPolicyDeny(message, 'only the Group owner can restore the Group');
     registry.restoreGroupOwnership?.(groupId);
     return null;
   }
-  if (entry && entry.owner.actorId !== actor.id && role !== 'root') {
+  if (entry && entry.owner.actorId !== actor.id) {
     if (role === 'client') {
       return createPolicyRejectReason({
         actor: message.actor ?? ('from' in message ? message.from : 'unknown'),
-        scope: 'server.ingress.clientControlTransfer',
+        scope: 'server.ingress.authorization',
         type: message.type,
-        path: 'transferId',
-        code: 'server.policy.client_transfer_required',
-        message: 'accepted client control transfer capability is required',
+        path: 'role',
+        code: 'server.policy.manager_required',
+        message: `manager role is required for ${message.type} messages`,
       });
     }
     return createPolicyDeny(message, `Group is ${entry.visibility.defaultAccess}; actor is not the owner`);
@@ -88,9 +75,7 @@ export function enforceGroupOwnership(input: {
 }
 
 function normalizeControlPlaneRole(role: string): ControlPlaneActorRole {
-  return role === 'root' || role === 'manager' || role === 'client' || role === 'service' || role === 'ai'
-    ? role
-    : 'client';
+  return role === 'manager' || role === 'client' || role === 'service' || role === 'ai' ? role : 'client';
 }
 
 function createPolicyDeny(

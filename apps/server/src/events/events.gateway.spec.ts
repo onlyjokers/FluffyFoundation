@@ -162,7 +162,7 @@ test('handleMessage rejects unauthorized routing with structured policy metadata
     type: 'plugin',
     path: 'from',
     decision: 'reject',
-    code: 'server.policy.unauthorized',
+    code: 'server.policy.manager_required',
     message: 'manager role is required for plugin messages',
   });
 });

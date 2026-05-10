@@ -10,7 +10,6 @@ import {
   createPartitionFailureReport,
   createControlPlaneActor,
   createGroupOwnershipEntry,
-  createTransferOffer,
   getControlPlaneCapabilities,
   isControlPlaneActorRole,
   isExecutionTargetPlatform,
@@ -18,6 +17,7 @@ import {
 } from './control-plane.js';
 
 test('ControlPlane defines explicit capability scopes for manager, client, service, and AI actors', () => {
+  assert.equal(isControlPlaneActorRole('root'), false);
   assert.equal(isControlPlaneActorRole('manager'), true);
   assert.equal(isControlPlaneActorRole('client'), true);
   assert.equal(isControlPlaneActorRole('service'), true);
@@ -45,29 +45,14 @@ test('ControlPlane actors are normalized with role-bounded capabilities', () => 
     role: 'ai',
     capabilities: ['proposal.create'],
   });
-  assert.deepEqual(getControlPlaneCapabilities('root'), [
-    'group.view',
-    'group.mutate',
-    'group.reclaim',
-    'group.release',
-    'group.transfer.offer',
-    'group.transfer.accept',
-    'group.transfer.deny',
-    'group.transfer.revoke',
-    'group.archive',
-    'group.restore',
-    'partition.deploy',
-    'partition.stop',
-    'root.stopAll',
-    'proposal.create',
-  ]);
+  assert.throws(() => getControlPlaneCapabilities('root' as never));
 });
 
 test('Group ownership entry records owner stack, transferability, surface, and readonly visibility', () => {
   const entry = createGroupOwnershipEntry({
     groupId: 'stage-left',
     owner: createControlPlaneActor({ id: 'manager-1', role: 'manager' }),
-    ownerStack: [createControlPlaneActor({ id: 'root', role: 'root' })],
+    ownerStack: [createControlPlaneActor({ id: 'manager-original', role: 'manager' })],
     transferable: true,
     surface: 'public',
     selectedClientIds: ['client-1'],
@@ -75,30 +60,11 @@ test('Group ownership entry records owner stack, transferability, surface, and r
 
   assert.equal(entry.groupId, 'stage-left');
   assert.equal(entry.owner.actorId, 'manager-1');
-  assert.equal(entry.ownerStack[0]?.role, 'root');
+  assert.equal(entry.ownerStack[0]?.role, 'manager');
   assert.equal(entry.transferable, true);
   assert.equal(entry.surface, 'public');
   assert.equal(entry.visibility.defaultAccess, 'visible-readonly');
   assert.deepEqual(entry.selectedClientIds, ['client-1']);
-});
-
-test('client transfer offers carry target confirmation, TTL, and scoped mutate capability', () => {
-  const offer = createTransferOffer({
-    transferId: 'transfer-stage-left-client-1',
-    groupId: 'stage-left',
-    offeredBy: createControlPlaneActor({ id: 'manager-1', role: 'manager' }),
-    targetClientId: 'client-1',
-    ttlMs: 30_000,
-    now: 1_000,
-  });
-
-  assert.equal(offer.status, 'pending');
-  assert.equal(offer.groupId, 'stage-left');
-  assert.equal(offer.targetClientId, 'client-1');
-  assert.equal(offer.expiresAt, 31_000);
-  assert.equal(offer.capability.scopeGroupId, 'stage-left');
-  assert.equal(offer.capability.targetClientId, 'client-1');
-  assert.deepEqual(offer.capability.capabilities, ['group.view', 'group.mutate', 'group.release']);
 });
 
 test('Execution partitions define FF-14 target platforms and structured status metadata', () => {

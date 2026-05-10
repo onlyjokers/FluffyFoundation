@@ -347,7 +347,7 @@ test('handleMessage rejects client direct partition lifecycle control outside Co
   });
 
   assert.equal(routed.length, 0);
-  assert.equal(loggedMetadata(warnings).code, 'control-plane.capability_required');
+  assert.equal(loggedMetadata(warnings).code, 'server.policy.manager_required');
   assert.equal(loggedMetadata(warnings).path, 'role');
 });
 

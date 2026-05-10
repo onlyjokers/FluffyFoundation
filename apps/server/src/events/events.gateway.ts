@@ -22,21 +22,13 @@ import type {
 } from '@shugu/protocol';
 import {
   createPolicyRejectReason,
-  createServerControlMessage,
   isNonSystemMutatingCommandMessage,
   createTimePong,
   targetClients,
   validateMessage,
 } from '@shugu/protocol';
 import { sendServerControl } from '../protocol/server-messages.js';
-import { enforceGroupOwnership, isRootStopAll } from './group-ownership-policy.js';
-import {
-  ClientControlTransferService,
-  handleClientControlTransferCommand,
-  isAcceptedClientControllerCommand,
-  isClientTransferResponse,
-  type ClientTransferCommandMessage,
-} from './client-control-transfer.js';
+import { enforceGroupOwnership } from './group-ownership-policy.js';
 import { validatePartitionLifecycleIngress } from './partition-lifecycle-policy.js';
 import { createSocketCorsOptions, resolveManagerRole } from '../bootstrap/security-policy.js';
 import {
@@ -81,17 +73,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   constructor(
     private readonly clientRegistry: ClientRegistryService,
-    private readonly messageRouter: MessageRouterService,
-    private readonly clientControlTransfers: ClientControlTransferService = new ClientControlTransferService(
-      clientRegistry
-    )
+    private readonly messageRouter: MessageRouterService
   ) {
     this.clientRegistry.onClientExpired((clientId) => {
-      this.clientControlTransfers.handleClientDisconnected(clientId);
       this.messageRouter.notifyClientLeft(clientId);
-    });
-    this.clientControlTransfers.setStatusEmitter((status) => {
-      this.emitTransferStatus(status);
     });
   }
 
@@ -221,7 +206,6 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const connectionInfo = this.clientRegistry.unregisterBySocketId(client.id);
 
     if (connectionInfo && connectionInfo.role === 'client') {
-      this.clientControlTransfers.handleClientDisconnected(connectionInfo.clientId);
       // Keep presence during grace window; only notify left on expiry.
       this.messageRouter.broadcastClientListUpdate();
     }
@@ -247,61 +231,54 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       validatedMessage.type === 'media' ||
       validatedMessage.type === 'plugin'
     ) {
-      const socketClientId = this.clientControlTransfers.clientIdBySocket(this.clientRegistry, client.id);
-      const commandMessage = validatedMessage as ClientTransferCommandMessage;
-      const isClientController = isAcceptedClientControllerCommand({
-        message: commandMessage,
-        socketClientId,
-        hasAcceptedCapability: (input) => this.clientControlTransfers.hasAcceptedCapability(input),
-      });
-      const isTransferResponse = isClientTransferResponse({
-        message: commandMessage,
-        socketClientId,
-      });
       const partitionRejectReason = validatePartitionLifecycleIngress(validatedMessage);
       if (partitionRejectReason) return this.logRejectedMessage(client.id, [partitionRejectReason]);
       if (
-        !isClientController &&
-        !isTransferResponse &&
         isNonSystemMutatingCommandMessage(validatedMessage) &&
         validatedMessage.role === 'client'
       ) {
-        const clientId =
-          this.clientControlTransfers.clientIdBySocket(this.clientRegistry, client.id) ??
-          validatedMessage.actor;
         this.logRejectedMessage(client.id, [
-          this.clientControlTransfers.rejectReason({
-            clientId,
+          createPolicyRejectReason({
+            actor: validatedMessage.actor ?? ('from' in validatedMessage ? validatedMessage.from : 'unknown'),
+            scope: 'server.ingress.authorization',
             type: validatedMessage.type,
-            scopeGroupId: validatedMessage.scopeGroupId,
+            path: 'role',
+            code: 'server.policy.manager_required',
+            message: `manager role is required for ${validatedMessage.type} messages`,
           }),
         ]);
         return;
       }
-      if (!this.clientRegistry.isManager(client.id) && !isClientController && !isTransferResponse) {
+      if (
+        isNonSystemMutatingCommandMessage(validatedMessage) &&
+        (validatedMessage as MessageWithoutServerTimestamp & { role?: string }).role === 'root'
+      ) {
+        this.logRejectedMessage(client.id, [
+          createPolicyRejectReason({
+            actor: validatedMessage.actor ?? ('from' in validatedMessage ? validatedMessage.from : 'unknown'),
+            scope: 'server.ingress.authorization',
+            type: validatedMessage.type,
+            path: 'role',
+            code: 'server.policy.root_retired',
+            message: 'Root control authority is retired; use a Manager-scoped command',
+          }),
+        ]);
+        return;
+      }
+      if (!this.clientRegistry.isManager(client.id)) {
         this.logRejectedMessage(client.id, [
           createPolicyRejectReason({
             actor: 'from' in validatedMessage ? validatedMessage.from : 'unknown',
             scope: 'server.ingress.authorization',
             type: validatedMessage.type,
             path: 'from',
+            code: 'server.policy.manager_required',
             message: `manager role is required for ${validatedMessage.type} messages`,
           }),
         ]);
         return;
       }
 
-      if (
-        handleClientControlTransferCommand({
-          message: validatedMessage as ClientTransferCommandMessage,
-          socketClientId: this.clientControlTransfers.clientIdBySocket(this.clientRegistry, client.id),
-          isManager: this.clientRegistry.isManager(client.id),
-          service: this.clientControlTransfers,
-          audit: () => this.auditMutatingCommand(validatedMessage),
-          logRejected: (reason) => this.logRejectedMessage(client.id, [reason]),
-        })
-      )
-        return;
       if (
         handleDisplayRouterCommand({
           message: validatedMessage,
@@ -326,28 +303,13 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
 
     this.auditMutatingCommand(validatedMessage);
-    if (isRootStopAll(validatedMessage)) {
-      this.clientControlTransfers.clear();
-    }
 
     // Route the message
     this.messageRouter.routeMessage(validatedMessage, client.id);
   }
 
-  private emitTransferStatus(status: import('@shugu/protocol').ClientControlTransferOffer): void {
-    const statusMessage = createServerControlMessage(
-      targetClients([status.targetClientId]),
-      'clientControlTransfer',
-      status
-    );
-    this.messageRouter.routeMessage(statusMessage, 'server');
-    this.messageRouter.broadcastClientListUpdate();
-  }
-
   private validateCommandScope(message: MessageWithoutServerTimestamp): ValidationRejectReason | null {
     if (!isNonSystemMutatingCommandMessage(message)) return null;
-
-    if (isRootStopAll(message)) return null;
 
     if (message.target.mode !== 'group') {
       return createPolicyRejectReason({

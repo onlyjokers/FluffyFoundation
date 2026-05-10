@@ -72,26 +72,6 @@ function validateControlPayload(action: unknown, payload: unknown, ctx: MutableV
     case 'visualEffects':
       validateVisualEffects(payload, ctx, path);
       break;
-    case 'clientControlTransfer':
-      validateClientControlTransferPayload(payload, ctx, path);
-      break;
-  }
-}
-
-function validateClientControlTransferPayload(payload: ObjectRecord, ctx: MutableValidationContext, path: string): void {
-  if (payload.kind !== 'client-control-transfer-status') {
-    addReason(ctx, fieldCode(payload, 'kind'), 'message.control.payload.kind', `${path}.kind`, `${path}.kind is unsupported`);
-  }
-  requireNonEmptyString(payload, ctx, 'transferId', 'message.control.payload.transferId', `${path}.transferId`);
-  requireNonEmptyString(payload, ctx, 'groupId', 'message.control.payload.groupId', `${path}.groupId`);
-  requireNonEmptyString(payload, ctx, 'targetClientId', 'message.control.payload.targetClientId', `${path}.targetClientId`);
-  requireNumber(payload, ctx, 'offeredAt', 'message.control.payload.offeredAt', `${path}.offeredAt`);
-  requireNumber(payload, ctx, 'expiresAt', 'message.control.payload.expiresAt', `${path}.expiresAt`);
-  if (!isOneOf(payload.status, ['pending', 'accepted', 'denied', 'expired', 'revoked', 'control-lost'] as const)) {
-    addReason(ctx, fieldCode(payload, 'status'), 'message.control.payload.status', `${path}.status`, `${path}.status is unsupported`);
-  }
-  if (!isRecord(payload.capability)) {
-    addReason(ctx, fieldCode(payload, 'capability'), 'message.control.payload.capability', `${path}.capability`, `${path}.capability must be an object`);
   }
 }
 

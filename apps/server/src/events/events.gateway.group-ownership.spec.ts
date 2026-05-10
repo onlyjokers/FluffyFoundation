@@ -12,6 +12,7 @@ function createGateway() {
     {
       onClientExpired: () => () => undefined,
       isManager: () => true,
+      getDisplayDescriptors: () => [],
       getGroupOwnershipEntry: (groupId: string) =>
         groupId === 'stage-left'
           ? {
@@ -112,23 +113,44 @@ test('server routes Manager reclaim command for transferable Group', () => {
   assert.equal(routed.length, 1);
 });
 
-test('server allows Root stop-all emergency authority across Group ownership', () => {
+test('server rejects retired Root stop-all emergency authority', () => {
+  const { gateway, routed } = createGateway();
+  const warnings = captureWarns(() => {
+    gateway.handleMessage(
+      {
+        type: 'control',
+        version: 1,
+        from: 'manager',
+        target: { mode: 'all' },
+        action: 'shutdown',
+        payload: { reason: 'root-stop-all' },
+        actor: 'root',
+        role: 'root',
+        scopeGroupId: '__root_emergency__',
+        correlationId: 'corr-root-stop',
+        idempotencyKey: 'idem-root-stop',
+      },
+      { id: 'socket-root' } as never
+    );
+  });
+
+  assert.equal(routed.length, 0);
+  assert.equal(loggedMetadata(warnings).code, 'server.policy.root_retired');
+});
+
+test('server allows Manager scoped shutdown through normal ownership policy', () => {
   const { gateway, routed } = createGateway();
   gateway.handleMessage(
     {
       type: 'control',
       version: 1,
       from: 'manager',
-      target: { mode: 'all' },
+      target: { mode: 'group', groupId: 'stage-left' },
       action: 'shutdown',
-      payload: { reason: 'root-stop-all' },
-      actor: 'root',
-      role: 'root',
-      scopeGroupId: '__root_emergency__',
-      correlationId: 'corr-root-stop',
-      idempotencyKey: 'idem-root-stop',
+      payload: { reason: 'manager-stop' },
+      ...commandEnvelope('manager-a'),
     },
-    { id: 'socket-root' } as never
+    { id: 'socket-manager-stop' } as never
   );
 
   assert.equal(routed.length, 1);

@@ -1,10 +1,8 @@
 /**
- * Purpose: Create scoped command envelopes for accepted client-as-controller transfers.
+ * Purpose: Keep retired client-as-controller helpers as no-op compatibility shims.
  */
 import {
   createCommandEnvelope,
-  createControlMessage,
-  SOCKET_EVENTS,
   type ClientControlCapability,
   type CommandEnvelope,
   type ControlAction,
@@ -43,19 +41,5 @@ export function emitClientControlCommand(input: {
   target?: TargetSelector;
   executeAt?: number;
 }): void {
-  if (!input.socket?.connected || !input.clientId) return;
-  const envelope = createClientControllerEnvelope({
-    clientId: input.clientId,
-    capability: input.capability,
-  });
-  input.socket.emit(
-    SOCKET_EVENTS.MSG,
-    createControlMessage(
-      envelope,
-      input.target ?? { mode: 'group', groupId: input.capability.scopeGroupId },
-      input.action,
-      input.payload,
-      input.executeAt
-    )
-  );
+  void input;
 }
