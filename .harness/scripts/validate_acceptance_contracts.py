@@ -13,6 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 CONTRACT_IDS = [f"FF-{item:02d}" for item in range(18, 25)]
+AD_HOC_CONTRACTS = {
+    "FF-classic-manager-rollback": ROOT
+    / ".harness"
+    / "goals"
+    / "FF-classic-manager-rollback-contract.md"
+}
 
 REQUIRED_ACCEPTANCE_TERMS = [
     "## Automatic Acceptance Decision Model",
@@ -61,6 +67,8 @@ def read_text(path: Path) -> str:
 def contract_path(contract_id: str) -> Path:
     if contract_id == "FF-18":
         return ROOT / ".harness" / "goals" / "FF-18-review-contract.md"
+    if contract_id in AD_HOC_CONTRACTS:
+        return AD_HOC_CONTRACTS[contract_id]
     return ROOT / ".harness" / "goals" / f"{contract_id}-contract.md"
 
 
@@ -76,7 +84,7 @@ def collect_errors() -> list[str]:
         if term not in acceptance:
             errors.append(f"ACCEPTANCE.md missing automatic gate term: {term}")
 
-    for contract_id in CONTRACT_IDS:
+    for contract_id in [*CONTRACT_IDS, *AD_HOC_CONTRACTS.keys()]:
         path = contract_path(contract_id)
         if not path.is_file():
             errors.append(f"{contract_id} contract is missing: {path.relative_to(ROOT)}")

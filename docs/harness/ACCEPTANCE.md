@@ -72,7 +72,9 @@ expansions, or externally reviewed risk acceptances.
 
 ## Machine Contract Fields
 
-Each `.harness/goals/FF-18..FF-24` contract must contain a `## Machine contract` section with these exact fields:
+Each `.harness/goals/FF-18..FF-24` contract must contain a `## Machine contract` section with these exact fields.
+Ad-hoc remediation contracts, such as the classic Manager topology rollback, must use the same fields before they are
+used as Codex `/goal` objectives:
 
 - `Contract ID`
 - `Completion decision`
@@ -212,3 +214,18 @@ Every `FF-*` final report must include:
 - Dated risk acceptances, if any.
 - Stop-condition review: either `none triggered` or a list of triggered conditions.
 - Whether the next `FF-*` item may start.
+
+## Classic Topology Rollback Contracts
+
+When a goal removes the Root/ControlPlane V2/client-as-controller product path, acceptance is governed by
+`.harness/goals/FF-classic-manager-rollback-contract.md`.
+
+The required end state is the classic product topology:
+
+- `Manager`: the only human control and authoring surface.
+- `Server`: the command validation, routing, and fan-out service.
+- `Client`: a runtime endpoint for sensors, media, node execution, and state reporting.
+- `Display`: a runtime endpoint for audience-facing display output.
+
+Root, Root emergency authority, published-Group-only Manager mode, and client-as-controller transfer are not active
+product roles in this topology. Historical docs may mention them only as removed or retired behavior.
