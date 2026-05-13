@@ -9,15 +9,12 @@ import { audienceClients } from '$lib/stores/manager';
 import type { NodeBounds } from '../adapters';
 import { normalizeGroupList } from '../groups/normalize-group-list';
 import { isGroupDecorationNodeType } from '../groups/group-node-types';
-import { groupIdFromNode, isGroupPortNodeType } from '../utils/group-port-utils';
 import {
-  boundsIntersect,
   buildGroupIndex,
   computeGroupFrameBoundsWithChildren,
   computeLoopFrameBounds as computeLoopFrameBoundsCore,
   computeSingleGroupFrameBounds,
   mergeBounds,
-  pickMoveDelta,
 } from './group-bounds';
 import type {
   FrameInfo,
@@ -41,15 +38,16 @@ import {
   planEditGroupMembershipChange,
   shouldEnforceFrameForMovedNodes,
 } from './group-drop-helpers';
+import { computeGroupVisualStatePlan } from './group-visual-state';
+import { easeOutCubic, planNodesOutOfBounds, type NodeTranslation } from './group-node-motion';
+import { createGroupMarqueeController } from './group-marquee';
 export type { FrameMoveContext, GroupController, GroupFrame, NodeGroup } from './group-types';
 
 export function createGroupController(opts: GroupControllerOptions): GroupController {
   const nodeGroups = writable<NodeGroup[]>([]);
   const groupFrames = writable<GroupFrame[]>([]);
   const groupSelectionNodeIds = writable<Set<string>>(new Set());
-  const groupSelectionBounds = writable<{ left: number; top: number; width: number; height: number } | null>(
-    null
-  );
+  const groupSelectionBounds = writable<{ left: number; top: number; width: number; height: number } | null>(null);
   const selectedGroupId = writable<string | null>(null);
   const editModeGroupId = writable<string | null>(null);
   const canvasToast = writable<string | null>(null);
@@ -60,15 +58,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   let groupHighlightDirty = false;
   let groupEditToastTimeout: ReturnType<typeof setTimeout> | null = null;
   let canvasToastTimeout: ReturnType<typeof setTimeout> | null = null;
-
   let editModeGroupBounds: { left: number; top: number; right: number; bottom: number } | null = null;
-
-  let isMarqueeDragging = false;
-  let marqueeStart = { x: 0, y: 0 };
-  let marqueeCurrent = { x: 0, y: 0 };
-  let marqueePointerId: number | null = null;
-  let marqueeMoveHandler: ((event: PointerEvent) => void) | null = null;
-  let marqueeUpHandler: ((event: PointerEvent) => void) | null = null;
 
   let programmaticTranslateDepth = 0;
   const isProgrammaticTranslate = () => programmaticTranslateDepth > 0;
@@ -165,71 +155,24 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     if (!groupHighlightDirty) return;
     groupHighlightDirty = false;
 
-    const disabled = get(groupDisabledNodeIds);
-    const selected = get(groupSelectionNodeIds);
-    const graph = opts.getGraphState();
-    const groups = get(nodeGroups);
-    const forcedHidden = opts.getForcedHiddenNodeIds?.() ?? new Set<string>();
+    const plan = computeGroupVisualStatePlan({
+      graph: opts.getGraphState(),
+      groups: get(nodeGroups),
+      disabledNodeIds: get(groupDisabledNodeIds),
+      selectedNodeIds: get(groupSelectionNodeIds),
+      forcedHiddenNodeIds: opts.getForcedHiddenNodeIds?.() ?? new Set<string>(),
+      getNodeVisualState: (id) => adapter.getNodeVisualState(id),
+      getConnectionVisualState: (id) => adapter.getConnectionVisualState(id),
+    });
 
-    const hiddenNodeIds = new Set<string>();
-    const minimizedGroupIds: string[] = [];
-    for (const g of groups) {
-      if (!g.minimized) continue;
-      minimizedGroupIds.push(String(g.id));
-      for (const nodeId of g.nodeIds ?? []) hiddenNodeIds.add(String(nodeId));
-    }
-    const minimizedGroupIdSet = new Set(minimizedGroupIds);
-
-    const hiddenGroupIds = new Set<string>();
-    if (minimizedGroupIds.length > 0) {
-      const { childrenByParentId } = buildGroupIndex(groups);
-      const stack: string[] = [];
-      for (const gid of minimizedGroupIds) {
-        for (const childId of childrenByParentId.get(String(gid)) ?? []) stack.push(String(childId));
-      }
-      while (stack.length > 0) {
-        const next = String(stack.pop() ?? '');
-        if (!next || hiddenGroupIds.has(next)) continue;
-        hiddenGroupIds.add(next);
-        for (const childId of childrenByParentId.get(next) ?? []) stack.push(String(childId));
-      }
+    for (const nodePatch of plan.nodePatches) {
+      const { nodeId, ...patch } = nodePatch;
+      await adapter.setNodeVisualState(nodeId, patch);
     }
 
-    const hiddenNodesEffective = new Set<string>();
-    for (const node of graph.nodes ?? []) {
-      const id = String(node.id);
-      if (!id) continue;
-
-      const type = String(node.type ?? '');
-      const nextHidden =
-        forcedHidden.has(id) ||
-        hiddenNodeIds.has(id) ||
-        (isGroupDecorationNodeType(type) && hiddenGroupIds.has(groupIdFromNode(node)));
-      if (nextHidden) hiddenNodesEffective.add(id);
-
-      const nextDisabled = disabled.has(id);
-      const nextSelected = selected.has(id);
-      const nextGroupMinimized =
-        isGroupPortNodeType(type) && minimizedGroupIdSet.has(groupIdFromNode(node));
-      const prev = adapter.getNodeVisualState(id);
-
-      const patch: { hidden?: boolean; groupDisabled?: boolean; groupSelected?: boolean; groupMinimized?: boolean } = {};
-      if (Boolean(prev?.hidden) !== nextHidden) patch.hidden = nextHidden;
-      if (Boolean(prev?.groupDisabled) !== nextDisabled) patch.groupDisabled = nextDisabled;
-      if (Boolean(prev?.groupSelected) !== nextSelected) patch.groupSelected = nextSelected;
-      if (Boolean(prev?.groupMinimized) !== nextGroupMinimized) patch.groupMinimized = nextGroupMinimized;
-      if (Object.keys(patch).length > 0) await adapter.setNodeVisualState(id, patch);
-    }
-
-    for (const conn of graph.connections ?? []) {
-      const id = String(conn.id);
-      if (!id) continue;
-      const nextHidden =
-        hiddenNodesEffective.has(String(conn.sourceNodeId)) || hiddenNodesEffective.has(String(conn.targetNodeId));
-      const prev = adapter.getConnectionVisualState(id);
-      const patch: { hidden?: boolean } = {};
-      if (Boolean(prev?.hidden) !== nextHidden) patch.hidden = nextHidden;
-      if (Object.keys(patch).length > 0) await adapter.setConnectionVisualState(id, patch);
+    for (const connectionPatch of plan.connectionPatches) {
+      const { connectionId, ...patch } = connectionPatch;
+      await adapter.setConnectionVisualState(connectionId, patch);
     }
   };
 
@@ -251,12 +194,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     return computeLoopFrameBoundsCore(loop, (nodeId) => adapter.getNodeBounds(nodeId));
   };
 
-  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-
-  const animateNodeTranslations = (
-    updates: { id: string; from: { x: number; y: number }; to: { x: number; y: number } }[],
-    durationMs = 320
-  ) => {
+  const animateNodeTranslations = (updates: NodeTranslation[], durationMs = 320) => {
     const adapter = opts.getAdapter();
     if (!adapter) return;
     if (typeof requestAnimationFrame === 'undefined') return;
@@ -294,82 +232,15 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     const adapter = opts.getAdapter();
     if (!adapter) return;
 
-    const t = adapter.getViewportTransform();
-    const zoom = t?.k && Number.isFinite(t.k) && t.k > 0 ? t.k : 1;
-    const margin = 24 / zoom;
-    const updates: { id: string; from: { x: number; y: number }; to: { x: number; y: number } }[] = [];
-    const skipNodeIds = new Set(excludeNodeIds);
-
-    // Push full frames as units when possible so internal node layout stays intact.
-    const moveFrame = (frameId: string): boolean => {
-      if (!frameMoves) return false;
-      if (frameMoves.movedFrameIds.has(frameId)) return false;
-      const frame = frameMoves.frameById.get(frameId);
-      if (!frame) return false;
-      if (!boundsIntersect(bounds, frame.bounds)) return false;
-
-      for (const nodeId of frame.nodeIds) {
-        if (excludeNodeIds.has(String(nodeId))) return false;
-      }
-
-      const pick = pickMoveDelta(bounds, frame.bounds, margin);
-      if (!pick) return false;
-
-      const dx = pick.dx;
-      const dy = pick.dy;
-
-      for (const nodeId of frame.nodeIds) {
-        const id = String(nodeId);
-        if (skipNodeIds.has(id)) continue;
-        const pos = adapter.getNodePosition(id);
-        if (!pos) continue;
-        updates.push({ id, from: { x: pos.x, y: pos.y }, to: { x: pos.x + dx, y: pos.y + dy } });
-        skipNodeIds.add(id);
-      }
-
-      frameMoves.movedFrameIds.add(frameId);
-      return true;
-    };
-
-    for (const node of opts.getGraphState().nodes ?? []) {
-      const id = String(node.id ?? '');
-      if (!id) continue;
-      if (skipNodeIds.has(id)) continue;
-      const type = String(node?.type ?? '');
-      if (isGroupDecorationNodeType(type)) continue;
-      const b = adapter.getNodeBounds(id);
-      if (!b) continue;
-
-      const cx = (b.left + b.right) / 2;
-      const cy = (b.top + b.bottom) / 2;
-      const inside = cx > bounds.left && cx < bounds.right && cy > bounds.top && cy < bounds.bottom;
-      if (!inside) continue;
-
-      if (frameMoves) {
-        const frameIds = frameMoves.nodeToFrameIds.get(id);
-        if (frameIds?.length) {
-          let moved = false;
-          for (const frameId of frameIds) {
-            if (moveFrame(frameId)) {
-              moved = true;
-              break;
-            }
-          }
-          if (moved) continue;
-        }
-      }
-
-      const pick = pickMoveDelta(bounds, b, margin);
-      if (!pick) continue;
-
-      const pos = adapter.getNodePosition(id) ?? { x: b.left, y: b.top };
-
-      const to = { x: pos.x + pick.dx, y: pos.y + pick.dy };
-      updates.push({ id, from: { x: pos.x, y: pos.y }, to });
-      skipNodeIds.add(id);
-    }
-
-    animateNodeTranslations(updates);
+    animateNodeTranslations(
+      planNodesOutOfBounds({
+        bounds,
+        excludeNodeIds,
+        frameMoves,
+        graph: opts.getGraphState(),
+        adapter,
+      })
+    );
   };
 
   const handleDroppedNodesAfterDrag = (nodeIds: string[]) => {
@@ -841,13 +712,6 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     scheduleHighlight();
   };
 
-  const toContainerPoint = (clientX: number, clientY: number): { x: number; y: number } => {
-    const container = opts.getContainer();
-    if (!container) return { x: 0, y: 0 };
-    const rect = container.getBoundingClientRect();
-    return { x: clientX - rect.left, y: clientY - rect.top };
-  };
-
   const isMarqueeStartTarget = (target: HTMLElement | null): boolean => {
     if (!target) return false;
     if (target.closest('.node')) return false;
@@ -876,69 +740,19 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     event.stopPropagation();
 
     clearSelection();
-    isMarqueeDragging = true;
-    marqueePointerId = event.pointerId;
-    marqueeStart = toContainerPoint(event.clientX, event.clientY);
-    marqueeCurrent = marqueeStart;
-    marqueeRect.set({
-      left: marqueeStart.x,
-      top: marqueeStart.y,
-      width: 0,
-      height: 0,
-    });
+    marqueeController.start(event);
+  };
 
-    const onMove = (ev: PointerEvent) => {
-      if (!isMarqueeDragging) return;
-      if (marqueePointerId !== null && ev.pointerId !== marqueePointerId) return;
-      marqueeCurrent = toContainerPoint(ev.clientX, ev.clientY);
-      const left = Math.min(marqueeStart.x, marqueeCurrent.x);
-      const top = Math.min(marqueeStart.y, marqueeCurrent.y);
-      const width = Math.abs(marqueeStart.x - marqueeCurrent.x);
-      const height = Math.abs(marqueeStart.y - marqueeCurrent.y);
-      marqueeRect.set({ left, top, width, height });
-    };
-
-    const onUp = (ev: PointerEvent) => {
-      if (marqueePointerId !== null && ev.pointerId !== marqueePointerId) return;
-      isMarqueeDragging = false;
-      marqueePointerId = null;
-
-      if (marqueeMoveHandler)
-        window.removeEventListener('pointermove', marqueeMoveHandler, { capture: true });
-      if (marqueeUpHandler) {
-        window.removeEventListener('pointerup', marqueeUpHandler, { capture: true });
-        window.removeEventListener('pointercancel', marqueeUpHandler, { capture: true });
-      }
-      marqueeMoveHandler = null;
-      marqueeUpHandler = null;
-
-      const selLeft = Math.min(marqueeStart.x, marqueeCurrent.x);
-      const selTop = Math.min(marqueeStart.y, marqueeCurrent.y);
-      const selRight = Math.max(marqueeStart.x, marqueeCurrent.x);
-      const selBottom = Math.max(marqueeStart.y, marqueeCurrent.y);
-
-      const adapter = opts.getAdapter();
-      if (!adapter) return;
-      const t = adapter.getViewportTransform();
-      const rect = {
-        left: (selLeft - t.tx) / t.k,
-        top: (selTop - t.ty) / t.k,
-        right: (selRight - t.tx) / t.k,
-        bottom: (selBottom - t.ty) / t.k,
-      };
-      const selected = adapter.getNodesInRect(rect);
-      groupSelectionNodeIds.set(new Set(selected.map(String)));
+  const marqueeController = createGroupMarqueeController({
+    marqueeRect,
+    getContainer: opts.getContainer,
+    getAdapter: opts.getAdapter,
+    setSelectedNodeIds: (ids) => groupSelectionNodeIds.set(ids),
+    onSelectionComplete: () => {
       scheduleHighlight();
       computeSelectionBounds();
-      marqueeRect.set(null);
-    };
-
-    marqueeMoveHandler = onMove;
-    marqueeUpHandler = onUp;
-    window.addEventListener('pointermove', onMove, { capture: true });
-    window.addEventListener('pointerup', onUp, { capture: true });
-    window.addEventListener('pointercancel', onUp, { capture: true });
-  };
+    },
+  });
 
   return {
     nodeGroups,
@@ -974,14 +788,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       clearCanvasToast();
       if (framesRaf && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(framesRaf);
       framesRaf = 0;
-      if (marqueeMoveHandler)
-        window.removeEventListener('pointermove', marqueeMoveHandler, { capture: true });
-      if (marqueeUpHandler) {
-        window.removeEventListener('pointerup', marqueeUpHandler, { capture: true });
-        window.removeEventListener('pointercancel', marqueeUpHandler, { capture: true });
-      }
-      marqueeMoveHandler = null;
-      marqueeUpHandler = null;
+      marqueeController.destroy();
     },
     isProgrammaticTranslate,
     beginProgrammaticTranslate,
