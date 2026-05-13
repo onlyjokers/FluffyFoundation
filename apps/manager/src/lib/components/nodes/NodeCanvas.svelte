@@ -2,8 +2,6 @@
   // @ts-nocheck
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
-  import { ClassicPreset, NodeEditor } from 'rete';
-  import { AreaPlugin } from 'rete-area-plugin';
 
   import NodeCanvasChrome from './node-canvas/ui/NodeCanvasChrome.svelte';
   import { createCanvasActions } from './node-canvas/ui/canvas-actions';
@@ -32,14 +30,10 @@
   import { parameterRegistry } from '$lib/parameters/registry';
   import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
   import { displayTransport, getSDK, sensorData, state as managerState } from '$lib/stores/manager';
-  import {
-    displayBridgeState,
-    ensureDisplayLocalFilesRegisteredFromValue,
-  } from '$lib/display/display-bridge';
+  import { displayBridgeState, ensureDisplayLocalFilesRegisteredFromValue } from '$lib/display/display-bridge';
   import type { NodeInstance, Connection as EngineConnection, GraphState } from '$lib/nodes/types';
   import type { LocalLoop } from '$lib/nodes';
   import { createNodeCanvasFileActionBundle } from './node-canvas/io/node-canvas-file-actions';
-  import { LiveDOMSocketPosition } from './node-canvas/rete/live-socket-position';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
   import { createNodeCanvasSemanticCommands } from './node-canvas/adapters/semantic-command-adapter';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
@@ -49,17 +43,11 @@
   import { createClipboardController } from './node-canvas/controllers/clipboard-controller';
   import { createFrameDragController } from './node-canvas/controllers/frame-drag-controller';
   import { createSelectionController } from './node-canvas/controllers/selection-controller';
-  import {
-    createLoopController,
-    type LoopController,
-  } from './node-canvas/controllers/loop-controller';
+  import { createLoopController, type LoopController } from './node-canvas/controllers/loop-controller';
   import { createMidiHighlightController } from './node-canvas/controllers/midi-highlight-controller';
-  import {
-    createPickerController,
-    type SocketData,
-  } from './node-canvas/controllers/picker-controller';
+  import { createPickerController, type SocketData } from './node-canvas/controllers/picker-controller';
   import { createReteBuilder } from './node-canvas/rete/rete-builder';
-  import { createGraphSync, type GraphSyncController } from './node-canvas/rete/rete-sync';
+  import { createReteSockets } from './node-canvas/rete/rete-sockets';
   import { readAreaTransform } from './node-canvas/utils/view-utils';
   import {
     customNodeIdFromMaterializedNodeId,
@@ -85,66 +73,20 @@
     groupIdFromNode,
     isGroupPortNodeType,
   } from './node-canvas/utils/group-port-utils';
+  import { createMinimapProjection } from './node-canvas/utils/minimap-projection';
   import { initNodeCanvasRuntime } from './node-canvas/runtime/runtime-init';
-  import { destroyNodeCanvasResources } from './node-canvas/lifecycle/cleanup';
   import {
-    bindDisplayBridgeSubscription,
-    bindGraphStateSubscription,
-    bindGroupUiSubscriptions,
-    bindManagerClientSubscription,
-    bindRuntimeSubscriptions,
-  } from './node-canvas/lifecycle/subscriptions';
-  import { initReteCanvas } from './node-canvas/lifecycle/rete-init';
-  import { bindCanvasInteractionHandlers } from './node-canvas/lifecycle/interaction-bindings';
-  import { createNodeDragInteractions } from './node-canvas/interactions/node-drag-interactions';
-
-  type ReteSchemes = ClassicPreset.Schemes;
+    destroyMountedNodeCanvasResources,
+    mountNodeCanvasResources,
+    type MountedNodeCanvasResources,
+  } from './node-canvas/lifecycle/mount';
+  import { createNodeVisualState } from './node-canvas/ui/node-visual-state';
 
   let container: HTMLDivElement | null = null;
-  let editor: NodeEditor<ReteSchemes> | null = null;
-  let areaPlugin: AreaPlugin<ReteSchemes> | null = null;
-  let graphUnsub: (() => void) | null = null;
-  let paramsUnsub: (() => void) | null = null;
-  let tickUnsub: (() => void) | null = null;
-  let runningUnsub: (() => void) | null = null;
-  let groupDisabledUnsub: (() => void) | null = null;
-  let groupNodesUnsub: (() => void) | null = null;
-  let groupFramesUnsub: (() => void) | null = null;
-  let groupUiStateUnsub: (() => void) | null = null;
-  let keydownHandler: ((event: KeyboardEvent) => void) | null = null;
-  let wheelHandler: ((event: WheelEvent) => void) | null = null;
-  let contextMenuHandler: ((event: MouseEvent) => void) | null = null;
-  let pointerDownHandler: ((event: PointerEvent) => void) | null = null;
-  let pointerMoveHandler: ((event: PointerEvent) => void) | null = null;
-  let dblclickHandler: ((event: MouseEvent) => void) | null = null;
-  let toolbarMenuOutsideHandler: ((event: PointerEvent) => void) | null = null;
-  let groupFrameToggleHandler: ((event: Event) => void) | null = null;
-  let groupFrameDisabledHandler: ((event: Event) => void) | null = null;
-  let customNodeUncoupleHandler: ((event: Event) => void) | null = null;
-  let customNodeExpandHandler: ((event: Event) => void) | null = null;
-  let resizeObserver: ResizeObserver | null = null;
-  let socketPositionWatcher: LiveDOMSocketPosition | null = null;
-  let managerUnsub: (() => void) | null = null;
-  let displayBridgeUnsub: (() => void) | null = null;
-  let loopDeployUnsub: (() => void) | null = null;
+  let areaPlugin: any = null;
+  let mountedResources: MountedNodeCanvasResources | null = null;
 
-  const sockets = {
-    number: new ClassicPreset.Socket('number'),
-    boolean: new ClassicPreset.Socket('boolean'),
-    string: new ClassicPreset.Socket('string'),
-    asset: new ClassicPreset.Socket('asset'),
-    color: new ClassicPreset.Socket('color'),
-    audio: new ClassicPreset.Socket('audio'),
-    image: new ClassicPreset.Socket('image'),
-    video: new ClassicPreset.Socket('video'),
-    scene: new ClassicPreset.Socket('scene'),
-    effect: new ClassicPreset.Socket('effect'),
-    client: new ClassicPreset.Socket('client'),
-    command: new ClassicPreset.Socket('command'),
-    fuzzy: new ClassicPreset.Socket('fuzzy'),
-    array: new ClassicPreset.Socket('array'),
-    any: new ClassicPreset.Socket('any'),
-  } as const;
+  const sockets = createReteSockets();
 
   const nodeMap = new Map<string, NodeInstance>();
   const connectionMap = new Map<string, EngineConnection>();
@@ -199,33 +141,15 @@
     lastErrorStore,
   });
 
-  // Manager-only visual state (not part of the graph runtime).
-  // Used to restore UI state after imports when nodes may not be rendered yet.
-  const pendingCollapsedByNodeId = new Map<string, boolean>();
-  const forcedHiddenNodeIds = new Set<string>();
+  const nodeVisualState = createNodeVisualState({
+    viewAdapter,
+    nodeMap,
+    requestFramesUpdate: () => requestFramesUpdate(),
+    requestMinimapUpdate: () => minimapController?.requestUpdate(),
+  });
+  const { forcedHiddenNodeIds, getNodeCollapsed, flushPendingCollapsedNodes, setNodeCollapsed } =
+    nodeVisualState;
 
-  const getNodeCollapsed = (nodeId: string): boolean =>
-    Boolean(viewAdapter.getNodeVisualState(String(nodeId))?.collapsed);
-
-  const flushPendingCollapsedNodes = async () => {
-    if (pendingCollapsedByNodeId.size === 0) return;
-    for (const [nodeId, collapsed] of Array.from(pendingCollapsedByNodeId.entries())) {
-      if (!nodeMap.has(String(nodeId))) continue;
-      pendingCollapsedByNodeId.delete(String(nodeId));
-      await viewAdapter.setNodeVisualState(String(nodeId), { collapsed: Boolean(collapsed) });
-    }
-    requestFramesUpdate();
-    minimapController?.requestUpdate();
-  };
-
-  const setNodeCollapsed = async (nodeId: string, collapsed: boolean) => {
-    const id = String(nodeId ?? '');
-    if (!id) return;
-    pendingCollapsedByNodeId.set(id, Boolean(collapsed));
-    await flushPendingCollapsedNodes();
-  };
-
-  // Invariant: NodeCanvas is composition-only. Keep behavior unchanged; delegate logic to modules.
   const groupController = createGroupController({
     getContainer: () => container,
     getAdapter: () => viewAdapter,
@@ -295,8 +219,6 @@
     marqueeRect,
   } = groupController;
 
-  // UI helper: When a Group's gate input is wired (connection into group-gate.active), we treat it as "Gate mode"
-  // and hide the "Gate: Open/Closed" badge (the wire + border state is enough).
   $: gateModeGroupIds = deriveGateModeGroupIds(graphState.nodes, graphState.connections);
 
   $: groupGateNodeIdByGroupId = deriveGroupGateNodeIdByGroupId(graphState.nodes);
@@ -375,8 +297,6 @@
     onClientNodeRandom: (nodeId, value) => void applyClientNodeSelection(nodeId, { random: value }),
   });
 
-  let graphSync: GraphSyncController | null = null;
-
   let pickerControllerRef: ReturnType<typeof createPickerController> | null = null;
 
   const pickerController = createPickerController({
@@ -438,15 +358,7 @@
 
   $: setPickerElement(pickerElement);
 
-  const toMiniX = (x: number) => {
-    const m = get(minimap);
-    return m.offsetX + (x - m.bounds.minX) * m.scale;
-  };
-
-  const toMiniY = (y: number) => {
-    const m = get(minimap);
-    return m.offsetY + (y - m.bounds.minY) * m.scale;
-  };
+  const { toMiniX, toMiniY } = createMinimapProjection(minimap);
 
   const refreshNumberParams = () => {
     const params = parameterRegistry
@@ -623,8 +535,6 @@
     setSelectedNode,
   });
 
-  let nodeDragInteractions: ReturnType<typeof createNodeDragInteractions> | null = null;
-
   const { handleToggleEngine, handleClear, resetGroups, viewportCenterGraphPos } =
     createCanvasActions({
       nodeEngine,
@@ -684,53 +594,8 @@
   }
 
   onMount(async () => {
-    if (!container) return;
-
-    if (import.meta.env.DEV && typeof window !== 'undefined') {
-      const windowWithEngine = window as Window & { __shuguNodeEngine?: typeof nodeEngine };
-      windowWithEngine.__shuguNodeEngine = nodeEngine;
-    }
-
-    midiController.start();
-
-    refreshNumberParams();
-    paramsUnsub = parameterRegistry.subscribe(() => refreshNumberParams());
-
-    ({
-      tickUnsub,
-      runningUnsub,
-      loopDeployUnsub,
-      groupDisabledUnsub,
-    } = bindRuntimeSubscriptions({
-      nodeEngine,
-      isRunningStore,
-      deployedLoopIds,
-      groupController,
-      groupPortNodesController,
-      patchRuntime,
-      loopController,
-    }));
-
-    ({
-      groupUiStateUnsub,
-      groupNodesUnsub,
-      groupFramesUnsub,
-    } = bindGroupUiSubscriptions({
-      nodeGroupsState,
-      nodeGroups: groupController.nodeGroups,
-      groupFrames,
-      groupController,
-      groupPortNodesController,
-    }));
-
-    ({
-      editor,
-      areaPlugin,
-      graphSync,
-      socketPositionWatcher,
-    } = await initReteCanvas({
+    mountedResources = await mountNodeCanvasResources({
       container,
-      editorId: 'fluffy-rete',
       nodeMap,
       connectionMap,
       nodeRegistry,
@@ -742,9 +607,11 @@
       reteBuilder,
       graphStateStore,
       isRunningStore,
+      deployedLoopIds,
+      patchRuntime,
       isSyncingRef,
       renderers: reteRenderers,
-      socketPositionWatcher,
+      socketPositionWatcher: null,
       getLastPointerClient: () => lastPointerClient,
       setConnectDraggingSocket: (socket) => {
         connectDraggingSocket = socket as SocketData | null;
@@ -770,62 +637,11 @@
       focusController,
       syncClientNodesFromInputs,
       setSelectedNode,
-    }));
-
-    graphUnsub = bindGraphStateSubscription({
-      graphStateStore,
-      graphSync,
-      groupController,
-      groupPortNodesController,
-      patchRuntime,
-      syncCustomGateInputs,
-      rehydrateExpandedCustomFrames,
-    });
-
-    managerUnsub = bindManagerClientSubscription({
       managerState,
-      graphStateStore,
-      graphSync,
-      nodeEngine,
-      schedulePatchReconcile,
-      syncClientNodesFromInputs,
-    });
-
-    // Patch targets can include local display (MessagePort), which is outside `managerState.clients`.
-    displayBridgeUnsub = bindDisplayBridgeSubscription({
       displayBridgeState,
       schedulePatchReconcile,
-    });
-
-    const groupEvents = bindGroupFrameEvents({
-      groupController,
-      windowRef: window,
-    });
-    groupFrameToggleHandler = groupEvents.onGroupFrameToggle;
-    groupFrameDisabledHandler = groupEvents.onGroupFrameToggleDisabled;
-
-    const customNodeEvents = bindCustomNodeEvents({
-      onUncouple: handleUncoupleCustomNode,
-      onExpand: handleExpandCustomNode,
-      windowRef: window,
-    });
-    customNodeUncoupleHandler = customNodeEvents.onCustomNodeUncouple;
-    customNodeExpandHandler = customNodeEvents.onCustomNodeExpand;
-
-    ({
-      wheelHandler,
-      contextMenuHandler,
-      toolbarMenuOutsideHandler,
-      nodeDragInteractions,
-      pointerDownHandler,
-      pointerMoveHandler,
-      dblclickHandler,
-      resizeObserver,
-      keydownHandler,
-    } = bindCanvasInteractionHandlers({
-      container,
-      windowRef: window,
-      getAreaPlugin: () => areaPlugin,
+      syncCustomGateInputs,
+      rehydrateExpandedCustomFrames,
       requestMinimapUpdate: minimapController.requestUpdate,
       requestFramesUpdate,
       isToolbarMenuOpen: () => isToolbarMenuOpen,
@@ -862,24 +678,24 @@
       getSelectedNodeId: () => selectedNodeId,
       deleteNodeWithRules,
       clipboardController,
-    }));
-
+      parameterRegistry,
+      refreshNumberParams,
+      midiController,
+      nodeGroupsState,
+      groupFrames,
+      handleUncoupleCustomNode,
+      handleExpandCustomNode,
+      windowRef: window,
+      viewAdapter,
+      getAreaPlugin: () => areaPlugin,
+      isDev: import.meta.env.DEV,
+    });
+    areaPlugin = mountedResources?.areaPlugin ?? null;
   });
 
   onDestroy(() => {
-    destroyNodeCanvasResources({
+    destroyMountedNodeCanvasResources(mountedResources, {
       container,
-      graphUnsub,
-      groupNodesUnsub,
-      groupFramesUnsub,
-      groupUiStateUnsub,
-      paramsUnsub,
-      tickUnsub,
-      runningUnsub,
-      loopDeployUnsub,
-      groupDisabledUnsub,
-      managerUnsub,
-      displayBridgeUnsub,
       midiController,
       patchRuntime,
       loopController,
@@ -887,22 +703,6 @@
       groupController,
       groupPortNodesController,
       minimapController,
-      nodeDragInteractions,
-      keydownHandler,
-      wheelHandler,
-      contextMenuHandler,
-      pointerDownHandler,
-      pointerMoveHandler,
-      dblclickHandler,
-      toolbarMenuOutsideHandler,
-      groupFrameToggleHandler,
-      groupFrameDisabledHandler,
-      customNodeUncoupleHandler,
-      customNodeExpandHandler,
-      resizeObserver,
-      socketPositionWatcher,
-      areaPlugin,
-      editor,
       nodeMap,
       connectionMap,
       nodeEngine,
