@@ -25,7 +25,7 @@
     "test:ff09": "pnpm --filter @shugu/node-core run test && pnpm tsx --test apps/manager/src/lib/components/nodes/node-canvas/adapters/semantic-command-adapter.spec.ts && node .harness/evidence/FF-09/semantic-cli-fixture.mjs && node .harness/evidence/FF-09/ui-semantic-mutation-guard.mjs",
     "verify": "pnpm guard:deps && pnpm lint && pnpm build:all && pnpm test:node-core && pnpm test:ff08 && pnpm test:ff09 && pnpm validate:node-specs && pnpm e2e:node-executor:offline && pnpm guard:ff08 && pnpm harness:verify",
     "test:node-canvas": "pnpm tsx --test \"apps/manager/src/lib/components/nodes/node-canvas/groups/**/*.spec.ts\"",
-    "guard:deps": "node scripts/guard-tracked-artifacts.mjs && node scripts/guard-deps.mjs && node scripts/guard-server-messages.mjs",
+    "guard:deps": "node scripts/guard-tracked-artifacts.mjs && node scripts/guard-source-size.mjs && node scripts/guard-deps.mjs && node scripts/guard-server-messages.mjs",
     "guard:server-messages": "node scripts/guard-server-messages.mjs",
     "build:all": "pnpm -r run build",
     "lint": "ESLINT_USE_FLAT_CONFIG=true pnpm -r run lint",

@@ -115,7 +115,6 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       groupEditToastTimeout = null;
     }, 1400);
   };
-
   const recomputeDisabledNodes = (nextGroups: NodeGroup[] = get(nodeGroups)) => {
     const prev = get(groupDisabledNodeIds);
     const next = new Set<string>();
