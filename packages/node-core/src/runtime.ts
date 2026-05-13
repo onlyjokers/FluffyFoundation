@@ -3,10 +3,16 @@ import type {
   GraphState,
   NodeDefinition,
   NodeInstance,
-  NodePort,
   ProcessContext,
 } from './types.js';
 import type { NodeRegistry } from './registry.js';
+import { computeDisabledBypassOutputs } from './runtime-disabled-bypass.js';
+import {
+  commandSignature,
+  countSinkValues,
+  diffCommandArray,
+  recordSinkSignature,
+} from './runtime-watchdog.js';
 
 const DEFAULT_TICK_INTERVAL_MS = 33;
 
@@ -26,9 +32,6 @@ type RuntimeOverridesByKind = {
   input: Map<string, RuntimeOverride>;
   config: Map<string, RuntimeOverride>;
 };
-
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 
 export class NodeRuntime {
   private nodes = new Map<string, NodeInstance>();
@@ -308,79 +311,6 @@ export class NodeRuntime {
     }
   }
 
-  private inferDisabledBypassPorts(
-    def: Pick<NodeDefinition, 'inputs' | 'outputs'>
-  ): { inId: string; outId: string } | null {
-    const inputs = Array.isArray(def.inputs) ? def.inputs : [];
-    const outputs = Array.isArray(def.outputs) ? def.outputs : [];
-
-    const inPort = inputs.find((p: NodePort) => p.id === 'in') ?? null;
-    const outPort = outputs.find((p: NodePort) => p.id === 'out') ?? null;
-    if (inPort && outPort && inPort.type === outPort.type) {
-      if (inPort.type === 'command' || inPort.type === 'client') return null;
-      return { inId: 'in', outId: 'out' };
-    }
-
-    if (inputs.length === 1 && outputs.length === 1) {
-      const onlyIn = inputs[0];
-      const onlyOut = outputs[0];
-      if (onlyIn?.id && onlyOut?.id && onlyIn.type === onlyOut.type) {
-        if (onlyIn.type === 'command' || onlyIn.type === 'client') return null;
-        return { inId: onlyIn.id, outId: onlyOut.id };
-      }
-    }
-
-    const sinkInputs = inputs.filter((p: NodePort) => p.kind === 'sink');
-    const sinkOutputs = outputs.filter((p: NodePort) => p.kind === 'sink');
-    if (sinkInputs.length === 1 && sinkOutputs.length === 1) {
-      const onlyIn = sinkInputs[0];
-      const onlyOut = sinkOutputs[0];
-      if (onlyIn?.id && onlyOut?.id && onlyIn.type === onlyOut.type) {
-        if (onlyIn.type === 'command' || onlyIn.type === 'client') return null;
-        return { inId: onlyIn.id, outId: onlyOut.id };
-      }
-    }
-
-    return null;
-  }
-
-  private computeDisabledBypassOutputs(node: NodeInstance): Record<string, unknown> | null {
-    const def = this.registry.get(node.type);
-    if (!def) return null;
-    const ports = this.inferDisabledBypassPorts(def);
-    if (!ports) {
-      if (['img-scale', 'img-fit', 'img-xy-offset', 'img-transparency'].includes(node.type)) {
-        console.warn(
-          `[NodeRuntime] Bypass failed for ${node.type} (${node.id}): inferDisabledBypassPorts returned null`
-        );
-      }
-      return null;
-    }
-
-    const incoming = this.connections.filter(
-      (c) => c.targetNodeId === node.id && c.targetPortId === ports.inId
-    );
-    if (incoming.length === 0) return null;
-
-    const outgoing = this.connections.filter(
-      (c) => c.sourceNodeId === node.id && c.sourcePortId === ports.outId
-    );
-    // Only treat it as a pass-through "wire" when both sides are connected.
-    if (outgoing.length === 0) return null;
-
-    let value: unknown = undefined;
-    for (const conn of incoming) {
-      const sourceNode = this.nodes.get(conn.sourceNodeId);
-      if (!sourceNode) continue;
-      const next = sourceNode.outputValues?.[conn.sourcePortId];
-      if (value === undefined) value = next;
-      else if (Array.isArray(value)) value.push(next);
-      else value = [value, next];
-    }
-
-    return { [ports.outId]: value };
-  }
-
   applyOverride(
     nodeId: string,
     kind: 'input' | 'config',
@@ -517,109 +447,6 @@ export class NodeRuntime {
     return next;
   }
 
-  private countSinkValues(value: unknown): number {
-    if (value === undefined || value === null) return 0;
-    if (Array.isArray(value)) return value.length;
-    return 1;
-  }
-
-  private commandSignature(value: unknown): string | null {
-    // Actions that are expected to be continuously updated (e.g., visual effects with
-    // numeric parameters) should be excluded from oscillation detection. These commands
-    // naturally change frequently when the user adjusts sliders/knobs.
-    const continuousActions = new Set([
-      'visualScenes',
-      'visualEffects',
-      'screenColor',
-      'modulateSoundUpdate',
-    ]);
-
-    const signatureFor = (value: unknown): string | null => {
-      const cmd = asRecord(value);
-      if (!cmd) return null;
-      const action = typeof cmd.action === 'string' ? cmd.action : '';
-      if (!action) return null;
-
-      // Skip oscillation detection for continuous/smoothly-updating actions.
-      if (continuousActions.has(action)) return null;
-
-      const payload = asRecord(cmd.payload) ?? {};
-
-      const parts: string[] = [`a=${action}`];
-      if (typeof payload.mode === 'string' && payload.mode) parts.push(`mode=${payload.mode}`);
-      if (typeof payload.waveform === 'string' && payload.waveform)
-        parts.push(`wave=${payload.waveform}`);
-      if (typeof payload.sceneId === 'string' && payload.sceneId)
-        parts.push(`scene=${payload.sceneId}`);
-      if (typeof payload.transition === 'string' && payload.transition)
-        parts.push(`trans=${payload.transition}`);
-
-      if (action === 'flashlight' && payload.mode === 'blink') {
-        const q = (n: unknown) =>
-          typeof n === 'number' && Number.isFinite(n) ? Math.round(n * 100) / 100 : undefined;
-        const freq = q(payload.frequency);
-        const duty = q(payload.dutyCycle);
-        if (freq !== undefined) parts.push(`f=${freq}`);
-        if (duty !== undefined) parts.push(`d=${duty}`);
-      }
-
-      return parts.join(',');
-    };
-
-    if (Array.isArray(value)) {
-      const items = value as unknown[];
-      const sigs = items
-        .slice(0, 3)
-        .map((v) => signatureFor(v))
-        .filter(Boolean) as string[];
-      if (sigs.length === 0) return null;
-      const extra = items.length > 3 ? `+${items.length - 3}` : '';
-      return `arr(${sigs.join('|')})${extra}`;
-    }
-
-    return signatureFor(value);
-  }
-
-  private recordSinkSignature(
-    key: string,
-    signature: string,
-    now: number
-  ): NodeRuntimeWatchdogInfo | null {
-    const history = this.sinkSignatureHistory.get(key) ?? [];
-    const next = [...history, { at: now, signature }].slice(-this.oscillation.windowSize);
-    this.sinkSignatureHistory.set(key, next);
-
-    if (!this.oscillation.enabled) return null;
-    if (next.length < this.oscillation.minAlternatingLength) return null;
-
-    const isAlternating = (slice: { at: number; signature: string }[]) => {
-      const uniq = new Set(slice.map((e) => e.signature));
-      if (uniq.size !== 2) return false;
-      for (let i = 1; i < slice.length; i++) {
-        if (slice[i].signature === slice[i - 1].signature) return false;
-      }
-      for (let i = 2; i < slice.length; i++) {
-        if (slice[i].signature !== slice[i - 2].signature) return false;
-      }
-      const span = slice[slice.length - 1].at - slice[0].at;
-      return span >= 0 && span <= this.oscillation.windowMs;
-    };
-
-    for (let len = next.length; len >= this.oscillation.minAlternatingLength; len--) {
-      const slice = next.slice(-len);
-      if (!isAlternating(slice)) continue;
-      const a = slice[0]?.signature ?? '';
-      const b = slice[1]?.signature ?? '';
-      return {
-        reason: 'oscillation',
-        message: `oscillation detected (${len} alternating changes)`,
-        diagnostics: { key, a, b, length: len, windowMs: this.oscillation.windowMs },
-      };
-    }
-
-    return null;
-  }
-
   private triggerWatchdog(info: NodeRuntimeWatchdogInfo): void {
     try {
       this.onWatchdog?.(info);
@@ -699,7 +526,8 @@ export class NodeRuntime {
         // Reset sink state so re-enabling triggers `onSink` even if the inputs didn't change.
         this.lastOnSinkStateByNode.delete(node.id);
         this.lastHadSinkConnectionsByNode.set(node.id, false);
-        node.outputValues = this.computeDisabledBypassOutputs(node) ?? {};
+        node.outputValues =
+          computeDisabledBypassOutputs(node, this.registry, this.nodes, this.connections) ?? {};
         continue;
       }
       this.lastEnabledStateByNode.set(node.id, true);
@@ -860,14 +688,14 @@ export class NodeRuntime {
           const next = fullInputs[portId];
           const prev = prevState.inputs[portId];
           if (!Array.isArray(next) || !Array.isArray(prev)) continue;
-          sinkInputs[portId] = this.diffCommandArray(prev, next);
+          sinkInputs[portId] = diffCommandArray(prev, next);
         }
       }
 
       // Count sink values for a simple burst watchdog.
       for (const port of def.inputs) {
         if (port.kind !== 'sink') continue;
-        this.sinkValuesThisTick += this.countSinkValues(sinkInputs[port.id]);
+        this.sinkValuesThisTick += countSinkValues(sinkInputs[port.id]);
       }
       if (this.sinkValuesThisTick > this.maxSinkValuesPerTick) {
         this.triggerWatchdog({
@@ -887,10 +715,16 @@ export class NodeRuntime {
         for (const port of def.inputs) {
           if (port.kind !== 'sink') continue;
           const portId = port.id;
-          const signature = this.commandSignature(sinkInputs[portId]);
+          const signature = commandSignature(sinkInputs[portId]);
           if (!signature) continue;
           const key = `${node.id}:${portId}`;
-          const watchdog = this.recordSinkSignature(key, signature, now);
+          const watchdog = recordSinkSignature(
+            this.sinkSignatureHistory,
+            this.oscillation,
+            key,
+            signature,
+            now
+          );
           if (watchdog) {
             this.triggerWatchdog(watchdog);
             break;
@@ -927,53 +761,5 @@ export class NodeRuntime {
       }
     }
     return false;
-  }
-
-  private diffCommandArray(prev: unknown[], next: unknown[]): unknown[] {
-    const signatureOf = (value: unknown): string => {
-      if (value === null) return 'null';
-      if (value === undefined) return 'undefined';
-      if (typeof value === 'string') return `str:${value}`;
-      if (typeof value === 'number')
-        return Number.isFinite(value) ? `num:${value}` : `num:${String(value)}`;
-      if (typeof value === 'boolean') return `bool:${value}`;
-      try {
-        return `json:${JSON.stringify(value)}`;
-      } catch {
-        return `obj:${Object.prototype.toString.call(value)}`;
-      }
-    };
-
-    const keyFor = (value: unknown, counts: Map<string, number>): string => {
-      const record = asRecord(value);
-      const action = typeof record?.action === 'string' ? String(record.action) : '';
-      if (!action) return '';
-      const idx = counts.get(action) ?? 0;
-      counts.set(action, idx + 1);
-      return `${action}#${idx}`;
-    };
-
-    const prevSignatures = new Map<string, string>();
-    const prevCounts = new Map<string, number>();
-    for (const cmd of prev) {
-      const key = keyFor(cmd, prevCounts);
-      if (!key) continue;
-      prevSignatures.set(key, signatureOf(cmd));
-    }
-
-    const changed: unknown[] = [];
-    const nextCounts = new Map<string, number>();
-    for (const cmd of next) {
-      const key = keyFor(cmd, nextCounts);
-      // If we can't key this command, treat it as changed (best-effort safety).
-      if (!key) {
-        changed.push(cmd);
-        continue;
-      }
-      const sig = signatureOf(cmd);
-      if (prevSignatures.get(key) !== sig) changed.push(cmd);
-    }
-
-    return changed;
   }
 }
