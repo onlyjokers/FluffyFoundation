@@ -10,7 +10,7 @@ import { get, writable, type Writable } from 'svelte/store';
 import { PROTOCOL_VERSION } from '@shugu/protocol';
 import { applyGraphChanges, NodeRuntime } from '@shugu/node-core';
 
-import type { Connection, GraphChange, GraphState, NodeInstance, PortType } from './types';
+import type { Connection, GraphChange, GraphState, NodeInstance } from './types';
 import { nodeRegistry } from './registry';
 import { getSelectOptionsForInput } from './selection-options';
 import { parameterRegistry } from '../parameters/registry';
@@ -18,63 +18,21 @@ import { exportGraphForPatch } from './patch-export';
 import { customNodeDefinitions } from './custom-nodes/store';
 import { compileGraphForPatch } from './custom-nodes/flatten';
 import { diffGraphState } from './graph-changes';
+import {
+  getConnectionValidationError,
+  getLocalOnlyPatchRoutingError,
+} from './connection-validation';
+import {
+  capabilityForNodeType,
+  detectLocalClientLoops,
+  hashString,
+  shouldComputeWhileOffloaded,
+  type LocalLoop,
+} from './local-loop-detection';
 
-export type LocalLoop = {
-  id: string;
-  nodeIds: string[];
-  connectionIds: string[];
-  requiredCapabilities: string[];
-  clientsInvolved: string[]; // list of client-node ids (usually one)
-};
+export type { LocalLoop } from './local-loop-detection';
 
 const TICK_INTERVAL = 33; // ~30 FPS
-
-function shouldComputeWhileOffloaded(type: string): boolean {
-  // UI/Debug: keep pure nodes running locally so values can be inspected even when a patch/loop is offloaded.
-  // This must stay conservative: do not include nodes with side-effects (commands, parameter writes, etc).
-  const t = String(type ?? '');
-  if (!t) return false;
-  if (t.startsWith('logic-')) return true;
-  return false;
-}
-
-function capabilityForNodeType(type: string | undefined): string | null {
-  if (!type) return null;
-  if (type === 'proc-client-sensors') return 'sensors';
-  if (type === 'proc-flashlight') return 'flashlight';
-  if (type === 'proc-screen-color') return 'screen';
-  if (type === 'proc-synth-update') return 'sound';
-  if (type === 'tone-osc') return 'sound';
-  if (type === 'audio-data') return 'sound';
-  if (type === 'tone-delay') return 'sound';
-  if (type === 'tone-resonator') return 'sound';
-  if (type === 'tone-pitch') return 'sound';
-  if (type === 'tone-reverb') return 'sound';
-  if (type === 'tone-granular') return 'sound';
-  if (type === 'tone-lfo') return 'sound';
-  if (type === 'play-media') return 'sound';
-  if (type === 'proc-scene-switch') return 'visual';
-  if (type === 'audio-out') return 'sound';
-  if (type === 'load-audio-from-assets') return 'sound';
-  if (type === 'load-audio-from-local') return 'sound';
-  if (type === 'load-image-from-assets') return 'visual';
-  if (type === 'load-image-from-local') return 'visual';
-  if (type === 'load-video-from-assets') return 'visual';
-  if (type === 'load-video-from-local') return 'visual';
-  if (type === 'image-out') return 'visual';
-  if (type === 'video-out') return 'visual';
-  if (type === 'effect-out') return 'visual';
-  if (type === 'scene-out') return 'visual';
-  return null;
-}
-
-function hashString(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
-  }
-  return hash.toString(36);
-}
 
 const LEGACY_TONE_FIELDS_BY_TYPE = new Map<string, string[]>([
   ['tone-delay', ['bus', 'order', 'enabled']],
@@ -418,142 +376,13 @@ class NodeEngineClass {
 
   addConnection(connection: Connection): boolean {
     const snapshot = this.runtime.exportGraph();
-
-    const inputAlreadyConnected = snapshot.connections.some(
-      (c) =>
-        c.targetNodeId === connection.targetNodeId && c.targetPortId === connection.targetPortId
-    );
-    if (inputAlreadyConnected) {
-      this.lastError.set('The "in port" is connected up to once');
-      return false;
-    }
-
-    // Type guard: ensure port types are compatible
-    const sourceNode = snapshot.nodes.find((n) => n.id === connection.sourceNodeId);
-    const targetNode = snapshot.nodes.find((n) => n.id === connection.targetNodeId);
-    if (!sourceNode || !targetNode) return false;
-
-    if (sourceNode.type === 'group-proxy' && connection.sourcePortId === 'out') {
-      const sourceConfig =
-        sourceNode.config && typeof sourceNode.config === 'object'
-          ? (sourceNode.config as Record<string, unknown>)
-          : null;
-      const direction = String(sourceConfig?.direction ?? 'output');
-      if (direction === 'output') {
-        const alreadyConnected = snapshot.connections.some(
-          (c) => c.sourceNodeId === connection.sourceNodeId && c.sourcePortId === connection.sourcePortId
-        );
-        if (alreadyConnected) {
-          this.lastError.set('Group proxy output can only be connected once');
-          return false;
-        }
-      }
-    }
-
-    const sourceDef = nodeRegistry.get(sourceNode.type);
-    const targetDef = nodeRegistry.get(targetNode.type);
-    const sourcePort = sourceDef?.outputs.find((p) => p.id === connection.sourcePortId);
-    const targetPort = targetDef?.inputs.find((p) => p.id === connection.targetPortId);
-
-    if (!sourcePort || !targetPort) return false;
-
-    const resolveProxyPortType = (node: NodeInstance): PortType => {
-      const configRecord =
-        node.config && typeof node.config === 'object' ? (node.config as Record<string, unknown>) : null;
-      const raw = configRecord?.portType;
-      const t = typeof raw === 'string' ? raw : raw ? String(raw) : '';
-      if (
-        [
-          'number',
-          'boolean',
-          'string',
-          'asset',
-          'color',
-          'audio',
-          'image',
-          'video',
-          'scene',
-          'effect',
-          'client',
-          'command',
-          'fuzzy',
-          'array',
-          'any',
-        ].includes(t)
-      ) {
-        return t as PortType;
-      }
-      return 'any';
-    };
-
-    let sourceType = (sourcePort.type ?? 'any') as PortType;
-    let targetType = (targetPort.type ?? 'any') as PortType;
-
-    if (sourceNode.type === 'group-proxy') sourceType = resolveProxyPortType(sourceNode);
-    if (targetNode.type === 'group-proxy') targetType = resolveProxyPortType(targetNode);
-
-    // Sleep output adopts its input type and is inactive until the input is connected.
-    if (sourceNode.type === 'logic-sleep' && sourcePort.id === 'output') {
-      const inputConn = snapshot.connections.find(
-        (c) => c.targetNodeId === sourceNode.id && c.targetPortId === 'input'
-      );
-      if (!inputConn) {
-        this.lastError.set('Sleep output requires a connected input.');
-        return false;
-      }
-      const inputSourceNode = snapshot.nodes.find((n) => n.id === inputConn.sourceNodeId);
-      const inputSourceDef = inputSourceNode ? nodeRegistry.get(inputSourceNode.type) : null;
-      const inputSourcePort = inputSourceDef?.outputs.find((p) => p.id === inputConn.sourcePortId);
-      sourceType = (inputSourcePort?.type ?? 'any') as PortType;
-    }
-    const typeMismatch = sourceType !== 'any' && targetType !== 'any' && sourceType !== targetType;
-
-    // Audio ports are never compatible with "any" to prevent accidental numeric/string links.
-    // This matches the plan's intent: audio wires only connect to audio wires.
-    const audioMismatch =
-      sourceType === 'audio' || targetType === 'audio'
-        ? sourceType !== 'audio' || targetType !== 'audio'
-        : false;
-    const imageMismatch =
-      sourceType === 'image' || targetType === 'image'
-        ? sourceType !== 'image' || targetType !== 'image'
-        : false;
-    const videoMismatch =
-      sourceType === 'video' || targetType === 'video'
-        ? sourceType !== 'video' || targetType !== 'video'
-        : false;
-    const assetMismatch =
-      sourceType === 'asset' || targetType === 'asset'
-        ? sourceType !== 'asset' || targetType !== 'asset'
-        : false;
-    if (typeMismatch) {
-      this.lastError.set(
-        `Type mismatch: ${sourceType} -> ${targetType} (${sourceNode.id}:${sourcePort.id} → ${targetNode.id}:${targetPort.id})`
-      );
-      return false;
-    }
-    if (audioMismatch) {
-      this.lastError.set(
-        `Type mismatch: audio connections must be audio -> audio (${sourceNode.id}:${sourcePort.id} → ${targetNode.id}:${targetPort.id})`
-      );
-      return false;
-    }
-    if (imageMismatch) {
-      this.lastError.set(
-        `Type mismatch: image connections must be image -> image (${sourceNode.id}:${sourcePort.id} → ${targetNode.id}:${targetPort.id})`
-      );
-      return false;
-    }
-    if (videoMismatch) {
-      this.lastError.set(
-        `Type mismatch: video connections must be video -> video (${sourceNode.id}:${sourcePort.id} → ${targetNode.id}:${targetPort.id})`
-      );
-      return false;
-    }
-    if (assetMismatch) {
-      this.lastError.set(
-        `Type mismatch: asset connections must be asset -> asset (${sourceNode.id}:${sourcePort.id} → ${targetNode.id}:${targetPort.id})`
-      );
+    const validationError = getConnectionValidationError({
+      graph: snapshot,
+      connection,
+      getNodeDefinition: (type) => nodeRegistry.get(type),
+    });
+    if (validationError) {
+      if (validationError !== 'Connection failed') this.lastError.set(validationError);
       return false;
     }
 
@@ -561,142 +390,10 @@ class NodeEngineClass {
       applyGraphChanges(snapshot, [{ type: 'add-connection', connection }])
     );
 
-    const localOnlyNodeTypes = new Set([
-      'load-audio-from-local',
-      'load-image-from-local',
-      'load-video-from-local',
-    ]);
-
-    const validateLocalOnlyPatchRouting = (): string | null => {
-      const nodes = Array.isArray(next.nodes) ? next.nodes : [];
-      const connections = Array.isArray(next.connections) ? next.connections : [];
-
-      const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
-      const typeById = new Map(nodes.map((n) => [String(n.id), String(n.type)]));
-
-      const patchRoots = nodes.filter((n) =>
-        ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out'].includes(String(n.type))
-      );
-      if (patchRoots.length === 0) return null;
-
-      const incomingByTarget = new Map<string, { sourceNodeId: string; targetPortId: string }[]>();
-      const outgoingBySourceKey = new Map<
-        string,
-        { targetNodeId: string; targetPortId: string }[]
-      >();
-      for (const c of connections) {
-        const targetNodeId = String(c.targetNodeId);
-        const sourceNodeId = String(c.sourceNodeId);
-        const targetPortId = String(c.targetPortId);
-        const sourcePortId = String(c.sourcePortId);
-
-        const incoming = incomingByTarget.get(targetNodeId) ?? [];
-        incoming.push({ sourceNodeId, targetPortId });
-        incomingByTarget.set(targetNodeId, incoming);
-
-        const sourceKey = `${sourceNodeId}:${sourcePortId}`;
-        const outgoing = outgoingBySourceKey.get(sourceKey) ?? [];
-        outgoing.push({ targetNodeId, targetPortId });
-        outgoingBySourceKey.set(sourceKey, outgoing);
-      }
-
-      const shouldTraverseComputeDependency = (
-        targetNodeId: string,
-        targetPortId: string
-      ): boolean => {
-        const node = nodeById.get(String(targetNodeId));
-        if (!node) return true;
-        const def = nodeRegistry.get(String(node.type));
-        const port = def?.inputs?.find((p) => String(p.id) === String(targetPortId));
-        const portType = (port?.type ?? 'any') as PortType;
-        if (portType === 'client' || portType === 'command') return false;
-        return true;
-      };
-
-      const rootContainsLocalOnlyNodes = (rootNodeId: string): boolean => {
-        const keep = new Set<string>();
-        const visit = (nodeId: string) => {
-          const id = String(nodeId);
-          if (!id || keep.has(id)) return;
-          const node = nodeById.get(id);
-          if (!node) return;
-          keep.add(id);
-          const incoming = incomingByTarget.get(id) ?? [];
-          for (const inc of incoming) {
-            if (!shouldTraverseComputeDependency(id, inc.targetPortId)) continue;
-            visit(inc.sourceNodeId);
-          }
-        };
-        visit(rootNodeId);
-        for (const id of keep) {
-          const type = String(typeById.get(id) ?? '');
-          if (localOnlyNodeTypes.has(type)) return true;
-        }
-        return false;
-      };
-
-      const getCommandOutputPorts = (type: string): string[] => {
-        const def = nodeRegistry.get(String(type));
-        return (def?.outputs ?? [])
-          .filter((p) => String(p.type) === 'command')
-          .map((p) => String(p.id));
-      };
-
-      const isCommandInputPort = (type: string, portId: string): boolean => {
-        const def = nodeRegistry.get(String(type));
-        const port = (def?.inputs ?? []).find((p) => String(p.id) === String(portId));
-        return Boolean(port) && String(port?.type) === 'command';
-      };
-
-      const rootRoutesToClientObject = (rootNodeId: string): boolean => {
-        const rootType = String(typeById.get(rootNodeId) ?? '');
-        if (!rootType) return false;
-
-        const queue: { nodeId: string; portId: string }[] = getCommandOutputPorts(rootType).map(
-          (portId) => ({ nodeId: rootNodeId, portId })
-        );
-        const visited = new Set<string>();
-
-        while (queue.length > 0) {
-          const nextHop = queue.shift()!;
-          const key = `${nextHop.nodeId}:${nextHop.portId}`;
-          if (visited.has(key)) continue;
-          visited.add(key);
-
-          const outgoing = outgoingBySourceKey.get(key) ?? [];
-          for (const c of outgoing) {
-            const targetNodeId = String(c.targetNodeId);
-            if (!targetNodeId) continue;
-            const targetPortId = String(c.targetPortId);
-            const targetType = String(typeById.get(targetNodeId) ?? '');
-            if (!targetType) continue;
-            if (!isCommandInputPort(targetType, targetPortId)) continue;
-
-            if (targetType === 'client-object') return true;
-            if (targetType === 'display-object') continue;
-
-            const outPorts = getCommandOutputPorts(targetType);
-            for (const outPortId of outPorts)
-              queue.push({ nodeId: targetNodeId, portId: outPortId });
-          }
-        }
-
-        return false;
-      };
-
-      for (const root of patchRoots) {
-        const rootId = String(root.id);
-        if (!rootId) continue;
-        if (!rootContainsLocalOnlyNodes(rootId)) continue;
-        if (rootRoutesToClientObject(rootId)) {
-          return 'Load * From Local(Display only) can only connect Deploy to Display (not Client).';
-        }
-      }
-
-      return null;
-    };
-
-    const localOnlyError = validateLocalOnlyPatchRouting();
+    const localOnlyError = getLocalOnlyPatchRoutingError({
+      graph: next,
+      getNodeDefinition: (type) => nodeRegistry.get(type),
+    });
     if (localOnlyError) {
       this.lastError.set(localOnlyError);
       return false;
@@ -914,7 +611,7 @@ class NodeEngineClass {
 
   private updateLocalLoops(): void {
     try {
-      const loops = this.detectLocalClientLoops();
+      const loops = detectLocalClientLoops(this.runtime.getGraphRef());
       this.localLoops.set(loops);
 
       // If a loop vanished, clear its offload flags.
@@ -939,104 +636,6 @@ class NodeEngineClass {
       this.deployedLoopIds.clear();
       this.deployedLoops.set([]);
     }
-  }
-
-  private detectLocalClientLoops(): LocalLoop[] {
-    const { nodes, connections } = this.runtime.getGraphRef();
-    const nodeById = new Map(nodes.map((n) => [n.id, n]));
-
-    const adj = new Map<string, string[]>();
-    for (const n of nodes) adj.set(n.id, []);
-    for (const conn of connections) {
-      const outs = adj.get(conn.sourceNodeId) ?? [];
-      outs.push(conn.targetNodeId);
-      adj.set(conn.sourceNodeId, outs);
-    }
-
-    const isClient = (id: string) => nodeById.get(id)?.type === 'client-object';
-    const isClientSensors = (id: string) => nodeById.get(id)?.type === 'proc-client-sensors';
-
-    const indexById = new Map<string, number>();
-    const lowById = new Map<string, number>();
-    const stack: string[] = [];
-    const onStack = new Set<string>();
-    let index = 0;
-    const sccs: string[][] = [];
-
-    const strongconnect = (v: string) => {
-      indexById.set(v, index);
-      lowById.set(v, index);
-      index++;
-      stack.push(v);
-      onStack.add(v);
-
-      for (const w of adj.get(v) ?? []) {
-        if (!indexById.has(w)) {
-          strongconnect(w);
-          lowById.set(v, Math.min(lowById.get(v)!, lowById.get(w)!));
-        } else if (onStack.has(w)) {
-          lowById.set(v, Math.min(lowById.get(v)!, indexById.get(w)!));
-        }
-      }
-
-      if (lowById.get(v) === indexById.get(v)) {
-        const component: string[] = [];
-        while (stack.length > 0) {
-          const w = stack.pop()!;
-          onStack.delete(w);
-          component.push(w);
-          if (w === v) break;
-        }
-        sccs.push(component);
-      }
-    };
-
-    for (const n of nodes) {
-      if (!indexById.has(n.id)) strongconnect(n.id);
-    }
-
-    const loops: LocalLoop[] = [];
-    for (const component of sccs) {
-      if (component.length === 0) continue;
-      const nodeSet = new Set(component);
-
-      // Single node SCC must have a self-loop to be a cycle.
-      if (component.length === 1) {
-        const only = component[0];
-        const hasSelf = connections.some((c) => c.sourceNodeId === only && c.targetNodeId === only);
-        if (!hasSelf) continue;
-      }
-
-      const clientNodes = component.filter(isClient);
-      if (clientNodes.length !== 1) continue;
-      const hasSensors = component.some(isClientSensors);
-      if (!hasSensors) continue;
-
-      const connIds = connections
-        .filter((c) => nodeSet.has(c.sourceNodeId) && nodeSet.has(c.targetNodeId))
-        .map((c) => c.id);
-
-      const caps = new Set<string>();
-      for (const nid of component) {
-        const cap = capabilityForNodeType(nodeById.get(nid)?.type);
-        if (cap) caps.add(cap);
-      }
-
-      const key = component.slice().sort().join(',');
-      const loopId = `loop:${clientNodes[0]}:${hashString(key)}`;
-
-      loops.push({
-        id: loopId,
-        nodeIds: component.slice(),
-        connectionIds: connIds,
-        requiredCapabilities: Array.from(caps),
-        clientsInvolved: clientNodes,
-      });
-    }
-
-    // Stable ordering for UI.
-    loops.sort((a, b) => a.id.localeCompare(b.id));
-    return loops;
   }
 
   /**
