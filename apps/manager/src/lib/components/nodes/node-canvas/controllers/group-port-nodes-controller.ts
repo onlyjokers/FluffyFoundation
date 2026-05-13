@@ -16,8 +16,8 @@ import {
   GROUP_GATE_NODE_TYPE,
   GROUP_PROXY_NODE_TYPE,
 } from '../utils/group-port-utils';
-
-const GROUP_FRAME_NODE_TYPE = 'group-frame';
+import { GROUP_FRAME_NODE_TYPE, syncGroupFrameNodes } from './group-frame-node-sync';
+import { alignGroupProxyNodes } from './group-proxy-alignment';
 const isGroupDecorationNodeType = (type: string) => isGroupPortNodeType(type) || type === GROUP_FRAME_NODE_TYPE;
 
 export type GroupPortNodesController = {
@@ -112,24 +112,11 @@ export function createGroupPortNodesController(
     const state = nodeEngine.exportGraph() as GraphState;
     const nodes = Array.isArray(state.nodes) ? state.nodes : [];
     const connections = Array.isArray((state as AnyRecord).connections) ? (state as AnyRecord).connections : [];
-    const nodeById = new Map(nodes.map((n: AnyRecord) => [String((n as AnyRecord)?.id ?? ''), n] as const));
-
-    // Minimized Group frames are represented as a dedicated UI node (`group-frame`),
-    // so the minimized state behaves like a standard node in the canvas.
-    const existingFrameNodeIdByGroupId = new Map<string, string>();
     const gateNodeIdsByGroupId = new Map<string, string[]>();
     for (const node of nodes) {
       const type = String((node as AnyRecord).type ?? '');
       const gid = groupIdFromNode(node as AnyRecord);
       if (!gid) continue;
-
-      if (type === GROUP_FRAME_NODE_TYPE) {
-        const id = String((node as AnyRecord).id ?? '');
-        if (!id) continue;
-        // Keep only one group-frame node per group.
-        if (!existingFrameNodeIdByGroupId.has(gid)) existingFrameNodeIdByGroupId.set(gid, id);
-        else nodeEngine.removeNode(id);
-      }
 
       if (type === GROUP_GATE_NODE_TYPE) {
         const id = String((node as AnyRecord).id ?? '');
@@ -141,11 +128,6 @@ export function createGroupPortNodesController(
     }
 
     const groupIdSet = new Set(groups.map((g: AnyRecord) => String((g as AnyRecord).id ?? '')).filter(Boolean));
-
-    for (const [gid, nodeId] of existingFrameNodeIdByGroupId.entries()) {
-      if (!gid || !nodeId) continue;
-      if (!groupIdSet.has(gid)) nodeEngine.removeNode(nodeId);
-    }
 
     // Remove Group Gate nodes whose group no longer exists.
     for (const [gid, ids] of gateNodeIdsByGroupId.entries()) {
@@ -179,65 +161,7 @@ export function createGroupPortNodesController(
       }
     }
 
-    for (const group of groups) {
-      const groupId = String((group as AnyRecord)?.id ?? '');
-      if (!groupId) continue;
-
-      const minimized = Boolean((group as AnyRecord)?.minimized);
-      const existingFrameNodeId = existingFrameNodeIdByGroupId.get(groupId) ?? '';
-
-      if (!minimized) {
-        if (existingFrameNodeId) nodeEngine.removeNode(existingFrameNodeId);
-        continue;
-      }
-
-      if (existingFrameNodeId) {
-        const frameNode = nodeById.get(existingFrameNodeId) as AnyRecord;
-        const desiredName = String((group as AnyRecord)?.name ?? 'Group');
-        const desiredDisabled = Boolean((group as AnyRecord)?.disabled);
-
-        const patch: Record<string, unknown> = {};
-        const currentName = String((frameNode?.config as AnyRecord)?.name ?? '');
-        const currentDisabled = Boolean((frameNode?.config as AnyRecord)?.disabled);
-
-        if (desiredName && desiredName !== currentName) patch.name = desiredName;
-        if (desiredDisabled !== currentDisabled) patch.disabled = desiredDisabled;
-
-        if (Object.keys(patch).length > 0) nodeEngine.updateNodeConfig(existingFrameNodeId, patch);
-        continue;
-      }
-
-      const bounds = computeGroupNodeBounds(group, state);
-      const count = getNodeCount();
-      const centerX = bounds ? bounds.centerX : 120 + count * 10;
-      const centerY = bounds ? bounds.centerY : 120 + count * 6;
-
-      const proxyNodes = nodes.filter(
-        (n: AnyRecord) =>
-          String((n as AnyRecord).type ?? '') === GROUP_PROXY_NODE_TYPE &&
-          String(((n as AnyRecord).config as AnyRecord)?.groupId ?? '') === groupId
-      );
-      const inputProxyCount = proxyNodes.filter(
-        (n: AnyRecord) => String(((n as AnyRecord).config as AnyRecord)?.direction ?? 'output') === 'input'
-      ).length;
-      const outputProxyCount = Math.max(0, proxyNodes.length - inputProxyCount);
-      const portRows = Math.max(1, Math.max(inputProxyCount, outputProxyCount));
-
-      const width = 230;
-      const headerHeight = 44;
-      const rowHeight = 28;
-      const height = Math.max(84, headerHeight + portRows * rowHeight + 12);
-
-      addNode(
-        GROUP_FRAME_NODE_TYPE,
-        { x: centerX - width / 2, y: centerY - height / 2 },
-        {
-          groupId,
-          name: String((group as AnyRecord)?.name ?? 'Group'),
-          disabled: Boolean((group as AnyRecord)?.disabled),
-        }
-      );
-    }
+    syncGroupFrameNodes({ groups, state, nodeEngine, getNodeCount, addNode });
 
     const index = buildGroupPortIndex(state);
 
@@ -268,12 +192,6 @@ export function createGroupPortNodesController(
     const nodeById = new Map((state.nodes ?? []).map((n: AnyRecord) => [String(n.id), n]));
     const connections = Array.isArray(state.connections) ? state.connections : [];
 
-    const PROXY_NODE_WIDTH = 48;
-    const PROXY_NODE_HALF_HEIGHT = 10;
-    const PROXY_MIN_SPACING = 20;
-    const PROXY_SOCKET_OUTSET = 10;
-    const PROXY_EDGE_NUDGE = 12;
-
     groupController.beginProgrammaticTranslate();
     try {
       for (const frame of frames) {
@@ -300,147 +218,7 @@ export function createGroupPortNodesController(
         }
 
         const proxyIds = Array.isArray((ports as AnyRecord).proxyIds) ? (ports as AnyRecord).proxyIds : [];
-        if (proxyIds.length > 0) {
-          const minimizedHeaderHeight = 44;
-          const minimizedRowHeight = 28;
-          const minimizedPad = 6;
-
-          const pad = (() => {
-            const h = Number(frame.height ?? 0);
-            if (!Number.isFinite(h) || h <= 0) return 56;
-            const halfMinus = Math.max(0, h / 2 - 18);
-            return Math.max(24, Math.min(56, halfMinus));
-          })();
-
-          const minCenterY = isMinimized
-            ? frame.top + minimizedHeaderHeight + minimizedPad + minimizedRowHeight / 2
-            : frame.top + pad;
-          const maxCenterY = isMinimized
-            ? frame.top + frame.height - minimizedPad - minimizedRowHeight / 2
-            : frame.top + frame.height - pad;
-
-          const clampCenterY = (y: number) => {
-            if (!Number.isFinite(y)) return centerY;
-            if (!Number.isFinite(minCenterY) || !Number.isFinite(maxCenterY) || maxCenterY <= minCenterY) return centerY;
-            return Math.max(minCenterY, Math.min(maxCenterY, y));
-          };
-
-          const nodeCenterY = (nodeId: string) => {
-            const b = adapter.getNodeBounds(String(nodeId));
-            if (b) return (b.top + b.bottom) / 2;
-            const pos = adapter.getNodePosition(String(nodeId));
-            return pos ? pos.y : centerY;
-          };
-
-          type ProxyItem = {
-            id: string;
-            direction: 'input' | 'output';
-            pinned: boolean;
-            desiredCenterY: number;
-          };
-
-          const inputSide: ProxyItem[] = [];
-          const outputSide: ProxyItem[] = [];
-
-          for (const proxyIdRaw of proxyIds) {
-            const proxyId = String(proxyIdRaw ?? '');
-            if (!proxyId) continue;
-            const proxyNode = nodeById.get(proxyId);
-            if (!proxyNode) continue;
-
-            const direction =
-              String((proxyNode as AnyRecord)?.config?.direction ?? 'output') === 'input' ? 'input' : 'output';
-            const pinned = Boolean((proxyNode as AnyRecord)?.config?.pinned);
-
-            const cur = adapter.getNodePosition(proxyId);
-            const curCenterY = cur ? cur.y + PROXY_NODE_HALF_HEIGHT : centerY;
-
-            let desiredCenterY = centerY;
-            if (pinned) {
-              desiredCenterY = curCenterY;
-            } else if (direction === 'input') {
-              // Left edge proxy forwards to inside via `out` → (target inside group).
-              const internal = connections.filter(
-                (c: AnyRecord) => String(c.sourceNodeId) === proxyId && String(c.sourcePortId) === 'out'
-              );
-              if (internal.length > 0) {
-                const ys = internal.map((c: AnyRecord) => nodeCenterY(String(c.targetNodeId)));
-                desiredCenterY = ys.reduce((sum: number, y: number) => sum + y, 0) / ys.length;
-              } else {
-                desiredCenterY = curCenterY;
-              }
-            } else {
-              // Right edge proxy forwards from inside via (source inside group) → `in`.
-              const internal = connections.find(
-                (c: AnyRecord) => String(c.targetNodeId) === proxyId && String(c.targetPortId) === 'in'
-              );
-              if (internal) desiredCenterY = nodeCenterY(String((internal as AnyRecord).sourceNodeId));
-              else desiredCenterY = curCenterY;
-            }
-
-            const item: ProxyItem = {
-              id: proxyId,
-              direction,
-              pinned,
-              desiredCenterY: clampCenterY(desiredCenterY),
-            };
-            if (direction === 'input') inputSide.push(item);
-            else outputSide.push(item);
-          }
-
-          const distribute = (items: ProxyItem[]) => {
-            if (items.length === 0) return;
-            if (items.length === 1) return;
-
-            const available = maxCenterY - minCenterY;
-            const maxSpacing = items.length > 1 ? available / (items.length - 1) : PROXY_MIN_SPACING;
-            const spacing = Math.max(14, Math.min(PROXY_MIN_SPACING, maxSpacing));
-
-            items.sort((a, b) => a.desiredCenterY - b.desiredCenterY || a.id.localeCompare(b.id));
-            const ys = items.map((i) => clampCenterY(i.desiredCenterY));
-
-            for (let i = 1; i < ys.length; i += 1) {
-              ys[i] = Math.max(ys[i], ys[i - 1] + spacing);
-            }
-
-            const overflow = ys[ys.length - 1] - maxCenterY;
-            if (overflow > 0) {
-              for (let i = 0; i < ys.length; i += 1) ys[i] -= overflow;
-              for (let i = ys.length - 2; i >= 0; i -= 1) {
-                ys[i] = Math.min(ys[i], ys[i + 1] - spacing);
-              }
-              const underflow = minCenterY - ys[0];
-              if (underflow > 0) {
-                for (let i = 0; i < ys.length; i += 1) ys[i] += underflow;
-              }
-            }
-
-            for (let i = 0; i < items.length; i += 1) {
-              items[i].desiredCenterY = clampCenterY(ys[i]);
-            }
-          };
-
-          distribute(inputSide);
-          distribute(outputSide);
-
-          for (const item of [...inputSide, ...outputSide]) {
-            const right = frame.left + frame.width;
-
-            const desiredX = isMinimized
-              ? item.direction === 'input'
-                ? frame.left - PROXY_SOCKET_OUTSET
-                : right + PROXY_SOCKET_OUTSET - PROXY_NODE_WIDTH
-              : // Straddle the frame edge so one socket is inside and one is outside the Group boundary.
-                item.direction === 'input'
-                ? frame.left - PROXY_NODE_WIDTH / 2 - PROXY_EDGE_NUDGE
-                : right - PROXY_NODE_WIDTH / 2 + PROXY_EDGE_NUDGE;
-            const topLeftY = item.desiredCenterY - PROXY_NODE_HALF_HEIGHT;
-            const cur = adapter.getNodePosition(item.id);
-            if (!cur || Math.abs(cur.x - desiredX) > 1 || Math.abs(cur.y - topLeftY) > 1) {
-              adapter.setNodePosition(item.id, desiredX, topLeftY);
-            }
-          }
-        }
+        alignGroupProxyNodes({ frame, proxyIds, nodeById, connections, adapter });
       }
     } finally {
       groupController.endProgrammaticTranslate();
