@@ -84,6 +84,61 @@ Purpose: Isolate manager login UI and dev-only password configuration from the m
 </div>
 
 <style>
+  .connect-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--space-lg);
+    background: linear-gradient(135deg, var(--bg-primary) 0%, #0f0f1a 100%);
+  }
+
+  .connect-card {
+    width: min(100%, 400px);
+    padding: var(--space-xl);
+    text-align: center;
+  }
+
+  .title {
+    margin: 0 0 var(--space-md);
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    line-height: 1.1;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .connect-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
+    text-align: left;
+  }
+
+  .form-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .input {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-base);
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--border-glow);
+  }
+
   .remember-row {
     display: flex;
     align-items: center;
@@ -91,5 +146,12 @@ Purpose: Isolate manager login UI and dev-only password configuration from the m
     font-size: var(--text-sm);
     color: var(--text-secondary);
     cursor: pointer;
+  }
+
+  .error-message {
+    margin: 0;
+    color: var(--color-error);
+    font-size: var(--text-sm);
+    text-align: center;
   }
 </style>

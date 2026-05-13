@@ -16,6 +16,8 @@ Purpose: Display panel (Phase 5) - show Local/Remote Display status and controls
   import Button from '$lib/components/ui/Button.svelte';
   import Toggle from '$lib/components/ui/Toggle.svelte';
 
+  export let serverUrl = '';
+
   $: bridge = $displayBridgeState;
   $: hasLocal = bridge.status !== 'idle' && bridge.status !== 'closed';
   $: hasRemote = $displayClients.length > 0;
@@ -64,7 +66,7 @@ Purpose: Display panel (Phase 5) - show Local/Remote Display status and controls
       </div>
 
       <div class="row">
-        <Button variant="primary" size="sm" on:click={() => openDisplay()}>Open</Button>
+        <Button variant="primary" size="sm" on:click={() => openDisplay({ serverUrl })}>Open</Button>
         <Button variant="ghost" size="sm" on:click={() => pairDisplay()} disabled={!hasLocal}
           >Reconnect</Button
         >

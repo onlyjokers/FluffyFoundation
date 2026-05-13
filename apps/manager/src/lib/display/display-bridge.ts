@@ -111,6 +111,7 @@ const ASSET_READ_TOKEN_STORAGE_KEY = 'shugu-asset-read-token';
 const DISPLAY_BASE_PATH = '/display';
 const LOCAL_MEDIA_BROADCAST_CHANNEL = 'shugu:display:local-media';
 const LOCAL_MEDIA_BROADCAST_DEDUP_MS = 1500;
+const LOCAL_DISPLAY_PAIR_RETRY_DELAYS_MS = [250, 750, 1500, 2500];
 
 let displayWindow: Window | null = null;
 let controlPort: MessagePort | null = null;
@@ -495,15 +496,19 @@ export function openDisplay(options?: {
 
   ensureCloseWatch();
 
-  // Pair after a short delay to reduce the chance that Display misses the initial postMessage listener.
-  setTimeout(() => {
-    pairDisplay({
-      serverUrl,
-      assetReadToken,
-      tokenOverride: pairToken,
-      displayOrigin: displayUrl.origin,
-    });
-  }, 250);
+  for (const delay of LOCAL_DISPLAY_PAIR_RETRY_DELAYS_MS) {
+    setTimeout(() => {
+      const state = get(displayBridgeState);
+      if (state.pairToken !== pairToken || state.ready) return;
+      if (!displayWindow || displayWindow.closed) return;
+      pairDisplay({
+        serverUrl,
+        assetReadToken,
+        tokenOverride: pairToken,
+        displayOrigin: displayUrl.origin,
+      });
+    }, delay);
+  }
 }
 
 export function pairDisplay(options?: {

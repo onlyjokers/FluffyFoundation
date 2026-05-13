@@ -44,6 +44,9 @@ pnpm-debug.log*
 # Testing
 coverage
 .nyc_output
+.playwright-cli/
+.playwright-mcp/
+browser-mcp-test.png
 
 # Temp
 .tmp
@@ -81,3 +84,6 @@ apps/**/data/
 
 # Python Cache
 **/__pycache__/
+
+# Local code-intelligence indexes
+.gitnexus/

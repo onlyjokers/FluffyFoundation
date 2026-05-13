@@ -63,7 +63,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
 
 <AppShell
   fullBleed={activePage === 'nodes' || activePage === 'assets'}
-  collapseHeader={activePage === 'nodes'}
+  collapseHeader={false}
 >
   <div slot="headerActions">
     <Button variant="danger" size="sm" on:click={() => interruptMedia(true)}>Global Stop</Button>
@@ -120,7 +120,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
         </Card>
       </div>
       <div class="grid-item">
-        <DisplayPanel />
+        <DisplayPanel {serverUrl} />
       </div>
       <div class="grid-item">
         <Card title="Performance Mode">
@@ -229,18 +229,16 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
     margin-top: var(--space-sm);
   }
 
-  .assets-pane {
-    height: calc(100vh - 96px);
-  }
-
   .nodes-page {
     width: 100%;
-    min-height: calc(100vh - 76px);
   }
 
+  .nodes-page,
+  .assets-pane,
   .nodes-pane {
-    width: 100%;
-    height: calc(100vh - 76px);
+    flex: 1;
+    min-height: 0;
+    display: flex;
   }
 
   .hide {
