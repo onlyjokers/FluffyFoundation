@@ -12,20 +12,27 @@ import { applyGraphChanges, NodeRuntime } from '@shugu/node-core';
 
 import type { Connection, GraphChange, GraphState, NodeInstance } from './types';
 import { nodeRegistry } from './registry';
-import { getSelectOptionsForInput } from './selection-options';
 import { parameterRegistry } from '../parameters/registry';
 import { exportGraphForPatch } from './patch-export';
 import { customNodeDefinitions } from './custom-nodes/store';
 import { compileGraphForPatch } from './custom-nodes/flatten';
 import { diffGraphState } from './graph-changes';
+import { applySelectionMapOptions } from './engine-selection-options';
+import {
+  assertPatchDeployableNodeType,
+  collectRequiredCapabilities,
+  createPatchId,
+  isLoopDeployableNodeType,
+  isPatchRootType,
+  patchRootTypeList,
+  selectPatchRoots,
+} from './engine-deployment-policy';
 import {
   getConnectionValidationError,
   getLocalOnlyPatchRoutingError,
 } from './connection-validation';
 import {
-  capabilityForNodeType,
   detectLocalClientLoops,
-  hashString,
   shouldComputeWhileOffloaded,
   type LocalLoop,
 } from './local-loop-detection';
@@ -235,51 +242,6 @@ class NodeEngineClass {
     // Don't sync graph state for position-only changes (performance)
   }
 
-  private applySelectionMapOptions(state: GraphState): GraphState {
-    const nodes = Array.isArray(state.nodes) ? state.nodes : [];
-    const connections = Array.isArray(state.connections) ? state.connections : [];
-    const selectionNodes = new Set(
-      nodes.filter((node) => node.type === 'midi-select-map').map((node) => String(node.id))
-    );
-
-    if (selectionNodes.size === 0 || connections.length === 0) return state;
-
-    const nodeById = new Map(nodes.map((node) => [String(node.id), node]));
-    const nextOptionsByNodeId = new Map<string, string[]>();
-
-    for (const c of connections) {
-      const sourceId = String(c.sourceNodeId);
-      if (!selectionNodes.has(sourceId)) continue;
-      const target = nodeById.get(String(c.targetNodeId));
-      if (!target) continue;
-      const options = getSelectOptionsForInput(target.type, String(c.targetPortId)) ?? [];
-      nextOptionsByNodeId.set(sourceId, options);
-    }
-
-    if (nextOptionsByNodeId.size === 0) return state;
-
-    const optionsEqual = (a: string[], b: string[]) =>
-      a.length === b.length && a.every((value, idx) => value === b[idx]);
-
-    let changed = false;
-    const nextNodes = nodes.map((node) => {
-      const nextOptions = nextOptionsByNodeId.get(String(node.id));
-      if (!nextOptions) return node;
-      const configRecord =
-        node.config && typeof node.config === 'object' ? (node.config as Record<string, unknown>) : null;
-      const raw = Array.isArray(configRecord?.options) ? configRecord.options : [];
-      const currentOptions = raw.map((value) => String(value)).filter((value) => value !== '');
-      if (optionsEqual(currentOptions, nextOptions)) return node;
-      changed = true;
-      return {
-        ...node,
-        config: { ...(node.config ?? {}), options: nextOptions },
-      };
-    });
-
-    return changed ? { ...state, nodes: nextNodes } : state;
-  }
-
   private countSinkConnectionsByNodeId(
     state: Pick<GraphState, 'nodes' | 'connections'>
   ): Map<string, number> {
@@ -386,7 +348,7 @@ class NodeEngineClass {
       return false;
     }
 
-    const next = this.applySelectionMapOptions(
+    const next = applySelectionMapOptions(
       applyGraphChanges(snapshot, [{ type: 'add-connection', connection }])
     );
 
@@ -420,7 +382,7 @@ class NodeEngineClass {
 
   removeConnection(connectionId: string): void {
     const snapshot = this.runtime.exportGraph();
-    const next = this.applySelectionMapOptions(
+    const next = applySelectionMapOptions(
       applyGraphChanges(snapshot, [{ type: 'remove-connection', connectionId }])
     );
 
@@ -569,7 +531,7 @@ class NodeEngineClass {
 
     const sanitized: GraphState = { nodes, connections };
 
-    const prepared = this.applySelectionMapOptions(sanitized);
+    const prepared = applySelectionMapOptions(sanitized);
     this.cleanupGraphTransition(prev, prepared, { reason: 'loadGraph' });
     this.runtime.loadGraph(prepared);
     this.offloadedNodeIds.clear();
@@ -671,41 +633,11 @@ class NodeEngineClass {
     const loop = get(this.localLoops).find((l) => l.id === loopId);
     if (!loop) throw new Error(`Loop not found: ${loopId}`);
 
-    const allowedNodeTypes = new Set([
-      'client-object',
-      'proc-client-sensors',
-      'math',
-      'ai-model-ref',
-      // Gates
-      'logic-not',
-      'logic-and',
-      'logic-or',
-      'logic-nand',
-      'logic-nor',
-      'logic-xor',
-      'tone-lfo',
-      'number',
-      'string',
-      'bool',
-      'number-stabilizer',
-      'proc-flashlight',
-      'proc-screen-color',
-      'proc-synth-update',
-      'proc-scene-switch',
-      'tone-osc',
-      'tone-delay',
-      'tone-resonator',
-      'tone-pitch',
-      'tone-reverb',
-      'tone-granular',
-      'play-media',
-    ]);
-
     const nodes: GraphState['nodes'] = [];
     for (const id of loop.nodeIds) {
       const node = this.runtime.getNode(id);
       if (!node) continue;
-      if (!allowedNodeTypes.has(node.type)) {
+      if (!isLoopDeployableNodeType(node.type)) {
         throw new Error(`Loop contains non-deployable node type: ${node.type}`);
       }
       nodes.push({
@@ -774,13 +706,12 @@ class NodeEngineClass {
     const ids = Array.from(new Set((rootNodeIds ?? []).map(String).filter(Boolean))).sort();
     if (ids.length === 0) throw new Error('No patch root ids provided.');
 
-    const patchRootTypes = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out']);
     const nodeById = new Map((snapshot.nodes ?? []).map((n) => [String(n.id), n]));
     const roots = ids.map((id) => {
       const node = nodeById.get(String(id)) ?? null;
       if (!node) throw new Error(`Invalid patch root id: ${String(id)}`);
       const type = String(node.type ?? '');
-      if (!patchRootTypes.has(type)) {
+      if (!isPatchRootType(type)) {
         throw new Error(`Invalid patch root type: ${type}:${String(node.id ?? id)}`);
       }
       return node;
@@ -792,80 +723,8 @@ class NodeEngineClass {
       isNodeEnabled: (nodeId) => !this.disabledNodeIds.has(String(nodeId)),
     });
 
-    const allowedNodeTypes = new Set([
-      // Pure + scheduling
-      'math',
-      'logic-add',
-      'logic-multiple',
-      'logic-subtract',
-      'logic-divide',
-      // Gates
-      'logic-not',
-      'logic-and',
-      'logic-or',
-      'logic-nand',
-      'logic-nor',
-      'logic-xor',
-      'logic-if',
-      'logic-for',
-      'logic-sleep',
-      'tone-lfo',
-      'number',
-      'string',
-      'bool',
-      'number-stabilizer',
-      // Audio sources/effects
-      'load-audio-from-assets',
-      'load-audio-from-local',
-      'load-image-from-assets',
-      'load-image-from-local',
-      'load-video-from-assets',
-      'load-video-from-local',
-      // Image modulation nodes
-      'img-scale',
-      'img-fit',
-      'img-xy-offset',
-      'img-transparency',
-      // Visual effects chain
-      'effect-ascii',
-      'effect-convolution',
-      // Visual scenes chain
-      'scene-box',
-      'scene-mel',
-      'scene-front-camera',
-      'scene-back-camera',
-      'tone-osc',
-      'tone-delay',
-      'tone-resonator',
-      'tone-pitch',
-      'tone-reverb',
-      'tone-granular',
-      'play-media',
-      // Generators
-      'number-script',
-      // Patch root
-      'audio-out',
-      'image-out',
-      'video-out',
-      'effect-out',
-      'scene-out',
-      // AI
-      'ai-model-ref',
-    ]);
-
     for (const n of patch.graph.nodes) {
-      const type = String(n.type);
-      if (!allowedNodeTypes.has(type)) {
-        const hint =
-          type === 'client-object'
-            ? 'Client is manager-only; screenshots/images must be routed via commands (e.g. Client.Image Out → Show Image → Display), not deployed as a patch.'
-            : '';
-        throw new Error(
-          hint
-            ? `Patch contains non-deployable node type: ${type}. ${hint}`
-            : `Patch contains non-deployable node type: ${type}`
-        );
-      }
+      assertPatchDeployableNodeType(String(n.type));
     }
 
     // AI model refs are global toggles and can be unconnected to patch roots.
@@ -885,30 +744,13 @@ class NodeEngineClass {
       });
     }
 
-    const caps = new Set<string>();
-    for (const n of patch.graph.nodes) {
-      const cap = capabilityForNodeType(String(n.type));
-      if (cap) caps.add(cap);
-    }
-
-    const nodeKey = patch.graph.nodes
-      .map((n) => String(n.id))
-      .sort()
-      .join(',');
-    const rootList = roots
-      .map((n) => `${String(n.type)}:${String(n.id)}`)
-      .sort()
-      .join(', ');
-    const patchId =
-      roots.length === 1
-        ? `patch:${String(roots[0]?.type)}:${String(roots[0]?.id)}:${hashString(nodeKey)}`
-        : `patch:multi:${hashString(rootList)}:${hashString(nodeKey)}`;
+    const patchId = createPatchId(roots, patch.graph.nodes);
 
     return {
       graph: patch.graph,
       meta: {
         loopId: patchId,
-        requiredCapabilities: Array.from(caps),
+        requiredCapabilities: collectRequiredCapabilities(patch.graph.nodes),
         tickIntervalMs: TICK_INTERVAL,
         protocolVersion: PROTOCOL_VERSION,
         executorVersion: 'node-executor-v1',
@@ -929,32 +771,7 @@ class NodeEngineClass {
     assetRefs: string[];
   } {
     const snapshot = this.runtime.exportGraph();
-    const patchRootTypes = ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out'] as const;
-    const patchRootTypeSet = new Set(patchRootTypes);
-    const roots = (snapshot.nodes ?? []).filter((n) => patchRootTypeSet.has(String(n.type) as (typeof patchRootTypes)[number]));
-    if (roots.length === 0) {
-      throw new Error(`No patch root node found (${patchRootTypes.join(', ')}). Add one first.`);
-    }
-
-    const connections = snapshot.connections ?? [];
-    const activeRoots = roots.filter((root) =>
-      connections.some(
-        (c) => String(c.sourceNodeId) === String(root.id) && String(c.sourcePortId) === 'cmd'
-      )
-    );
-
-    const selectedRoots = (() => {
-      if (roots.length === 1) return roots;
-      if (activeRoots.length >= 1) return activeRoots;
-      const list = roots
-        .map((n) => `${String(n.type)}:${String(n.id)}`)
-        .sort()
-        .join(', ');
-      throw new Error(
-        `Multiple patch roots found (${list}). Connect Deploy on one or more roots (or delete the others).`
-      );
-    })();
-
+    const selectedRoots = selectPatchRoots(snapshot);
     return this.exportGraphForPatchFromRootNodeIds(selectedRoots.map((n) => String(n.id)));
   }
 }
