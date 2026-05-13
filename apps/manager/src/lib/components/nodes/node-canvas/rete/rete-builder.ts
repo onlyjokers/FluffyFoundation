@@ -28,6 +28,14 @@ import {
   TimeRangeControl,
   CurveControl,
 } from './rete-controls';
+import {
+  bestMatchingPort as findBestMatchingPort,
+  getPortDefForSocket as findPortDefForSocket,
+  inputAllowsMultiple as doesInputAllowMultiple,
+  isCompatiblePortType,
+} from './rete-port-matching';
+import { applyMidiMapRangeConstraintsToReteNodes } from './rete-midi-range-constraints';
+import { getCmdAggregatorInputCount, getProxyPortType, shouldRenderInputPort } from './rete-node-build-options';
 
 type ReteSocketMap = Record<string, ClassicPreset.Socket>;
 type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
@@ -66,17 +74,6 @@ export type ReteBuilder = {
   inputAllowsMultiple: (nodeId: string, inputKey: string) => boolean;
 };
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function clampNumber(value: number, min: number | undefined, max: number | undefined): number {
-  let next = value;
-  if (typeof min === 'number' && Number.isFinite(min)) next = Math.max(min, next);
-  if (typeof max === 'number' && Number.isFinite(max)) next = Math.min(max, next);
-  return next;
-}
-
 export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const { nodeRegistry, nodeEngine, sockets, sendNodeOverride, getNumberParamOptions } = opts;
 
@@ -107,31 +104,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     const inputControlKeys = new Set<string>();
     node.id = instance.id;
 
-    // Feature: Group Proxy ports inherit their "effective" type from config.portType so sockets show correct color/tooltips.
-    const proxyPortType =
-      instance.type === 'group-proxy'
-        ? (() => {
-            const raw = (instance.config as Record<string, unknown>)?.portType;
-            return typeof raw === 'string' && raw ? raw : raw ? String(raw) : 'any';
-          })()
-        : null;
-
-    const cmdAggInputCount = (() => {
-      if (instance.type !== 'cmd-aggregator') return null;
-      const raw = (instance.config as Record<string, unknown>)?.inCount;
-      const n = typeof raw === 'number' ? raw : Number(raw);
-      return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
-    })();
+    const proxyPortType = getProxyPortType(instance);
+    const cmdAggInputCount = getCmdAggregatorInputCount(instance);
 
     for (const input of def?.inputs ?? []) {
-      if (cmdAggInputCount !== null) {
-        const match = /^in(\d+)$/.exec(String(input.id));
-        if (match) {
-          const idx = Number(match[1]);
-          if (!Number.isFinite(idx) || idx <= 0) continue;
-          if (idx > cmdAggInputCount) continue;
-        }
-      }
+      if (!shouldRenderInputPort(input, cmdAggInputCount)) continue;
       // Allow users to attempt multiple links; NodeEngine enforces the global rule that each input
       // port can only be connected once (and shows the error message on violation).
       const inp = new ClassicPreset.Input(
@@ -570,116 +547,21 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     areaPlugin: AnyAreaPlugin | null | undefined,
     nodeMap: Map<string, ClassicPreset.Node>
   ) => {
-    if (!areaPlugin) return;
-
-    const byId = new Map(state.nodes.map((n) => [String(n.id), n]));
-
-    for (const node of state.nodes) {
-      if (node.type !== 'midi-map') continue;
-
-      const def = nodeRegistry.get(node.type);
-      const minField = def?.configSchema?.find((f) => f.key === 'min');
-      const maxField = def?.configSchema?.find((f) => f.key === 'max');
-
-      const baseMinCandidates = [minField?.min, maxField?.min].filter(isFiniteNumber);
-      const baseMaxCandidates = [minField?.max, maxField?.max].filter(isFiniteNumber);
-      const baseMin = baseMinCandidates.length > 0 ? Math.max(...baseMinCandidates) : undefined;
-      const baseMax = baseMaxCandidates.length > 0 ? Math.min(...baseMaxCandidates) : undefined;
-
-      const conns = state.connections.filter(
-        (c) => String(c.sourceNodeId) === String(node.id) && String(c.sourcePortId) === 'out'
-      );
-
-      let downMin: number | undefined;
-      let downMax: number | undefined;
-
-      for (const c of conns) {
-        const target = byId.get(String(c.targetNodeId));
-        const targetDef = target ? nodeRegistry.get(target.type) : null;
-        const port = targetDef?.inputs?.find((p) => p.id === c.targetPortId);
-        if (!port || port.type !== 'number') continue;
-
-        if (isFiniteNumber(port.min)) {
-          downMin = downMin === undefined ? port.min : Math.max(downMin, port.min);
-        }
-        if (isFiniteNumber(port.max)) {
-          downMax = downMax === undefined ? port.max : Math.min(downMax, port.max);
-        }
-      }
-
-      if (downMin !== undefined && downMax !== undefined && downMax < downMin) {
-        downMin = undefined;
-        downMax = undefined;
-      }
-
-      const nextMinLimit =
-        baseMin !== undefined && downMin !== undefined ? Math.max(baseMin, downMin) : (baseMin ?? downMin);
-      const nextMaxLimit =
-        baseMax !== undefined && downMax !== undefined ? Math.min(baseMax, downMax) : (baseMax ?? downMax);
-
-      const reteNode = nodeMap.get(String(node.id));
-      const minCtrl = reteNode?.controls?.min;
-      const maxCtrl = reteNode?.controls?.max;
-      let needsNodeUpdate = false;
-
-      if (minCtrl) {
-        if (minCtrl.min !== nextMinLimit) {
-          minCtrl.min = nextMinLimit;
-          needsNodeUpdate = true;
-        }
-        if (minCtrl.max !== nextMaxLimit) {
-          minCtrl.max = nextMaxLimit;
-          needsNodeUpdate = true;
-        }
-      }
-
-      if (maxCtrl) {
-        if (maxCtrl.min !== nextMinLimit) {
-          maxCtrl.min = nextMinLimit;
-          needsNodeUpdate = true;
-        }
-        if (maxCtrl.max !== nextMaxLimit) {
-          maxCtrl.max = nextMaxLimit;
-          needsNodeUpdate = true;
-        }
-      }
-
-      const rawMin = Number(node.config?.min ?? minField?.defaultValue ?? 0);
-      const rawMax = Number(node.config?.max ?? maxField?.defaultValue ?? 1);
-      const effectiveRawMin = Number.isFinite(rawMin) ? rawMin : 0;
-      const effectiveRawMax = Number.isFinite(rawMax) ? rawMax : 1;
-      const clampedMin = clampNumber(effectiveRawMin, nextMinLimit, nextMaxLimit);
-      const clampedMax = clampNumber(effectiveRawMax, nextMinLimit, nextMaxLimit);
-
-      const updates: Record<string, number> = {};
-      if (clampedMin !== effectiveRawMin) updates.min = clampedMin;
-      if (clampedMax !== effectiveRawMax) updates.max = clampedMax;
-      if (Object.keys(updates).length > 0) {
-        nodeEngine.updateNodeConfig(String(node.id), updates);
-        if (minCtrl) minCtrl.value = clampedMin;
-        if (maxCtrl) maxCtrl.value = clampedMax;
-        needsNodeUpdate = true;
-      }
-
-      if (needsNodeUpdate) await areaPlugin.update('node', String(node.id));
-    }
+    await applyMidiMapRangeConstraintsToReteNodes(
+      {
+        nodeRegistry,
+        updateNodeConfig: nodeEngine.updateNodeConfig,
+      },
+      state,
+      areaPlugin,
+      nodeMap
+    );
   };
 
-  const isCompatible = (sourceType: PortType, targetType: PortType) => {
-    if (sourceType === 'asset' || targetType === 'asset') return sourceType === 'asset' && targetType === 'asset';
-    if (sourceType === 'audio' || targetType === 'audio') return sourceType === 'audio' && targetType === 'audio';
-    if (sourceType === 'image' || targetType === 'image') return sourceType === 'image' && targetType === 'image';
-    if (sourceType === 'video' || targetType === 'video') return sourceType === 'video' && targetType === 'video';
-    return sourceType === 'any' || targetType === 'any' || sourceType === targetType;
-  };
+  const isCompatible = isCompatiblePortType;
 
   const getPortDefForSocket = (socket: { nodeId: string; side: 'input' | 'output'; key: string }): NodePort | null => {
-    const instance = nodeEngine.getNode?.(socket.nodeId) as NodeInstance | undefined;
-    if (!instance) return null;
-    const def = nodeRegistry.get(instance.type);
-    if (!def) return null;
-    if (socket.side === 'output') return (def.outputs ?? []).find((p) => p.id === socket.key) ?? null;
-    return (def.inputs ?? []).find((p) => p.id === socket.key) ?? null;
+    return findPortDefForSocket(nodeRegistry, nodeEngine.getNode, socket);
   };
 
   const bestMatchingPort = (
@@ -687,30 +569,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     requiredType: PortType,
     portSide: 'input' | 'output'
   ): NodePort | null => {
-    let best: NodePort | null = null;
-    let bestScore = -1;
-
-    for (const port of ports) {
-      const portType = (port.type ?? 'any') as PortType;
-      const ok =
-        portSide === 'input' ? isCompatible(requiredType, portType) : isCompatible(portType, requiredType);
-      if (!ok) continue;
-      const exact = portType === requiredType ? 2 : 1;
-      if (exact > bestScore) {
-        bestScore = exact;
-        best = port;
-      }
-    }
-
-    return best;
+    return findBestMatchingPort(ports, requiredType, portSide);
   };
 
   const inputAllowsMultiple = (nodeId: string, inputKey: string): boolean => {
-    const instance = nodeEngine.getNode?.(nodeId) as NodeInstance | undefined;
-    if (!instance) return false;
-    const def = nodeRegistry.get(instance.type);
-    const port = def?.inputs?.find((p) => p.id === inputKey);
-    return port?.kind === 'sink';
+    return doesInputAllowMultiple(nodeRegistry, nodeEngine.getNode, nodeId, inputKey);
   };
 
   return {

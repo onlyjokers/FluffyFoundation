@@ -6,6 +6,11 @@ import type { CustomNodeInstanceState } from '$lib/nodes/custom-nodes/instance';
 import type { NodeRegistry } from '@shugu/node-core';
 import { asRecord, getBoolean, getNumber, getString } from '../../../../utils/value-guards';
 import type { GroupFrame, NodeGroup } from '../controllers/group-controller';
+import {
+  collectCustomNodeIdsFromMaterializedNodes,
+  collectSubtreeGroupIds,
+  deriveCustomNodePortsFromProxies,
+} from './custom-node-collapse-ports';
 
 export type ExpandedCustomNodeFrame = {
   groupId: string;
@@ -78,12 +83,10 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
 
   const rehydrateExpandedCustomFrames = (state: GraphState) => {
     const nodes = Array.isArray(state?.nodes) ? state.nodes : [];
-    const customNodeIds = new Set<string>();
-    for (const n of nodes) {
-      const id = n.id;
-      const customId = opts.customNodeIdFromMaterializedNodeId(id);
-      if (customId) customNodeIds.add(customId);
-    }
+    const customNodeIds = collectCustomNodeIdsFromMaterializedNodes(
+      nodes,
+      opts.customNodeIdFromMaterializedNodeId
+    );
     if (customNodeIds.size === 0) return;
 
     const groups = get(opts.groupController.nodeGroups) ?? [];
@@ -145,7 +148,6 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
     opts.groupController.scheduleHighlight();
     opts.requestFramesUpdate();
   };
-
   const handleExpandCustomNode = (nodeId: string) => {
     const id = String(nodeId ?? '');
     if (!id) return;
@@ -320,7 +322,6 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
     opts.requestFramesUpdate();
     opts.groupPortNodesController.scheduleNormalizeProxies();
   };
-
   const handleCollapseCustomNodeFrame = (groupId: string) => {
     const rootGroupId = String(groupId ?? '');
     if (!rootGroupId) return;
@@ -356,17 +357,7 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
     const nodeById = new Map(nodes.map((n) => [String(n.id), n] as const));
 
     const groupsSnapshot = get(opts.groupController.nodeGroups) ?? [];
-    const subtreeGroupIds = new Set<string>();
-    const stack = [rootGroupId];
-    while (stack.length > 0) {
-      const gid = String(stack.pop() ?? '');
-      if (!gid || subtreeGroupIds.has(gid)) continue;
-      subtreeGroupIds.add(gid);
-      for (const g of groupsSnapshot) {
-        if (String(g.parentId ?? '') !== gid) continue;
-        stack.push(String(g.id ?? ''));
-      }
-    }
+    const subtreeGroupIds = collectSubtreeGroupIds(rootGroupId, groupsSnapshot);
 
     const nodeIdsInSubtree = new Set<string>();
     for (const g of groupsSnapshot) {
@@ -426,92 +417,19 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
         targetNodeId: internalIdForMain(String(c.targetNodeId)),
       }));
 
-    // Derive Custom Node ports from root-level group-proxy nodes.
-    const resolvePortLabel = (nodeType: string, side: 'input' | 'output', portId: string): string => {
-      const def = opts.nodeRegistry.get(String(nodeType ?? ''));
-      const ports = side === 'input' ? def?.inputs : def?.outputs;
-      const port = (ports ?? []).find((p) => String(p.id) === String(portId)) ?? null;
-      return String(port?.label ?? portId);
-    };
-
-    const validPortTypes = new Set([
-      'number',
-      'boolean',
-      'string',
-      'asset',
-      'color',
-      'audio',
-      'image',
-      'video',
-      'scene',
-      'effect',
-      'client',
-      'command',
-      'fuzzy',
-      'array',
-      'any',
-    ]);
-
-    const ports: CustomNodeDefinition['ports'] = [];
     const rootProxyNodes = nodes.filter((n) => {
       if (String(n.type ?? '') !== 'group-proxy') return false;
       const gid = opts.groupIdFromNode(n);
       return String(gid ?? '') === rootGroupId;
     });
-
-    for (const proxy of rootProxyNodes) {
-      const proxyMainId = String(proxy.id ?? '');
-      if (!proxyMainId) continue;
-      if (
-        !internalNodeIdsForTemplate.has(proxyMainId) &&
-        !opts.isMaterializedInternalNodeId(motherNodeId, proxyMainId)
-      ) {
-        // It should still be removed as a group decoration node, but won't be part of the template.
-      }
-
-      const internalProxyId = internalIdForMain(proxyMainId);
-      const config = asRecord(proxy.config);
-      const directionRaw = getString(config.direction, 'output');
-      const side: 'input' | 'output' = directionRaw === 'input' ? 'input' : 'output';
-      const bindingPortId = side === 'input' ? 'in' : 'out';
-      const portKey = `p:${internalProxyId}`;
-
-      const portTypeRaw = getString(config.portType, 'any');
-      const type = validPortTypes.has(portTypeRaw) ? portTypeRaw : 'any';
-      const pinned = getBoolean(config.pinned, false);
-
-      const pos = proxy.position ?? { x: 0, y: 0 };
-      const y = Number(pos?.y ?? 0) - originY;
-
-      const label = (() => {
-        if (side === 'input') {
-          const inner = packedConnections.find(
-            (c) => String(c.sourceNodeId) === internalProxyId && String(c.sourcePortId) === 'out'
-          );
-          if (!inner) return 'In';
-          const targetNode = packedNodes.find((n) => String(n.id) === String(inner.targetNodeId));
-          if (!targetNode) return String(inner.targetPortId ?? 'In');
-          return resolvePortLabel(String(targetNode.type), 'input', String(inner.targetPortId));
-        }
-        const inner = packedConnections.find(
-          (c) => String(c.targetNodeId) === internalProxyId && String(c.targetPortId) === 'in'
-        );
-        if (!inner) return 'Out';
-        const sourceNode = packedNodes.find((n) => String(n.id) === String(inner.sourceNodeId));
-        if (!sourceNode) return String(inner.sourcePortId ?? 'Out');
-        return resolvePortLabel(String(sourceNode.type), 'output', String(inner.sourcePortId));
-      })();
-
-      ports.push({
-        portKey,
-        side,
-        label,
-        type,
-        pinned,
-        y: Number.isFinite(y) ? y : 0,
-        binding: { nodeId: internalProxyId, portId: bindingPortId },
-      });
-    }
+    const ports = deriveCustomNodePortsFromProxies({
+      rootProxyNodes,
+      packedNodes,
+      packedConnections,
+      originY,
+      nodeRegistry: opts.nodeRegistry,
+      internalIdForMain,
+    });
 
     // Capture external wiring from boundary proxies (so we can reconnect to collapsed Custom Node ports).
     const mainInternalNodeIdSet = new Set<string>();
@@ -671,7 +589,6 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
     opts.requestFramesUpdate();
     opts.groupPortNodesController.scheduleNormalizeProxies();
   };
-
   return {
     refreshExpandedCustomGroupIds,
     getExpandedGroupIds: () => new Set(expandedCustomGroupIds),
