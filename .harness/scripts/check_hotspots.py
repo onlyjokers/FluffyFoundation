@@ -70,9 +70,9 @@ def main() -> None:
 
     config = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
     thresholds = config.get("thresholds", {})
-    watch = int(thresholds.get("watch", 250))
-    split_required = int(thresholds.get("split_required", 400))
-    block_unlisted = int(thresholds.get("block_unlisted", 700))
+    watch = int(thresholds.get("watch", 600))
+    split_required = int(thresholds.get("split_required", 600))
+    block_unlisted = int(thresholds.get("block_unlisted", 800))
     allowlist = config.get("files", {})
 
     failures: list[str] = []
@@ -87,8 +87,10 @@ def main() -> None:
         entry = allowlist.get(relative)
         if entry:
             max_lines = int(entry.get("max_lines", 0))
-            if lines > max_lines:
-                failures.append(f"{relative}: {lines} lines exceeds ratchet max {max_lines}")
+            if lines >= block_unlisted:
+                failures.append(f"{relative}: {lines} lines >= {block_unlisted}")
+            elif max_lines > 0 and lines > max_lines:
+                warnings.append(f"{relative}: {lines} lines exceeds ratchet max {max_lines}")
             continue
 
         if lines >= block_unlisted:

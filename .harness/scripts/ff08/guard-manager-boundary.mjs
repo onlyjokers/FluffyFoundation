@@ -1,26 +1,25 @@
 #!/usr/bin/env node
 /**
- * Purpose: Guard FF-08 Root/Manager split so Manager does not reabsorb Root-only editor code.
+ * Purpose: Guard the active classic Manager topology so retired Root routes do not reappear.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
 const repoRoot = process.cwd();
 const managerRouteRoot = path.join(repoRoot, 'apps/manager/src/routes/manager');
+const retiredRootRoute = path.join(repoRoot, 'apps/manager/src/routes/root');
 const defaultRoute = path.join(repoRoot, 'apps/manager/src/routes/+page.svelte');
 const kitOutRoot = path.join(repoRoot, 'apps/manager/.svelte-kit-manager/output/client');
 const kitImmutableRoot = path.join(kitOutRoot, '_app/immutable');
 const kitManifestFile = path.join(kitOutRoot, '.vite/manifest.json');
 
 const rootOnlyPatterns = [
-  /\$lib\/nodes\b/,
-  /components\/nodes\/NodeCanvas/,
-  /components\/nodes\/node-canvas/,
-  /\bNodeCanvas\b/,
-  /\bRete\b/,
-  /RegistryMidiPanel/,
   /project\/projectManager/,
   /stores\/root-authoring/,
+  /\/manager\/root/,
+  /RootWorkspace/,
+  /RootConnectPanel/,
+  /Fluffy Root/,
 ];
 
 function listFiles(root, out = []) {
@@ -43,6 +42,9 @@ function rel(file) {
 function checkSourceBoundary() {
   const files = [...listFiles(managerRouteRoot), defaultRoute].filter((file) => fs.existsSync(file));
   const failures = [];
+  if (listFiles(retiredRootRoute).length > 0) {
+    failures.push(`retired Root route still exists: ${rel(retiredRootRoute)}`);
+  }
   for (const file of files) {
     const text = fs.readFileSync(file, 'utf8');
     for (const pattern of rootOnlyPatterns) {
@@ -71,11 +73,7 @@ function collectImportedAssets(manifest, manifestKey, assets = new Set(), seen =
 function collectManagerRouteAssets(manifest) {
   const assets = new Set();
   const managerEntry = manifest['.svelte-kit-manager/generated/client-optimized/nodes/2.js'];
-  const rootEntry = manifest['.svelte-kit-manager/generated/client-optimized/nodes/3.js'];
   if (!managerEntry) return assets;
-  if (!rootEntry) {
-    throw new Error('could not identify Root route bundle in built manifest');
-  }
   collectImportedAssets(manifest, '.svelte-kit-manager/generated/client-optimized/nodes/2.js', assets);
   return assets;
 }
@@ -88,16 +86,13 @@ function checkBundleBoundary() {
   const failures = [];
   const manifest = parseRouteManifest();
   if (manifest) {
-    const routeAssets = collectManagerRouteAssets(manifest);
-    if (routeAssets.size === 0) failures.push('could not identify Manager route assets in built manifest');
-    for (const asset of routeAssets) {
-      const file = path.join(kitOutRoot, asset);
-      if (!fs.existsSync(file)) continue;
-      const text = fs.readFileSync(file, 'utf8');
-      if (/NodeCanvas|node-canvas|rete|Rete/.test(text)) {
-        failures.push(`Manager route asset contains editor code marker: ${asset}`);
+    for (const key of Object.keys(manifest)) {
+      if (/routes\/root|manager\/root|RootWorkspace|RootConnectPanel/.test(key)) {
+        failures.push(`retired Root route appears in built manifest: ${key}`);
       }
     }
+    const routeAssets = collectManagerRouteAssets(manifest);
+    if (routeAssets.size === 0) failures.push('could not identify Manager route assets in built manifest');
   }
 
   return failures;

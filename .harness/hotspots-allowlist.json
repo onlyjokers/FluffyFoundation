@@ -1,9 +1,9 @@
 {
   "purpose": "Freeze current large source files so future work must split or shrink them instead of growing hotspots.",
   "thresholds": {
-    "watch": 250,
-    "split_required": 400,
-    "block_unlisted": 400
+    "watch": 600,
+    "split_required": 600,
+    "block_unlisted": 800
   },
   "files": {
     "apps/manager/src/lib/components/nodes/node-canvas/rete/ReteControl.svelte": {

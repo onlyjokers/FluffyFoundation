@@ -585,7 +585,7 @@
   <div
     class="time-range-slider"
     on:pointerdown|stopPropagation
-    style="background-image: {timeRangeBackdropUrl ? `url(\"${timeRangeBackdropUrl}\")` : 'none'};"
+    style="background-image: {timeRangeBackdropUrl ? `url('${timeRangeBackdropUrl}')` : 'none'};"
   >
     <div
       class="time-range-highlight"

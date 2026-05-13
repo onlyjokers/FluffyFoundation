@@ -77,7 +77,7 @@ test('Manager can reclaim a transferable public Group and then mutate it', () =>
   assert.equal(bus.getSnapshot().nodes[0]?.params.value, 9);
 });
 
-test('Root has emergency authority to stop all partitions across Group ownership', () => {
+test('Root stop-all authority is retired from the active classic manager topology', () => {
   const bus = createSemanticCommandBus({
     graph,
     groups: [ownedGroup],
@@ -94,10 +94,12 @@ test('Root has emergency authority to stop all partitions across Group ownership
     command: { type: 'partition.stop.all' },
   });
 
-  assert.equal(stopped.ok, true);
+  assert.equal(stopped.ok, false);
+  assert.equal(stopped.stage, 'policy');
+  assert.match(stopped.message, /Root stop-all emergency authority is required/);
   assert.deepEqual(
     bus.getSnapshot().partitions.map((partition) => partition.status),
-    ['stopped', 'stopped']
+    ['deployed', 'deployed']
   );
 });
 
