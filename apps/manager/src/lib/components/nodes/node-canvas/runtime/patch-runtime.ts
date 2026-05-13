@@ -3,162 +3,35 @@
  */
 
 import { get } from 'svelte/store';
-import type { Readable } from 'svelte/store';
+import type { GraphState } from '$lib/nodes/types';
+import {
+  resolvePatchDeploymentPlan as resolvePatchDeploymentPlanCore,
+  type PatchDeploymentPlan,
+} from './patch-deployment-plan';
+import {
+  applyTimeRangePlayheadsToPatchPayload,
+  computeTopologySignature,
+  isDefinitionBypassableWhenDisabled,
+} from './patch-runtime-helpers';
+import {
+  resolveDeployedLoopClientId,
+  selectExecutorLogsTargetId,
+} from './patch-override-routing';
 import type {
-  Connection,
-  GraphState,
-  NodeDefinition,
-  NodeInstance,
-  NodePort,
-  PortType,
-} from '$lib/nodes/types';
-import type { GraphViewAdapter } from '../adapters/graph-view-adapter';
-import { buildStableRandomOrder, clampInt, coerceBoolean, toFiniteNumber } from './client-utils';
+  CreatePatchRuntimeOptions,
+  DeployedPatch,
+  MidiBridgeRoute,
+  NodeOverride,
+  PatchPayload,
+  PatchRuntime,
+  SendNodeOverrideFn,
+} from './patch-runtime-types';
 
 type AnyRecord = Record<string, unknown>;
 
-type PatchPayload = {
-  graph: Pick<GraphState, 'nodes' | 'connections'>;
-  meta: {
-    loopId: string;
-    requiredCapabilities: string[];
-    tickIntervalMs: number;
-    protocolVersion: string;
-    executorVersion: string;
-  };
-  assetRefs: string[];
-};
-
 const asRecord = (value: unknown): AnyRecord | null =>
   value && typeof value === 'object' ? (value as AnyRecord) : null;
-
-type NodeRegistryLike = {
-  get(type: string): NodeDefinition | undefined;
-};
-
-type NodeEngineLike = {
-  getNode(nodeId: string): NodeInstance | undefined;
-  getLastComputedInputs(nodeId: string): Record<string, unknown> | null;
-  exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): PatchPayload;
-  lastError: Readable<string | null> & { set(value: string | null): void };
-  setPatchOffloadedNodeIds(nodeIds: string[]): void;
-  getTimeRangePlayheadSec(nodeId: string): number | null;
-};
-
-type ManagerStateLike = { clients?: unknown[]; selectedClientIds?: unknown[] };
-
-type DisplayTransportAvailabilityLike = {
-  route: string;
-  hasLocalSession: boolean;
-  hasLocalReady: boolean;
-  hasRemoteDisplay: boolean;
-};
-
-type DisplayTransportSendOptionsLike = { forceServer?: boolean; localOnly?: boolean };
-
-type DisplayTransportLike = {
-  getAvailability: () => DisplayTransportAvailabilityLike;
-  sendPlugin: (
-    pluginId: string,
-    command: string,
-    payload?: Record<string, unknown>,
-    options?: DisplayTransportSendOptionsLike
-  ) => DisplayTransportAvailabilityLike;
-};
-
-type SdkLike = {
-  sendPluginControl: (
-    target: { mode: 'clientIds'; ids: string[] },
-    pluginName: string,
-    command: string,
-    payload: unknown
-  ) => void;
-};
-
-type LoopControllerLike = {
-  deployedLoopIds: Readable<Set<string>>;
-  localLoops: Readable<unknown[]>;
-  loopActions: {
-    getLoopClientId(loop: unknown): string | null;
-    getDeployedLoopForNode(nodeId: string): { id: string } | null;
-  };
-};
-
-type ExecutorStatusLike = { loopId?: unknown; running?: unknown };
-type WritableLike<T> = { set(value: T): void; subscribe: (run: (v: T) => void) => () => void };
-
-export type SendNodeOverrideFn = (
-  nodeId: string,
-  kind: 'input' | 'config',
-  portId: string,
-  value: unknown
-) => void;
-
-type NodeOverride = {
-  nodeId: string;
-  kind: 'input' | 'config';
-  portId: string;
-  value?: unknown;
-  ttlMs?: number;
-};
-
-type DeployedPatch = {
-  patchId: string;
-  nodeIds: Set<string>;
-  topologySignature: string;
-  deployedAt: number;
-};
-
-type MidiBridgeRoute = {
-  sourceNodeId: string;
-  sourcePortId: string;
-  targetNodeId: string;
-  targetPortId: string;
-  targetType: PortType;
-  key: string; // `${targetNodeId}|${targetPortId}`
-};
-
-type PatchRoot = { id: string; type: string };
-
-type PatchDeploymentPlan = {
-  selectedRoots: PatchRoot[];
-  rootIdsByClientId: Map<string, string[]>;
-  targetClientIds: string[];
-  planKey: string;
-};
-
-export interface PatchRuntime {
-  onTick(): void;
-  onGraphStateChanged(): void;
-  onLoopDeployListChanged(): void;
-  onGroupDisabledChanged(disabled: Set<string>): void;
-  onRunningChanged(running: boolean): void;
-  scheduleReconcile(reason: string): void;
-  stopAllDeployedPatches(): void;
-  clearMidiLoopBridgeState(): void;
-  syncPatchVisualState(): void;
-  applyStoppedHighlights(running: boolean): Promise<void>;
-  toggleExecutorLogs(): void;
-  sendNodeOverride: SendNodeOverrideFn;
-  destroy(): void;
-}
-
-export interface CreatePatchRuntimeOptions {
-  nodeEngine: NodeEngineLike;
-  nodeRegistry: NodeRegistryLike;
-  adapter: GraphViewAdapter;
-  isRunningStore: Readable<boolean>;
-  getGraphState: () => GraphState;
-  groupDisabledNodeIds: Readable<Set<string>>;
-  executorStatusByClient: Readable<Map<string, ExecutorStatusLike>>;
-  showExecutorLogs: WritableLike<boolean>;
-  logsClientId: WritableLike<string>;
-  loopController: LoopControllerLike | null;
-  managerState: Readable<ManagerStateLike>;
-  displayTransport: DisplayTransportLike;
-  getSDK: () => SdkLike | null;
-  ensureDisplayLocalFilesRegisteredFromValue: (value: unknown) => void;
-}
+export type { CreatePatchRuntimeOptions, PatchRuntime, SendNodeOverrideFn } from './patch-runtime-types';
 
 export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntime {
   const {
@@ -660,344 +533,29 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   // Patch deployment
   // ────────────────────────────────────────────────────────────────────────────
 
-  const computeTopologySignature = (payload: Pick<GraphState, 'nodes' | 'connections'>): string => {
-    const nodes = (payload.nodes ?? []).map((node) => ({
-      id: String(node.id),
-      type: String(node.type),
-    }));
-    nodes.sort((a, b) => a.id.localeCompare(b.id));
-
-    const connections = (payload.connections ?? []).map((conn) => ({
-      s: String(conn.sourceNodeId),
-      sp: String(conn.sourcePortId),
-      t: String(conn.targetNodeId),
-      tp: String(conn.targetPortId),
-    }));
-    connections.sort((a, b) => {
-      const sa = `${a.s}:${a.sp}->${a.t}:${a.tp}`;
-      const sb = `${b.s}:${b.sp}->${b.t}:${b.tp}`;
-      return sa.localeCompare(sb);
-    });
-
-    return JSON.stringify({ nodes, connections });
-  };
-
   const isBypassableWhenDisabled = (nodeId: string): boolean => {
     const node = nodeEngine.getNode(String(nodeId));
     if (!node) return false;
 
     const def = nodeRegistry.get(String(node.type));
-    if (!def) return false;
-
-    const inputs: NodePort[] = Array.isArray(def.inputs) ? def.inputs : [];
-    const outputs: NodePort[] = Array.isArray(def.outputs) ? def.outputs : [];
-
-    const isSafeType = (type: unknown) => String(type) !== 'command' && String(type) !== 'client';
-
-    const inPort = inputs.find((p) => String(p?.id ?? '') === 'in') ?? null;
-    const outPort = outputs.find((p) => String(p?.id ?? '') === 'out') ?? null;
-    if (inPort && outPort && String(inPort.type) === String(outPort.type) && isSafeType(inPort.type)) {
-      return true;
-    }
-
-    if (inputs.length === 1 && outputs.length === 1) {
-      const onlyIn = inputs[0];
-      const onlyOut = outputs[0];
-      if (String(onlyIn?.type ?? '') === String(onlyOut?.type ?? '') && isSafeType(onlyIn?.type)) {
-        return true;
-      }
-    }
-
-    const sinkInputs = inputs.filter((p) => p?.kind === 'sink');
-    const sinkOutputs = outputs.filter((p) => p?.kind === 'sink');
-    if (sinkInputs.length === 1 && sinkOutputs.length === 1) {
-      const onlyIn = sinkInputs[0];
-      const onlyOut = sinkOutputs[0];
-      if (String(onlyIn?.type ?? '') === String(onlyOut?.type ?? '') && isSafeType(onlyIn?.type)) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  const applyTimeRangePlayheadsToPatchPayload = (payload: PatchPayload) => {
-    const nodes = payload?.graph?.nodes;
-    if (!Array.isArray(nodes) || nodes.length === 0) return;
-
-    for (const node of nodes) {
-      const type = String(node?.type ?? '');
-      if (type !== 'load-audio-from-assets' && type !== 'load-video-from-assets') continue;
-      const nodeId = String(node?.id ?? '');
-      if (!nodeId) continue;
-      const playheadSec = nodeEngine.getTimeRangePlayheadSec(nodeId);
-      if (playheadSec === null) continue;
-
-      node.inputValues = { ...(node.inputValues ?? {}), cursorSec: playheadSec };
-    }
+    return isDefinitionBypassableWhenDisabled(def);
   };
 
   const resolvePatchDeploymentPlan = (): PatchDeploymentPlan | null => {
-    const patchRootTypes = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out']);
-    const disabled = get(groupDisabledNodeIds);
-    const state = getGraphState();
-    const roots = (state.nodes ?? [])
-      .filter((node) => patchRootTypes.has(String(node.type ?? '')))
-      .map((node) => ({ id: String(node.id ?? ''), type: String(node.type ?? '') }))
-      .filter((n) => Boolean(n.id));
-    const enabledRoots = roots.filter((root) => !disabled.has(root.id));
-    if (enabledRoots.length === 0) return null;
-
-    const connectedAll = new Set(clientIdsInOrder());
-    const connectedAudience = new Set(audienceClientIdsInOrder());
-
-    const connections: Connection[] = state.connections ?? [];
-
-    const activeRoots = enabledRoots.filter((root) =>
-      connections.some((c) => String(c.sourceNodeId) === root.id && String(c.sourcePortId) === 'cmd')
-    );
-
-    const formatRootList = (items: { id: string; type: string }[]) =>
-      items
-        .map((r) => `${r.type}:${r.id}`)
-        .sort()
-        .join(', ');
-
-    const selectedRoots = (() => {
-      if (enabledRoots.length === 1) return enabledRoots;
-      if (activeRoots.length >= 1) return activeRoots;
-      nodeEngine.lastError.set(
-        `Multiple patch roots found (${formatRootList(enabledRoots)}). Connect Deploy on one or more roots (or delete the others).`
-      );
-      return null;
-    })();
-
-    if (!selectedRoots) return null;
-
-    const outgoingBySourceKey = new Map<string, Connection[]>();
-    for (const c of connections) {
-      const key = `${String(c.sourceNodeId)}:${String(c.sourcePortId)}`;
-      const list = outgoingBySourceKey.get(key) ?? [];
-      list.push(c);
-      outgoingBySourceKey.set(key, list);
-    }
-
-    const typeById = new Map<string, string>();
-    for (const n of state.nodes ?? []) {
-      const id = String(n?.id ?? '');
-      if (!id) continue;
-      typeById.set(id, String(n?.type ?? ''));
-    }
-
-    const getCommandOutputPorts = (type: string): string[] => {
-      const def = nodeRegistry.get(String(type));
-      const ports = def?.outputs ?? [];
-      return ports.filter((p) => String(p.type) === 'command').map((p) => String(p.id));
-    };
-
-    const isCommandInputPort = (type: string, portId: string): boolean => {
-      const def = nodeRegistry.get(String(type));
-      const port = (def?.inputs ?? []).find((p) => String(p.id) === String(portId));
-      return Boolean(port) && String(port?.type ?? '') === 'command';
-    };
-
-    const resolveClientId = (nodeId: string, outputPortId: string) => {
-      const runtimeNode = nodeEngine.getNode(nodeId);
-      const runtimeOut = asRecord(runtimeNode?.outputValues?.[outputPortId]);
-      const fromOut = typeof runtimeOut?.clientId === 'string' ? String(runtimeOut.clientId).trim() : '';
-      const config = asRecord(runtimeNode?.config);
-      const fromConfig = typeof config?.clientId === 'string' ? String(config.clientId).trim() : '';
-      return fromOut || fromConfig;
-    };
-
-    // Patch deployment treats `client-object` as a selection (index/range/random), so expand it to all target ids.
-    const resolveClientNodeTargets = (nodeId: string): string[] => {
-      const runtimeNode = nodeEngine.getNode(nodeId);
-      if (!runtimeNode) return [];
-      const computed = nodeEngine.getLastComputedInputs(nodeId);
-      const isPortConnected = (portId: string) =>
-        connections.some(
-          (c) => String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
-        );
-      const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
-        const connected = isPortConnected(portId);
-        if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
-          return computed[portId];
-        }
-        const inputValues = runtimeNode.inputValues as Record<string, unknown> | undefined;
-        return inputValues?.[portId];
-      };
-
-      const clients = audienceClientIdsInOrder();
-      const total = clients.length;
-      if (total === 0) return [];
-
-      const randomRaw = getEffectiveInput('random');
-      const random = coerceBoolean(randomRaw, false);
-      const ordered = random ? buildStableRandomOrder(nodeId, clients) : clients;
-
-      const primaryId = resolveClientId(nodeId, 'out');
-      const indexRaw = getEffectiveInput('index');
-      const indexCandidate = toFiniteNumber(indexRaw, Number.NaN);
-      const indexFromInput = Number.isFinite(indexCandidate) ? clampInt(indexCandidate, 1, total) : null;
-      const indexFromPrimary = primaryId ? ordered.indexOf(primaryId) + 1 : 0;
-      const index = indexFromInput ?? (indexFromPrimary > 0 ? indexFromPrimary : 1);
-
-      const rangeRaw = getEffectiveInput('range');
-      const rangeCandidate = toFiniteNumber(rangeRaw, 1);
-      const range = clampInt(rangeCandidate, 1, total);
-
-      const ids: string[] = [];
-      const start = index - 1;
-      for (let i = 0; i < range; i += 1) {
-        ids.push(ordered[(start + i) % total]);
-      }
-      return ids;
-    };
-
-    // Patch target routing (Max/MSP style):
-    // - Direct: `<patch-root>(cmd) -> client-object(in)`.
-    // - Indirect (supported): `<patch-root>(cmd) -> cmd-aggregator(...) -> client-object(in)`.
-    // We follow the command-type subgraph starting from `<patch-root>(cmd)` to find target objects.
-    const resolveTargetsForRoot = (rootId: string): string[] => {
-      const routedClientNodeIds: string[] = [];
-      const routedClientNodeIdSet = new Set<string>();
-      let hasDisplayTarget = false;
-
-      const queue: { nodeId: string; portId: string }[] = [{ nodeId: rootId, portId: 'cmd' }];
-      const visited = new Set<string>();
-
-      while (queue.length > 0) {
-        const next = queue.shift()!;
-        const visitKey = `${next.nodeId}:${next.portId}`;
-        if (visited.has(visitKey)) continue;
-        visited.add(visitKey);
-
-        const outgoing = outgoingBySourceKey.get(visitKey) ?? [];
-        for (const c of outgoing) {
-          const targetNodeId = String(c?.targetNodeId ?? '');
-          if (!targetNodeId) continue;
-          const targetPortId = String(c?.targetPortId ?? '');
-
-          const targetType = typeById.get(targetNodeId) ?? '';
-          if (!targetType) continue;
-          if (!isCommandInputPort(targetType, targetPortId)) continue;
-
-          if (targetType === 'display-object') {
-            hasDisplayTarget = true;
-            continue;
-          }
-
-          if (targetType === 'client-object') {
-            if (!routedClientNodeIdSet.has(targetNodeId)) {
-              routedClientNodeIdSet.add(targetNodeId);
-              routedClientNodeIds.push(targetNodeId);
-            }
-            continue;
-          }
-
-          // Continue walking through any node that can output commands.
-          for (const outPortId of getCommandOutputPorts(targetType)) {
-            queue.push({ nodeId: targetNodeId, portId: outPortId });
-          }
-        }
-      }
-
-      const out: string[] = [];
-      const seen = new Set<string>();
-
-      for (const nodeId of routedClientNodeIds) {
-        const ids = resolveClientNodeTargets(nodeId);
-        for (const id of ids) {
-          if (!id || !connectedAudience.has(id) || seen.has(id)) continue;
-          seen.add(id);
-          out.push(id);
-        }
-      }
-
-      if (hasDisplayTarget) {
-        const availability = displayTransport.getAvailability();
-        if (availability.hasLocalSession && !seen.has(LOCAL_DISPLAY_TARGET_ID)) {
-          seen.add(LOCAL_DISPLAY_TARGET_ID);
-          out.push(LOCAL_DISPLAY_TARGET_ID);
-        }
-
-        const displayIds = (get(managerState).clients ?? [])
-          .filter((client) => {
-            const record = asRecord(client);
-            return String(record?.group ?? '') === 'display';
-          })
-          .map((client) => {
-            const record = asRecord(client);
-            return record ? String(record.clientId ?? '') : '';
-          })
-          .filter((id) => Boolean(id) && connectedAll.has(id));
-
-        for (const id of displayIds) {
-          if (seen.has(id)) continue;
-          seen.add(id);
-          out.push(id);
-        }
-      }
-
-      return out;
-    };
-
-    const rootIdSetByClientId = new Map<string, Set<string>>();
-    for (const root of selectedRoots) {
-      const targets = resolveTargetsForRoot(root.id);
-      for (const targetId of targets) {
-        const set = rootIdSetByClientId.get(targetId) ?? new Set<string>();
-        set.add(root.id);
-        rootIdSetByClientId.set(targetId, set);
-      }
-    }
-
-    if (rootIdSetByClientId.size === 0) return null;
-
-    const rootIdsByClientId = new Map<string, string[]>();
-    for (const [clientId, set] of rootIdSetByClientId.entries()) {
-      rootIdsByClientId.set(clientId, Array.from(set).sort());
-    }
-
-    const targetClientIds: string[] = [];
-    const seenTargets = new Set<string>();
-
-    if (rootIdsByClientId.has(LOCAL_DISPLAY_TARGET_ID)) {
-      targetClientIds.push(LOCAL_DISPLAY_TARGET_ID);
-      seenTargets.add(LOCAL_DISPLAY_TARGET_ID);
-    }
-
-    for (const id of clientIdsInOrder()) {
-      if (!rootIdsByClientId.has(id) || seenTargets.has(id)) continue;
-      seenTargets.add(id);
-      targetClientIds.push(id);
-    }
-
-    const leftovers = Array.from(rootIdsByClientId.keys())
-      .filter((id) => !seenTargets.has(id))
-      .sort();
-    for (const id of leftovers) {
-      seenTargets.add(id);
-      targetClientIds.push(id);
-    }
-
-    const prevError = get(nodeEngine.lastError);
-    if (
-      typeof prevError === 'string' &&
-      (prevError.startsWith('Multiple patch roots found') ||
-        prevError.startsWith('Multiple active patch roots found') ||
-        prevError.startsWith('Multiple active patch roots have different targets'))
-    ) {
-      nodeEngine.lastError.set(null);
-    }
-
-    const planKey = Array.from(rootIdsByClientId.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([clientId, rootIds]) => `${clientId}=${rootIds.join(',')}`)
-      .join('|');
-
-    return { selectedRoots, rootIdsByClientId, targetClientIds, planKey };
+    return resolvePatchDeploymentPlanCore({
+      graph: getGraphState(),
+      disabledNodeIds: get(groupDisabledNodeIds),
+      clientIdsInOrder,
+      audienceClientIdsInOrder,
+      getManagerClients: () => get(managerState).clients ?? [],
+      localDisplayTargetId: LOCAL_DISPLAY_TARGET_ID,
+      getDisplayAvailability: () => displayTransport.getAvailability(),
+      getNodeDefinition: (type) => nodeRegistry.get(type),
+      getRuntimeNode: (nodeId) => nodeEngine.getNode(nodeId),
+      getLastComputedInputs: (nodeId) => nodeEngine.getLastComputedInputs(nodeId),
+      getLastError: () => get(nodeEngine.lastError),
+      setLastError: (message) => nodeEngine.lastError.set(message),
+    });
   };
 
   const resolvePatchTargetClientIds = (): string[] => resolvePatchDeploymentPlan()?.targetClientIds ?? [];
@@ -1133,7 +691,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       const topologySignature = computeTopologySignature(payload.graph);
       const patchId = String(payload?.meta?.loopId ?? '');
 
-      applyTimeRangePlayheadsToPatchPayload(payload);
+      applyTimeRangePlayheadsToPatchPayload(payload, (nodeId) => nodeEngine.getTimeRangePlayheadSec(nodeId));
 
       for (const nodeId of nodeIds) desiredNodeIds.add(nodeId);
       for (const clientId of targets) {
@@ -1247,13 +805,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       // Important: once a loop is deployed, the executor client is the "source of truth" for where to send overrides.
       // Using the current `client-object.config.clientId` is incorrect because Index/Range changes can retarget the
       // picker selection without redeploying the loop.
-      const deployedClientId = (() => {
-        const statusMap = get(executorStatusByClient);
-        for (const [cid, status] of statusMap.entries()) {
-          if (String(status?.loopId ?? '') === loopId) return String(cid);
-        }
-        return '';
-      })();
+      const deployedClientId = resolveDeployedLoopClientId(get(executorStatusByClient), loopId);
 
       const clientId = deployedClientId || loopController?.loopActions.getLoopClientId(loop);
       if (!clientId) return;
@@ -1314,7 +866,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const current = get(logsClientId);
     const patchTargets = resolvePatchTargetClientIds();
     const selected = (get(managerState).selectedClientIds ?? []).map(String).filter(Boolean);
-    const targetId = patchTargets[0] ?? selected[0] ?? clientIdsInOrder()[0] ?? '';
+    const targetId = selectExecutorLogsTargetId(patchTargets, selected, clientIdsInOrder());
     if (!targetId) return;
 
     if (show && current === targetId) {
