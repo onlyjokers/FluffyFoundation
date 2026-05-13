@@ -17,11 +17,10 @@ import {
   resolveDeployedLoopClientId,
   selectExecutorLogsTargetId,
 } from './patch-override-routing';
+import { createPatchMidiBridge } from './patch-midi-bridge';
 import type {
   CreatePatchRuntimeOptions,
   DeployedPatch,
-  MidiBridgeRoute,
-  NodeOverride,
   PatchPayload,
   PatchRuntime,
   SendNodeOverrideFn,
@@ -166,368 +165,16 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     void applyPatchHighlights(nodeIds);
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // MIDI bridge (patch deploy)
-  // ────────────────────────────────────────────────────────────────────────────
-
-  const isMidiNodeType = (type: string): boolean => type.startsWith('midi-');
-
-  let midiBridgeRoutes: MidiBridgeRoute[] = [];
-  let midiBridgeActiveKeysByClientId = new Map<string, Set<string>>();
-  let midiBridgeLastSignatureByClientKey = new Map<string, string>();
-  let midiBridgeLastSendAt = 0;
-
-  const midiBridgeClientKey = (clientId: string, patchId: string, nodeId: string, portId: string) =>
-    `${clientId}|${patchId}|${nodeId}|${portId}`;
-
-  const computeMidiBridgeRoutes = (
-    patchNodeIds: Set<string>
-  ): { routes: MidiBridgeRoute[]; keys: Set<string> } => {
-    const state = getGraphState();
-    const nodeById = new Map((state.nodes ?? []).map((n) => [String(n.id), n] as const));
-    const routes: MidiBridgeRoute[] = [];
-    const keys = new Set<string>();
-
-    for (const c of state.connections ?? []) {
-      const targetNodeId = String(c.targetNodeId);
-      const targetPortId = String(c.targetPortId);
-      if (!patchNodeIds.has(targetNodeId)) continue;
-
-      const sourceNodeId = String(c.sourceNodeId);
-      const sourcePortId = String(c.sourcePortId);
-      const sourceNode = nodeById.get(sourceNodeId);
-      if (!sourceNode) continue;
-      if (!isMidiNodeType(String(sourceNode.type))) continue;
-
-      const targetNode = nodeById.get(targetNodeId);
-      if (!targetNode) continue;
-      const def = nodeRegistry.get(String(targetNode.type));
-      const port = def?.inputs?.find((p) => String(p.id) === targetPortId) ?? null;
-      if (!port || port.kind === 'sink') continue;
-      const targetType = (port.type ?? 'any') as PortType;
-
-      const key = `${targetNodeId}|${targetPortId}`;
-      keys.add(key);
-      routes.push({
-        sourceNodeId,
-        sourcePortId,
-        targetNodeId,
-        targetPortId,
-        targetType,
-        key,
-      });
-    }
-
-    // Stable ordering for deterministic behavior.
-    routes.sort((a, b) => a.key.localeCompare(b.key) || a.sourceNodeId.localeCompare(b.sourceNodeId));
-
-    return { routes, keys };
-  };
-
-  const clearMidiBridgeState = () => {
-    midiBridgeRoutes = [];
-    midiBridgeActiveKeysByClientId = new Map();
-    midiBridgeLastSignatureByClientKey = new Map();
-  };
-
-  const syncMidiBridgeRoutes = (patchId: string, patchNodeIds: Set<string>) => {
-    if (!patchId || patchNodeIds.size === 0 || deployedPatchByClientId.size === 0) {
-      clearMidiBridgeState();
-      return;
-    }
-
-    const { routes, keys } = computeMidiBridgeRoutes(patchNodeIds);
-    midiBridgeRoutes = routes;
-
-    // Remove overrides that are no longer wired from MIDI.
-    for (const [clientId, patch] of deployedPatchByClientId.entries()) {
-      const prev = midiBridgeActiveKeysByClientId.get(clientId) ?? new Set<string>();
-      const next = new Set(keys);
-      const toRemove = Array.from(prev).filter((k) => !next.has(k));
-      if (toRemove.length > 0) {
-        const overrides = toRemove.map((k) => {
-          const [nodeId, portId] = k.split('|');
-          return { nodeId, kind: 'input', portId };
-        });
-        sendNodeExecutorPluginControl(String(clientId), 'override-remove', {
-          loopId: patch.patchId,
-          overrides,
-        });
-
-        for (const k of toRemove) {
-          const [nodeId, portId] = k.split('|');
-          midiBridgeLastSignatureByClientKey.delete(midiBridgeClientKey(clientId, patch.patchId, nodeId, portId));
-        }
-      }
-      midiBridgeActiveKeysByClientId.set(clientId, next);
-    }
-  };
-
-  const coerceForPortType = (value: unknown, type: PortType): unknown | undefined => {
-    if (value === undefined || value === null) return undefined;
-    if (type === 'number') {
-      const n = typeof value === 'number' ? value : Number(value);
-      return Number.isFinite(n) ? n : undefined;
-    }
-    if (type === 'boolean') {
-      if (typeof value === 'boolean') return value;
-      if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
-      return undefined;
-    }
-    if (type === 'string') return typeof value === 'string' ? value : String(value);
-    if (type === 'color') return typeof value === 'string' ? value : undefined;
-    // any/fuzzy/client/command/audio are not expected here (we skip sink + type mismatch should prevent it).
-    return value;
-  };
-
-  const signatureForValue = (value: unknown, type: PortType): string => {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
-    if (type === 'number') {
-      const n = typeof value === 'number' ? value : Number(value);
-      if (!Number.isFinite(n)) return 'nan';
-      return `n:${Math.round(n * 1_000_000) / 1_000_000}`;
-    }
-    if (type === 'boolean') return `b:${Boolean(value)}`;
-    if (type === 'string' || type === 'color') return `s:${String(value)}`;
-    try {
-      return `j:${JSON.stringify(value)}`;
-    } catch {
-      return `u:${String(value)}`;
-    }
-  };
-
-  const sendMidiBridgeOverrides = () => {
-    if (!get(isRunningStore)) return;
-    if (midiBridgeRoutes.length === 0) return;
-    if (deployedPatchByClientId.size === 0) return;
-
-    const now = Date.now();
-    if (now - midiBridgeLastSendAt < 30) return;
-    midiBridgeLastSendAt = now;
-
-    for (const [clientId, patch] of deployedPatchByClientId.entries()) {
-      const overrides: NodeOverride[] = [];
-      const removals: NodeOverride[] = [];
-      const activeKeys = midiBridgeActiveKeysByClientId.get(clientId) ?? new Set<string>();
-
-      for (const route of midiBridgeRoutes) {
-        const sourceNode = nodeEngine.getNode(route.sourceNodeId);
-        const raw = sourceNode?.outputValues?.[route.sourcePortId];
-        const coerced = coerceForPortType(raw, route.targetType);
-
-        const key = midiBridgeClientKey(clientId, patch.patchId, route.targetNodeId, route.targetPortId);
-        if (coerced === undefined) {
-          if (activeKeys.has(route.key)) {
-            activeKeys.delete(route.key);
-            midiBridgeLastSignatureByClientKey.delete(key);
-            removals.push({
-              nodeId: route.targetNodeId,
-              kind: 'input',
-              portId: route.targetPortId,
-            });
-          }
-          continue;
-        }
-
-        const sig = signatureForValue(coerced, route.targetType);
-        const prevSig = midiBridgeLastSignatureByClientKey.get(key);
-        if (prevSig === sig) {
-          activeKeys.add(route.key);
-          continue;
-        }
-
-        midiBridgeLastSignatureByClientKey.set(key, sig);
-        activeKeys.add(route.key);
-        overrides.push({
-          nodeId: route.targetNodeId,
-          kind: 'input',
-          portId: route.targetPortId,
-          value: coerced,
-        });
-      }
-
-      midiBridgeActiveKeysByClientId.set(clientId, activeKeys);
-
-      if (removals.length > 0) {
-        sendNodeExecutorPluginControl(String(clientId), 'override-remove', {
-          loopId: patch.patchId,
-          overrides: removals,
-        });
-      }
-
-      if (overrides.length > 0) {
-        sendNodeExecutorPluginControl(String(clientId), 'override-set', {
-          loopId: patch.patchId,
-          overrides,
-        });
-      }
-    }
-  };
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // MIDI bridge (loop deploy)
-  // ────────────────────────────────────────────────────────────────────────────
-
-  type MidiLoopBridgeTarget = { loopId: string; clientId: string; nodeIds: Set<string> };
-
-  let midiLoopBridgeRoutesByLoopId = new Map<string, MidiBridgeRoute[]>();
-  let midiLoopBridgeActiveKeysByLoopId = new Map<string, Set<string>>();
-  let midiLoopBridgeLastSignatureByClientKey = new Map<string, string>();
-  let midiLoopBridgeLastSendAt = 0;
-  let midiLoopBridgeDirty = true;
-
-  const midiLoopBridgeClientKey = (clientId: string, loopId: string, nodeId: string, portId: string) =>
-    `${clientId}|${loopId}|${nodeId}|${portId}`;
-
-  const clearMidiLoopBridgeState = () => {
-    midiLoopBridgeRoutesByLoopId = new Map();
-    midiLoopBridgeActiveKeysByLoopId = new Map();
-    midiLoopBridgeLastSignatureByClientKey = new Map();
-    midiLoopBridgeDirty = true;
-  };
-
-  const getMidiLoopBridgeTargets = (): MidiLoopBridgeTarget[] => {
-    if (!loopController) return [];
-    const deployed = get(loopController.deployedLoopIds);
-    if (!deployed || deployed.size === 0) return [];
-
-    const loops = get(loopController.localLoops) ?? [];
-    const targets: MidiLoopBridgeTarget[] = [];
-    for (const loop of loops) {
-      const record = asRecord(loop);
-      const loopId = String(record?.id ?? '');
-      if (!loopId || !deployed.has(loopId)) continue;
-      const clientId = loopController.loopActions.getLoopClientId(loop);
-      if (!clientId) continue;
-
-      const nodeIdsRaw = Array.isArray(record?.nodeIds) ? record?.nodeIds : [];
-      const nodeIds = new Set(nodeIdsRaw.map((id) => String(id)).filter(Boolean));
-      if (nodeIds.size === 0) continue;
-
-      targets.push({ loopId, clientId: String(clientId), nodeIds });
-    }
-
-    targets.sort((a, b) => a.loopId.localeCompare(b.loopId) || a.clientId.localeCompare(b.clientId));
-    return targets;
-  };
-
-  const syncMidiLoopBridgeRoutes = () => {
-    const targets = getMidiLoopBridgeTargets();
-    if (targets.length === 0) {
-      clearMidiLoopBridgeState();
-      return;
-    }
-
-    const activeLoopIds = new Set(targets.map((t) => t.loopId));
-    for (const loopId of Array.from(midiLoopBridgeRoutesByLoopId.keys())) {
-      if (activeLoopIds.has(loopId)) continue;
-      midiLoopBridgeRoutesByLoopId.delete(loopId);
-      midiLoopBridgeActiveKeysByLoopId.delete(loopId);
-    }
-
-    for (const target of targets) {
-      const { routes, keys } = computeMidiBridgeRoutes(target.nodeIds);
-      midiLoopBridgeRoutesByLoopId.set(target.loopId, routes);
-
-      const prev = midiLoopBridgeActiveKeysByLoopId.get(target.loopId) ?? new Set<string>();
-      const next = new Set(keys);
-      const toRemove = Array.from(prev).filter((k) => !next.has(k));
-      if (toRemove.length > 0) {
-        const overrides = toRemove.map((k) => {
-          const [nodeId, portId] = k.split('|');
-          return { nodeId, kind: 'input', portId };
-        });
-        sendNodeExecutorPluginControl(String(target.clientId), 'override-remove', {
-          loopId: target.loopId,
-          overrides,
-        });
-
-        for (const k of toRemove) {
-          const [nodeId, portId] = k.split('|');
-          midiLoopBridgeLastSignatureByClientKey.delete(midiLoopBridgeClientKey(target.clientId, target.loopId, nodeId, portId));
-        }
-      }
-
-      midiLoopBridgeActiveKeysByLoopId.set(target.loopId, next);
-    }
-
-    midiLoopBridgeDirty = false;
-  };
-
-  const sendMidiLoopBridgeOverrides = () => {
-    if (!get(isRunningStore)) return;
-
-    const targets = getMidiLoopBridgeTargets();
-    if (targets.length === 0) return;
-
-    if (midiLoopBridgeDirty) syncMidiLoopBridgeRoutes();
-
-    const now = Date.now();
-    if (now - midiLoopBridgeLastSendAt < 30) return;
-    midiLoopBridgeLastSendAt = now;
-
-    for (const target of targets) {
-      const routes = midiLoopBridgeRoutesByLoopId.get(target.loopId) ?? [];
-      if (routes.length === 0) continue;
-
-      const overrides: NodeOverride[] = [];
-      const removals: NodeOverride[] = [];
-      const activeKeys = midiLoopBridgeActiveKeysByLoopId.get(target.loopId) ?? new Set<string>();
-
-      for (const route of routes) {
-        const sourceNode = nodeEngine.getNode(route.sourceNodeId);
-        const raw = sourceNode?.outputValues?.[route.sourcePortId];
-        const coerced = coerceForPortType(raw, route.targetType);
-
-        const key = midiLoopBridgeClientKey(target.clientId, target.loopId, route.targetNodeId, route.targetPortId);
-        if (coerced === undefined) {
-          if (activeKeys.has(route.key)) {
-            activeKeys.delete(route.key);
-            midiLoopBridgeLastSignatureByClientKey.delete(key);
-            removals.push({
-              nodeId: route.targetNodeId,
-              kind: 'input',
-              portId: route.targetPortId,
-            });
-          }
-          continue;
-        }
-
-        const sig = signatureForValue(coerced, route.targetType);
-        const prevSig = midiLoopBridgeLastSignatureByClientKey.get(key);
-        if (prevSig === sig) {
-          activeKeys.add(route.key);
-          continue;
-        }
-
-        midiLoopBridgeLastSignatureByClientKey.set(key, sig);
-        activeKeys.add(route.key);
-        overrides.push({
-          nodeId: route.targetNodeId,
-          kind: 'input',
-          portId: route.targetPortId,
-          value: coerced,
-        });
-      }
-
-      midiLoopBridgeActiveKeysByLoopId.set(target.loopId, activeKeys);
-
-      if (removals.length > 0) {
-        sendNodeExecutorPluginControl(String(target.clientId), 'override-remove', {
-          loopId: target.loopId,
-          overrides: removals,
-        });
-      }
-
-      if (overrides.length > 0) {
-        sendNodeExecutorPluginControl(String(target.clientId), 'override-set', {
-          loopId: target.loopId,
-          overrides,
-        });
-      }
-    }
-  };
+  const midiBridge = createPatchMidiBridge({
+    isRunningStore,
+    getGraphState,
+    nodeRegistry,
+    nodeEngine,
+    loopController,
+    getDeployedPatches: () => deployedPatchByClientId.entries(),
+    sendNodeExecutorPluginControl,
+  });
+  const clearMidiLoopBridgeState = () => midiBridge.clearLoopState();
 
   // ────────────────────────────────────────────────────────────────────────────
   // Patch deployment
@@ -574,7 +221,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     }
     deployedPatchByClientId = new Map();
     patchLastPlanKey = '';
-    clearMidiBridgeState();
+    midiBridge.resetPatchOverrides();
     syncPatchOffloadState(new Set());
     void applyPatchHighlights(new Set());
   };
@@ -712,7 +359,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         syncPatchOffloadState(desiredNodeIds);
         void applyPatchHighlights(desiredNodeIds);
         const first = deployedPatchByClientId.values().next().value as DeployedPatch | undefined;
-        if (first) syncMidiBridgeRoutes(first.patchId, desiredNodeIds);
+        if (first) midiBridge.syncPatchRoutes(first.patchId, desiredNodeIds);
       }
       return;
     }
@@ -755,8 +402,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
       if (!didDeploy) {
         // A deploy resets client overrides; ensure MIDI bridge resend starts fresh.
-        midiBridgeLastSignatureByClientKey = new Map();
-        midiBridgeActiveKeysByClientId = new Map();
+        midiBridge.resetPatchOverrides();
         didDeploy = true;
       }
 
@@ -775,7 +421,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const first = deployedPatchByClientId.values().next().value as DeployedPatch | undefined;
     syncPatchOffloadState(desiredNodeIds);
     void applyPatchHighlights(desiredNodeIds);
-    if (first) syncMidiBridgeRoutes(first.patchId, desiredNodeIds);
+    if (first) midiBridge.syncPatchRoutes(first.patchId, desiredNodeIds);
     console.log('[patch] reconciled', { reason, targets: Array.from(desiredByClientId.keys()).sort() });
   };
 
@@ -882,8 +528,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   // ────────────────────────────────────────────────────────────────────────────
 
   const onTick = () => {
-    sendMidiBridgeOverrides();
-    sendMidiLoopBridgeOverrides();
+    midiBridge.sendPatchOverrides();
+    midiBridge.sendLoopOverrides();
 
     if (!get(isRunningStore)) return;
     if (patchDeployTimer) return;
@@ -897,18 +543,16 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
   const onGraphStateChanged = () => {
     scheduleReconcile('graph-change');
-    midiLoopBridgeDirty = true;
+    midiBridge.markLoopDirty();
 
     // Keep MIDI bridge wiring responsive (MIDI nodes are excluded from deploy topology).
     const first = deployedPatchByClientId.values().next().value as DeployedPatch | undefined;
-    if (first) syncMidiBridgeRoutes(first.patchId, getDeployedPatchNodeIds());
+    if (first) midiBridge.syncPatchRoutes(first.patchId, getDeployedPatchNodeIds());
   };
 
   const onLoopDeployListChanged = () => {
     // Loop deploy/redeploy clears client runtime overrides; force resend of MIDI-driven overrides.
-    midiLoopBridgeDirty = true;
-    midiLoopBridgeLastSignatureByClientKey = new Map();
-    midiLoopBridgeActiveKeysByLoopId = new Map();
+    midiBridge.resetLoopOverrides();
   };
 
   const onGroupDisabledChanged = (disabled: Set<string>) => {
@@ -922,12 +566,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
       stopAndRemovePatchOnClient(clientId, patch.patchId);
       deployedPatchByClientId.delete(clientId);
-      midiBridgeActiveKeysByClientId.delete(clientId);
-
-      const prefix = `${clientId}|${patch.patchId}|`;
-      for (const key of Array.from(midiBridgeLastSignatureByClientKey.keys())) {
-        if (key.startsWith(prefix)) midiBridgeLastSignatureByClientKey.delete(key);
-      }
+      midiBridge.removePatchClient(clientId, patch.patchId);
       didStop = true;
     }
 
