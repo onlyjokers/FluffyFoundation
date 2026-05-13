@@ -1,23 +1,30 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { midiService, type MidiEvent } from '$lib/features/midi/midi-service';
-  import { midiNodeBridge, type MidiSource, formatMidiSource } from '$lib/features/midi/midi-node-bridge';
+  import { midiService } from '$lib/features/midi/midi-service';
+  import { midiNodeBridge } from '$lib/features/midi/midi-node-bridge';
   import { nodeEngine } from '$lib/nodes';
   import { parameterRegistry } from '$lib/parameters/registry';
-  import type { Parameter } from '$lib/parameters/parameter';
   import {
     detectMidiBindings,
     exportMidiTemplateFile,
     instantiateMidiBindings,
     parseMidiTemplateFile,
     removeMidiBinding,
-    templateForNodeInput,
-    templateForParam,
     type DetectedMidiBinding,
     type MidiBindingMode,
     type MidiBindingTemplateV1,
   } from '$lib/features/midi/midi-templates';
+  import {
+    clampMidiNumber,
+    createTemplateForMidiTarget,
+    describeMidiSource,
+    downloadJsonFile,
+    formatMidiEvent,
+    listMidiTargetGroups,
+    type MidiTarget,
+    type ParamGroup,
+  } from './registry-midi-panel-helpers';
 
   let inputs = midiService.inputs;
   let selectedInputId = midiService.selectedInputId;
@@ -30,33 +37,13 @@
   let graphUnsub: (() => void) | null = null;
   let unsubscribeRegistry: (() => void) | null = null;
 
-  type MidiTarget = { type: 'PARAM'; path: string };
-
-  type TargetOption = { id: string; label: string; target: MidiTarget };
-  type ParamGroup = { key: string; label: string; params: TargetOption[] };
-
   let availableGroups: ParamGroup[] = [];
   let selectedGroupKey = '';
   let selectedTargetId = '';
   let selectedTarget: MidiTarget | null = null;
   let selectedMode: MidiBindingMode = 'REMOTE';
   let refreshQueued = false;
-
   let importInputEl: HTMLInputElement | null = null;
-
-  // Map legacy control-surface params to a practical Node Graph target (matches the user's Synth/Flashlight example).
-  const paramToNodeInput = new Map<string, { nodeType: string; inputId: string }>([
-    ['controls/synth/frequency', { nodeType: 'proc-synth-update', inputId: 'frequency' }],
-    ['controls/synth/duration', { nodeType: 'proc-synth-update', inputId: 'durationMs' }],
-    ['controls/synth/volume', { nodeType: 'proc-synth-update', inputId: 'volume' }],
-    ['controls/synth/modDepth', { nodeType: 'proc-synth-update', inputId: 'modDepth' }],
-    ['controls/synth/modLfo', { nodeType: 'proc-synth-update', inputId: 'modFrequency' }],
-    ['controls/flashlight/frequencyHz', { nodeType: 'proc-flashlight', inputId: 'frequencyHz' }],
-    ['controls/flashlight/dutyCycle', { nodeType: 'proc-flashlight', inputId: 'dutyCycle' }],
-    ['controls/screenColor/maxOpacity', { nodeType: 'proc-screen-color', inputId: 'maxOpacity' }],
-    ['controls/screenColor/minOpacity', { nodeType: 'proc-screen-color', inputId: 'minOpacity' }],
-    ['controls/screenColor/frequencyHz', { nodeType: 'proc-screen-color', inputId: 'frequencyHz' }],
-  ]);
 
   function scheduleRefresh() {
     if (refreshQueued) return;
@@ -67,58 +54,11 @@
     });
   }
 
-  function computeGroup(path: string, metadataGroup?: string): { key: string; label: string } {
-    if (metadataGroup) return { key: metadataGroup, label: metadataGroup };
-
-    const parts = path.split('/');
-    if (parts[0] === 'controls') {
-      const key = parts[1] ?? 'Controls';
-      return { key, label: key };
-    }
-    if (parts[0] === 'client') {
-      const key = parts[2] ?? 'Client';
-      return { key, label: key };
-    }
-    const fallback = parts[0] || 'Other';
-    return { key: fallback, label: fallback };
-  }
-
   function refreshTargets() {
-    const params = parameterRegistry
-      .list('controls')
-      .filter((p) => p.type === 'number')
-      .filter((p) => !p.metadata?.hidden)
-      .filter((p) => !p.isOffline);
-
-    const groups = new Map<string, ParamGroup>();
-    for (const p of params) {
-      const group = computeGroup(p.path, p.metadata?.group);
-      const entry = groups.get(group.key) ?? {
-        key: group.key,
-        label: group.label,
-        params: [] as TargetOption[],
-      };
-      entry.params.push({
-        id: p.path,
-        label: p.metadata?.label || p.path.split('/').pop() || p.path,
-        target: { type: 'PARAM', path: p.path },
-      });
-      groups.set(group.key, entry);
-    }
-
-    const nextGroups = Array.from(groups.values())
-      .map((g) => ({
-        ...g,
-        params: g.params.sort((a, b) => a.label.localeCompare(b.label)),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-
-    availableGroups = [...nextGroups];
-
+    availableGroups = listMidiTargetGroups();
     if (!availableGroups.some((g) => g.key === selectedGroupKey)) {
       selectedGroupKey = availableGroups[0]?.key ?? '';
     }
-
     const selectedGroup = availableGroups.find((g) => g.key === selectedGroupKey);
     const groupParams = selectedGroup?.params ?? [];
     if (!groupParams.some((p) => p.id === selectedTargetId)) {
@@ -143,51 +83,9 @@
     midiService.selectInput(select.value);
   }
 
-  function formatEvent(event: MidiEvent): string {
-    if (event.type === 'pitchbend') return `Pitch Bend ch${event.channel + 1}`;
-    return `${event.type.toUpperCase()} ${event.number} ch${event.channel + 1}`;
-  }
-
-  function describeSource(source: MidiSource | null | undefined, inputList: { id: string; name: string }[]): string {
-    if (!source) return 'Unbound';
-    if (!source.inputId) return formatMidiSource(source);
-    const name = inputList.find((i) => i.id === source.inputId)?.name ?? source.inputId;
-    return formatMidiSource({ ...source, inputId: name }).replace(/^in:/, '');
-  }
-
-  function clampNumber(value: number, min?: number, max?: number): number {
-    let next = value;
-    if (typeof min === 'number' && Number.isFinite(min)) next = Math.max(min, next);
-    if (typeof max === 'number' && Number.isFinite(max)) next = Math.min(max, next);
-    return next;
-  }
-
   function numberFromEvent(event: Event): number {
     const input = event.target as HTMLInputElement | null;
     return parseFloat(input?.value ?? '');
-  }
-
-  function createTemplateForTarget(target: MidiTarget): MidiBindingTemplateV1 | null {
-    const param = parameterRegistry.get<number>(target.path) as Parameter<number> | undefined;
-    if (!param) return null;
-
-    const mapping = {
-      min: typeof param.min === 'number' ? param.min : 0,
-      max: typeof param.max === 'number' ? param.max : 1,
-      invert: false,
-      round: false,
-    };
-
-    const nodeTarget = paramToNodeInput.get(target.path);
-    if (nodeTarget) {
-      return templateForNodeInput({ nodeType: nodeTarget.nodeType, inputId: nodeTarget.inputId, mapping });
-    }
-
-    // Fallback: keep the old behavior by driving a registry parameter via param-set.
-    const tpl = templateForParam(target.path, selectedMode);
-    if (!tpl) return null;
-    tpl.mapping = mapping;
-    return tpl;
   }
 
   function beginLearnForTemplate(tpl: MidiBindingTemplateV1) {
@@ -199,7 +97,7 @@
 
   function startLearnSelected() {
     if (!selectedTarget) return;
-    const tpl = createTemplateForTarget(selectedTarget);
+    const tpl = createTemplateForMidiTarget(selectedTarget, selectedMode);
     if (!tpl) return;
     beginLearnForTemplate(tpl);
   }
@@ -217,8 +115,8 @@
     const rawMax = updates.max;
     const min = typeof rawMin === 'number' && Number.isFinite(rawMin) ? rawMin : current.min;
     const max = typeof rawMax === 'number' && Number.isFinite(rawMax) ? rawMax : current.max;
-    const clampedMin = clampNumber(min, undefined, max);
-    const clampedMax = clampNumber(max, clampedMin, undefined);
+    const clampedMin = clampMidiNumber(min, undefined, max);
+    const clampedMax = clampMidiNumber(max, clampedMin, undefined);
     const patch: Record<string, unknown> = {
       ...updates,
       min: clampedMin,
@@ -232,20 +130,16 @@
   function toggleInvert(binding: DetectedMidiBinding) {
     updateMapping(binding, { invert: !binding.template.mapping.invert });
   }
-
   function toggleRound(binding: DetectedMidiBinding) {
     updateMapping(binding, { round: !binding.template.mapping.round });
   }
-
   function startLearn(binding: DetectedMidiBinding) {
     void midiService.init();
     midiNodeBridge.startLearn(binding.midiNodeId);
   }
-
   function clearBinding(binding: DetectedMidiBinding) {
     nodeEngine.updateNodeConfig(binding.midiNodeId, { source: null });
   }
-
   function removeBinding(binding: DetectedMidiBinding) {
     removeMidiBinding(binding);
   }
@@ -262,21 +156,9 @@
     return formatValue(v ?? null);
   }
 
-  function downloadJson(payload: unknown, filename: string) {
-    if (typeof document === 'undefined') return;
-    const data = JSON.stringify(payload, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   function exportTemplates() {
     const file = exportMidiTemplateFile(nodeEngine.exportGraph());
-    downloadJson(file, 'shugu-midi-templates.json');
+    downloadJsonFile(file, 'shugu-midi-templates.json');
   }
 
   function openImport() {
@@ -296,13 +178,11 @@
       alert('Invalid JSON file.');
       return;
     }
-
     const templates = parseMidiTemplateFile(parsed);
     if (!templates) {
       alert('Unsupported template format (expected version: 1).');
       return;
     }
-
     const created = instantiateMidiBindings(templates);
     alert(`Imported ${created.length} template(s).`);
   }
@@ -317,7 +197,6 @@
     graphUnsub = graphStateStore.subscribe((state) => {
       bindings = detectMidiBindings(state);
     });
-
   });
 
   onDestroy(() => {
@@ -367,7 +246,7 @@
         </div>
         <div class="monitor-row">
           <span class="label">Signal:</span>
-          <span class="value">{formatEvent($lastMessage)}</span>
+          <span class="value">{formatMidiEvent($lastMessage)}</span>
         </div>
         <div class="monitor-row">
           <span class="label">Value:</span>
@@ -428,7 +307,7 @@
         {#each bindings as binding (binding.id)}
           <div class="binding-card">
             <div class="binding-header">
-              <div class="binding-source">{describeSource(binding.template.source, $inputs)}</div>
+              <div class="binding-source">{describeMidiSource(binding.template.source, $inputs)}</div>
               <div class="binding-arrow">→</div>
               <div class="binding-target">{binding.template.label}</div>
             </div>
