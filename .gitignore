@@ -4,6 +4,9 @@ node_modules
 
 # Build outputs
 dist
+dist-*
+**/dist
+**/dist-*
 dist2
 dist-user
 dist-local
@@ -44,6 +47,8 @@ pnpm-debug.log*
 # Testing
 coverage
 .nyc_output
+test-results/
+**/test-results/
 .playwright-cli/
 .playwright-mcp/
 browser-mcp-test.png
