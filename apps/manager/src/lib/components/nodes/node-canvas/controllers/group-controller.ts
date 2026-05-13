@@ -1,110 +1,47 @@
 /**
  * Purpose: Node group + marquee selection controller for NodeCanvas.
  */
-import { get, writable, type Writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import type { LocalLoop } from '$lib/nodes';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 import { nodeRegistry } from '$lib/nodes';
 import { audienceClients } from '$lib/stores/manager';
-import type { GraphViewAdapter, NodeBounds } from '../adapters';
+import type { NodeBounds } from '../adapters';
 import { normalizeGroupList } from '../groups/normalize-group-list';
 import { isGroupDecorationNodeType } from '../groups/group-node-types';
 import { groupIdFromNode, isGroupPortNodeType } from '../utils/group-port-utils';
-
-
-export type NodeGroup = {
-  id: string;
-  parentId: string | null;
-  name: string;
-  nodeIds: string[];
-  disabled: boolean;
-  /** When true, the group frame collapses into a node-like form and hides its subtree nodes/connections. */
-  minimized: boolean;
-  /** Runtime gate from Group Gate port; defaults to true when unset. */
-  runtimeActive?: boolean;
-};
-
-export type GroupFrame = {
-  group: NodeGroup;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  effectiveDisabled: boolean;
-  depth: number;
-};
-export type GroupEditToast = { groupId: string; message: string } | null;
-
-export type FrameInfo = {
-  id: string;
-  kind: 'group' | 'loop';
-  nodeIds: Set<string>;
-  bounds: NodeBounds;
-};
-
-export type FrameMoveContext = {
-  frameById: Map<string, FrameInfo>;
-  nodeToFrameIds: Map<string, string[]>;
-  movedFrameIds: Set<string>;
-};
-
-export type GroupController = {
-  nodeGroups: Writable<NodeGroup[]>;
-  groupFrames: Writable<GroupFrame[]>;
-  groupSelectionNodeIds: Writable<Set<string>>;
-  groupSelectionBounds: Writable<{ left: number; top: number; width: number; height: number } | null>;
-  selectedGroupId: Writable<string | null>;
-  editModeGroupId: Writable<string | null>;
-  canvasToast: Writable<string | null>;
-  groupEditToast: Writable<GroupEditToast>;
-  groupDisabledNodeIds: Writable<Set<string>>;
-  marqueeRect: Writable<{ left: number; top: number; width: number; height: number } | null>;
-  requestFramesUpdate: () => void;
-  setGroups: (groups: NodeGroup[]) => void;
-  appendGroups: (groups: NodeGroup[]) => void;
-  /** Reconcile group membership after nodes are removed from the graph. Returns removed group IDs. */
-  reconcileGraphNodes: (graph?: GraphState) => string[];
-  setRuntimeActiveByGroupId: (activeById: Map<string, boolean>) => void;
-  applyHighlights: () => Promise<void>;
-  scheduleHighlight: () => void;
-  clearSelection: () => void;
-  createGroupFromSelection: () => void;
-  toggleGroupDisabled: (groupId: string) => void;
-  toggleGroupMinimized: (groupId: string) => void;
-  disassembleGroup: (groupId: string) => void;
-  renameGroup: (groupId: string, name: string) => void;
-  toggleGroupEditMode: (groupId: string) => void;
-  autoAddNodeToGroupFromPosition: (nodeId: string, graphPos: { x: number; y: number }) => void;
-  autoAddNodeToGroupFromConnectDrop: (
-    initialNodeId: string,
-    newNodeId: string,
-    dropGraphPos: { x: number; y: number }
-  ) => void;
-  handleDroppedNodesAfterDrag: (nodeIds: string[]) => void;
-  onPointerDown: (event: PointerEvent) => void;
-  destroy: () => void;
-  isProgrammaticTranslate: () => boolean;
-  beginProgrammaticTranslate: () => void;
-  endProgrammaticTranslate: () => void;
-  computeLoopFrameBounds: (loop: LocalLoop) => NodeBounds | null;
-  pushNodesOutOfBounds: (bounds: NodeBounds, excludeNodeIds: Set<string>, frameMoves?: FrameMoveContext) => void;
-};
-
-type GroupControllerOptions = {
-  getContainer: () => HTMLDivElement | null;
-  getAdapter: () => GraphViewAdapter | null;
-  getGraphState: () => GraphState;
-  /** Extra hidden nodes owned by host UI (e.g. expanded Custom Node mother instances). */
-  getForcedHiddenNodeIds?: () => Set<string>;
-  getLocalLoops: () => LocalLoop[];
-  getLoopConstraintLoops: () => LocalLoop[];
-  getDeployedLoopIds: () => Set<string>;
-  setNodesDisabled: (ids: string[], disabled: boolean) => void;
-  requestLoopFramesUpdate: () => void;
-  requestMinimapUpdate: () => void;
-  isSyncingGraph: () => boolean;
-  stopAndRemoveLoop: (loop: LocalLoop) => void;
-};
+import {
+  boundsIntersect,
+  buildGroupIndex,
+  computeGroupFrameBoundsWithChildren,
+  computeLoopFrameBounds as computeLoopFrameBoundsCore,
+  computeSingleGroupFrameBounds,
+  mergeBounds,
+  pickMoveDelta,
+} from './group-bounds';
+import type {
+  FrameInfo,
+  FrameMoveContext,
+  GroupController,
+  GroupControllerOptions,
+  GroupEditToast,
+  GroupFrame,
+  NodeGroup,
+} from './group-types';
+import { reconcileGroupsWithGraphNodes } from './group-reconcile';
+import { computeGroupFramesFromState } from './group-frame-computation';
+import { planGroupFromSelection } from './group-selection-plan';
+import {
+  applyEditGroupMembershipChange,
+  buildDropFrameContext,
+  computeSelectionScreenBounds,
+  pickSmallestGroupAtPoint,
+  planAddNodeToGroupChain,
+  planDisassembleGroup,
+  planEditGroupMembershipChange,
+  shouldEnforceFrameForMovedNodes,
+} from './group-drop-helpers';
+export type { FrameMoveContext, GroupController, GroupFrame, NodeGroup } from './group-types';
 
 export function createGroupController(opts: GroupControllerOptions): GroupController {
   const nodeGroups = writable<NodeGroup[]>([]);
@@ -296,257 +233,22 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     }
   };
 
-  const mergeBounds = (base: NodeBounds | null, next: NodeBounds | null): NodeBounds | null => {
-    if (!next) return base;
-    if (!base) return { ...next };
-    return {
-      left: Math.min(base.left, next.left),
-      top: Math.min(base.top, next.top),
-      right: Math.max(base.right, next.right),
-      bottom: Math.max(base.bottom, next.bottom),
-    };
-  };
-
-  const boundsIntersect = (a: NodeBounds, b: NodeBounds): boolean =>
-    a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-
-  const pickMoveDelta = (bounds: NodeBounds, target: NodeBounds, margin: number) => {
-    const moveLeft = bounds.left - margin - target.right;
-    const moveRight = bounds.right + margin - target.left;
-    const moveUp = bounds.top - margin - target.bottom;
-    const moveDown = bounds.bottom + margin - target.top;
-
-    const candidates = [
-      { dx: moveLeft, dy: 0 },
-      { dx: moveRight, dy: 0 },
-      { dx: 0, dy: moveUp },
-      { dx: 0, dy: moveDown },
-    ];
-    candidates.sort((a, b) => Math.abs(a.dx) + Math.abs(a.dy) - (Math.abs(b.dx) + Math.abs(b.dy)));
-    return candidates[0] ?? null;
-  };
-
-  const buildGroupIndex = (groups: NodeGroup[]) => {
-    const byId = new Map<string, NodeGroup>();
-    const childrenByParentId = new Map<string, string[]>();
-
-    for (const group of groups) {
-      const id = String(group.id);
-      const parentId = group.parentId ? String(group.parentId) : null;
-      const normalized: NodeGroup = {
-        ...group,
-        id,
-        parentId,
-        nodeIds: (group.nodeIds ?? []).map((nodeId) => String(nodeId)),
-        minimized: Boolean(group.minimized),
-      };
-      byId.set(id, normalized);
-      if (!parentId) continue;
-      const list = childrenByParentId.get(parentId) ?? [];
-      list.push(id);
-      childrenByParentId.set(parentId, list);
-    }
-
-    return { byId, childrenByParentId };
-  };
-
-  // Include child frames so parent bounds reflect nested groups.
-  const computeGroupFrameBoundsWithChildren = (
-    groupId: string,
-    byId: Map<string, NodeGroup>,
-    childrenByParentId: Map<string, string[]>,
-    cache: Map<string, NodeBounds | null>,
-    visiting: Set<string>,
-    hiddenNodeIds: Set<string>
-  ): NodeBounds | null => {
-    const cached = cache.get(groupId);
-    if (cached !== undefined) return cached;
-    if (visiting.has(groupId)) return null;
-
-    const group = byId.get(groupId);
-    if (!group) return null;
-
-    visiting.add(groupId);
-
-    const minimized = Boolean(group.minimized);
-    const isSubGroup = Boolean(group.parentId);
-    const paddingX = isSubGroup ? 36 : 52;
-    const paddingTop = isSubGroup ? 54 : 64;
-    const paddingBottom = isSubGroup ? 40 : 52;
-
-    const loopPaddingX = 56;
-    const loopPaddingTop = 64;
-    const loopPaddingBottom = 64;
-
-    let bounds: NodeBounds | null = null;
+  const computeGroupFrameBounds = (group: NodeGroup): NodeBounds | null => {
     const adapter = opts.getAdapter();
     if (!adapter) return null;
-
-    const graph = opts.getGraphState();
-    const nodeById = new Map((graph.nodes ?? []).map((node) => [String(node.id), node]));
-    const typeByNodeId = new Map((graph.nodes ?? []).map((node) => [String(node.id), String(node.type ?? '')]));
-    const isDecorationNodeId = (nodeId: string): boolean => {
-      const type = typeByNodeId.get(String(nodeId)) ?? '';
-      return isGroupDecorationNodeType(type);
-    };
-
-    const unionBoundsFromPositions = (nodeIds: string[]) => {
-      let minX = Number.POSITIVE_INFINITY;
-      let minY = Number.POSITIVE_INFINITY;
-      let maxX = Number.NEGATIVE_INFINITY;
-      let maxY = Number.NEGATIVE_INFINITY;
-
-      for (const nodeId of nodeIds) {
-        if (isDecorationNodeId(nodeId)) continue;
-        const node = nodeById.get(String(nodeId));
-        if (!node) continue;
-        const x = Number(node.position?.x ?? 0);
-        const y = Number(node.position?.y ?? 0);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
-      }
-
-      const ok =
-        Number.isFinite(minX) &&
-        Number.isFinite(minY) &&
-        Number.isFinite(maxX) &&
-        Number.isFinite(maxY);
-      if (!ok) return null;
-      return { minX, minY, maxX, maxY, centerX: (minX + maxX) / 2, centerY: (minY + maxY) / 2 };
-    };
-
-    if (minimized) {
-      const posBounds = unionBoundsFromPositions(group.nodeIds ?? []);
-      const centerX = posBounds?.centerX ?? 220;
-      const centerY = posBounds?.centerY ?? 160;
-
-      const proxyNodes = (graph.nodes ?? []).filter(
-        (n) =>
-          String(n?.type ?? '') === 'group-proxy' &&
-          String((n?.config as Record<string, unknown>)?.groupId ?? '') === groupId
-      );
-      const inputProxyCount = proxyNodes.filter((n) => String((n?.config as Record<string, unknown>)?.direction ?? 'output') === 'input').length;
-      const outputProxyCount = Math.max(0, proxyNodes.length - inputProxyCount);
-      const portRows = Math.max(1, Math.max(inputProxyCount, outputProxyCount));
-
-      // Minimized Group should look like a standard node: title bar + port rows.
-      const width = 230;
-      const headerHeight = 44;
-      const rowHeight = 28;
-      const height = Math.max(84, headerHeight + portRows * rowHeight + 12);
-      const compact = {
-        left: centerX - width / 2,
-        top: centerY - height / 2,
-        right: centerX + width / 2,
-        bottom: centerY + height / 2,
-      };
-      cache.set(groupId, compact);
-      visiting.delete(groupId);
-      return compact;
-    }
-
-    const unionBoundsGraph = (nodeIds: string[]): NodeBounds | null => {
-      let merged: NodeBounds | null = null;
-      for (const nodeId of nodeIds) {
-        if (hiddenNodeIds.has(String(nodeId))) continue;
-        if (isDecorationNodeId(nodeId)) continue;
-        const b = adapter.getNodeBounds(String(nodeId));
-        merged = mergeBounds(merged, b);
-      }
-      return merged;
-    };
-
-    bounds = mergeBounds(bounds, unionBoundsGraph(group.nodeIds ?? []));
-
-    const groupNodeSet = new Set((group.nodeIds ?? []).map((id) => String(id)));
-    for (const loop of opts.getLocalLoops()) {
-      if (!loop?.nodeIds?.length) continue;
-      const fullyContained = loop.nodeIds.every((id) => groupNodeSet.has(String(id)));
-      if (!fullyContained) continue;
-      const lb = unionBoundsGraph(loop.nodeIds.map(String));
-      if (!lb) continue;
-      bounds = mergeBounds(bounds, {
-        left: lb.left - loopPaddingX,
-        top: lb.top - loopPaddingTop,
-        right: lb.right + loopPaddingX,
-        bottom: lb.bottom + loopPaddingBottom,
-      });
-    }
-
-    const children = childrenByParentId.get(groupId) ?? [];
-    for (const childId of children) {
-      const childBounds = computeGroupFrameBoundsWithChildren(
-        childId,
-        byId,
-        childrenByParentId,
-        cache,
-        visiting,
-        hiddenNodeIds
-      );
-      bounds = mergeBounds(bounds, childBounds);
-    }
-
-    visiting.delete(groupId);
-
-    if (!bounds) {
-      cache.set(groupId, null);
-      return null;
-    }
-
-    const padded = {
-      left: bounds.left - paddingX,
-      top: bounds.top - paddingTop,
-      right: bounds.right + paddingX,
-      bottom: bounds.bottom + paddingBottom,
-    };
-    cache.set(groupId, padded);
-    return padded;
-  };
-
-  const computeGroupFrameBounds = (group: NodeGroup): NodeBounds | null => {
-    const groupsSnapshot = get(nodeGroups);
-    const { byId, childrenByParentId } = buildGroupIndex(groupsSnapshot);
-    const cache = new Map<string, NodeBounds | null>();
-
-    const hiddenNodeIds = new Set<string>();
-    for (const g of groupsSnapshot) {
-      if (!g.minimized) continue;
-      for (const nodeId of g.nodeIds ?? []) hiddenNodeIds.add(String(nodeId));
-    }
-    return computeGroupFrameBoundsWithChildren(
-      String(group.id),
-      byId,
-      childrenByParentId,
-      cache,
-      new Set(),
-      hiddenNodeIds
-    );
+    return computeSingleGroupFrameBounds({
+      groupId: String(group.id),
+      groups: get(nodeGroups),
+      graph: opts.getGraphState(),
+      localLoops: opts.getLocalLoops(),
+      getNodeBounds: (nodeId) => adapter.getNodeBounds(nodeId),
+    });
   };
 
   const computeLoopFrameBounds = (loop: LocalLoop): NodeBounds | null => {
-    const paddingX = 56;
-    const paddingTop = 64;
-    const paddingBottom = 64;
-
     const adapter = opts.getAdapter();
     if (!adapter) return null;
-
-    let base: NodeBounds | null = null;
-    for (const nodeId of loop.nodeIds ?? []) {
-      const b = adapter.getNodeBounds(String(nodeId));
-      base = mergeBounds(base, b);
-    }
-    if (!base) return null;
-
-    return {
-      left: base.left - paddingX,
-      top: base.top - paddingTop,
-      right: base.right + paddingX,
-      bottom: base.bottom + paddingBottom,
-    };
+    return computeLoopFrameBoundsCore(loop, (nodeId) => adapter.getNodeBounds(nodeId));
   };
 
   const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -694,13 +396,6 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     const groupsSnapshot = get(nodeGroups);
     const loopsSnapshot = opts.getLoopConstraintLoops();
 
-    const groupNodeSets = new Map<string, Set<string>>();
-    for (const g of groupsSnapshot) {
-      const gid = String(g.id);
-      const set = new Set((g.nodeIds ?? []).map((id) => String(id)));
-      groupNodeSets.set(gid, set);
-    }
-
     const { byId, childrenByParentId } = buildGroupIndex(groupsSnapshot);
 
     const hiddenNodeIds = new Set<string>();
@@ -711,82 +406,28 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
 
     const groupBoundsCache = new Map<string, NodeBounds | null>();
     const computeGroupBoundsCached = (groupId: string) =>
-      computeGroupFrameBoundsWithChildren(
+      computeGroupFrameBoundsWithChildren({
         groupId,
         byId,
         childrenByParentId,
-        groupBoundsCache,
-        new Set(),
-        hiddenNodeIds
-      );
-
-    const frameById = new Map<string, FrameInfo>();
-    const loopNodeSets = new Map<string, Set<string>>();
-
-    for (const loop of loopsSnapshot) {
-      const loopId = String(loop.id ?? '');
-      if (!loopId) continue;
-      const nodeIds = new Set((loop.nodeIds ?? []).map((id) => String(id)));
-      loopNodeSets.set(loopId, nodeIds);
-      const bounds = computeLoopFrameBounds(loop);
-      if (!bounds) continue;
-      frameById.set(`loop:${loopId}`, {
-        id: `loop:${loopId}`,
-        kind: 'loop',
-        nodeIds,
-        bounds,
+        cache: groupBoundsCache,
+        visiting: new Set(),
+        hiddenNodeIds,
+        graph: opts.getGraphState(),
+        localLoops: opts.getLocalLoops(),
+        getNodeBounds: (nodeId) => adapter.getNodeBounds(nodeId),
       });
-    }
 
     const editId = get(editModeGroupId);
-    for (const group of groupsSnapshot) {
-      const groupId = String(group.id ?? '');
-      if (!groupId) continue;
-      const nodeIds = groupNodeSets.get(groupId) ?? new Set();
-
-      let bounds: NodeBounds | null = null;
-      if (editId && editModeGroupBounds && editId === groupId) {
-        bounds = { ...editModeGroupBounds };
-      } else {
-        bounds = computeGroupBoundsCached(groupId);
-      }
-      if (!bounds) continue;
-      frameById.set(`group:${groupId}`, {
-        id: `group:${groupId}`,
-        kind: 'group',
-        nodeIds,
-        bounds,
-      });
-    }
-
-    const frameAreaById = new Map<string, number>();
-    const nodeToFrameIds = new Map<string, string[]>();
-
-    for (const [frameId, frame] of frameById.entries()) {
-      const area = Math.max(
-        0,
-        (frame.bounds.right - frame.bounds.left) * (frame.bounds.bottom - frame.bounds.top)
-      );
-      frameAreaById.set(frameId, area);
-      for (const nid of frame.nodeIds) {
-        const id = String(nid);
-        const list = nodeToFrameIds.get(id) ?? [];
-        list.push(frameId);
-        nodeToFrameIds.set(id, list);
-      }
-    }
-
-    for (const [nodeId, list] of nodeToFrameIds.entries()) {
-      list.sort((a, b) => {
-        const areaA = frameAreaById.get(a) ?? Number.POSITIVE_INFINITY;
-        const areaB = frameAreaById.get(b) ?? Number.POSITIVE_INFINITY;
-        return areaA - areaB;
-      });
-      nodeToFrameIds.set(nodeId, list);
-    }
-
-    const frameMoves: FrameMoveContext | undefined =
-      frameById.size > 0 ? { frameById, nodeToFrameIds, movedFrameIds: new Set() } : undefined;
+    const dropContext = buildDropFrameContext({
+      groups: groupsSnapshot,
+      loops: loopsSnapshot,
+      editModeGroupId: editId,
+      editModeGroupBounds,
+      computeGroupBounds: computeGroupBoundsCached,
+      computeLoopBounds: computeLoopFrameBounds,
+    });
+    const { groupNodeSets, loopNodeSets, frameById, frameMoves } = dropContext;
 
     for (const loop of loopsSnapshot) {
       const loopId = String(loop.id ?? '');
@@ -796,20 +437,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       if (!bounds) continue;
       const loopNodeSet = loopNodeSets.get(loopId) ?? new Set();
 
-      let shouldEnforce = false;
-      for (const movedId of nodeIds) {
-        const id = String(movedId);
-        if (loopNodeSet.has(id)) {
-          shouldEnforce = true;
-          break;
-        }
-        const c = getNodeCenter(id);
-        if (!c) continue;
-        if (c.cx > bounds.left && c.cx < bounds.right && c.cy > bounds.top && c.cy < bounds.bottom) {
-          shouldEnforce = true;
-          break;
-        }
-      }
+      const shouldEnforce = shouldEnforceFrameForMovedNodes(nodeIds, loopNodeSet, bounds, getNodeCenter);
       if (!shouldEnforce) continue;
 
       pushNodesOutOfBounds(bounds, loopNodeSet, frameMoves);
@@ -819,114 +447,35 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       const group = groupsSnapshot.find((g) => String(g.id) === String(editId)) ?? null;
       if (group) {
         const bounds: NodeBounds = { ...editModeGroupBounds };
-
-        const nextSet = new Set((group.nodeIds ?? []).map((id) => String(id)));
-        const typeByNodeId = new Map(
-          opts.getGraphState().nodes.map((node) => [String(node.id), String(node.type ?? '')])
-        );
-        const added: string[] = [];
-        const removed: string[] = [];
-
-          for (const movedId of nodeIds) {
-            const id = String(movedId);
-            if (isGroupDecorationNodeType(typeByNodeId.get(id) ?? '')) continue;
-            const c = getNodeCenter(id);
-            if (!c) continue;
-          const inside = c.cx > bounds.left && c.cx < bounds.right && c.cy > bounds.top && c.cy < bounds.bottom;
-
-          if (inside && !nextSet.has(id)) {
-            nextSet.add(id);
-            added.push(id);
-            const node = opts.getGraphState().nodes.find((n) => String(n.id) === id);
-            const nodeName = node ? nodeLabel(node) : id;
-            showGroupEditToast(group.id, `Add ${nodeName} to ${group.name ?? 'Group'}`);
-          }
-
-          if (!inside && nextSet.has(id)) {
-            nextSet.delete(id);
-            removed.push(id);
-            const node = opts.getGraphState().nodes.find((n) => String(n.id) === id);
-            const nodeName = node ? nodeLabel(node) : id;
-            showGroupEditToast(group.id, `Remove ${nodeName} from ${group.name ?? 'Group'}`);
-          }
-        }
+        const { added, removed } = planEditGroupMembershipChange({
+          movedNodeIds: nodeIds,
+          group,
+          bounds,
+          graph: opts.getGraphState(),
+          getNodeCenter,
+        });
 
         if (added.length > 0 || removed.length > 0) {
-          const groupsSnapshot = get(nodeGroups);
-          const byId = new Map<string, NodeGroup>();
-          const childrenByParentId = new Map<string, string[]>();
-
-          for (const g of groupsSnapshot) {
-            byId.set(String(g.id), g);
-            const pid = g.parentId ? String(g.parentId) : '';
-            if (!pid) continue;
-            const list = childrenByParentId.get(pid) ?? [];
-            list.push(String(g.id));
-            childrenByParentId.set(pid, list);
+          const graph = opts.getGraphState();
+          for (const id of added) {
+            const node = graph.nodes.find((n) => String(n.id) === id);
+            showGroupEditToast(group.id, `Add ${node ? nodeLabel(node) : id} to ${group.name ?? 'Group'}`);
           }
-
-          const targetAndAncestors = new Set<string>();
-          let cursor: string | null = String(group.id);
-          while (cursor) {
-            if (targetAndAncestors.has(cursor)) break;
-            targetAndAncestors.add(cursor);
-            const parentId: string = (() => {
-              const rec = byId.get(cursor);
-              return rec?.parentId ? String(rec.parentId) : '';
-            })();
-            cursor = parentId && byId.has(parentId) ? parentId : null;
+          for (const id of removed) {
+            const node = graph.nodes.find((n) => String(n.id) === id);
+            showGroupEditToast(group.id, `Remove ${node ? nodeLabel(node) : id} from ${group.name ?? 'Group'}`);
           }
-
-          const targetAndDescendants = new Set<string>();
-          const stack = [String(group.id)];
-          while (stack.length > 0) {
-            const id = stack.pop();
-            if (!id) continue;
-            if (targetAndDescendants.has(id)) continue;
-            targetAndDescendants.add(id);
-            const children = childrenByParentId.get(id) ?? [];
-            for (const childId of children) stack.push(childId);
-          }
-
-          const effectiveDisabled = Array.from(targetAndAncestors).some((id) => {
-            const g = byId.get(id);
-            const runtimeActive = g?.runtimeActive ?? true;
-            return Boolean(g?.disabled) || !runtimeActive;
+          const result = applyEditGroupMembershipChange({
+            groups: get(nodeGroups),
+            targetGroupId: group.id,
+            added,
+            removed,
           });
-
-          nodeGroups.update((groups) =>
-            groups.map((g) => {
-              const id = String(g.id);
-              let changed = false;
-              let nextNodeIds = Array.from((g.nodeIds ?? []).map((nid) => String(nid)));
-
-              if (added.length > 0 && targetAndAncestors.has(id)) {
-                const set = new Set(nextNodeIds);
-                for (const nid of added) {
-                  if (set.has(nid)) continue;
-                  set.add(nid);
-                  changed = true;
-                }
-                if (changed) nextNodeIds = Array.from(set);
-              }
-
-              if (removed.length > 0 && targetAndDescendants.has(id)) {
-                const set = new Set(nextNodeIds);
-                for (const nid of removed) {
-                  if (!set.has(nid)) continue;
-                  set.delete(nid);
-                  changed = true;
-                }
-                if (changed) nextNodeIds = Array.from(set);
-              }
-
-              return changed ? { ...g, nodeIds: nextNodeIds } : g;
-            })
-          );
+          nodeGroups.set(result.nextGroups);
           recomputeDisabledNodes();
           opts.requestLoopFramesUpdate();
 
-          if (effectiveDisabled && added.length > 0) {
+          if (result.effectiveDisabled && added.length > 0) {
             stopDeployedLoopsIntersecting(added.map(String));
           }
         }
@@ -941,20 +490,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       if (!bounds) continue;
       const groupNodeSet = groupNodeSets.get(String(group.id)) ?? new Set();
 
-      let shouldEnforce = false;
-      for (const movedId of nodeIds) {
-        const id = String(movedId);
-        if (groupNodeSet.has(id)) {
-          shouldEnforce = true;
-          break;
-        }
-        const c = getNodeCenter(id);
-        if (!c) continue;
-        if (c.cx > bounds.left && c.cx < bounds.right && c.cy > bounds.top && c.cy < bounds.bottom) {
-          shouldEnforce = true;
-          break;
-        }
-      }
+      const shouldEnforce = shouldEnforceFrameForMovedNodes(nodeIds, groupNodeSet, bounds, getNodeCenter);
       if (!shouldEnforce) continue;
 
       pushNodesOutOfBounds(bounds, groupNodeSet, frameMoves);
@@ -962,81 +498,31 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   };
 
   const pickGroupAtPoint = (groups: NodeGroup[], gx: number, gy: number): NodeGroup | null => {
-    let picked: NodeGroup | null = null;
-    let pickedArea = Number.POSITIVE_INFINITY;
-
-    for (const group of groups) {
-      let bounds: NodeBounds | null = null;
-
+    return pickSmallestGroupAtPoint(groups, gx, gy, (_groupId, group) => {
       if (get(editModeGroupId) === group.id && editModeGroupBounds) {
-        bounds = { ...editModeGroupBounds };
-      } else {
-        bounds = computeGroupFrameBounds(group);
+        return { ...editModeGroupBounds };
       }
-
-      if (!bounds) continue;
-      const inside = gx >= bounds.left && gx <= bounds.right && gy >= bounds.top && gy <= bounds.bottom;
-      if (!inside) continue;
-
-      const area = (bounds.right - bounds.left) * (bounds.bottom - bounds.top);
-      if (area < pickedArea) {
-        picked = group;
-        pickedArea = area;
-      }
-    }
-
-    return picked;
+      return computeGroupFrameBounds(group);
+    });
   };
 
   const addNodeToGroupChain = (groupId: string, nodeId: string) => {
     const rootId = String(groupId ?? '');
-      const createdId = String(nodeId ?? '');
-      if (!rootId || !createdId) return;
+    const createdId = String(nodeId ?? '');
+    if (!rootId || !createdId) return;
 
-      const createdType = String(opts.getGraphState().nodes.find((n) => String(n.id) === createdId)?.type ?? '');
-      if (isGroupDecorationNodeType(createdType)) return;
+    const createdType = String(opts.getGraphState().nodes.find((n) => String(n.id) === createdId)?.type ?? '');
+    if (isGroupDecorationNodeType(createdType)) return;
 
-    const groupsSnapshot = get(nodeGroups);
-    const byId = new Map<string, NodeGroup>();
-    for (const g of groupsSnapshot) byId.set(String(g.id), g);
+    const result = planAddNodeToGroupChain({ groups: get(nodeGroups), groupId: rootId, nodeId: createdId });
+    if (!result.didAdd) return;
 
-    const targetAndAncestors = new Set<string>();
-    let cursor: string | null = rootId;
-    while (cursor) {
-      if (targetAndAncestors.has(cursor)) break;
-      targetAndAncestors.add(cursor);
-      const parentId: string = (() => {
-        const rec = byId.get(cursor);
-        return rec?.parentId ? String(rec.parentId) : '';
-      })();
-      cursor = parentId && byId.has(parentId) ? parentId : null;
-    }
-
-    const effectiveDisabled = Array.from(targetAndAncestors).some((id) => {
-      const g = byId.get(id);
-      const runtimeActive = g?.runtimeActive ?? true;
-      return Boolean(g?.disabled) || !runtimeActive;
-    });
-
-    let didAdd = false;
-    nodeGroups.update((groups) =>
-      groups.map((g) => {
-        if (!targetAndAncestors.has(String(g.id))) return g;
-        const set = new Set((g.nodeIds ?? []).map((id) => String(id)));
-        if (set.has(createdId)) return g;
-        set.add(createdId);
-        if (String(g.id) === rootId) didAdd = true;
-        return { ...g, nodeIds: Array.from(set) };
-      })
-    );
-
-    if (!didAdd) return;
-
+    nodeGroups.set(result.nextGroups);
     recomputeDisabledNodes();
     opts.requestLoopFramesUpdate();
     opts.requestMinimapUpdate();
 
-    if (effectiveDisabled) stopDeployedLoopsIntersecting([createdId]);
+    if (result.effectiveDisabled) stopDeployedLoopsIntersecting([createdId]);
   };
 
   const autoAddNodeToGroupFromPosition = (nodeId: string, graphPos: { x: number; y: number }) => {
@@ -1079,132 +565,19 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   };
 
   const createGroupFromSelection = () => {
-      const selectedRaw = Array.from(get(groupSelectionNodeIds)).map((id) => String(id));
-      const graph = opts.getGraphState();
-      const nodeById = new Map((graph.nodes ?? []).map((node) => [String(node.id), node]));
-      const selected = selectedRaw.filter((id) => {
-        const type = String(nodeById.get(id)?.type ?? '');
-        return !isGroupDecorationNodeType(type);
-      });
-    if (selected.length === 0) return;
-
     const groups = get(nodeGroups);
-    const byId = new Map<string, NodeGroup>();
-    const groupNodeSets = new Map<string, Set<string>>();
-    const nodeToGroupIds = new Map<string, string[]>();
+    const result = planGroupFromSelection({
+      selectionNodeIds: Array.from(get(groupSelectionNodeIds)),
+      graph: opts.getGraphState(),
+      groups,
+      localLoops: opts.getLocalLoops(),
+      createId: () => `group:${crypto.randomUUID?.() ?? Date.now()}`,
+    });
 
-    for (const g of groups) {
-      const id = String(g.id);
-      byId.set(id, { ...g, id, parentId: g.parentId ? String(g.parentId) : null });
-      const set = new Set((g.nodeIds ?? []).map((nid) => String(nid)));
-      groupNodeSets.set(id, set);
-      for (const nid of set) {
-        const list = nodeToGroupIds.get(nid) ?? [];
-        list.push(id);
-        nodeToGroupIds.set(nid, list);
-      }
-    }
+    if (result.deniedNodeIds.length > 0) showCanvasToast('无法创建跨组组合');
+    if (!result.group) return;
 
-    const depthCache = new Map<string, number>();
-    const getDepth = (groupId: string, visiting = new Set<string>()): number => {
-      const cached = depthCache.get(groupId);
-      if (cached !== undefined) return cached;
-      if (visiting.has(groupId)) return 0;
-      visiting.add(groupId);
-
-      const g = byId.get(groupId);
-      const parentId = g?.parentId && byId.has(String(g.parentId)) ? String(g.parentId) : null;
-      const depth = parentId ? getDepth(parentId, visiting) + 1 : 0;
-
-      visiting.delete(groupId);
-      depthCache.set(groupId, depth);
-      return depth;
-    };
-
-    const getPrimaryGroupIdForNode = (nodeId: string): string | null => {
-      const groupIds = nodeToGroupIds.get(String(nodeId)) ?? [];
-      if (groupIds.length === 0) return null;
-
-      let bestId: string | null = null;
-      let bestDepth = -1;
-      let bestSize = Number.POSITIVE_INFINITY;
-
-      for (const gid of groupIds) {
-        const depth = getDepth(gid);
-        const size = groupNodeSets.get(gid)?.size ?? Number.POSITIVE_INFINITY;
-        if (depth > bestDepth || (depth === bestDepth && size < bestSize)) {
-          bestId = gid;
-          bestDepth = depth;
-          bestSize = size;
-        }
-      }
-
-      return bestId;
-    };
-
-    let parentId: string | null = null;
-    let parentDepth = -1;
-    let parentSize = Number.POSITIVE_INFINITY;
-
-    for (const g of groups) {
-      const gid = String(g.id);
-      const set = groupNodeSets.get(gid);
-      if (!set) continue;
-      const containsAll = selected.every((id) => set.has(String(id)));
-      if (!containsAll) continue;
-
-      const depth = getDepth(gid);
-      const size = set.size;
-      if (depth > parentDepth || (depth === parentDepth && size < parentSize)) {
-        parentId = gid;
-        parentDepth = depth;
-        parentSize = size;
-      }
-    }
-
-    const denied: string[] = [];
-    const ids = new Set<string>();
-
-    for (const nodeId of selected) {
-      const primary = getPrimaryGroupIdForNode(nodeId);
-      const allowed = parentId ? primary === parentId : primary === null;
-      if (!allowed) {
-        denied.push(nodeId);
-        continue;
-      }
-      ids.add(nodeId);
-    }
-
-    if (denied.length > 0) showCanvasToast('无法创建跨组组合');
-    if (ids.size === 0) return;
-
-    const isEligibleLoopNode = (nodeId: string): boolean => {
-      const primary = getPrimaryGroupIdForNode(nodeId);
-      return parentId ? primary === parentId : primary === null;
-    };
-
-    for (const loop of opts.getLocalLoops()) {
-      if (!loop?.nodeIds?.length) continue;
-      const loopIds = loop.nodeIds.map((id) => String(id));
-      if (!loopIds.some((id) => ids.has(id))) continue;
-      if (!loopIds.every((id) => isEligibleLoopNode(id))) continue;
-      for (const nid of loopIds) ids.add(nid);
-    }
-
-    const groupId = `group:${crypto.randomUUID?.() ?? Date.now()}`;
-    const nextName = parentId
-      ? `Sub Group ${(groups.filter((g) => String(g.parentId ?? '') === String(parentId)).length ?? 0) + 1}`
-      : `Group ${groups.filter((g) => !g.parentId).length + 1}`;
-
-    const group: NodeGroup = {
-      id: groupId,
-      parentId,
-      name: nextName,
-      nodeIds: Array.from(ids),
-      disabled: false,
-      minimized: false,
-      runtimeActive: true,
-    };
+    const group = result.group;
 
     nodeGroups.set([...groups, group]);
     recomputeDisabledNodes();
@@ -1263,42 +636,19 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   };
 
   const disassembleGroup = (groupId: string) => {
-    const rootId = String(groupId ?? '');
-    if (!rootId) return;
-
-    const groups = get(nodeGroups);
-    if (!groups.some((g) => String(g.id) === rootId)) return;
-
-    const childrenByParentId = new Map<string, string[]>();
-    for (const g of groups) {
-      const pid = g.parentId ? String(g.parentId) : '';
-      if (!pid) continue;
-      const list = childrenByParentId.get(pid) ?? [];
-      list.push(String(g.id));
-      childrenByParentId.set(pid, list);
-    }
-
-    const toRemove = new Set<string>();
-    const stack = [rootId];
-    while (stack.length > 0) {
-      const id = stack.pop();
-      if (!id) continue;
-      if (toRemove.has(id)) continue;
-      toRemove.add(id);
-      const children = childrenByParentId.get(id) ?? [];
-      for (const childId of children) stack.push(childId);
-    }
+    const result = planDisassembleGroup({ groups: get(nodeGroups), groupId });
+    if (result.removedGroupIds.size === 0) return;
 
     const editingId = get(editModeGroupId);
-    if (editingId && toRemove.has(String(editingId))) {
+    if (editingId && result.removedGroupIds.has(String(editingId))) {
       editModeGroupId.set(null);
       editModeGroupBounds = null;
       clearGroupEditToast();
       opts.requestLoopFramesUpdate();
     }
 
-    nodeGroups.set(groups.filter((g) => !toRemove.has(String(g.id))));
-    recomputeDisabledNodes(get(nodeGroups));
+    nodeGroups.set(result.nextGroups);
+    recomputeDisabledNodes(result.nextGroups);
     opts.requestLoopFramesUpdate();
   };
 
@@ -1343,119 +693,17 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       return;
     }
 
-    const { byId, childrenByParentId } = buildGroupIndex(groups);
-
-    const hiddenNodeIds = new Set<string>();
-    for (const nodeId of opts.getForcedHiddenNodeIds?.() ?? []) hiddenNodeIds.add(String(nodeId));
-    const minimizedGroupIds: string[] = [];
-    for (const g of groups) {
-      if (!g.minimized) continue;
-      minimizedGroupIds.push(String(g.id));
-      for (const nodeId of g.nodeIds ?? []) hiddenNodeIds.add(String(nodeId));
-    }
-
-    const hiddenGroupIds = new Set<string>();
-    if (minimizedGroupIds.length > 0) {
-      const stack: string[] = [];
-      for (const gid of minimizedGroupIds) {
-        for (const childId of childrenByParentId.get(String(gid)) ?? []) {
-          stack.push(String(childId));
-        }
-      }
-      while (stack.length > 0) {
-        const next = String(stack.pop() ?? '');
-        if (!next || hiddenGroupIds.has(next)) continue;
-        hiddenGroupIds.add(next);
-        for (const childId of childrenByParentId.get(next) ?? []) {
-          stack.push(String(childId));
-        }
-      }
-    }
-
-    const depthCache = new Map<string, number>();
-    const getDepth = (groupId: string, visiting = new Set<string>()): number => {
-      const cached = depthCache.get(groupId);
-      if (cached !== undefined) return cached;
-      if (visiting.has(groupId)) return 0;
-      visiting.add(groupId);
-
-      const g = byId.get(groupId);
-      const parentId = g?.parentId && byId.has(String(g.parentId)) ? String(g.parentId) : null;
-      const depth = parentId ? getDepth(parentId, visiting) + 1 : 0;
-
-      visiting.delete(groupId);
-      depthCache.set(groupId, depth);
-      return depth;
-    };
-
-    const effectiveDisabledCache = new Map<string, boolean>();
-    const getEffectiveDisabled = (groupId: string, visiting = new Set<string>()): boolean => {
-      const cached = effectiveDisabledCache.get(groupId);
-      if (cached !== undefined) return cached;
-      if (visiting.has(groupId)) return false;
-      visiting.add(groupId);
-
-      const g = byId.get(groupId);
-      const parentId = g?.parentId && byId.has(String(g.parentId)) ? String(g.parentId) : null;
-      const runtimeActive = g?.runtimeActive ?? true;
-      const effective =
-        Boolean(g?.disabled) || !runtimeActive || (parentId ? getEffectiveDisabled(parentId, visiting) : false);
-
-      visiting.delete(groupId);
-      effectiveDisabledCache.set(groupId, effective);
-      return effective;
-    };
-
-    const boundsCache = new Map<string, NodeBounds | null>();
-    const computeBoundsCached = (groupId: string) =>
-      computeGroupFrameBoundsWithChildren(
-        groupId,
-        byId,
-        childrenByParentId,
-        boundsCache,
-        new Set(),
-        hiddenNodeIds
-      );
-
-    const frames: GroupFrame[] = [];
-    for (const group of groups) {
-      if (hiddenGroupIds.has(String(group.id))) continue;
-      const depth = getDepth(String(group.id));
-      const effectiveDisabled = getEffectiveDisabled(String(group.id));
-
-      if (get(editModeGroupId) === group.id && editModeGroupBounds) {
-        const left = editModeGroupBounds.left;
-        const top = editModeGroupBounds.top;
-        const right = editModeGroupBounds.right;
-        const bottom = editModeGroupBounds.bottom;
-        frames.push({
-          group,
-          left,
-          top,
-          width: right - left,
-          height: bottom - top,
-          effectiveDisabled,
-          depth,
-        });
-        continue;
-      }
-
-      const bounds = computeBoundsCached(String(group.id));
-      if (!bounds) continue;
-
-      frames.push({
-        group,
-        left: bounds.left,
-        top: bounds.top,
-        width: bounds.right - bounds.left,
-        height: bounds.bottom - bounds.top,
-        effectiveDisabled,
-        depth,
-      });
-    }
-
-    frames.sort((a, b) => a.depth - b.depth);
-    groupFrames.set(frames);
+    groupFrames.set(
+      computeGroupFramesFromState({
+        groups,
+        editModeGroupId: get(editModeGroupId),
+        editModeGroupBounds,
+        forcedHiddenNodeIds: opts.getForcedHiddenNodeIds?.() ?? new Set(),
+        graph: opts.getGraphState(),
+        localLoops: opts.getLocalLoops(),
+        getNodeBounds: (nodeId) => adapter.getNodeBounds(nodeId),
+      })
+    );
   };
 
   const computeSelectionBounds = () => {
@@ -1470,36 +718,13 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       return;
     }
 
-    const t = adapter.getViewportTransform();
-
-    let left = Number.POSITIVE_INFINITY;
-    let top = Number.POSITIVE_INFINITY;
-    let right = Number.NEGATIVE_INFINITY;
-    let bottom = Number.NEGATIVE_INFINITY;
-
-    for (const nodeId of get(groupSelectionNodeIds)) {
-      const b = adapter.getNodeBounds(String(nodeId));
-      if (!b) continue;
-      left = Math.min(left, b.left * t.k + t.tx);
-      top = Math.min(top, b.top * t.k + t.ty);
-      right = Math.max(right, b.right * t.k + t.tx);
-      bottom = Math.max(bottom, b.bottom * t.k + t.ty);
-    }
-
-    const hasBounds =
-      Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom);
-    if (!hasBounds) {
-      groupSelectionBounds.set(null);
-      return;
-    }
-
-    const pad = 18;
-    groupSelectionBounds.set({
-      left: left - pad,
-      top: top - pad,
-      width: right - left + pad * 2,
-      height: bottom - top + pad * 2,
-    });
+    groupSelectionBounds.set(
+      computeSelectionScreenBounds({
+        nodeIds: Array.from(get(groupSelectionNodeIds)),
+        transform: adapter.getViewportTransform(),
+        getNodeBounds: (nodeId) => adapter.getNodeBounds(nodeId),
+      })
+    );
   };
 
   const requestFramesUpdate = () => {
@@ -1538,35 +763,10 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     if (groupsSnapshot.length === 0) return [];
 
     const graph = graphOverride ?? opts.getGraphState();
-    const existingNodeIds = new Set<string>();
-    for (const node of graph.nodes ?? []) {
-      const id = String(node.id ?? '');
-      if (!id) continue;
-      // Ignore UI-only group decoration nodes so a deleted group doesn't "stick" just because a port node survived.
-      if (isGroupDecorationNodeType(String(node.type ?? ''))) continue;
-      existingNodeIds.add(id);
-    }
+    const result = reconcileGroupsWithGraphNodes(groupsSnapshot, graph);
 
-    const prevById = new Map<string, NodeGroup>();
-    for (const g of groupsSnapshot) prevById.set(String(g.id), g);
-
-    const normalized: NodeGroup[] = [];
-    const byId = new Map<string, NodeGroup>();
-    for (const group of groupsSnapshot) {
-      const id = String(group?.id ?? '');
-      if (!id) continue;
-      const parentId = group?.parentId ? String(group.parentId) : null;
-      const nodeIds = Array.from(new Set((group.nodeIds ?? []).map((nid) => String(nid)).filter(Boolean))).filter(
-        (nid) => existingNodeIds.has(nid)
-      );
-      const next: NodeGroup = { ...group, id, parentId, nodeIds };
-      normalized.push(next);
-      byId.set(id, next);
-    }
-
-    if (normalized.length === 0) {
-      const removedIds = Array.from(prevById.keys()).filter(Boolean);
-      if (removedIds.length > 0) {
+    if (result.nextGroups.length === 0) {
+      if (result.removedGroupIds.length > 0) {
         nodeGroups.set([]);
         recomputeDisabledNodes([]);
         clearSelection();
@@ -1574,91 +774,13 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
         opts.requestLoopFramesUpdate();
         opts.requestMinimapUpdate();
       }
-      return removedIds;
-    }
-
-    const childrenByParent = new Map<string, string[]>();
-    for (const g of normalized) {
-      const pid = g.parentId ? String(g.parentId) : '';
-      if (!pid || pid === g.id || !byId.has(pid)) continue;
-      const list = childrenByParent.get(pid) ?? [];
-      list.push(g.id);
-      childrenByParent.set(pid, list);
-    }
-
-    const unionCache = new Map<string, Set<string>>();
-    const visiting = new Set<string>();
-    const computeUnion = (id: string): Set<string> => {
-      const cached = unionCache.get(id);
-      if (cached) return cached;
-      if (visiting.has(id)) return new Set((byId.get(id)?.nodeIds ?? []).map(String));
-      visiting.add(id);
-      const base = new Set((byId.get(id)?.nodeIds ?? []).map(String));
-      for (const childId of childrenByParent.get(id) ?? []) {
-        const childUnion = computeUnion(String(childId));
-        for (const nid of childUnion) base.add(nid);
-      }
-      visiting.delete(id);
-      unionCache.set(id, base);
-      return base;
-    };
-
-    for (const g of normalized) computeUnion(g.id);
-
-    const removedGroupIds = new Set<string>();
-    for (const g of normalized) {
-      const union = unionCache.get(g.id) ?? new Set();
-      if (union.size === 0) removedGroupIds.add(g.id);
-    }
-
-    let changed = removedGroupIds.size > 0;
-    const nextGroups: NodeGroup[] = [];
-
-    for (const g of normalized) {
-      if (removedGroupIds.has(g.id)) continue;
-      const union = unionCache.get(g.id) ?? new Set<string>();
-      const preferred = Array.from((g.nodeIds ?? []).map((nid) => String(nid)).filter(Boolean));
-      const ordered: string[] = [];
-      const seen = new Set<string>();
-      for (const nid of preferred) {
-        if (!union.has(nid) || seen.has(nid)) continue;
-        seen.add(nid);
-        ordered.push(nid);
-      }
-      const extras = Array.from(union).filter((nid) => !seen.has(nid));
-      extras.sort();
-      ordered.push(...extras);
-
-      const nextParentId =
-        g.parentId && byId.has(String(g.parentId)) && !removedGroupIds.has(String(g.parentId))
-          ? String(g.parentId)
-          : null;
-
-      const prev = prevById.get(g.id);
-      if (prev) {
-        const prevParentId = prev.parentId ? String(prev.parentId) : null;
-        const prevNodeIds = Array.from((prev.nodeIds ?? []).map((nid) => String(nid)).filter(Boolean));
-        if (prevParentId !== nextParentId) changed = true;
-        if (prevNodeIds.length !== ordered.length) changed = true;
-        else {
-          for (let i = 0; i < ordered.length; i += 1) {
-            if (prevNodeIds[i] !== ordered[i]) {
-              changed = true;
-              break;
-            }
-          }
-        }
-      } else {
-        changed = true;
-      }
-
-      nextGroups.push({ ...g, parentId: nextParentId, nodeIds: ordered });
+      return result.removedGroupIds;
     }
 
     // Drop deleted nodes from selection (marquee highlight can otherwise linger after delete).
     const prevSelection = get(groupSelectionNodeIds);
     if (prevSelection.size > 0) {
-      const nextSelection = new Set(Array.from(prevSelection).filter((id) => existingNodeIds.has(String(id))));
+      const nextSelection = new Set(Array.from(prevSelection).filter((id) => result.existingNodeIds.has(String(id))));
       if (nextSelection.size !== prevSelection.size) {
         groupSelectionNodeIds.set(nextSelection);
         if (nextSelection.size === 0) groupSelectionBounds.set(null);
@@ -1668,22 +790,22 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     }
 
     const editingId = get(editModeGroupId);
-    if (editingId && removedGroupIds.has(String(editingId))) {
+    if (editingId && result.removedGroupIds.includes(String(editingId))) {
       editModeGroupId.set(null);
       editModeGroupBounds = null;
       clearGroupEditToast();
       opts.requestLoopFramesUpdate();
     }
 
-    if (!changed) return [];
+    if (!result.changed) return [];
 
-    nodeGroups.set(nextGroups);
-    recomputeDisabledNodes(nextGroups);
+    nodeGroups.set(result.nextGroups);
+    recomputeDisabledNodes(result.nextGroups);
     requestFramesUpdate();
     opts.requestLoopFramesUpdate();
     opts.requestMinimapUpdate();
 
-    return Array.from(removedGroupIds);
+    return result.removedGroupIds;
   };
 
   const setRuntimeActiveByGroupId = (activeById: Map<string, boolean>) => {
