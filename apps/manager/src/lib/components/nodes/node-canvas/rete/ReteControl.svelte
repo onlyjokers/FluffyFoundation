@@ -9,11 +9,23 @@
   } from '$lib/stores/manager';
   import { assetsStore } from '$lib/stores/assets';
   import { nodeEngine, nodeRegistry } from '$lib/nodes';
-  import type { ClientInfo } from '@shugu/protocol';
-  import { midiService, type MidiEvent } from '$lib/features/midi/midi-service';
+  import { midiService } from '$lib/features/midi/midi-service';
   import { midiNodeBridge, type MidiSource } from '$lib/features/midi/midi-node-bridge';
   import type { Connection, NodeInstance } from '$lib/nodes/types';
   import { renderMarkdownToHtml } from '../utils/markdown';
+  import {
+    buildAssetOptions,
+    buildAssetUploadUrl,
+    buildClientPickerView,
+    clampNumberToBounds,
+    clientLabel,
+    computeSensorValue,
+    formatMidiEvent,
+    inferAssetKind,
+    readinessClass as resolveReadinessClass,
+    resolveNumberBounds,
+    type AnyRecord,
+  } from './rete-control-helpers';
   import CurveEditor from '../ui/CurveEditor.svelte';
   import ReteClientPickerControl from './ReteClientPickerControl.svelte';
   import ReteFileControl from './ReteFileControl.svelte';
@@ -22,69 +34,14 @@
   import ReteNoteControl from './ReteNoteControl.svelte';
   import ReteTimeRangeControl from './ReteTimeRangeControl.svelte';
 
-  type AnyRecord = Record<string, unknown>;
-
   export let data: AnyRecord;
   $: isInline = Boolean((data as AnyRecord)?.inline);
   $: inputControlLabel =
     data instanceof ClassicPreset.InputControl ? (data as AnyRecord).controlLabel : undefined;
-  type NumberBounds = { min?: number; max?: number; step?: number };
-  const resolveNumberBounds = (ctrl: unknown): NumberBounds => {
-    if (!(ctrl instanceof ClassicPreset.InputControl)) return {};
-    if ((ctrl as AnyRecord).type !== 'number') return {};
-
-    const isFiniteNumber = (value: unknown): value is number =>
-      typeof value === 'number' && Number.isFinite(value);
-
-    const fromControl: NumberBounds = {
-      min: isFiniteNumber((ctrl as AnyRecord).min) ? (ctrl as AnyRecord).min : undefined,
-      max: isFiniteNumber((ctrl as AnyRecord).max) ? (ctrl as AnyRecord).max : undefined,
-      step: isFiniteNumber((ctrl as AnyRecord).step) ? (ctrl as AnyRecord).step : undefined,
-    };
-    if (
-      fromControl.min !== undefined ||
-      fromControl.max !== undefined ||
-      fromControl.step !== undefined
-    ) {
-      return fromControl;
-    }
-
-    // Safety: some legacy graphs/controls may miss `min/max` hints. Resolve them from the node registry so
-    // critical constraints (e.g. non-negative playback rate) still apply at the UI layer.
-    const nodeType =
-      typeof (ctrl as AnyRecord).nodeType === 'string' ? String((ctrl as AnyRecord).nodeType) : '';
-    const portId = typeof (ctrl as AnyRecord).portId === 'string' ? String((ctrl as AnyRecord).portId) : '';
-    const configKey =
-      typeof (ctrl as AnyRecord).configKey === 'string' ? String((ctrl as AnyRecord).configKey) : '';
-    const key = portId || configKey;
-    if (!nodeType || !key) return {};
-
-    const def = nodeRegistry.get(nodeType);
-    if (!def) return {};
-    const port = def.inputs?.find((p) => String(p.id) === key);
-    const field = def.configSchema?.find((f) => String(f.key) === key);
-
-    const min = isFiniteNumber(port?.min)
-      ? port!.min
-      : isFiniteNumber(field?.min)
-        ? field!.min
-        : undefined;
-    const max = isFiniteNumber(port?.max)
-      ? port!.max
-      : isFiniteNumber(field?.max)
-        ? field!.max
-        : undefined;
-    const step = isFiniteNumber(port?.step)
-      ? port!.step
-      : isFiniteNumber(field?.step)
-        ? field!.step
-        : undefined;
-    return { min, max, step };
-  };
 
   $: numberBounds =
     data instanceof ClassicPreset.InputControl && data.type === 'number'
-      ? resolveNumberBounds(data)
+      ? resolveNumberBounds(data, nodeRegistry)
       : {};
   $: numberInputMin = numberBounds.min;
   $: numberInputMax = numberBounds.max;
@@ -110,10 +67,7 @@
     if (data.type === 'number') {
       const num = Number(target.value);
       let next = Number.isFinite(num) ? num : 0;
-      const min = numberBounds.min;
-      const max = numberBounds.max;
-      if (typeof min === 'number' && Number.isFinite(min)) next = Math.max(min, next);
-      if (typeof max === 'number' && Number.isFinite(max)) next = Math.min(max, next);
+      next = clampNumberToBounds(next, numberBounds);
       if (Number.isFinite(num) && next !== num) target.value = String(next);
       data.setValue(next);
     } else {
@@ -139,10 +93,7 @@
     }
 
     let next = num;
-    const min = numberBounds.min;
-    const max = numberBounds.max;
-    if (typeof min === 'number' && Number.isFinite(min)) next = Math.max(min, next);
-    if (typeof max === 'number' && Number.isFinite(max)) next = Math.min(max, next);
+    next = clampNumberToBounds(next, numberBounds);
 
     // Force a canonical display string (e.g. "000" -> "0", "01.0" -> "1").
     const canonical = String(next);
@@ -250,63 +201,17 @@
     didRefreshAssets = true;
     void assetsStore.refresh();
   }
-
-  function buildAssetOptions(kind: string): { value: string; label: string }[] {
-    const list = ($assetsStore?.assets ?? []) as AnyRecord[];
-    const k = kind && typeof kind === 'string' ? kind : 'any';
-    const filtered = k === 'any' ? list : list.filter((a) => String(a?.kind ?? '') === k);
-    return filtered.map((a) => ({
-      value: `asset:${String(a?.id ?? '')}`,
-      label: `${String(a?.originalName ?? a?.id ?? '')}`,
-    }));
-  }
-
-  function clientLabel(c: ClientInfo): string {
-    return String((c as AnyRecord).clientId ?? '');
-  }
+  $: assetPickerOptions =
+    data?.controlType === 'asset-picker'
+      ? buildAssetOptions(($assetsStore?.assets ?? []) as AnyRecord[], data.assetKind)
+      : [];
 
   function readinessClass(clientId: string, connected?: boolean): string {
-    if (connected === false) return 'disconnected';
-    const info = $clientReadiness.get(clientId);
-    if (!info) return 'connected';
-    if (info.status === 'assets-ready') return 'ready';
-    if (info.status === 'assets-error') return 'error';
-    if (info.status === 'assets-loading') return 'loading';
-    return 'connected';
+    return resolveReadinessClass($clientReadiness as Map<string, AnyRecord>, clientId, connected);
   }
 
   $: hasLabel = Boolean(data?.label) && !isInline;
   $: showInputControlLabel = Boolean(inputControlLabel) && !isInline;
-
-  const clampInt = (value: number, min: number, max: number) => {
-    const next = Math.floor(value);
-    return Math.max(min, Math.min(max, next));
-  };
-
-  const toFiniteNumber = (value: unknown, fallback: number): number => {
-    const n = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-
-  const coerceBoolean = (value: unknown, fallback = false): boolean => {
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
-    return fallback;
-  };
-
-  const hashStringDjb2 = (value: string): number => {
-    let hash = 5381;
-    for (let i = 0; i < value.length; i += 1) {
-      hash = ((hash << 5) + hash + value.charCodeAt(i)) >>> 0;
-    }
-    return hash >>> 0;
-  };
-
-  const buildStableRandomOrder = (nodeId: string, clients: string[]) => {
-    const keyed = clients.map((id) => ({ id, score: hashStringDjb2(`${nodeId}|${id}`) }));
-    keyed.sort((a, b) => a.score - b.score || a.id.localeCompare(b.id));
-    return keyed.map((k) => k.id);
-  };
 
   $: clientPickerInputLocked = (() => {
     if (data?.controlType !== 'client-picker') return false;
@@ -326,108 +231,19 @@
     const _tick = $tickTimeStore;
     void _tick;
 
-    const nodeId = String(data?.nodeId ?? '');
-    if (!nodeId) return [];
-
-    const rawClients = ($audienceClients ?? []) as AnyRecord[];
-    const clients = rawClients.map((c) => String(c?.clientId ?? '')).filter(Boolean);
-    if (clients.length === 0) return [];
-    const clientById = new Map<string, ClientInfo>();
-    for (const c of rawClients) {
-      const id = String((c as AnyRecord)?.clientId ?? '');
-      if (!id) continue;
-      clientById.set(id, c as ClientInfo);
-    }
-
-    const node = nodeEngine.getNode(nodeId);
-    if (!node) {
-      const orderedClients = clients
-        .map((id) => clientById.get(id))
-        .filter(Boolean) as ClientInfo[];
-      return orderedClients.map((c) => ({ client: c, selected: false, primary: false }));
-    }
-    const computed = nodeEngine.getLastComputedInputs(nodeId);
-    const isPortConnected = (portId: string) =>
-      ($graphStateStore?.connections ?? []).some(
-        (c) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === String(portId)
-      );
-    const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
-      const connected = isPortConnected(portId);
-      if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
-        return (computed as AnyRecord)[portId];
-      }
-      return (node.inputValues as AnyRecord)?.[portId];
-    };
-
-    const total = clients.length;
-    const indexRaw = toFiniteNumber(getEffectiveInput('index'), 1);
-    const rangeRaw = toFiniteNumber(getEffectiveInput('range'), 1);
-    const random = coerceBoolean(getEffectiveInput('random'), false);
-
-    const index = clampInt(indexRaw, 1, total);
-    const range = clampInt(rangeRaw, 1, total);
-    const ordered = random ? buildStableRandomOrder(nodeId, clients) : clients;
-
-    const selectedIdSet = new Set<string>();
-    const start = index - 1;
-    for (let i = 0; i < range; i += 1) selectedIdSet.add(ordered[(start + i) % total]);
-    const selectedFirstId = ordered[start] ?? '';
-
-    const orderedClients = ordered.map((id) => clientById.get(id)).filter(Boolean) as ClientInfo[];
-    return orderedClients.map((c) => ({
-      client: c,
-      selected: selectedIdSet.has(String((c as AnyRecord)?.clientId ?? '')),
-      primary: String((c as AnyRecord)?.clientId ?? '') === selectedFirstId,
-    }));
+    return buildClientPickerView({
+      data,
+      graphState: $graphStateStore,
+      audienceClients: ($audienceClients ?? []) as AnyRecord[],
+      getNode: (nodeId) => nodeEngine.getNode(nodeId),
+      getLastComputedInputs: (nodeId) => nodeEngine.getLastComputedInputs(nodeId),
+    });
   })();
-
-  function formatValue(val: unknown): string {
-    if (val === null || val === undefined) return '0.00';
-    const num = Number(val);
-    if (!Number.isFinite(num)) return '0.00';
-    return num.toFixed(2);
-  }
 
   let sensorsClientId = '';
   let sensorsData: AnyRecord | null = null;
   let sensorsPayload: AnyRecord = {};
   let sensorValueText = '--';
-
-  function formatBpm(val: unknown): string {
-    if (val === null || val === undefined) return '0';
-    const num = Number(val);
-    if (!Number.isFinite(num)) return '0';
-    return String(Math.round(num));
-  }
-
-  function computeSensorValue(portId: string, msg: AnyRecord | null, payload: AnyRecord): string {
-    const fallbackNumber = formatValue(0);
-    const fallbackBpm = formatBpm(0);
-    if (!msg || typeof msg !== 'object') return portId === 'micBpm' ? fallbackBpm : fallbackNumber;
-    const sensorType = typeof msg.sensorType === 'string' ? msg.sensorType : '';
-
-    if (portId === 'accelX')
-      return sensorType === 'accel' ? formatValue(payload.x) : fallbackNumber;
-    if (portId === 'accelY')
-      return sensorType === 'accel' ? formatValue(payload.y) : fallbackNumber;
-    if (portId === 'accelZ')
-      return sensorType === 'accel' ? formatValue(payload.z) : fallbackNumber;
-
-    const isAngle = sensorType === 'gyro' || sensorType === 'orientation';
-    if (portId === 'gyroA') return isAngle ? formatValue(payload.alpha) : fallbackNumber;
-    if (portId === 'gyroB') return isAngle ? formatValue(payload.beta) : fallbackNumber;
-    if (portId === 'gyroG') return isAngle ? formatValue(payload.gamma) : fallbackNumber;
-
-    if (portId === 'micVol')
-      return sensorType === 'mic' ? formatValue(payload.volume) : fallbackNumber;
-    if (portId === 'micLow')
-      return sensorType === 'mic' ? formatValue(payload.lowEnergy) : fallbackNumber;
-    if (portId === 'micHigh')
-      return sensorType === 'mic' ? formatValue(payload.highEnergy) : fallbackNumber;
-    if (portId === 'micBpm') return sensorType === 'mic' ? formatBpm(payload.bpm) : fallbackBpm;
-
-    return fallbackNumber;
-  }
 
   $: if (data?.controlType === 'client-sensor-value') {
     const nodeId = String(data?.nodeId ?? '');
@@ -458,33 +274,10 @@
   let fileIsUploading = false;
   let fileUploadError: string | null = null;
 
-  const isFiniteNumber = (value: unknown): value is number =>
-    typeof value === 'number' && Number.isFinite(value);
-
   function openFilePicker() {
     if (data?.readonly) return;
     if (fileIsUploading) return;
     fileInput?.click?.();
-  }
-
-  function inferAssetKind(mimeType: string): 'audio' | 'image' | 'video' | 'model' | null {
-    const t = mimeType.toLowerCase();
-    if (t.startsWith('audio/')) return 'audio';
-    if (t.startsWith('image/')) return 'image';
-    if (t.startsWith('video/')) return 'video';
-    if (t.startsWith('model/')) return 'model';
-    return null;
-  }
-
-  function buildAssetUploadUrl(serverUrl: string): string | null {
-    const trimmed = serverUrl.trim();
-    if (!trimmed) return null;
-    try {
-      const base = trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
-      return new URL('api/assets', base).toString();
-    } catch {
-      return null;
-    }
   }
 
   async function uploadFileToAssetService(file: File): Promise<{ assetId: string } | null> {
@@ -566,16 +359,6 @@
     } finally {
       fileIsUploading = false;
     }
-  }
-
-  function formatMidiEvent(event: MidiEvent | null): string {
-    if (!event) return '—';
-    const channel = `ch${event.channel + 1}`;
-    if (event.type === 'pitchbend')
-      return `pitchbend • ${channel} • ${event.normalized.toFixed(3)}`;
-    const num = event.number ?? 0;
-    const suffix = event.type === 'note' ? (event.isPress ? 'on' : 'off') : `${event.rawValue}`;
-    return `${event.type} ${num} • ${channel} • ${suffix}`;
   }
 
   $: if (data?.controlType === 'midi-learn') {
@@ -773,7 +556,7 @@
       on:change={changeSelect}
     >
       <option value="">(select asset)</option>
-      {#each buildAssetOptions(data.assetKind) as opt (opt.value)}
+      {#each assetPickerOptions as opt (opt.value)}
         <option value={opt.value}>{opt.label}</option>
       {/each}
     </select>
