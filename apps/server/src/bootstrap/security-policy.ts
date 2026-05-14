@@ -41,6 +41,22 @@ export function isLocalAddress(address: string | undefined): boolean {
   );
 }
 
+export function isPrivateNetworkAddress(address: string | undefined): boolean {
+  const value = (address ?? '').trim().toLowerCase().replace(/^::ffff:/, '');
+  if (isLocalAddress(value)) return true;
+
+  const parts = value.split('.');
+  if (parts.length !== 4) return false;
+
+  const octets = parts.map((part) => Number.parseInt(part, 10));
+  if (octets.some((octet, index) => !Number.isFinite(octet) || String(octet) !== parts[index] || octet < 0 || octet > 255)) {
+    return false;
+  }
+
+  const [a, b] = octets;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
 export function canGrantInsecureLocalManager(opts: {
   nodeEnv?: string;
   allowInsecureManager?: string;
@@ -70,7 +86,7 @@ export function resolveManagerRole(opts: {
   if (
     !expectedManagerKey &&
     !isProductionLike(opts.nodeEnv) &&
-    isLocalAddress(opts.address)
+    isPrivateNetworkAddress(opts.address)
   ) return 'manager';
 
   return 'client';

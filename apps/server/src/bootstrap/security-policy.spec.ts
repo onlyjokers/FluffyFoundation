@@ -111,3 +111,16 @@ test('resolveManagerRole grants local dev manager when no manager key is configu
     'manager'
   );
 });
+
+test('resolveManagerRole grants LAN dev manager when no manager key is configured', () => {
+  assert.equal(
+    resolveManagerRole({
+      requestedRole: 'manager',
+      expectedManagerKey: '',
+      requestedManagerKey: '',
+      nodeEnv: 'development',
+      address: '10.88.0.3',
+    }),
+    'manager'
+  );
+});
