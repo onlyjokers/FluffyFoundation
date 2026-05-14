@@ -90,6 +90,12 @@ export type SemanticValidationError = {
   repairOptions: string[];
 };
 
+export type SemanticWarning = {
+  code: string;
+  path: string;
+  message: string;
+};
+
 export type SemanticProposal = {
   id: string;
   title: string;
@@ -209,6 +215,7 @@ export type SemanticCommandResult =
       appliedRevision: number;
       rollbackToken: string;
       audit: CommandAuditEntry;
+      warnings?: SemanticWarning[];
       snapshot: SemanticGraphSnapshot;
     }
   | {

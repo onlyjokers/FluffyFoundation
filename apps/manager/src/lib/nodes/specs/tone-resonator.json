@@ -6,14 +6,14 @@
   "inputs": [
     { "id": "in", "label": "In", "type": "audio" },
     { "id": "resonance", "label": "Resonance", "type": "number", "defaultValue": 0.6, "min": 0, "max": 0.9999 },
-    { "id": "dampening", "label": "Dampening", "type": "number", "defaultValue": 3000 },
-    { "id": "wet", "label": "Wet", "type": "number", "defaultValue": 0.4 }
+    { "id": "dampening", "label": "Dampening", "type": "number", "defaultValue": 3000, "min": 20, "max": 20000 },
+    { "id": "wet", "label": "Wet", "type": "number", "defaultValue": 0.4, "min": 0, "max": 1 }
   ],
   "outputs": [{ "id": "out", "label": "Out", "type": "audio" }],
   "configSchema": [
     { "key": "resonance", "label": "Resonance", "type": "number", "defaultValue": 0.6, "min": 0, "max": 0.9999 },
-    { "key": "dampening", "label": "Dampening (Hz)", "type": "number", "defaultValue": 3000 },
-    { "key": "wet", "label": "Wet", "type": "number", "defaultValue": 0.4 }
+    { "key": "dampening", "label": "Dampening (Hz)", "type": "number", "defaultValue": 3000, "min": 20, "max": 20000 },
+    { "key": "wet", "label": "Wet", "type": "number", "defaultValue": 0.4, "min": 0, "max": 1 }
   ],
   "runtime": { "kind": "tone-resonator" }
 }

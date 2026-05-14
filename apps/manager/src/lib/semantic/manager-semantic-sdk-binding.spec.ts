@@ -16,7 +16,7 @@ const definitions: NodeDefinition[] = [
     category: 'Values',
     inputs: [],
     outputs: [{ id: 'out', label: 'Out', type: 'number' }],
-    configSchema: [{ key: 'value', type: 'number', label: 'Value', default: 0 }],
+    configSchema: [{ key: 'value', type: 'number', label: 'Value', default: 0, min: 0, max: 3 }],
   },
 ];
 
@@ -86,10 +86,17 @@ test('bindManagerSemanticSdk dispatches semantic SDK commands and replies with s
     requestId: 'semantic-live-1',
   } satisfies SemanticMessage);
 
-  assert.deepEqual(nodes[0]?.config, { value: 4 });
+  assert.deepEqual(nodes[0]?.config, { value: 3 });
   assert.equal(replies.length, 1);
   assert.equal((replies[0] as { requestId?: string }).requestId, 'semantic-live-1');
   assert.equal((replies[0] as { ok?: boolean }).ok, true);
+  assert.deepEqual((replies[0] as { warnings?: unknown[] }).warnings, [
+    {
+      code: 'SEMANTIC.PARAM_CLAMPED',
+      path: 'nodes.n1.params.value',
+      message: 'Parameter value was clamped from 4 to 3.',
+    },
+  ]);
 
   unsubscribe();
   assert.deepEqual(unsubscribeCalls, ['semantic']);

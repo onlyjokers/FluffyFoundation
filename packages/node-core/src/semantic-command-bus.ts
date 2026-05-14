@@ -23,6 +23,7 @@ import {
   normalizeGroups,
 } from './semantic-graph-snapshot.js';
 import { applySemanticCommand, validateSemanticCommandDetailed } from './semantic-command-apply.js';
+import { normalizeSemanticCommand } from './semantic-command-normalization.js';
 import { createSemanticHistory } from './graph-state/history.js';
 import {
   cloneCommandState,
@@ -86,11 +87,12 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
   const dispatch: SemanticCommandBus['dispatch'] = ({ actor, command, dryRun = false }) => {
     const previousRevision = state.revision;
     const rollbackToken = `rollback:${previousRevision}:${history.length + auditLog.length + 1}`;
-    const validationErrors = validateSemanticCommandDetailed(state, command, definitions);
+    const normalized = normalizeSemanticCommand(state, command, definitions);
+    const validationErrors = validateSemanticCommandDetailed(state, normalized.command, definitions);
     if (validationErrors.length > 0) {
       return {
         ok: false,
-        command,
+        command: normalized.command,
         dryRun,
         stage: 'dry-run',
         message: validationErrors[0].message,
@@ -103,7 +105,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
 
     const policyResult = (input.policy ?? defaultPolicy).canExecute({
       actor,
-      command,
+      command: normalized.command,
       snapshot: snapshot(),
     });
     const policy =
@@ -113,7 +115,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     if (!policy.allowed) {
       return {
         ok: false,
-        command,
+        command: normalized.command,
         dryRun,
         stage: 'policy',
         message: policy.reason ?? 'Policy denied command.',
@@ -125,10 +127,11 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
 
     let nextState: CommandState;
     try {
-      nextState = applySemanticCommand(state, command);
-      if (command.type === 'group.reclaim') {
+      nextState = applySemanticCommand(state, normalized.command);
+      if (normalized.command.type === 'group.reclaim') {
+        const groupId = normalized.command.groupId;
         nextState.groups = nextState.groups.map((group) =>
-          group.id === command.groupId
+          group.id === groupId
             ? {
                 ...group,
                 owner: ownershipActorForSemanticActor(actor),
@@ -139,7 +142,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     } catch (err) {
       return {
         ok: false,
-        command,
+        command: normalized.command,
         dryRun,
         stage: 'apply',
         message: err instanceof Error ? err.message : 'Command apply failed.',
@@ -150,9 +153,9 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     }
 
     const audit: CommandAuditEntry = {
-      id: `audit:${previousRevision}:${commandOperation(command)}:${auditLog.length + 1}`,
+      id: `audit:${previousRevision}:${commandOperation(normalized.command)}:${auditLog.length + 1}`,
       actor: { ...actor },
-      command,
+      command: normalized.command,
       dryRun,
       lifecycle: [...lifecycle],
       policy,
@@ -177,12 +180,13 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
 
     return {
       ok: true,
-      command,
+      command: normalized.command,
       dryRun,
       previousRevision,
       appliedRevision: dryRun ? previousRevision : state.revision,
       rollbackToken,
       audit,
+      ...(normalized.warnings.length > 0 ? { warnings: normalized.warnings } : {}),
       snapshot: snapshot(),
     };
   };

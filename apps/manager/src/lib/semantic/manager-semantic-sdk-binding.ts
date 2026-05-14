@@ -33,6 +33,7 @@ export function bindManagerSemanticSdk(input: {
           snapshot: result.snapshot,
           audit: result.audit,
         },
+        warnings: result.warnings,
         snapshotRevision: result.appliedRevision,
       });
       return;
