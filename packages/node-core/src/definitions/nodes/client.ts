@@ -8,6 +8,30 @@ import type { ClientObject, ClientObjectDeps, ClientSensorMessage, NodeCommand }
 import { selectClientIdsForNode } from '../client-selection.js';
 import { asRecord, getArrayValue, getNumberValue, getStringValue } from './node-definition-utils.js';
 
+function resolveConfiguredClientId(configured: string, available: string[]): string {
+  const clientId = configured.trim();
+  if (!clientId) return '';
+  if (available.length > 0 && !available.includes(clientId)) return '';
+  return clientId;
+}
+
+function resolveClientSelection(
+  nodeId: string,
+  available: string[],
+  loadedIds: string[],
+  inputs: Record<string, unknown>,
+  configured: string
+): { index: number; selectedIds: string[] } {
+  const configuredClientId = resolveConfiguredClientId(configured, available);
+  if (configuredClientId) return { index: 1, selectedIds: [configuredClientId] };
+  if (loadedIds.length > 0) return { index: 1, selectedIds: loadedIds };
+  return selectClientIdsForNode(nodeId, available, {
+    index: inputs.index,
+    range: inputs.range,
+    random: inputs.random,
+  });
+}
+
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
   return {
     type: 'client-count',
@@ -54,14 +78,7 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
         ? loadInds.map(String).filter((id) => available.includes(id))
         : [];
 
-      const selection =
-        loadedIds.length > 0
-          ? { index: 1, selectedIds: loadedIds }
-          : selectClientIdsForNode(context.nodeId, available, {
-              index: inputs.index,
-              range: inputs.range,
-              random: inputs.random,
-            });
+      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs, configured);
 
       const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
       const primaryClientId =
@@ -93,14 +110,7 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
       const loadInds = getArrayValue(inputs.loadIndexs);
       const loadedIds = loadInds ? loadInds.map(String).filter((id) => available.includes(id)) : [];
 
-      const selection =
-        loadedIds.length > 0
-          ? { index: 1, selectedIds: loadedIds }
-          : selectClientIdsForNode(context.nodeId, available, {
-              index: inputs.index,
-              range: inputs.range,
-              random: inputs.random,
-            });
+      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs, configured);
 
       const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
       const fallbackSingle = deps.getClientId() ?? configured;
@@ -141,14 +151,7 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
       const loadInds = getArrayValue(inputs.loadIndexs);
       const loadedIds = loadInds ? loadInds.map(String).filter((id) => available.includes(id)) : [];
 
-      const selection =
-        loadedIds.length > 0
-          ? { index: 1, selectedIds: loadedIds }
-          : selectClientIdsForNode(context.nodeId, available, {
-              index: inputs.index,
-              range: inputs.range,
-              random: inputs.random,
-            });
+      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs, configured);
 
       const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
       const fallbackSingle = deps.getClientId() ?? configured;

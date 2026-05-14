@@ -2,10 +2,10 @@
  * Purpose: Register node-core default runtime definitions into the manager registry.
  */
 import { get } from 'svelte/store';
-import { targetClients } from '@shugu/protocol';
 import { registerDefaultNodeDefinitions, type NodeCommand } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, getSDK, sensorData, state } from '$lib/stores/manager';
+import { targetManagedClient } from './client-target';
 
 export function registerDefaultRuntimeNodes(): void {
   registerDefaultNodeDefinitions(nodeRegistry, {
@@ -32,10 +32,11 @@ export function registerDefaultRuntimeNodes(): void {
     // Manager always routes via executeCommandForClientId.
   },
   executeCommandForClientId: (clientId: string, cmd: NodeCommand) => {
-    if (!clientId) return;
+    const target = targetManagedClient(clientId);
+    if (!target) return;
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendControl(targetClients([clientId]), cmd.action, cmd.payload ?? {}, cmd.executeAt);
+    sdk.sendControl(target, cmd.action, cmd.payload ?? {}, cmd.executeAt);
   },
   });
 }

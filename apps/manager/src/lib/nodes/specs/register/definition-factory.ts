@@ -2,7 +2,7 @@
  * Purpose: Create manager NodeDefinition objects from JSON node specs.
  */
 import { get } from 'svelte/store';
-import { targetClients, type ControlAction, type ControlPayload } from '@shugu/protocol';
+import { type ControlAction, type ControlPayload } from '@shugu/protocol';
 import type { NodeDefinition, ProcessContext } from '../../types';
 import { parameterRegistry } from '$lib/parameters/registry';
 import { displayTransport, getSDK, state } from '$lib/stores/manager';
@@ -11,6 +11,7 @@ import { mapRangeWithOptions } from '$lib/features/midi/midi-math';
 import { applyClientSelectionFromInputs, clientSelectionState, displayObjectLogLastAt, getSelectedClientIndexOut, midiBooleanState, midiSourceKey } from './client-selection';
 import { createCommandProcess } from './command-mapping';
 import { coreRuntimeImplByKind } from './core-runtime';
+import { targetManagedClient } from './client-target';
 import { asRecord, coerceBoolean, isFiniteNumber } from './helpers';
 import type { MidiBooleanState, NodeRuntime, NodeSpec } from './types';
 
@@ -74,7 +75,9 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
             const executeAt = typeof cmdRecord.executeAt === 'number' ? cmdRecord.executeAt : undefined;
 
             for (const clientId of targets) {
-              sdk.sendControl(targetClients([clientId]), action, payload, executeAt);
+              const target = targetManagedClient(clientId);
+              if (!target) continue;
+              sdk.sendControl(target, action, payload, executeAt);
             }
           }
         },

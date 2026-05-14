@@ -6,7 +6,7 @@ import type { GraphState } from '$lib/nodes/types';
 import { midiService, type MidiEvent } from '$lib/features/midi/midi-service';
 import { midiNodeBridge, midiSourceMatchesEvent } from '$lib/features/midi/midi-node-bridge';
 import type { GraphViewAdapter } from '../adapters';
-import { computeMidiHighlightState } from './midi-highlight';
+import { computeMidiHighlightState, computeNodeActivityHighlightState } from './midi-highlight';
 import { nodeRegistry } from '$lib/nodes';
 
 export type MidiHighlightController = {
@@ -15,6 +15,7 @@ export type MidiHighlightController = {
   scheduleHighlight: () => void;
   applyHighlights: () => Promise<void>;
   clearHighlights: () => void;
+  showNodeActivity: (nodeId: string, portId?: string) => void;
 };
 
 type MidiHighlightControllerOptions = {
@@ -203,6 +204,27 @@ export function createMidiHighlightController(opts: MidiHighlightControllerOptio
     midiHighlightTimeout = setTimeout(() => clearHighlights(), MIDI_HIGHLIGHT_TTL_MS);
   };
 
+  const showNodeActivity = (nodeId: string, portId?: string) => {
+    const result = computeNodeActivityHighlightState({
+      graph: opts.getGraphState(),
+      disabledNodeIds: opts.getGroupDisabledNodeIds(),
+      sourceNodeId: nodeId,
+      sourcePortId: portId,
+      traversalStopNodeTypes: midiTraversalStopNodeTypes,
+      nodeRegistry,
+    });
+
+    if (!result) return;
+    midiActiveNodeIds = result.nodeIds;
+    midiActiveConnIds = result.connectionIds;
+    midiActiveInputPortsByNode = result.inputPortsByNode;
+    midiActiveOutputPortsByNode = result.outputPortsByNode;
+    scheduleHighlight();
+
+    if (midiHighlightTimeout) clearTimeout(midiHighlightTimeout);
+    midiHighlightTimeout = setTimeout(() => clearHighlights(), MIDI_HIGHLIGHT_TTL_MS);
+  };
+
   const start = () => {
     midiNodeBridge.init();
     midiUnsub = midiService.onMessage((event) => handleMidiActivity(event));
@@ -224,5 +246,6 @@ export function createMidiHighlightController(opts: MidiHighlightControllerOptio
     scheduleHighlight,
     applyHighlights,
     clearHighlights,
+    showNodeActivity,
   };
 }

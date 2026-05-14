@@ -155,3 +155,46 @@ test('server allows Manager scoped shutdown through normal ownership policy', ()
 
   assert.equal(routed.length, 1);
 });
+
+test('server allows Manager controls for server-managed client groups', () => {
+  const routed: unknown[] = [];
+  const gateway = new EventsGateway(
+    {
+      onClientExpired: () => () => undefined,
+      isManager: () => true,
+      getDisplayDescriptors: () => [],
+      getGroupOwnershipEntry: (groupId: string) =>
+        groupId === 'client:client-1'
+          ? {
+              groupId,
+              owner: { actorId: 'server-process', role: 'service', capabilities: ['group.mutate'] },
+              ownerStack: [],
+              transferable: true,
+              surface: 'public',
+              visibility: { defaultAccess: 'visible-readonly' },
+              selectedClientIds: [],
+            }
+          : undefined,
+    } as never,
+    { routeMessage: (message: unknown) => routed.push(message) } as never
+  );
+
+  gateway.handleMessage(
+    {
+      type: 'control',
+      version: 1,
+      from: 'manager',
+      target: { mode: 'group', groupId: 'client:client-1' },
+      action: 'screenColor',
+      payload: { color: '#ff0000' },
+      scopeGroupId: 'client:client-1',
+      actor: 'manager',
+      role: 'manager',
+      correlationId: 'corr-client-group',
+      idempotencyKey: 'idem-client-group',
+    },
+    { id: 'socket-client-group' } as never
+  );
+
+  assert.equal(routed.length, 1);
+});

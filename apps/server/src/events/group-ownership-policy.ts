@@ -35,6 +35,10 @@ export function enforceGroupOwnership(input: {
   const groupId = message.scopeGroupId;
   const entry = registry.getGroupOwnershipEntry?.(groupId);
 
+  if (entry && isServerManagedClientGroup(groupId, entry.owner.actorId, entry.owner.role, role)) {
+    return null;
+  }
+
   if (command === 'reclaim') {
     if (!entry?.transferable) return createPolicyDeny(message, 'group is not transferable');
     registry.reclaimGroupOwnership?.(groupId, actor);
@@ -76,6 +80,20 @@ export function enforceGroupOwnership(input: {
 
 function normalizeControlPlaneRole(role: string): ControlPlaneActorRole {
   return role === 'manager' || role === 'client' || role === 'service' || role === 'ai' ? role : 'client';
+}
+
+function isServerManagedClientGroup(
+  groupId: string,
+  ownerActorId: string,
+  ownerRole: ControlPlaneActorRole,
+  actorRole: ControlPlaneActorRole
+): boolean {
+  return (
+    groupId.startsWith('client:') &&
+    ownerActorId === 'server-process' &&
+    ownerRole === 'service' &&
+    actorRole === 'manager'
+  );
 }
 
 function createPolicyDeny(

@@ -291,6 +291,7 @@
     sockets,
     getNumberParamOptions: () => numberParamOptions,
     sendNodeOverride,
+    onNodeActivity: (nodeId) => midiController.showNodeActivity(nodeId),
     onClientNodePick: (nodeId, clientId) => void applyClientNodeSelection(nodeId, { clientId }),
     onClientNodeSelectInput: (nodeId, portId, value) =>
       void applyClientNodeSelection(nodeId, { [portId]: value }),

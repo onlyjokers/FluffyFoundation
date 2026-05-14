@@ -54,6 +54,45 @@ function createBuilderWithThisBoundGetNode() {
   });
 }
 
+function createBuilderWithActivitySpy() {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'param-node',
+    label: 'Param Node',
+    category: 'Values',
+    inputs: [{ id: 'amount', label: 'Amount', type: 'number', defaultValue: 0 }],
+    outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    configSchema: [{ key: 'gain', label: 'Gain', type: 'number', defaultValue: 1 }],
+    process: () => ({}),
+  });
+
+  const activity: Array<{ nodeId: string; portId: string }> = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'param-1',
+        type: 'param-node',
+        config: { gain: 1 },
+        inputValues: { amount: 0 },
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    onNodeActivity: (nodeId, portId) => activity.push({ nodeId, portId }),
+  });
+
+  return { builder, activity };
+}
+
 test('getPortDefForSocket preserves nodeEngine.getNode receiver context', () => {
   const builder = createBuilderWithThisBoundGetNode();
 
@@ -67,4 +106,38 @@ test('inputAllowsMultiple preserves nodeEngine.getNode receiver context', () => 
   const builder = createBuilderWithThisBoundGetNode();
 
   assert.equal(builder.inputAllowsMultiple('node-1', 'sink'), true);
+});
+
+test('input control changes notify canvas activity highlighting', () => {
+  const { builder, activity } = createBuilderWithActivitySpy();
+  const node = builder.buildReteNode({
+    id: 'param-1',
+    type: 'param-node',
+    config: { gain: 1 },
+    inputValues: { amount: 0 },
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const inputControl = node.inputs.amount?.control as ClassicPreset.InputControl<'number'>;
+  inputControl.setValue(5);
+
+  assert.deepEqual(activity, [{ nodeId: 'param-1', portId: 'amount' }]);
+});
+
+test('config control changes notify canvas activity highlighting', () => {
+  const { builder, activity } = createBuilderWithActivitySpy();
+  const node = builder.buildReteNode({
+    id: 'param-1',
+    type: 'param-node',
+    config: { gain: 1 },
+    inputValues: { amount: 0 },
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const configControl = node.controls.gain as ClassicPreset.InputControl<'number'>;
+  configControl.setValue(2);
+
+  assert.deepEqual(activity, [{ nodeId: 'param-1', portId: 'gain' }]);
 });

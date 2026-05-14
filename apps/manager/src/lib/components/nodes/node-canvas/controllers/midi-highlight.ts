@@ -22,6 +22,15 @@ export type MidiHighlightOptions = {
   nodeRegistry?: NodeRegistry;
 };
 
+export type NodeActivityHighlightOptions = {
+  graph: GraphState;
+  disabledNodeIds: Set<string>;
+  sourceNodeId: string;
+  sourcePortId?: string;
+  traversalStopNodeTypes: Set<string>;
+  nodeRegistry?: NodeRegistry;
+};
+
 type BypassPorts = { inId: string; outId: string };
 
 function inferBypassPorts(def: Pick<NodeDefinition, 'inputs' | 'outputs'>): BypassPorts | null {
@@ -70,7 +79,6 @@ export function computeMidiHighlightState(opts: MidiHighlightOptions): MidiHighl
     nodeRegistry,
   } = opts;
 
-  const nodeTypeById = new Map((graph.nodes ?? []).map((n) => [String(n.id), String(n.type)]));
   const sourceNodeIds = (graph.nodes ?? [])
     .filter((n) => sourceNodeTypes.has(String(n.type)))
     .filter((n) => midiSourceMatchesEvent((n.config as Record<string, unknown>)?.source, event, selectedInputId))
@@ -78,6 +86,43 @@ export function computeMidiHighlightState(opts: MidiHighlightOptions): MidiHighl
     .filter((id) => !disabledNodeIds.has(id));
 
   if (sourceNodeIds.length === 0) return null;
+
+  return computeActivityHighlightState({
+    graph,
+    disabledNodeIds,
+    sourceNodeIds,
+    traversalStopNodeTypes,
+    nodeRegistry,
+  });
+}
+
+export function computeNodeActivityHighlightState(
+  opts: NodeActivityHighlightOptions
+): MidiHighlightState | null {
+  const sourceNodeId = String(opts.sourceNodeId ?? '');
+  if (!sourceNodeId || opts.disabledNodeIds.has(sourceNodeId)) return null;
+
+  return computeActivityHighlightState({
+    graph: opts.graph,
+    disabledNodeIds: opts.disabledNodeIds,
+    sourceNodeIds: [sourceNodeId],
+    sourcePortIds: opts.sourcePortId ? new Set([String(opts.sourcePortId)]) : undefined,
+    traversalStopNodeTypes: opts.traversalStopNodeTypes,
+    nodeRegistry: opts.nodeRegistry,
+  });
+}
+
+function computeActivityHighlightState(opts: {
+  graph: GraphState;
+  disabledNodeIds: Set<string>;
+  sourceNodeIds: string[];
+  sourcePortIds?: Set<string>;
+  traversalStopNodeTypes: Set<string>;
+  nodeRegistry?: NodeRegistry;
+}): MidiHighlightState | null {
+  const { graph, disabledNodeIds, sourceNodeIds, sourcePortIds, traversalStopNodeTypes, nodeRegistry } =
+    opts;
+  const nodeTypeById = new Map((graph.nodes ?? []).map((n) => [String(n.id), String(n.type)]));
 
   const outsByNode = new Map<string, Connection[]>();
   for (const c of graph.connections ?? []) {
@@ -110,10 +155,13 @@ export function computeMidiHighlightState(opts: MidiHighlightOptions): MidiHighl
   let queueIndex = 0;
   const visited = new Set<string>();
   for (const id of sourceNodeIds) {
+    if (!nodeTypeById.has(id)) continue;
     nextNodeIds.add(id);
     queue.push(id);
     visited.add(id);
   }
+
+  if (queue.length === 0) return null;
 
   while (queueIndex < queue.length) {
     const nodeId = queue[queueIndex++]!;
@@ -126,6 +174,7 @@ export function computeMidiHighlightState(opts: MidiHighlightOptions): MidiHighl
       const targetType = nodeTypeById.get(targetNodeId) ?? '';
       const stopAtTarget = traversalStopNodeTypes.has(targetType);
 
+      if (nodeId === sourceNodeIds[0] && sourcePortIds && !sourcePortIds.has(sourcePortId)) continue;
       if (bypassPorts && sourcePortId !== bypassPorts.outId) continue;
 
       if (disabledNodeIds.has(targetNodeId)) {

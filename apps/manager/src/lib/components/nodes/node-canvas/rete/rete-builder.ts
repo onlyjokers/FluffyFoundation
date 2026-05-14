@@ -50,6 +50,7 @@ type ReteBuilderOptions = {
   sockets: ReteSocketMap;
   getNumberParamOptions: () => { path: string; label: string }[];
   sendNodeOverride: (nodeId: string, kind: 'input' | 'config', portId: string, value: unknown) => void;
+  onNodeActivity?: (nodeId: string, portId: string) => void;
   onClientNodePick?: (nodeId: string, clientId: string) => void;
   onClientNodeSelectInput?: (nodeId: string, portId: 'index' | 'range', value: number) => void;
   onClientNodeRandom?: (nodeId: string, value: boolean) => void;
@@ -76,6 +77,10 @@ export type ReteBuilder = {
 
 export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const { nodeRegistry, nodeEngine, sockets, sendNodeOverride, getNumberParamOptions } = opts;
+
+  const notifyNodeActivity = (nodeId: string, portId: string) => {
+    opts.onNodeActivity?.(nodeId, portId);
+  };
 
   const nodeLabel = (node: NodeInstance): string => {
     if (node.type === 'client-object') {
@@ -174,6 +179,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                   const next = typeof value === 'number' ? clamp(value) : value;
                   nodeEngine.updateNodeInputValue(instance.id, input.id, next);
                   sendNodeOverride(instance.id, 'input', input.id, next);
+                  notifyNodeActivity(instance.id, input.id);
                   if (
                     instance.type === 'client-object' &&
                     (input.id === 'index' || input.id === 'range') &&
@@ -208,6 +214,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             change: (value) => {
               nodeEngine.updateNodeInputValue(instance.id, input.id, value);
               sendNodeOverride(instance.id, 'input', input.id, value);
+              notifyNodeActivity(instance.id, input.id);
             },
           });
           control.inline = true;
@@ -226,6 +233,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             change: (value) => {
               nodeEngine.updateNodeInputValue(instance.id, input.id, value);
               sendNodeOverride(instance.id, 'input', input.id, value);
+              notifyNodeActivity(instance.id, input.id);
               if (instance.type === 'client-object' && input.id === 'random') {
                 opts.onClientNodeRandom?.(instance.id, value);
               }
@@ -261,6 +269,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               change: (value) => {
                 nodeEngine.updateNodeInputValue(instance.id, input.id, value);
                 sendNodeOverride(instance.id, 'input', input.id, value);
+                notifyNodeActivity(instance.id, input.id);
               },
             });
             control.inline = true;
@@ -284,6 +293,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           change: (value) => {
             nodeEngine.updateNodeInputValue(instance.id, input.id, value);
             sendNodeOverride(instance.id, 'input', input.id, value);
+            notifyNodeActivity(instance.id, input.id);
           },
         });
         control.inline = true;
@@ -317,6 +327,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             change: (value) => {
               nodeEngine.updateNodeConfig(instance.id, { [key]: value });
               sendNodeOverride(instance.id, 'config', key, value);
+              notifyNodeActivity(instance.id, key);
             },
           })
         );
@@ -349,6 +360,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             change: (value) => {
               nodeEngine.updateNodeConfig(instance.id, { [key]: value });
               sendNodeOverride(instance.id, 'config', key, value);
+              notifyNodeActivity(instance.id, key);
             },
           })
         );
@@ -368,6 +380,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             const next = typeof value === 'number' ? clamp(value) : value;
             nodeEngine.updateNodeConfig(instance.id, { [key]: next });
             sendNodeOverride(instance.id, 'config', key, next);
+            notifyNodeActivity(instance.id, key);
           },
         });
         control.controlLabel = field.label;
@@ -384,6 +397,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             if (instance.type === 'client-object') {
               opts.onClientNodePick?.(instance.id, value);
             }
+            notifyNodeActivity(instance.id, key);
           },
         });
         control.nodeId = instance.id;
@@ -398,6 +412,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
+            notifyNodeActivity(instance.id, key);
           },
         });
         node.addControl(key, control);
@@ -410,6 +425,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
+            notifyNodeActivity(instance.id, key);
           },
         });
         node.addControl(key, control);
@@ -427,6 +443,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             change: (value) => {
               nodeEngine.updateNodeConfig(instance.id, { [key]: value });
               sendNodeOverride(instance.id, 'config', key, value);
+              notifyNodeActivity(instance.id, key);
             },
           })
         );
@@ -441,6 +458,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             change: (value) => {
               nodeEngine.updateNodeConfig(instance.id, { [key]: value });
               sendNodeOverride(instance.id, 'config', key, value);
+              notifyNodeActivity(instance.id, key);
             },
           })
         );
@@ -474,13 +492,16 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
               nodeEngine.updateNodeInputValue(instance.id, 'startSec', nextStart);
               sendNodeOverride(instance.id, 'input', 'startSec', nextStart);
+              notifyNodeActivity(instance.id, 'startSec');
 
               nodeEngine.updateNodeInputValue(instance.id, 'endSec', nextEnd);
               sendNodeOverride(instance.id, 'input', 'endSec', nextEnd);
+              notifyNodeActivity(instance.id, 'endSec');
 
               if (typeof nextCursor === 'number' && Number.isFinite(nextCursor)) {
                 nodeEngine.updateNodeInputValue(instance.id, 'cursorSec', nextCursor);
                 sendNodeOverride(instance.id, 'input', 'cursorSec', nextCursor);
+                notifyNodeActivity(instance.id, 'cursorSec');
               }
 
               // Keep config in sync for persistence/debugging (not used by runtime).
@@ -490,6 +511,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
+            notifyNodeActivity(instance.id, key);
           },
         });
         control.nodeId = instance.id;
@@ -509,6 +531,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
+            notifyNodeActivity(instance.id, key);
           },
         });
         curveControl.nodeId = instance.id;
@@ -521,6 +544,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
+            notifyNodeActivity(instance.id, key);
           },
         });
         noteControl.nodeId = instance.id;
@@ -531,6 +555,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             sendNodeOverride(instance.id, 'config', key, value);
+            notifyNodeActivity(instance.id, key);
           },
         });
         control.controlLabel = field.label;
