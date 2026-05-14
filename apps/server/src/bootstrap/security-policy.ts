@@ -67,7 +67,11 @@ export function resolveManagerRole(opts: {
   const requestedManagerKey = (opts.requestedManagerKey ?? '').trim();
   if (expectedManagerKey && requestedManagerKey === expectedManagerKey) return 'manager';
 
-  if (!expectedManagerKey && canGrantInsecureLocalManager(opts)) return 'manager';
+  if (
+    !expectedManagerKey &&
+    !isProductionLike(opts.nodeEnv) &&
+    isLocalAddress(opts.address)
+  ) return 'manager';
 
   return 'client';
 }

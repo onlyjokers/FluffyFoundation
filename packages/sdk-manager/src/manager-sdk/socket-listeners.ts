@@ -116,18 +116,62 @@ export function handleManagerSystemMessage(
             break;
         case 'clientJoined':
             console.log('[SDK Manager] Client joined:', message.payload.clientId);
+            applyClientJoined(host, message);
             break;
         case 'clientLeft': {
             console.log('[SDK Manager] Client left:', message.payload.clientId);
-            const remaining = host.getState().selectedClientIds.filter(
-                id => id !== message.payload.clientId
-            );
-            if (remaining.length !== host.getState().selectedClientIds.length) {
-                host.updateState({ selectedClientIds: remaining });
-            }
+            applyClientLeft(host, message);
             break;
         }
     }
+}
+
+function applyClientJoined(host: ManagerSocketListenerHost, message: SystemMessage): void {
+    const clientId = message.payload.clientId?.trim();
+    if (!clientId) return;
+
+    const state = host.getState();
+    const existing = state.clients.find((client) => client.clientId === clientId);
+    const connectedAt = typeof message.serverTimestamp === 'number' ? message.serverTimestamp : Date.now();
+
+    const clients = existing
+        ? state.clients.map((client) =>
+            client.clientId === clientId
+                ? {
+                    ...client,
+                    connected: true,
+                    lastSeenAt: connectedAt,
+                }
+                : client
+        )
+        : [
+            ...state.clients,
+            {
+                clientId,
+                connectedAt,
+                connected: true,
+                selected: false,
+            },
+        ];
+
+    host.updateState({ clients });
+}
+
+function applyClientLeft(host: ManagerSocketListenerHost, message: SystemMessage): void {
+    const clientId = message.payload.clientId?.trim();
+    if (!clientId) return;
+
+    const state = host.getState();
+    const remainingSelectedClientIds = state.selectedClientIds.filter((id) => id !== clientId);
+    const remainingClients = state.clients.filter((client) => client.clientId !== clientId);
+
+    const patch: Partial<ManagerState> = {};
+    if (remainingClients.length !== state.clients.length) patch.clients = remainingClients;
+    if (remainingSelectedClientIds.length !== state.selectedClientIds.length) {
+        patch.selectedClientIds = remainingSelectedClientIds;
+    }
+
+    if (Object.keys(patch).length > 0) host.updateState(patch);
 }
 
 export function startTimeSync(host: ManagerSocketListenerHost): void {

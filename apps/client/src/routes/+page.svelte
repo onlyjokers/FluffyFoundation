@@ -20,6 +20,7 @@
   import GeoGateOverlay from '$lib/components/GeoGateOverlay.svelte';
   import ClientControlTransferStatus from '$lib/components/ClientControlTransferStatus.svelte';
   import { toneAudioEngine } from '@shugu/multimedia-core';
+  import { resolveLocalServerUrl } from '@shugu/protocol';
   import { sendTransferResponse as sendClientTransferResponse } from '$lib/stores/client/client-transfer-command';
   import { handleWheelNavigationGuard, tryFullscreen } from '$lib/client-page/browser-shell';
   import { formatMeters, haversineDistanceM } from '$lib/client-page/geo-gate';
@@ -73,36 +74,15 @@
     const urlParam = params.get('server');
     const assetReadTokenParam = params.get('assetReadToken') ?? params.get('asset_read_token');
     const e2e = params.get('e2e') === '1';
-    const isAccessingViaIP =
-      window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-
-    if (urlParam) {
-      serverUrl = urlParam;
-    } else {
-      const savedUrl = localStorage.getItem('shugu-server-url');
-
-      // If accessing via IP but saved URL is localhost, ignore the saved URL
-      // Also ignore if saved URL is http but we want https
-      const savedIsLocalhost =
-        savedUrl && (savedUrl.includes('localhost') || savedUrl.includes('127.0.0.1'));
-      const savedIsHttp = savedUrl && savedUrl.startsWith('http:');
-
-      // If we are on IP, we definitely want HTTPS IP
-      // If we are on localhost, we definitely want HTTPS localhost
-      // Basically always prefer auto-detected HTTPS unless user manually set a complex URL
-
-      if (savedUrl && !savedIsHttp && !(isAccessingViaIP && savedIsLocalhost)) {
-        serverUrl = savedUrl;
-      } else {
-        // Default to current hostname (localhost or IP) with HTTPS
-        // If running on standard HTTPS port (443), assume we are proxied and use the origin
-        if (window.location.protocol === 'https:' && window.location.port === '') {
-          serverUrl = window.location.origin;
-        } else {
-          serverUrl = `https://${window.location.hostname}:3001`;
-        }
-      }
-    }
+    serverUrl = resolveLocalServerUrl({
+      currentProtocol: window.location.protocol,
+      hostname: window.location.hostname,
+      port: window.location.port,
+      origin: window.location.origin,
+      queryUrl: urlParam,
+      savedUrl: localStorage.getItem('shugu-server-url'),
+      allowInsecureHttp: import.meta.env.DEV,
+    });
 
     // Optional provisioning: allow setting the asset read token via query param (no UI exposure).
     if (assetReadTokenParam && assetReadTokenParam.trim()) {

@@ -78,3 +78,46 @@ test('ManagerSDK rejects silent ownership divergence between clients and control
   assert.equal(managerState(sdk).error, 'Control-plane snapshot divergence: selected clients differ from registry clients.');
   assert.deepEqual(managerState(sdk).selectedClientIds, []);
 });
+
+test('ManagerSDK applies incremental client presence while full list update is delayed', () => {
+  const sdk = new ManagerSDK({ serverUrl: 'http://localhost:3001' });
+
+  (
+    sdk as unknown as {
+      handleSystemMessage: (message: unknown) => void;
+    }
+  ).handleSystemMessage({
+    type: 'system',
+    version: 1,
+    serverTimestamp: 456,
+    action: 'clientJoined',
+    payload: {
+      clientId: 'client-joined',
+    },
+  });
+
+  assert.deepEqual(managerState(sdk).clients, [
+    {
+      clientId: 'client-joined',
+      connectedAt: 456,
+      connected: true,
+      selected: false,
+    },
+  ]);
+
+  (
+    sdk as unknown as {
+      handleSystemMessage: (message: unknown) => void;
+    }
+  ).handleSystemMessage({
+    type: 'system',
+    version: 1,
+    serverTimestamp: 789,
+    action: 'clientLeft',
+    payload: {
+      clientId: 'client-joined',
+    },
+  });
+
+  assert.deepEqual(managerState(sdk).clients, []);
+});

@@ -32,6 +32,9 @@ export * from './stop-all.js';
 // Export socket event names
 export * from './socket-events.js';
 
+// Export local server URL helpers
+export * from './server-url.js';
+
 // Export time sync utilities
 export * from './time-sync.js';
 

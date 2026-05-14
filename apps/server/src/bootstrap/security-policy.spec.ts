@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import {
   createHttpCorsOptions,
   createSocketCorsOptions,
+  resolveManagerRole,
   validateServerSecurityConfig,
 } from './security-policy.js';
 
@@ -95,5 +96,18 @@ test('Socket.IO CORS uses a real wildcard origin for local development defaults'
       hasHttps: true,
     }).origin,
     '*'
+  );
+});
+
+test('resolveManagerRole grants local dev manager when no manager key is configured', () => {
+  assert.equal(
+    resolveManagerRole({
+      requestedRole: 'manager',
+      expectedManagerKey: '',
+      requestedManagerKey: '',
+      nodeEnv: 'development',
+      address: '127.0.0.1',
+    }),
+    'manager'
   );
 });

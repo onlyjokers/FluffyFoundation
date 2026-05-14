@@ -4,6 +4,7 @@ Purpose: Classic Manager control and authoring route.
 <script lang="ts">
   import '@shugu/ui-kit/styles';
   import { onMount } from 'svelte';
+  import { resolveLocalServerUrl } from '@shugu/protocol';
   import { connect, disconnect, connectionStatus } from '$lib/stores/domain/connection';
   import { auth } from '$lib/stores/auth';
 
@@ -23,24 +24,14 @@ Purpose: Classic Manager control and authoring route.
   let performanceModeRestored = false;
 
   onMount(() => {
-    const isAccessingViaIP =
-      window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    const savedUrl = localStorage.getItem('shugu-server-url');
-    const savedIsLocalhost =
-      savedUrl && (savedUrl.includes('localhost') || savedUrl.includes('127.0.0.1'));
-    const savedIsHttp = savedUrl && savedUrl.startsWith('http:');
-
-    if (
-      savedUrl &&
-      (allowInsecureHttpManagerControl || !savedIsHttp) &&
-      !(isAccessingViaIP && savedIsLocalhost)
-    ) {
-      serverUrl = savedUrl;
-    } else if (window.location.protocol === 'https:' && window.location.port === '') {
-      serverUrl = window.location.origin;
-    } else {
-      serverUrl = `https://${window.location.hostname}:3001`;
-    }
+    serverUrl = resolveLocalServerUrl({
+      currentProtocol: window.location.protocol,
+      hostname: window.location.hostname,
+      port: window.location.port,
+      origin: window.location.origin,
+      savedUrl: localStorage.getItem('shugu-server-url'),
+      allowInsecureHttp: allowInsecureHttpManagerControl,
+    });
 
     managerKey = localStorage.getItem(MANAGER_KEY_STORAGE_KEY) ?? '';
 
