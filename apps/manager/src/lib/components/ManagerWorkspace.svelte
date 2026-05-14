@@ -17,16 +17,18 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   import NodeCanvasRenderer from '$lib/components/nodes/NodeCanvasRenderer.svelte';
   import AssetsManager from '$lib/components/AssetsManager.svelte';
   import OperatorConsole from '$lib/components/OperatorConsole.svelte';
+  import PluginsPanel from '$lib/components/PluginsPanel.svelte';
 
   export let serverUrl = 'https://localhost:3001';
   export let performanceMode = false;
 
-  type WorkspaceTab = 'dashboard' | 'assets' | 'registry-midi' | 'nodes' | 'operator';
+  type WorkspaceTab = 'dashboard' | 'assets' | 'registry-midi' | 'nodes' | 'operator' | 'plugins';
   let activePage: WorkspaceTab = 'dashboard';
   let tabsEl: HTMLDivElement | null = null;
   let tabDashboardEl: HTMLButtonElement | null = null;
   let tabAssetsEl: HTMLButtonElement | null = null;
   let tabRegistryMidiEl: HTMLButtonElement | null = null;
+  let tabPluginsEl: HTMLButtonElement | null = null;
   let tabNodesEl: HTMLButtonElement | null = null;
   let tabOperatorEl: HTMLButtonElement | null = null;
   const tabSlider = spring(
@@ -41,6 +43,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
     if (activePage === 'dashboard') return tabDashboardEl;
     if (activePage === 'assets') return tabAssetsEl;
     if (activePage === 'registry-midi') return tabRegistryMidiEl;
+    if (activePage === 'plugins') return tabPluginsEl;
     if (activePage === 'nodes') return tabNodesEl;
     if (activePage === 'operator') return tabOperatorEl;
     return null;
@@ -102,6 +105,13 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
       on:click={() => (activePage = 'registry-midi')}
     >
       Registry MIDI
+    </button>
+    <button
+      bind:this={tabPluginsEl}
+      class:active={activePage === 'plugins'}
+      on:click={() => (activePage = 'plugins')}
+    >
+      Plugins
     </button>
     <button
       bind:this={tabNodesEl}
@@ -170,6 +180,12 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
     </div>
   </div>
 
+  <div class:hide={activePage !== 'plugins'}>
+    <div class="plugins-pane">
+      <PluginsPanel />
+    </div>
+  </div>
+
   <div class="nodes-page" class:hide={activePage !== 'nodes'}>
     <div class="nodes-pane">
       <NodeCanvasRenderer />
@@ -225,7 +241,8 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
     color: white;
   }
 
-  .midi-pane {
+  .midi-pane,
+  .plugins-pane {
     margin-top: var(--space-sm);
   }
 
