@@ -11,6 +11,8 @@ import {
   createMediaMetaMessage,
   createPluginControlMessage,
   createSensorDataMessage,
+  createSemanticMessage,
+  createSemanticResultMessage,
   createSystemMessage,
   isValidMessage,
   validateMessage,
@@ -46,6 +48,33 @@ const validFixtures = [
   ),
   createSystemMessage('clientList', {
     clients: [{ clientId: 'client-1', connectedAt: 1000, selected: true }],
+  }),
+  createSemanticMessage({
+    target: { mode: 'manager' },
+    actor: 'agent-1',
+    role: 'manager',
+    command: {
+      kind: 'node.params.update',
+      nodeId: 'tone-1',
+      param: 'volume',
+      value: 0.5,
+    },
+    requestId: 'semantic-1',
+  }),
+  createSemanticResultMessage({
+    requestId: 'semantic-1',
+    ok: true,
+    result: {
+      snapshot: { nodes: [], connections: [] },
+    },
+    warnings: [
+      {
+        code: 'semantic.param.clamped',
+        path: 'command.value',
+        message: 'volume clamped to semantic bounds',
+      },
+    ],
+    snapshotRevision: 2,
   }),
 ] as const;
 
@@ -210,6 +239,79 @@ test('validateMessage rejects malformed media, plugin, and system messages', () 
     assert.equal(result.reasons[0]?.decision, 'reject');
     assert.ok(result.reasons[0]?.path);
   }
+});
+
+test('validateMessage accepts semantic manager commands and semantic results', () => {
+  const request = createSemanticMessage({
+    target: { mode: 'managerId', managerId: 'manager-1' },
+    actor: 'cli',
+    role: 'manager',
+    dryRun: true,
+    command: {
+      kind: 'node.create',
+      nodeId: 'tone-1',
+      nodeType: 'tone.granular',
+      position: { x: 12, y: 24 },
+    },
+    requestId: 'semantic-create-1',
+  });
+  const result = createSemanticResultMessage({
+    requestId: 'semantic-create-1',
+    ok: true,
+    result: { nodeId: 'tone-1' },
+    snapshotRevision: 3,
+  });
+
+  assert.equal(validateMessage(request).ok, true);
+  assert.equal(isValidMessage(request), true);
+  assert.equal(validateMessage(result).ok, true);
+  assert.equal(isValidMessage(result), true);
+});
+
+test('validateMessage rejects malformed semantic messages with failing field paths', () => {
+  const invalidMessages = [
+    {
+      type: 'semantic',
+      version: PROTOCOL_VERSION,
+      target: { mode: 'clientIds', ids: ['client-1'] },
+      actor: 'cli',
+      role: 'manager',
+      command: { kind: 'node.create' },
+      requestId: 'bad-target',
+    },
+    {
+      type: 'semantic',
+      version: PROTOCOL_VERSION,
+      target: { mode: 'manager' },
+      actor: 'cli',
+      role: 'client',
+      command: { kind: 'node.create' },
+      requestId: 'bad-role',
+    },
+    {
+      type: 'semantic-result',
+      version: PROTOCOL_VERSION,
+      requestId: 'bad-result',
+      ok: false,
+      result: {},
+    },
+  ];
+
+  const results = invalidMessages.map((message) => validateMessage(message));
+
+  const firstReasons = results.map((result) => {
+    assert.equal(result.ok, false);
+    return result.reasons[0];
+  });
+
+  assert.deepEqual(
+    firstReasons.map((reason) => reason?.path),
+    ['target.mode', 'role', 'error']
+  );
+  assert.deepEqual(
+    firstReasons.map((reason) => reason?.code),
+    ['protocol.field.invalid', 'protocol.field.invalid', 'protocol.field.required']
+  );
 });
 
 test('validateMessage reports unknown message types as schema rejections', () => {

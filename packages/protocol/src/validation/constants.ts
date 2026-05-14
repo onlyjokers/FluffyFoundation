@@ -1,7 +1,7 @@
 /**
  * Purpose: Runtime protocol enum allowlists used by schema validators.
  */
-export const MESSAGE_TYPES = ['control', 'data', 'media', 'system', 'plugin'] as const;
+export const MESSAGE_TYPES = ['control', 'data', 'media', 'system', 'plugin', 'semantic', 'semantic-result'] as const;
 
 export const CONTROL_ACTIONS = [
   'flashlight',

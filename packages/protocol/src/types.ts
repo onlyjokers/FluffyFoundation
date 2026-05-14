@@ -4,7 +4,7 @@ export const PROTOCOL_VERSION = 1 as const;
 /**
  * Message types for categorizing different kinds of messages
  */
-export type MessageType = 'control' | 'data' | 'media' | 'system' | 'plugin';
+export type MessageType = 'control' | 'data' | 'media' | 'system' | 'plugin' | 'semantic' | 'semantic-result';
 
 /**
  * Base message structure for all messages in the system
@@ -27,6 +27,13 @@ export type TargetSelector =
   | { mode: 'all' }
   | { mode: 'clientIds'; ids: string[] }
   | { mode: 'group'; groupId: string };
+
+/**
+ * Target selector for live semantic graph commands.
+ */
+export type SemanticTargetSelector =
+  | { mode: 'manager' }
+  | { mode: 'managerId'; managerId: string };
 
 /**
  * Control actions that can be sent to clients
@@ -443,6 +450,61 @@ export type NonSystemPluginControlMessage = PluginControlMessage & CommandEnvelo
 export type NonSystemMutatingCommandMessage = NonSystemControlMessage | NonSystemMediaMetaMessage | NonSystemPluginControlMessage;
 
 /**
+ * Opaque semantic graph command payload shared by Canvas, CLI, and future agents.
+ */
+export type SemanticCommandPayload = {
+  kind: string;
+  [key: string]: unknown;
+};
+
+/**
+ * Warning returned when semantic normalization accepts a command with adjustments.
+ */
+export type SemanticWarning = {
+  code: string;
+  path: string;
+  message: string;
+};
+
+/**
+ * Live semantic graph command sent to the Manager graph runtime.
+ */
+export interface SemanticMessage extends BaseMessage {
+  type: 'semantic';
+  target: SemanticTargetSelector;
+  actor: string;
+  role: 'manager' | 'system';
+  command: SemanticCommandPayload;
+  dryRun?: boolean;
+  requestId: string;
+}
+
+/**
+ * Result for a live semantic graph command.
+ */
+export type SemanticResultMessage = BaseMessage & {
+  type: 'semantic-result';
+  requestId: string;
+  warnings?: SemanticWarning[];
+  snapshotRevision?: number;
+} & (
+  | {
+      ok: true;
+      result: Record<string, unknown>;
+      error?: never;
+    }
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        path?: string;
+      };
+      result?: never;
+    }
+);
+
+/**
  * System message types
  */
 export type SystemAction =
@@ -492,6 +554,8 @@ export type Message =
   | SensorDataMessage
   | MediaMetaMessage
   | PluginControlMessage
+  | SemanticMessage
+  | SemanticResultMessage
   | SystemMessage;
 
 /**
@@ -504,6 +568,8 @@ export type MessageWithoutServerTimestamp =
   | Omit<SensorDataMessage, 'serverTimestamp'>
   | Omit<MediaMetaMessage, 'serverTimestamp'>
   | Omit<PluginControlMessage, 'serverTimestamp'>
+  | Omit<SemanticMessage, 'serverTimestamp'>
+  | Omit<SemanticResultMessage, 'serverTimestamp'>
   | Omit<SystemMessage, 'serverTimestamp'>;
 
 /**

@@ -4,6 +4,7 @@ import {
     MediaMetaMessage,
     SOCKET_EVENTS,
     createPluginControlMessage,
+    createSemanticMessage,
     createMediaMetaMessage,
     getServerTime,
     TargetSelector,
@@ -23,6 +24,10 @@ import {
     targetClients,
     type DeliveryMetrics,
     type DisplayOperation,
+    type SemanticCommandPayload,
+    type SemanticMessage,
+    type SemanticResultMessage,
+    type SemanticTargetSelector,
 } from '@shugu/protocol';
 import {
     nextManagerCommandEnvelope,
@@ -62,6 +67,8 @@ export class ManagerSDK {
     private commandEnvelope: CommandEnvelope;
     private stateListeners: Set<(state: ManagerState) => void> = new Set();
     private sensorDataHandlers: Set<MessageHandler<SensorDataMessage>> = new Set();
+    private semanticCommandHandlers: Set<MessageHandler<SemanticMessage>> = new Set();
+    private semanticResultHandlers: Set<MessageHandler<SemanticResultMessage>> = new Set();
     private timeSyncIntervalId: ReturnType<typeof setInterval> | null = null;
     private readonly deliveryQueue: ManagerDeliveryQueue;
 
@@ -149,6 +156,22 @@ export class ManagerSDK {
     onSensorData(handler: MessageHandler<SensorDataMessage>): () => void {
         this.sensorDataHandlers.add(handler);
         return () => this.sensorDataHandlers.delete(handler);
+    }
+
+    /**
+     * Subscribe to live semantic graph commands routed to this Manager.
+     */
+    onSemanticCommand(handler: MessageHandler<SemanticMessage>): () => void {
+        this.semanticCommandHandlers.add(handler);
+        return () => this.semanticCommandHandlers.delete(handler);
+    }
+
+    /**
+     * Subscribe to semantic command results.
+     */
+    onSemanticResult(handler: MessageHandler<SemanticResultMessage>): () => void {
+        this.semanticResultHandlers.add(handler);
+        return () => this.semanticResultHandlers.delete(handler);
     }
 
     /**
@@ -258,6 +281,27 @@ export class ManagerSDK {
     ): void {
         if (!this.socket?.connected) return;
         const message = createPluginControlMessage(this.nextCommandEnvelope(target), target, pluginId, command, payload);
+        this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Send a live semantic graph command to the Manager graph runtime.
+     */
+    sendSemanticCommand(input: {
+        target?: SemanticTargetSelector;
+        command: SemanticCommandPayload;
+        dryRun?: boolean;
+        requestId: string;
+    }): void {
+        if (!this.socket?.connected) return;
+        const message = createSemanticMessage({
+            target: input.target ?? { mode: 'manager' },
+            actor: this.commandEnvelope.actor,
+            role: this.commandEnvelope.role === 'system' ? 'system' : 'manager',
+            command: input.command,
+            ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
+            requestId: input.requestId,
+        });
         this.socket.emit(SOCKET_EVENTS.MSG, message);
     }
 
@@ -536,6 +580,8 @@ export class ManagerSDK {
             getTimeSyncIntervalId: () => this.timeSyncIntervalId,
             updateState: (partial) => this.updateState(partial),
             getSensorDataHandlers: () => this.sensorDataHandlers,
+            getSemanticCommandHandlers: () => this.semanticCommandHandlers,
+            getSemanticResultHandlers: () => this.semanticResultHandlers,
         };
     }
 }

@@ -5,11 +5,15 @@ import {
     SOCKET_EVENTS,
     createTimePing,
     isSensorDataMessage,
+    isSemanticMessage,
+    isSemanticResultMessage,
     isSystemMessage,
     processTimePong,
     updateTimeSyncState,
     type Message,
     type SensorDataMessage,
+    type SemanticMessage,
+    type SemanticResultMessage,
     type SystemMessage,
     type TimePongData,
 } from '@shugu/protocol';
@@ -26,6 +30,8 @@ export type ManagerSocketListenerHost = {
     getTimeSyncIntervalId(): ReturnType<typeof setInterval> | null;
     updateState(partial: Partial<ManagerState>): void;
     getSensorDataHandlers(): Set<MessageHandler<SensorDataMessage>>;
+    getSemanticCommandHandlers(): Set<MessageHandler<SemanticMessage>>;
+    getSemanticResultHandlers(): Set<MessageHandler<SemanticResultMessage>>;
 };
 
 export function setupManagerSocketListeners(host: ManagerSocketListenerHost): void {
@@ -91,6 +97,22 @@ export function handleManagerMessage(host: ManagerSocketListenerHost, message: M
         });
     } else if (isSystemMessage(message)) {
         handleManagerSystemMessage(host, message as SystemMessage);
+    } else if (isSemanticMessage(message)) {
+        host.getSemanticCommandHandlers().forEach(handler => {
+            try {
+                handler(message);
+            } catch (error) {
+                console.error('[SDK Manager] Semantic command handler error:', error);
+            }
+        });
+    } else if (isSemanticResultMessage(message)) {
+        host.getSemanticResultHandlers().forEach(handler => {
+            try {
+                handler(message);
+            } catch (error) {
+                console.error('[SDK Manager] Semantic result handler error:', error);
+            }
+        });
     }
 }
 

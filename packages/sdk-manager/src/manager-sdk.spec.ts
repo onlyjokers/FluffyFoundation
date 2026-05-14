@@ -6,6 +6,7 @@ import { test } from 'node:test';
 
 import { mergeControlPayload } from './payload-merge.js';
 import { ManagerSDK } from './manager-sdk.js';
+import { setupManagerSocketListeners } from './manager-sdk/socket-listeners.js';
 
 test('mergeControlPayload shallow merges plain objects', () => {
   const prev = { a: 1, b: 2 };
@@ -29,6 +30,33 @@ function connectFakeSocket(sdk: ManagerSDK): unknown[] {
     emit: (_event: string, message: unknown) => emitted.push(message),
   };
   return emitted;
+}
+
+function connectFakeEventSocket(sdk: ManagerSDK): { emitted: unknown[]; triggerMsg: (message: unknown) => void } {
+  const emitted: unknown[] = [];
+  let msgHandler: ((message: unknown) => void) | null = null;
+  (sdk as unknown as {
+    socket: {
+      connected: boolean;
+      emit: (_event: string, message: unknown) => void;
+      on: (event: string, handler: (message: unknown) => void) => void;
+      io: { on: () => void };
+    };
+  }).socket = {
+    connected: true,
+    emit: (_event: string, message: unknown) => emitted.push(message),
+    on: (event: string, handler: (message: unknown) => void) => {
+      if (event === 'msg') msgHandler = handler;
+    },
+    io: { on: () => undefined },
+  };
+  return {
+    emitted,
+    triggerMsg: (message: unknown) => {
+      assert.notEqual(msgHandler, null);
+      msgHandler?.(message);
+    },
+  };
 }
 
 test('ManagerSDK sendControl preserves caller scope envelope while flushing a single command', async () => {
@@ -114,6 +142,79 @@ test('ManagerSDK sendPluginControl preserves reclaim command envelope for Group 
   assert.equal((emitted[0] as { command?: string }).command, 'reclaim');
   assert.equal((emitted[0] as { scopeGroupId?: string }).scopeGroupId, 'stage-left');
   assert.equal((emitted[0] as { actor?: string }).actor, 'manager-reclaim');
+});
+
+test('ManagerSDK sends semantic graph commands through the live manager channel', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'semantic-manager', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.sendSemanticCommand({
+    target: { mode: 'manager' },
+    command: {
+      kind: 'node.params.update',
+      nodeId: 'tone-1',
+      param: 'volume',
+      value: 0.5,
+    },
+    requestId: 'semantic-sdk-1',
+    dryRun: true,
+  });
+
+  assert.equal(emitted.length, 1);
+  assert.deepEqual(emitted[0], {
+    type: 'semantic',
+    version: 1,
+    target: { mode: 'manager' },
+    actor: 'semantic-manager',
+    role: 'manager',
+    command: {
+      kind: 'node.params.update',
+      nodeId: 'tone-1',
+      param: 'volume',
+      value: 0.5,
+    },
+    requestId: 'semantic-sdk-1',
+    dryRun: true,
+    clientTimestamp: (emitted[0] as { clientTimestamp?: number }).clientTimestamp,
+  });
+});
+
+test('ManagerSDK dispatches semantic commands and semantic results to registered handlers', () => {
+  const sdk = new ManagerSDK({ serverUrl: 'http://localhost:3001' });
+  const { triggerMsg } = connectFakeEventSocket(sdk);
+  setupManagerSocketListeners((sdk as unknown as { createSocketListenerHost: () => never }).createSocketListenerHost());
+  const semanticCommands: unknown[] = [];
+  const semanticResults: unknown[] = [];
+
+  sdk.onSemanticCommand((message) => semanticCommands.push(message));
+  sdk.onSemanticResult((message) => semanticResults.push(message));
+  triggerMsg({
+    type: 'semantic',
+    version: 1,
+    serverTimestamp: 100,
+    target: { mode: 'manager' },
+    actor: 'cli',
+    role: 'manager',
+    command: { kind: 'graph.snapshot' },
+    requestId: 'snapshot-1',
+  });
+  triggerMsg({
+    type: 'semantic-result',
+    version: 1,
+    serverTimestamp: 101,
+    requestId: 'snapshot-1',
+    ok: true,
+    result: { snapshot: { nodes: [], connections: [] } },
+    snapshotRevision: 4,
+  });
+
+  assert.equal(semanticCommands.length, 1);
+  assert.equal((semanticCommands[0] as { requestId?: string }).requestId, 'snapshot-1');
+  assert.equal(semanticResults.length, 1);
+  assert.equal((semanticResults[0] as { snapshotRevision?: number }).snapshotRevision, 4);
 });
 
 test('ManagerSDK scopes plugin controls to the target group for server policy parity', () => {

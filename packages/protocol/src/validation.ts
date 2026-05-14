@@ -14,6 +14,8 @@ import { validateSensorDataMessage } from './validation/data.js';
 import {
   validateMediaMetaMessage,
   validatePluginControlMessage,
+  validateSemanticMessage,
+  validateSemanticResultMessage,
   validateSystemMessage,
 } from './validation/other-messages.js';
 import {
@@ -60,6 +62,12 @@ export function validateMessage(input: unknown): MessageValidationResult {
       break;
     case 'plugin':
       validatePluginControlMessage(input, ctx);
+      break;
+    case 'semantic':
+      validateSemanticMessage(input, ctx);
+      break;
+    case 'semantic-result':
+      validateSemanticResultMessage(input, ctx);
       break;
     case 'system':
       validateSystemMessage(input, ctx);

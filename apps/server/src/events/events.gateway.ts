@@ -229,10 +229,13 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     if (
       validatedMessage.type === 'control' ||
       validatedMessage.type === 'media' ||
-      validatedMessage.type === 'plugin'
+      validatedMessage.type === 'plugin' ||
+      validatedMessage.type === 'semantic'
     ) {
-      const partitionRejectReason = validatePartitionLifecycleIngress(validatedMessage);
-      if (partitionRejectReason) return this.logRejectedMessage(client.id, [partitionRejectReason]);
+      if (validatedMessage.type !== 'semantic') {
+        const partitionRejectReason = validatePartitionLifecycleIngress(validatedMessage);
+        if (partitionRejectReason) return this.logRejectedMessage(client.id, [partitionRejectReason]);
+      }
       if (
         isNonSystemMutatingCommandMessage(validatedMessage) &&
         validatedMessage.role === 'client'
@@ -268,14 +271,20 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       if (!this.clientRegistry.isManager(client.id)) {
         this.logRejectedMessage(client.id, [
           createPolicyRejectReason({
-            actor: 'from' in validatedMessage ? validatedMessage.from : 'unknown',
+            actor: 'actor' in validatedMessage ? validatedMessage.actor : 'from' in validatedMessage ? validatedMessage.from : 'unknown',
             scope: 'server.ingress.authorization',
             type: validatedMessage.type,
-            path: 'from',
+            path: validatedMessage.type === 'semantic' ? 'role' : 'from',
             code: 'server.policy.manager_required',
             message: `manager role is required for ${validatedMessage.type} messages`,
           }),
         ]);
+        return;
+      }
+
+      if (validatedMessage.type === 'semantic') {
+        this.auditMutatingCommand(validatedMessage);
+        this.messageRouter.routeMessage(validatedMessage, client.id);
         return;
       }
 

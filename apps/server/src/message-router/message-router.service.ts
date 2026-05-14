@@ -8,6 +8,8 @@ import type {
     SensorDataMessage,
     MediaMetaMessage,
     PluginControlMessage,
+    SemanticMessage,
+    SemanticResultMessage,
     SystemMessage,
     Message,
     MessageWithoutServerTimestamp,
@@ -66,6 +68,12 @@ export class MessageRouterService {
                 break;
             case 'plugin':
                 this.routePluginMessage(timestampedMessage as PluginControlMessage);
+                break;
+            case 'semantic':
+                this.routeSemanticMessage(timestampedMessage as SemanticMessage);
+                break;
+            case 'semantic-result':
+                this.routeSemanticResultMessage(timestampedMessage as SemanticResultMessage, _fromSocketId);
                 break;
             case 'system':
                 this.routeSystemMessage(timestampedMessage as SystemMessage, _fromSocketId);
@@ -170,6 +178,25 @@ export class MessageRouterService {
     }
 
     /**
+     * Route semantic graph commands to Manager sockets only.
+     */
+    private routeSemanticMessage(message: SemanticMessage): void {
+        const socketIds = this.resolveSemanticTargetSocketIds(message);
+        if (socketIds.length === 0) {
+            this.deliveryMetrics.rejected += 1;
+            return;
+        }
+        this.emitToSockets(socketIds, message);
+    }
+
+    /**
+     * Route semantic command results back through manager channels.
+     */
+    private routeSemanticResultMessage(message: SemanticResultMessage, fromSocketId: string): void {
+        this.emitToSockets([fromSocketId], message);
+    }
+
+    /**
      * Route system message
      */
     private routeSystemMessage(_message: SystemMessage, _fromSocketId: string): void {
@@ -198,6 +225,15 @@ export class MessageRouterService {
             default:
                 return [];
         }
+    }
+
+    private resolveSemanticTargetSocketIds(message: SemanticMessage): string[] {
+        if (message.target.mode === 'manager') {
+            return this.clientRegistry.getAllManagerSocketIds();
+        }
+
+        const managerSocketIds = this.clientRegistry.getSocketIds([message.target.managerId]);
+        return managerSocketIds.filter((socketId) => this.clientRegistry.getAllManagerSocketIds().includes(socketId));
     }
 
     /**

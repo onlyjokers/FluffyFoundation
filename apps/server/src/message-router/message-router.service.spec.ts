@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createControlMessage, createSensorDataMessage, type Message } from '@shugu/protocol';
+import { createControlMessage, createSemanticMessage, createSensorDataMessage, type Message } from '@shugu/protocol';
 import { MessageRouterService } from './message-router.service.js';
 
 const envelope = {
@@ -49,6 +49,30 @@ test('MessageRouterService drops volatile telemetry under backpressure and recor
 
   assert.equal(reliableMessages.length, 0);
   assert.equal(router.getDeliveryMetrics().dropped, 1);
+});
+
+test('MessageRouterService routes semantic graph commands only to manager sockets', () => {
+  const { router, reliableMessages } = createRouter(3, 2);
+
+  router.routeMessage(
+    createSemanticMessage({
+      target: { mode: 'manager' },
+      actor: 'cli',
+      role: 'manager',
+      command: {
+        kind: 'node.params.update',
+        nodeId: 'tone-1',
+        param: 'volume',
+        value: 0.5,
+      },
+      requestId: 'semantic-route-1',
+    }),
+    'socket-manager-1'
+  );
+
+  assert.equal(reliableMessages.length, 1);
+  assert.equal(reliableMessages[0]?.type, 'semantic');
+  assert.equal((reliableMessages[0] as { requestId?: string }).requestId, 'semantic-route-1');
 });
 
 test('MessageRouterService keeps reliable and scheduled commands out of volatile throttling', async () => {
