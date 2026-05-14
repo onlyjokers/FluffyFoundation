@@ -182,6 +182,24 @@ test('ManagerSDK sends semantic graph commands through the live manager channel'
   });
 });
 
+test('ManagerSDK sends semantic command results through the live manager channel', () => {
+  const sdk = new ManagerSDK({ serverUrl: 'http://localhost:3001' });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.sendSemanticResult({
+    requestId: 'semantic-result-sdk-1',
+    ok: true,
+    result: { accepted: true },
+    snapshotRevision: 5,
+  });
+
+  assert.equal(emitted.length, 1);
+  assert.equal((emitted[0] as { type?: string }).type, 'semantic-result');
+  assert.equal((emitted[0] as { requestId?: string }).requestId, 'semantic-result-sdk-1');
+  assert.equal((emitted[0] as { ok?: boolean }).ok, true);
+  assert.equal((emitted[0] as { snapshotRevision?: number }).snapshotRevision, 5);
+});
+
 test('ManagerSDK dispatches semantic commands and semantic results to registered handlers', () => {
   const sdk = new ManagerSDK({ serverUrl: 'http://localhost:3001' });
   const { triggerMsg } = connectFakeEventSocket(sdk);

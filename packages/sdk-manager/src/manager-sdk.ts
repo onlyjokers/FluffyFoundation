@@ -5,6 +5,7 @@ import {
     SOCKET_EVENTS,
     createPluginControlMessage,
     createSemanticMessage,
+    createSemanticResultMessage,
     createMediaMetaMessage,
     getServerTime,
     TargetSelector,
@@ -28,6 +29,7 @@ import {
     type SemanticMessage,
     type SemanticResultMessage,
     type SemanticTargetSelector,
+    type SemanticWarning,
 } from '@shugu/protocol';
 import {
     nextManagerCommandEnvelope,
@@ -303,6 +305,30 @@ export class ManagerSDK {
             requestId: input.requestId,
         });
         this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Send a semantic command result back through the live manager channel.
+     */
+    sendSemanticResult(
+        input:
+            | {
+                  requestId: string;
+                  ok: true;
+                  result: Record<string, unknown>;
+                  warnings?: SemanticWarning[];
+                  snapshotRevision?: number;
+              }
+            | {
+                  requestId: string;
+                  ok: false;
+                  error: SemanticResultMessage['error'];
+                  warnings?: SemanticWarning[];
+                  snapshotRevision?: number;
+              }
+    ): void {
+        if (!this.socket?.connected) return;
+        this.socket.emit(SOCKET_EVENTS.MSG, createSemanticResultMessage(input));
     }
 
     sendDisplayOperation(operation: DisplayOperation): void {

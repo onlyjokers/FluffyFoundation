@@ -36,6 +36,8 @@
   import { createNodeCanvasFileActionBundle } from './node-canvas/io/node-canvas-file-actions';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
   import { createNodeCanvasSemanticCommands } from './node-canvas/adapters/semantic-command-adapter';
+  import { createManagerSemanticBridge } from '$lib/semantic/manager-semantic-bridge';
+  import { bindManagerSemanticSdk } from '$lib/semantic/manager-semantic-sdk-binding';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
   import { createGroupController, type GroupFrame } from './node-canvas/controllers/group-controller';
   import { createFocusController } from './node-canvas/controllers/focus-controller';
@@ -124,7 +126,7 @@
     requestFramesUpdate: () => requestFramesUpdate(),
   });
 
-  const canvasCommands = createNodeCanvasSemanticCommands({
+  const semanticRuntime = {
     nodeEngine,
     nodeRegistry,
     getGroups: () => get(groupController.nodeGroups),
@@ -139,7 +141,10 @@
         : [],
     isRunningStore,
     lastErrorStore,
-  });
+  };
+  const managerSemanticBridge = createManagerSemanticBridge(semanticRuntime);
+  const canvasCommands = createNodeCanvasSemanticCommands(semanticRuntime);
+  let unbindSemanticSdk: (() => void) | null = null;
 
   const nodeVisualState = createNodeVisualState({
     viewAdapter,
@@ -594,6 +599,14 @@
   }
 
   onMount(async () => {
+    const sdk = getSDK();
+    if (sdk) {
+      unbindSemanticSdk = bindManagerSemanticSdk({
+        sdk,
+        bridge: managerSemanticBridge,
+      });
+    }
+
     mountedResources = await mountNodeCanvasResources({
       container,
       nodeMap,
@@ -682,6 +695,8 @@
   });
 
   onDestroy(() => {
+    unbindSemanticSdk?.();
+    unbindSemanticSdk = null;
     destroyMountedNodeCanvasResources(mountedResources, {
       container,
       midiController,

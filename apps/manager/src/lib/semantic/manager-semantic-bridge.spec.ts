@@ -1,0 +1,136 @@
+// Purpose: Verify the Manager semantic bridge is the shared Canvas/CLI graph mutation path.
+import assert from 'node:assert/strict';
+import { writable } from 'svelte/store';
+import { test } from 'node:test';
+
+import { createManagerSemanticBridge } from './manager-semantic-bridge';
+import type { NodeInstance } from '$lib/nodes/types';
+import type { NodeDefinition } from '@shugu/node-core';
+
+const definitions: NodeDefinition[] = [
+  {
+    type: 'number',
+    label: 'Number',
+    category: 'Values',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+  },
+  {
+    type: 'math',
+    label: 'Math',
+    category: 'Logic',
+    inputs: [{ id: 'a', label: 'A', type: 'number' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [{ key: 'gain', type: 'number', label: 'Gain', default: 1 }],
+  },
+];
+
+const numberNode: NodeInstance = {
+  id: 'n1',
+  type: 'number',
+  position: { x: 10, y: 20 },
+  config: {},
+  inputValues: {},
+  outputValues: {},
+};
+
+function createRuntime() {
+  const nodes: NodeInstance[] = [];
+  const connections: Array<{
+    id: string;
+    sourceNodeId: string;
+    sourcePortId: string;
+    targetNodeId: string;
+    targetPortId: string;
+  }> = [];
+  const configPatches: Array<{ nodeId: string; patch: Record<string, unknown> }> = [];
+
+  const runtime = {
+    nodeEngine: {
+      exportGraph: () => ({ nodes: nodes.map((node) => ({ ...node })), connections: connections.map((conn) => ({ ...conn })) }),
+      addNode: (node: NodeInstance) => {
+        nodes.push({ ...node });
+      },
+      addConnection: (connection: (typeof connections)[number]) => {
+        connections.push({ ...connection });
+      },
+      updateNodeConfig: (nodeId: string, patch: Record<string, unknown>) => {
+        configPatches.push({ nodeId, patch });
+        const node = nodes.find((candidate) => candidate.id === nodeId);
+        if (node) node.config = { ...(node.config ?? {}), ...patch };
+      },
+      lastError: writable<string | null>(null),
+    },
+    nodeRegistry: { list: () => definitions },
+    getGroups: () => [],
+    getPartitions: () => [],
+    isRunningStore: writable(false),
+    lastErrorStore: writable<string | null>(null),
+  };
+
+  return { runtime, nodes, connections, configPatches };
+}
+
+test('Manager semantic bridge gives Canvas and CLI-style commands the same graph mutation path', () => {
+  const canvas = createRuntime();
+  const cli = createRuntime();
+  const canvasBridge = createManagerSemanticBridge(canvas.runtime);
+  const cliBridge = createManagerSemanticBridge(cli.runtime);
+
+  const mathNode: NodeInstance = {
+    id: 'n2',
+    type: 'math',
+    position: { x: 50, y: 50 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+
+  assert.equal(canvasBridge.addNode(numberNode).ok, true);
+  assert.equal(canvasBridge.addNode(mathNode).ok, true);
+  assert.equal(
+    canvasBridge.connect({
+      id: 'c1',
+      sourceNodeId: 'n1',
+      sourcePortId: 'out',
+      targetNodeId: 'n2',
+      targetPortId: 'a',
+    }).ok,
+    true
+  );
+
+  assert.equal(cliBridge.dispatch({ actor: { id: 'cli', role: 'operator' }, command: { type: 'node.add', node: numberNode } }).ok, true);
+  assert.equal(cliBridge.dispatch({ actor: { id: 'cli', role: 'operator' }, command: { type: 'node.add', node: mathNode } }).ok, true);
+  assert.equal(
+    cliBridge.dispatch({
+      actor: { id: 'cli', role: 'operator' },
+      command: {
+        type: 'node.connect',
+        connection: {
+          id: 'c1',
+          sourceNodeId: 'n1',
+          sourcePortId: 'out',
+          targetNodeId: 'n2',
+          targetPortId: 'a',
+        },
+      },
+    }).ok,
+    true
+  );
+
+  assert.deepEqual(canvas.nodes, cli.nodes);
+  assert.deepEqual(canvas.connections, cli.connections);
+});
+
+test('Manager semantic bridge applies node.params.update through nodeEngine.updateNodeConfig', () => {
+  const { runtime, configPatches, nodes } = createRuntime();
+  const bridge = createManagerSemanticBridge(runtime);
+
+  assert.equal(bridge.addNode({ ...numberNode, id: 'n-param', type: 'math' }).ok, true);
+  const result = bridge.setNodeParams('n-param', { gain: 2 });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(configPatches, [{ nodeId: 'n-param', patch: { gain: 2 } }]);
+  assert.deepEqual(nodes[0]?.config, { gain: 2 });
+});

@@ -5,8 +5,9 @@ import { test } from 'node:test';
 import { createSemanticCommandBus, type SemanticCommand } from '@shugu/node-core';
 import { createCanvasSemanticCommandAdapter } from './semantic-command-adapter';
 import type { NodeInstance } from '$lib/nodes/types';
+import type { NodeDefinition } from '@shugu/node-core';
 
-const definitions = [
+const definitions: NodeDefinition[] = [
   {
     type: 'number',
     label: 'Number',
