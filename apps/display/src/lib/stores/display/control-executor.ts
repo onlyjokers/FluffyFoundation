@@ -1,0 +1,173 @@
+/**
+ * Purpose: Execute display control actions against MultimediaCore and display side effects.
+ */
+import type { Writable } from 'svelte/store';
+import type { MultimediaCore } from '@shugu/multimedia-core';
+import type {
+  ControlAction,
+  ControlPayload,
+  PlayMediaPayload,
+  ScreenColorPayload,
+  ShowImagePayload,
+} from '@shugu/protocol';
+import type { NodeExecutor } from '@shugu/sdk-client';
+import { stopAllDisplaySideEffects } from '../display-stop-all';
+import {
+  createDisplayScreenOverlayState,
+  type ScreenOverlayState,
+} from '../display-screen-overlay';
+import {
+  clearActiveImageObjectUrl,
+  isDataImageUrl,
+  normalizeImageUrlForDisplay,
+} from './image-object-url';
+import {
+  parseDisplayFileId,
+  resolveDisplayFileUrl,
+  warnMissingDisplayLocalMedia,
+} from './local-media';
+import { parseMediaClipParams } from './media-clip';
+
+export type DisplayControlExecutorDeps = {
+  getMultimediaCore: () => MultimediaCore | null;
+  getNodeExecutor: () => NodeExecutor | null;
+  screenOverlay: Writable<ScreenOverlayState>;
+  isDev: boolean;
+};
+
+export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): {
+  executeControl: (action: ControlAction, payload: ControlPayload, executeAtLocal?: number) => void;
+} {
+  let lastControlLogAt = 0;
+
+  const setScreenColor = (payload: ScreenColorPayload): void => {
+    deps.screenOverlay.set(createDisplayScreenOverlayState(payload));
+  };
+
+  const executeNow = (action: ControlAction, payload: ControlPayload): void => {
+    switch (action) {
+      case 'showImage': {
+        const imagePayload = payload as ShowImagePayload;
+        const clip = typeof imagePayload.url === 'string' ? parseMediaClipParams(imagePayload.url) : null;
+        const baseUrl = clip ? clip.baseUrl : String(imagePayload.url ?? '');
+        const resolvedDisplayUrl = resolveDisplayFileUrl(baseUrl);
+        if (parseDisplayFileId(baseUrl) && !resolvedDisplayUrl) {
+          warnMissingDisplayLocalMedia(baseUrl);
+          return;
+        }
+        const fit = clip?.fit ?? null;
+        const url = normalizeImageUrlForDisplay(resolvedDisplayUrl ?? baseUrl);
+        if (deps.isDev) {
+          const now = Date.now();
+          if (now - lastControlLogAt >= 500) {
+            lastControlLogAt = now;
+            console.info('[Display] showImage', {
+              dataUrl: isDataImageUrl(baseUrl),
+              urlChars: baseUrl.length,
+              fit,
+            });
+          }
+        }
+        deps.getMultimediaCore()?.media.showImage({
+          url,
+          duration: imagePayload.duration,
+          ...(fit === null ? {} : { fit }),
+        });
+        return;
+      }
+
+      case 'hideImage':
+        clearActiveImageObjectUrl();
+        if (deps.isDev) {
+          const now = Date.now();
+          if (now - lastControlLogAt >= 500) {
+            lastControlLogAt = now;
+            console.info('[Display] hideImage');
+          }
+        }
+        deps.getMultimediaCore()?.media.hideImage();
+        return;
+
+      case 'playMedia': {
+        const mediaPayload = payload as PlayMediaPayload;
+        const clip = typeof mediaPayload.url === 'string' ? parseMediaClipParams(mediaPayload.url) : null;
+        const baseUrl = clip ? clip.baseUrl : mediaPayload.url;
+        const url = typeof baseUrl === 'string' ? baseUrl : String(baseUrl ?? '');
+        const resolvedDisplayUrl = resolveDisplayFileUrl(url);
+        if (parseDisplayFileId(url) && !resolvedDisplayUrl) {
+          warnMissingDisplayLocalMedia(url);
+          return;
+        }
+
+        const resolvedUrlString = resolvedDisplayUrl ?? url;
+        const isVideo =
+          mediaPayload.mediaType === 'video' ||
+          Boolean(parseDisplayFileId(url)) ||
+          /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(resolvedUrlString);
+
+        if (!isVideo) {
+          deps.getMultimediaCore()?.media.playAudio({
+            url: resolvedUrlString,
+            loop: mediaPayload.loop ?? false,
+            volume: mediaPayload.volume ?? 1,
+            playing: true,
+          });
+          return;
+        }
+
+        deps.getMultimediaCore()?.media.playVideo({
+          url: resolvedUrlString,
+          sourceNodeId: clip?.sourceNodeId ?? null,
+          muted: mediaPayload.muted ?? true,
+          loop: clip?.loop ?? mediaPayload.loop ?? false,
+          volume: mediaPayload.volume ?? 1,
+          playing: clip?.play ?? Boolean(resolvedUrlString),
+          startSec: clip ? Math.max(0, clip.startSec) : 0,
+          endSec: clip ? clip.endSec : -1,
+          cursorSec: clip?.cursorSec ?? -1,
+          reverse: clip?.reverse ?? false,
+          ...(clip?.fit === null || clip?.fit === undefined ? {} : { fit: clip.fit }),
+        });
+        return;
+      }
+
+      case 'stopMedia':
+        deps.getMultimediaCore()?.media.stopAllMedia();
+        return;
+
+      case 'screenColor':
+        setScreenColor(payload as ScreenColorPayload);
+        return;
+
+      case 'shutdown': {
+        const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+        if (record?.reason !== 'root-stop-all' && record?.kind !== 'stop-all') return;
+        stopAllDisplaySideEffects({
+          multimediaCore: deps.getMultimediaCore(),
+          nodeExecutor: deps.getNodeExecutor(),
+          screenOverlay: deps.screenOverlay,
+          setScreenColor,
+          clearActiveImageObjectUrl,
+        });
+        return;
+      }
+
+      default:
+        console.info('[Display] noop action:', action, payload);
+    }
+  };
+
+  return {
+    executeControl: (action, payload, executeAtLocal) => {
+      if (typeof executeAtLocal === 'number' && Number.isFinite(executeAtLocal)) {
+        const delay = executeAtLocal - Date.now();
+        if (delay > 0) {
+          setTimeout(() => executeNow(action, payload), delay);
+          return;
+        }
+      }
+
+      executeNow(action, payload);
+    },
+  };
+}

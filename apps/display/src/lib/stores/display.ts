@@ -17,18 +17,29 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import { MultimediaCore, toneAudioEngine, type MultimediaCoreState, type MediaEngineState, type MediaFit } from '@shugu/multimedia-core';
-import { PROTOCOL_VERSION, type ControlAction, type ControlPayload, type ControlMessage, type PluginControlMessage, type PluginCommand, type MediaMetaMessage, type PlayMediaPayload, type ScreenColorPayload, type ShowImagePayload, type TargetSelector } from '@shugu/protocol';
+import { MultimediaCore, toneAudioEngine, type MultimediaCoreState, type MediaEngineState } from '@shugu/multimedia-core';
+import type { ControlAction, ControlPayload, PluginCommand } from '@shugu/protocol';
 import type { GraphChange } from '@shugu/node-core';
-import { ClientSDK, NodeExecutor, type NodeCommand, type ClientState, type ClientIdentity } from '@shugu/sdk-client';
+import { ClientSDK, NodeExecutor, type ClientState } from '@shugu/sdk-client';
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
-import { stopAllDisplaySideEffects } from './display-stop-all';
-import { applyDisplayAssetManifest } from './display-asset-manifest';
 import {
   createClearedDisplayScreenOverlayState,
-  createDisplayScreenOverlayState,
   type ScreenOverlayState,
 } from './display-screen-overlay';
+import { createDisplayControlExecutor } from './display/control-executor';
+import {
+  clearActiveImageObjectUrl,
+} from './display/image-object-url';
+import {
+  clearDisplayLocalMedia,
+  registerDisplayLocalMedia,
+  resolveDisplayFileUrl,
+  startLocalMediaBroadcast,
+  stopLocalMediaBroadcast,
+  warnMissingDisplayLocalMedia,
+} from './display/local-media';
+import { createLocalPluginMessage, isAllowedManagerOrigin } from './display/local-pairing';
+import { createDisplayServerTransport } from './display/server-transport';
 
 export type DisplayInitConfig = {
   serverUrl: string;
@@ -36,221 +47,8 @@ export type DisplayInitConfig = {
   pairToken?: string | null;
 };
 
-type MediaClipParams = {
-  baseUrl: string;
-  startSec: number;
-  endSec: number;
-  loop: boolean | null;
-  play: boolean | null;
-  reverse: boolean | null;
-  cursorSec: number | null;
-  sourceNodeId: string | null;
-  fit: MediaFit | null;
-};
-
-// Some browsers can be flaky about updating large data URLs repeatedly via `<img src="data:...">`.
-// Convert data-image URLs into Blob object URLs to ensure refresh + reduce retained base64 strings.
-let activeImageObjectUrl: string | null = null;
-const IMAGE_OBJECT_URL_REVOKE_DELAY_MS = 800; // allow the fade-out transition to finish
-let lastControlLogAt = 0;
-const LOCAL_PLUGIN_TARGET: TargetSelector = { mode: 'all' };
-
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
-
-const createLocalPluginMessage = (
-  command: PluginCommand,
-  payload?: Record<string, unknown>
-): PluginControlMessage => ({
-  type: 'plugin',
-  from: 'manager',
-  target: LOCAL_PLUGIN_TARGET,
-  pluginId: 'node-executor',
-  command,
-  payload,
-  version: PROTOCOL_VERSION,
-  serverTimestamp: Date.now(),
-});
-
-function isDataImageUrl(url: string): boolean {
-  return url.startsWith('data:image/');
-}
-
-function dataUrlToBlob(dataUrl: string): Blob | null {
-  if (typeof dataUrl !== 'string') return null;
-  if (!dataUrl.startsWith('data:')) return null;
-
-  const comma = dataUrl.indexOf(',');
-  if (comma < 0) return null;
-
-  const meta = dataUrl.slice(5, comma); // strip "data:"
-  const data = dataUrl.slice(comma + 1);
-
-  const parts = meta.split(';').map((s) => s.trim()).filter(Boolean);
-  const mime = parts[0] && parts[0].includes('/') ? parts[0] : 'application/octet-stream';
-  const isBase64 = parts.includes('base64');
-
-  try {
-    if (!isBase64) {
-      const decoded = decodeURIComponent(data);
-      return new Blob([decoded], { type: mime });
-    }
-
-    const binary = atob(data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return new Blob([bytes], { type: mime });
-  } catch {
-    return null;
-  }
-}
-
-function scheduleRevokeObjectUrl(url: string): void {
-  if (!url) return;
-  if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') return;
-  setTimeout(() => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      // ignore
-    }
-  }, IMAGE_OBJECT_URL_REVOKE_DELAY_MS);
-}
-
-function normalizeImageUrlForDisplay(url: string): string {
-  const trimmed = url.trim();
-  if (!trimmed) {
-    clearActiveImageObjectUrl();
-    return url;
-  }
-
-  if (!isDataImageUrl(trimmed)) {
-    clearActiveImageObjectUrl();
-    return trimmed;
-  }
-
-  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
-    clearActiveImageObjectUrl();
-    return trimmed;
-  }
-
-  const blob = dataUrlToBlob(trimmed);
-  if (!blob) {
-    clearActiveImageObjectUrl();
-    return trimmed;
-  }
-
-  const objectUrl = URL.createObjectURL(blob);
-  const prev = activeImageObjectUrl;
-  activeImageObjectUrl = objectUrl;
-  if (prev) scheduleRevokeObjectUrl(prev);
-  return objectUrl;
-}
-
-function clearActiveImageObjectUrl(): void {
-  const prev = activeImageObjectUrl;
-  activeImageObjectUrl = null;
-  if (prev) scheduleRevokeObjectUrl(prev);
-}
-
-function parseMediaClipParams(raw: string): MediaClipParams {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return {
-      baseUrl: '',
-      startSec: 0,
-      endSec: -1,
-      loop: null,
-      play: null,
-      reverse: null,
-      cursorSec: null,
-      sourceNodeId: null,
-      fit: null,
-    };
-  }
-
-  const hashIndex = trimmed.indexOf('#');
-  if (hashIndex < 0) {
-    return {
-      baseUrl: trimmed,
-      startSec: 0,
-      endSec: -1,
-      loop: null,
-      play: null,
-      reverse: null,
-      cursorSec: null,
-      sourceNodeId: null,
-      fit: null,
-    };
-  }
-
-  const baseUrl = trimmed.slice(0, hashIndex).trim();
-  const hash = trimmed.slice(hashIndex + 1);
-  const params = new URLSearchParams(hash);
-
-  const toNumber = (value: string | null, fallback: number): number => {
-    if (value == null) return fallback;
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-
-  const toBoolean = (value: string | null, fallback: boolean): boolean => {
-    if (value == null) return fallback;
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) return fallback;
-    if (normalized === 'true') return true;
-    if (normalized === 'false') return false;
-    const n = Number(normalized);
-    if (Number.isFinite(n)) return n >= 0.5;
-    return fallback;
-  };
-
-  const tRaw = params.get('t');
-  let startSec = 0;
-  let endSec = -1;
-  if (tRaw !== null) {
-    const parts = tRaw.split(',');
-    const startCandidate = parts[0]?.trim() ?? '';
-    const endCandidate = parts[1]?.trim() ?? '';
-    startSec = toNumber(startCandidate || null, 0);
-    if (parts.length > 1) {
-      endSec = endCandidate ? toNumber(endCandidate, -1) : -1;
-    }
-  }
-
-  const loopRaw = params.get('loop');
-  const playRaw = params.get('play');
-  const reverseRaw = params.get('rev');
-  const cursorRaw = params.get('p');
-  const nodeRaw = params.get('node');
-  const fitRaw = params.get('fit');
-
-  const cursorParsed = cursorRaw === null ? null : toNumber(cursorRaw, -1);
-  const cursorSec = cursorParsed !== null && Number.isFinite(cursorParsed) && cursorParsed >= 0 ? cursorParsed : null;
-
-  const fit = (() => {
-    if (fitRaw === null) return null;
-    const normalized = fitRaw.trim().toLowerCase();
-    if (normalized === 'fit-screen' || normalized === 'fitscreen' || normalized === 'fullscreen')
-      return 'fit-screen';
-    if (normalized === 'cover') return 'cover';
-    if (normalized === 'fill' || normalized === 'stretch') return 'fill';
-    if (normalized === 'contain') return 'contain';
-    return null;
-  })();
-
-  return {
-    baseUrl,
-    startSec: Number.isFinite(startSec) ? startSec : 0,
-    endSec: Number.isFinite(endSec) ? endSec : -1,
-    loop: loopRaw === null ? null : toBoolean(loopRaw, false),
-    play: playRaw === null ? null : toBoolean(playRaw, true),
-    reverse: reverseRaw === null ? null : toBoolean(reverseRaw, false),
-    cursorSec,
-    sourceNodeId: typeof nodeRaw === 'string' && nodeRaw.trim() ? nodeRaw.trim() : null,
-    fit,
-  };
-}
 
 const DEFAULT_SERVER_URL = 'https://localhost:3001';
 
@@ -304,121 +102,6 @@ let localPort: MessagePort | null = null;
 let windowPairListener: ((event: MessageEvent) => void) | null = null;
 let pairTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 let transportDecision: 'uninitialized' | 'pending' | 'local' | 'server' = 'uninitialized';
-
-type LocalDisplayMediaKind = 'audio' | 'image' | 'video';
-type LocalDisplayMediaEntry = {
-  id: string;
-  kind: LocalDisplayMediaKind;
-  name: string;
-  file: File;
-  objectUrl: string;
-};
-
-// Local-only media registry (Manager ↔ Display same machine via MessagePort).
-const displayLocalMedia = new Map<string, LocalDisplayMediaEntry>();
-const LOCAL_MEDIA_BROADCAST_CHANNEL = 'shugu:display:local-media';
-const warnedMissingDisplayLocalMedia = new Set<string>();
-
-type LocalMediaBroadcastMessage = {
-  type: 'shugu:display:local-media';
-  command: 'register' | 'clear';
-  payload?: Record<string, unknown>;
-};
-
-let localMediaBroadcast: BroadcastChannel | null = null;
-
-function startLocalMediaBroadcast(): void {
-  if (typeof window === 'undefined') return;
-  if (typeof BroadcastChannel === 'undefined') return;
-  if (localMediaBroadcast) return;
-
-  try {
-    localMediaBroadcast = new BroadcastChannel(LOCAL_MEDIA_BROADCAST_CHANNEL);
-  } catch {
-    localMediaBroadcast = null;
-    return;
-  }
-
-  localMediaBroadcast.onmessage = (event: MessageEvent) => {
-    const msg = event.data as Partial<LocalMediaBroadcastMessage> | null;
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.type !== 'shugu:display:local-media') return;
-
-    const command = msg.command;
-    if (command === 'clear') {
-      clearDisplayLocalMedia();
-      return;
-    }
-    if (command === 'register') {
-      registerDisplayLocalMedia(msg.payload ?? undefined);
-    }
-  };
-}
-
-function stopLocalMediaBroadcast(): void {
-  if (!localMediaBroadcast) return;
-  try {
-    localMediaBroadcast.onmessage = null;
-    localMediaBroadcast.close();
-  } catch {
-    // ignore
-  }
-  localMediaBroadcast = null;
-}
-
-function parseDisplayFileId(raw: string): string | null {
-  const s = typeof raw === 'string' ? raw.trim() : '';
-  if (!s.startsWith('displayfile:')) return null;
-  const rest = s.slice('displayfile:'.length);
-  const id = (rest.split(/[?#]/)[0] ?? '').trim();
-  return id ? id : null;
-}
-
-function resolveDisplayFileUrl(raw: string): string | null {
-  const id = parseDisplayFileId(raw);
-  if (!id) return null;
-  return displayLocalMedia.get(id)?.objectUrl ?? null;
-}
-
-function clearDisplayLocalMedia(): void {
-  for (const entry of displayLocalMedia.values()) {
-    try {
-      URL.revokeObjectURL(entry.objectUrl);
-    } catch {
-      // ignore
-    }
-  }
-  displayLocalMedia.clear();
-  warnedMissingDisplayLocalMedia.clear();
-}
-
-function registerDisplayLocalMedia(payload: Record<string, unknown> | undefined): void {
-  const id = typeof payload?.id === 'string' ? payload.id.trim() : '';
-  if (!id) return;
-
-  const kindRaw = typeof payload?.kind === 'string' ? payload.kind.trim().toLowerCase() : '';
-  const kind: LocalDisplayMediaKind =
-    kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? (kindRaw as LocalDisplayMediaKind) : 'video';
-
-  const fileRaw = payload?.file ?? null;
-  if (!(fileRaw instanceof Blob)) return;
-
-  const file = fileRaw instanceof File ? fileRaw : new File([fileRaw], `displayfile-${id}`);
-  const name =
-    typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : file.name;
-
-  const existing = displayLocalMedia.get(id);
-  if (existing) {
-    try {
-      URL.revokeObjectURL(existing.objectUrl);
-    } catch {
-      // ignore
-    }
-  }
-
-  const objectUrl = URL.createObjectURL(file);
-  displayLocalMedia.set(id, { id, kind, name, file, objectUrl });
-}
 
 export const runtime = writable<{
   serverUrl: string;
@@ -517,46 +200,6 @@ export async function enableAudio(): Promise<{ enabled: boolean; error?: string 
   return result;
 }
 
-const DISPLAY_DEVICE_ID_STORAGE_KEY = 'shugu-display-device-id';
-const DISPLAY_INSTANCE_ID_STORAGE_KEY = 'shugu-display-instance-id';
-const DISPLAY_CLIENT_ID_STORAGE_KEY = 'shugu-display-client-id';
-
-function createRandomId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
-  }
-  return `${prefix}${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-}
-
-function getOrCreateStorageId(storage: Storage, key: string, prefix: string): string {
-  const existing = storage.getItem(key);
-  if (existing && existing.trim()) return existing;
-  const id = createRandomId(prefix);
-  storage.setItem(key, id);
-  return id;
-}
-
-function getOrCreateDisplayIdentity(): ClientIdentity | null {
-  if (typeof window === 'undefined') return null;
-
-  const deviceId = getOrCreateStorageId(window.localStorage, DISPLAY_DEVICE_ID_STORAGE_KEY, 'd_');
-  const instanceId = getOrCreateStorageId(window.sessionStorage, DISPLAY_INSTANCE_ID_STORAGE_KEY, 'i_');
-
-  const storedClientId = window.sessionStorage.getItem(DISPLAY_CLIENT_ID_STORAGE_KEY);
-  const clientId = storedClientId && storedClientId.trim() ? storedClientId : deviceId;
-  window.sessionStorage.setItem(DISPLAY_CLIENT_ID_STORAGE_KEY, clientId);
-
-  return { deviceId, instanceId, clientId };
-}
-
-function persistAssignedClientId(assignedClientId: string): void {
-  if (typeof window === 'undefined') return;
-  if (!assignedClientId) return;
-  const current = window.sessionStorage.getItem(DISPLAY_CLIENT_ID_STORAGE_KEY);
-  if (current === assignedClientId) return;
-  window.sessionStorage.setItem(DISPLAY_CLIENT_ID_STORAGE_KEY, assignedClientId);
-}
-
 function teardownServerTransport(): void {
   mediaMsgUnsub?.();
   mediaMsgUnsub = null;
@@ -613,47 +256,6 @@ function teardownLocalTransport(): void {
 
   transportDecision = 'uninitialized';
   clearDisplayLocalMedia();
-}
-
-function isAllowedManagerOrigin(origin: string): boolean {
-  if (!origin) return false;
-  if (typeof window === 'undefined') return false;
-
-  const allowed = new Set<string>([
-    // Dev: Manager runs on a dedicated Vite port.
-    'https://localhost:5173',
-    'https://127.0.0.1:5173',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ]);
-
-  try {
-    const url = new URL(window.location.origin);
-    url.port = '5173';
-    allowed.add(url.origin);
-    // When Manager and Display are deployed under the same origin (e.g. /manager + /display), allow same-origin pairing.
-    allowed.add(window.location.origin);
-  } catch {
-    // ignore
-  }
-
-  // Dev convenience: allow Manager to pair from the same hostname (any port).
-  // This keeps local MessagePort pairing working in e2e/dev runs where Manager is started on a non-default port.
-  if (import.meta.env.DEV) {
-    try {
-      const sender = new URL(origin);
-      const display = new URL(window.location.origin);
-
-      if (sender.protocol === display.protocol && sender.hostname === display.hostname) return true;
-
-      const hostPair = new Set([sender.hostname, display.hostname]);
-      if (sender.protocol === display.protocol && hostPair.has('localhost') && hostPair.has('127.0.0.1')) return true;
-    } catch {
-      // ignore
-    }
-  }
-
-  return allowed.has(origin);
 }
 
 export function initializeDisplay(config: DisplayInitConfig): void {
@@ -771,101 +373,21 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   teardownLocalTransport();
   teardownServerTransport();
 
-  const handleAssetManifest = (payload: Record<string, unknown> | undefined) => {
-    applyDisplayAssetManifest(payload, () => multimediaCore);
-  };
-
-  const identity = getOrCreateDisplayIdentity();
-  sdk = new ClientSDK({
+  const serverTransport = createDisplayServerTransport({
     serverUrl,
-    identity: identity ?? undefined,
-    query: { group: 'display' },
+    serverState,
+    getTransportDecision: () => transportDecision,
+    getMultimediaCore: () => multimediaCore,
+    executeControl,
+    reportReadyIfPossible,
   });
-
-  sdkUnsub = sdk.onStateChange((s) => {
-    serverState.set(s);
-    if (s.clientId) {
-      persistAssignedClientId(s.clientId);
-    }
-    reportReadyIfPossible();
-  });
-
-  controlUnsub = sdk.onControl((message: ControlMessage) => {
-    // If we later pair locally (MessagePort), keep the server connection but ignore server control messages.
-    if (transportDecision !== 'server') return;
-    const offset = sdk?.getOffset?.() ?? 0;
-    const executeAtLocal =
-      typeof message.executeAt === 'number' && Number.isFinite(message.executeAt) ? message.executeAt - offset : undefined;
-    executeControl(message.action, message.payload, executeAtLocal);
-  });
-
+  sdk = serverTransport.sdk;
   nodeExecutor?.destroy();
-  nodeExecutor = new NodeExecutor(
-    sdk,
-    (cmd: NodeCommand) => {
-      const offset = sdk?.getOffset?.() ?? 0;
-      const executeAtLocal =
-        typeof cmd.executeAt === 'number' && Number.isFinite(cmd.executeAt) ? cmd.executeAt - offset : undefined;
-      executeControl(cmd.action, cmd.payload, executeAtLocal);
-    },
-    {
-      resolveAssetRef: (ref: string) => {
-        const resolvedDisplayUrl = resolveDisplayFileUrl(ref);
-        if (resolvedDisplayUrl) return resolvedDisplayUrl;
-
-        const displayFileId = parseDisplayFileId(ref);
-        if (displayFileId) {
-          if (!warnedMissingDisplayLocalMedia.has(displayFileId)) {
-            warnedMissingDisplayLocalMedia.add(displayFileId);
-            console.warn('[Display] missing display-local file registration:', ref);
-          }
-          return '';
-        }
-
-        return multimediaCore?.resolveAssetRef(ref) ?? ref;
-      },
-    }
-  );
-
-  pluginUnsub = sdk.onPluginControl((message: PluginControlMessage) => {
-    // If we later pair locally (MessagePort), keep the server connection but ignore server plugin messages.
-    if (transportDecision !== 'server') return;
-    if (message.pluginId === 'node-executor') {
-      if (message.command === 'graph-changes') {
-        const payloadRecord = asRecord(message.payload);
-        const rawChanges = payloadRecord?.changes;
-        const changes = Array.isArray(rawChanges) ? (rawChanges as GraphChange[]) : [];
-        applyGraphChangesToExecutor(nodeExecutor, changes);
-        return;
-      }
-      nodeExecutor?.handlePluginControl(message);
-      return;
-    }
-
-    if (message.pluginId === 'multimedia-core' && message.command === 'configure') {
-      handleAssetManifest(message.payload);
-      return;
-    }
-
-    console.info('[Display] plugin noop:', message.pluginId, message.command);
-  });
-
-  mediaMsgUnsub = sdk.onMedia((message: MediaMetaMessage) => {
-    // If we later pair locally (MessagePort), keep the server connection but ignore server media messages.
-    if (transportDecision !== 'server') return;
-    const options = message.options ?? {};
-    const payload: PlayMediaPayload = {
-      url: message.url,
-      mediaType: message.mediaType,
-      loop: options.loop,
-      volume: options.volume,
-      muted: message.mediaType === 'video' ? true : undefined,
-    };
-
-    const offset = sdk?.getOffset?.() ?? 0;
-    const executeAtLocal = typeof message.executeAt === 'number' ? message.executeAt - offset : undefined;
-    executeControl('playMedia', payload, executeAtLocal);
-  });
+  nodeExecutor = serverTransport.nodeExecutor;
+  sdkUnsub = serverTransport.unsubs.sdk;
+  controlUnsub = serverTransport.unsubs.control;
+  pluginUnsub = serverTransport.unsubs.plugin;
+  mediaMsgUnsub = serverTransport.unsubs.media;
 
   const enterServerMode = () => {
     if (transportDecision !== 'pending' && transportDecision !== 'uninitialized') return;
@@ -1000,7 +522,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   windowPairListener = (event: MessageEvent) => {
     // Allow late local pairing even after server fallback so the Manager's "Reconnect" can recover.
     if (transportDecision === 'local') return;
-    if (!isAllowedManagerOrigin(event.origin)) {
+    if (!isAllowedManagerOrigin(event.origin, import.meta.env.DEV)) {
       if (import.meta.env.DEV) {
         const data = asRecord(event.data);
         if (data?.type === 'shugu:display:pair') console.warn('[Display] pair rejected (origin)', event.origin);
@@ -1054,127 +576,13 @@ export function destroyDisplay(): void {
   stopLocalMediaBroadcast();
 }
 
-function setScreenColor(payload: ScreenColorPayload): void {
-  screenOverlay.set(createDisplayScreenOverlayState(payload));
-}
-
-function executeNow(action: ControlAction, payload: ControlPayload): void {
-  switch (action) {
-    case 'showImage': {
-      const imagePayload = payload as ShowImagePayload;
-      const clip = typeof imagePayload.url === 'string' ? parseMediaClipParams(imagePayload.url) : null;
-      const baseUrl = clip ? clip.baseUrl : String(imagePayload.url ?? '');
-      const resolvedDisplayUrl = resolveDisplayFileUrl(baseUrl);
-      if (parseDisplayFileId(baseUrl) && !resolvedDisplayUrl) {
-        console.warn('[Display] missing display-local file registration:', baseUrl);
-        return;
-      }
-      const fit = clip?.fit ?? null;
-      const url = normalizeImageUrlForDisplay(resolvedDisplayUrl ?? baseUrl);
-      if (import.meta.env.DEV) {
-        const now = Date.now();
-        if (now - lastControlLogAt >= 500) {
-          lastControlLogAt = now;
-          console.info('[Display] showImage', {
-            dataUrl: isDataImageUrl(baseUrl),
-            urlChars: baseUrl.length,
-            fit,
-          });
-        }
-      }
-      multimediaCore?.media.showImage({
-        url,
-        duration: imagePayload.duration,
-        ...(fit === null ? {} : { fit }),
-      });
-      return;
-    }
-
-    case 'hideImage':
-      clearActiveImageObjectUrl();
-      if (import.meta.env.DEV) {
-        const now = Date.now();
-        if (now - lastControlLogAt >= 500) {
-          lastControlLogAt = now;
-          console.info('[Display] hideImage');
-        }
-      }
-      multimediaCore?.media.hideImage();
-      return;
-
-    case 'playMedia': {
-      const mediaPayload = payload as PlayMediaPayload;
-      const clip = typeof mediaPayload.url === 'string' ? parseMediaClipParams(mediaPayload.url) : null;
-      const baseUrl = clip ? clip.baseUrl : mediaPayload.url;
-      const url = typeof baseUrl === 'string' ? baseUrl : String(baseUrl ?? '');
-      const resolvedDisplayUrl = resolveDisplayFileUrl(url);
-      if (parseDisplayFileId(url) && !resolvedDisplayUrl) {
-        console.warn('[Display] missing display-local file registration:', url);
-        return;
-      }
-
-      const resolvedUrlString = resolvedDisplayUrl ?? url;
-      const isVideo =
-        mediaPayload.mediaType === 'video' ||
-        Boolean(parseDisplayFileId(url)) ||
-        /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(resolvedUrlString);
-
-      if (!isVideo) { multimediaCore?.media.playAudio({ url: resolvedUrlString, loop: mediaPayload.loop ?? false, volume: mediaPayload.volume ?? 1, playing: true }); return; }
-
-      const loop = clip?.loop ?? mediaPayload.loop ?? false;
-      const playing = clip?.play ?? Boolean(resolvedUrlString);
-      const startSec = clip ? Math.max(0, clip.startSec) : 0;
-      const endSec = clip ? clip.endSec : -1;
-      const cursorSec = clip?.cursorSec ?? -1;
-      const reverse = clip?.reverse ?? false;
-      const fit = clip?.fit ?? null;
-
-      multimediaCore?.media.playVideo({
-        url: resolvedUrlString,
-        sourceNodeId: clip?.sourceNodeId ?? null,
-        muted: mediaPayload.muted ?? true,
-        loop,
-        volume: mediaPayload.volume ?? 1,
-        playing,
-        startSec,
-        endSec,
-        cursorSec,
-        reverse,
-        ...(fit === null ? {} : { fit }),
-      });
-      return;
-    }
-
-    case 'stopMedia':
-      multimediaCore?.media.stopAllMedia();
-      return;
-
-    case 'screenColor': {
-      const colorPayload = payload as ScreenColorPayload;
-      setScreenColor(colorPayload);
-      return;
-    }
-
-    case 'shutdown': {
-      const record = asRecord(payload);
-      if (record?.reason !== 'root-stop-all' && record?.kind !== 'stop-all') return;
-      stopAllDisplaySideEffects({ multimediaCore, nodeExecutor, screenOverlay, setScreenColor, clearActiveImageObjectUrl });
-      return;
-    }
-
-    default:
-      console.info('[Display] noop action:', action, payload);
-  }
-}
+const controlExecutor = createDisplayControlExecutor({
+  getMultimediaCore: () => multimediaCore,
+  getNodeExecutor: () => nodeExecutor,
+  screenOverlay,
+  isDev: import.meta.env.DEV,
+});
 
 export function executeControl(action: ControlAction, payload: ControlPayload, executeAtLocal?: number): void {
-  if (typeof executeAtLocal === 'number' && Number.isFinite(executeAtLocal)) {
-    const delay = executeAtLocal - Date.now();
-    if (delay > 0) {
-      setTimeout(() => executeNow(action, payload), delay);
-      return;
-    }
-  }
-
-  executeNow(action, payload);
+  controlExecutor.executeControl(action, payload, executeAtLocal);
 }

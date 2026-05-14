@@ -1,22 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 import {
-    Message,
-    SystemMessage,
     SensorDataMessage,
     MediaMetaMessage,
-    ClientInfo,
     SOCKET_EVENTS,
-    isSensorDataMessage,
-    isSystemMessage,
     createPluginControlMessage,
     createMediaMetaMessage,
-    createTimePing,
-    processTimePong,
-    createTimeSyncState,
-    updateTimeSyncState,
     getServerTime,
-    TimeSyncState,
-    TimePongData,
     TargetSelector,
     ControlAction,
     BaseControlPayload,
@@ -40,69 +29,35 @@ import {
     nextManagerCommandEnvelopeForTarget,
     normalizeManagerCommandEnvelope,
     type CommandEnvelope,
-    type CommandEnvelopeInput,
 } from './command-envelope.js';
 import { sendControlByAudience } from './controls.js';
 import { ManagerDeliveryQueue } from './delivery-queue.js';
-import { createStateSnapshotPatch, type StateSnapshotPatch } from './state-snapshot.js';
-
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
-
-export interface ManagerState {
-    status: ConnectionStatus;
-    managerId: string | null;
-    clients: ClientInfo[];
-    selectedClientIds: string[];
-    stateStrategy?: StateSnapshotPatch['stateStrategy'];
-    controlPlane?: StateSnapshotPatch['controlPlane'];
-    timeSync: TimeSyncState;
-    error: string | null;
-}
-
-export type MessageHandler<T = Message> = (message: T) => void;
-
-export type SocketTransport = 'polling' | 'websocket';
+import { normalizeManagerSDKConfig, type NormalizedManagerSDKConfig } from './manager-sdk/config.js';
+import {
+    setupManagerSocketListeners,
+    handleManagerSystemMessage,
+    stopTimeSync,
+    type ManagerSocketListenerHost,
+} from './manager-sdk/socket-listeners.js';
+import { createInitialManagerState, notifyManagerStateListeners } from './manager-sdk/state.js';
+import type { ManagerSDKConfig, ManagerState, MessageHandler } from './manager-sdk/types.js';
+export type {
+    ConnectionStatus,
+    ManagerSDKConfig,
+    ManagerState,
+    MessageHandler,
+    SocketTransport,
+} from './manager-sdk/types.js';
 
 const isControlBatchPayload = (payload: ControlPayload): payload is ControlBatchPayload =>
     typeof payload === 'object' && payload !== null && 'kind' in payload && (payload as ControlBatchPayload).kind === 'control-batch';
-
-/**
- * Configuration for ManagerSDK
- */
-export interface ManagerSDKConfig {
-    serverUrl: string;
-    autoReconnect?: boolean;
-    reconnectionAttempts?: number;
-    reconnectionDelay?: number;
-    timeSyncInterval?: number;
-    /**
-     * Optional manager key used for server-side role verification.
-     */
-    managerKey?: string;
-    /**
-     * Socket.io transports preference.
-     * - Default: `['polling', 'websocket']` (best compatibility)
-     * - Performance mode: `['websocket']` (less jitter, but may fail on restrictive networks)
-     */
-    transports?: SocketTransport[];
-    /**
-     * Minimum interval (ms) between outgoing high-frequency control messages.
-     * When many clients are connected, this limits message rate to prevent backpressure.
-     * Default: 33 (~30fps). Set to 0 to disable throttling.
-     */
-    highFreqThrottleMs?: number;
-    /**
-     * Caller command scope metadata attached to non-system mutating control commands.
-     */
-    commandEnvelope?: CommandEnvelopeInput;
-}
 
 /**
  * Manager SDK for managing Socket.io connection and controlling clients
  */
 export class ManagerSDK {
     private socket: Socket | null = null;
-    private config: Required<Omit<ManagerSDKConfig, 'commandEnvelope'>> & Pick<ManagerSDKConfig, 'commandEnvelope'>;
+    private config: NormalizedManagerSDKConfig;
     private state: ManagerState;
     private commandEnvelope: CommandEnvelope;
     private stateListeners: Set<(state: ManagerState) => void> = new Set();
@@ -111,27 +66,7 @@ export class ManagerSDK {
     private readonly deliveryQueue: ManagerDeliveryQueue;
 
     constructor(config: ManagerSDKConfig) {
-        const transports: SocketTransport[] = (() => {
-            const defaults: SocketTransport[] = ['polling', 'websocket'];
-            const raw = Array.isArray(config.transports) ? config.transports : defaults;
-            const normalized = raw.filter((t): t is SocketTransport => t === 'polling' || t === 'websocket');
-            const unique = Array.from(new Set(normalized));
-            return unique.length > 0 ? unique : defaults;
-        })();
-
-        this.config = {
-            serverUrl: config.serverUrl,
-            autoReconnect: config.autoReconnect ?? true,
-            // Default to unlimited retries to keep the control UI resilient.
-            reconnectionAttempts: config.reconnectionAttempts ?? Number.POSITIVE_INFINITY,
-            reconnectionDelay: config.reconnectionDelay ?? 1000,
-            timeSyncInterval: config.timeSyncInterval ?? 5000,
-            transports,
-            // Throttle high-frequency updates to ~30fps by default to prevent backpressure
-            highFreqThrottleMs: config.highFreqThrottleMs ?? 33,
-            managerKey: typeof config.managerKey === 'string' ? config.managerKey.trim() : '',
-            commandEnvelope: config.commandEnvelope,
-        };
+        this.config = normalizeManagerSDKConfig(config);
         this.commandEnvelope = normalizeManagerCommandEnvelope(this.config.commandEnvelope);
         this.deliveryQueue = new ManagerDeliveryQueue({
             getSocket: () => this.socket,
@@ -140,14 +75,7 @@ export class ManagerSDK {
             nextCommandEnvelope: (target) => this.nextCommandEnvelope(target),
         });
 
-        this.state = {
-            status: 'disconnected',
-            managerId: null,
-            clients: [],
-            selectedClientIds: [],
-            timeSync: createTimeSyncState(),
-            error: null,
-        };
+        this.state = createInitialManagerState();
     }
 
     /**
@@ -180,14 +108,14 @@ export class ManagerSDK {
             forceNew: true,
         });
 
-        this.setupSocketListeners();
+        setupManagerSocketListeners(this.createSocketListenerHost());
     }
 
     /**
      * Disconnect from server
      */
     disconnect(): void {
-        this.stopTimeSync();
+        stopTimeSync(this.createSocketListenerHost());
         this.deliveryQueue.clearPendingLatestState();
         this.socket?.disconnect();
         this.socket = null;
@@ -587,139 +515,27 @@ export class ManagerSDK {
         );
     }
 
-    private setupSocketListeners(): void {
-        if (!this.socket) return;
-
-        this.socket.on('connect', () => {
-            console.log('[SDK Manager] Connected');
-            this.updateState({ status: 'connected', error: null });
-            this.startTimeSync();
-        });
-
-        this.socket.on('disconnect', (reason) => {
-            console.log('[SDK Manager] Disconnected:', reason);
-            this.stopTimeSync();
-
-            // socket.io does not auto-reconnect if the server explicitly disconnected us.
-            if (this.config.autoReconnect && reason !== 'io client disconnect') {
-                this.updateState({ status: 'reconnecting', managerId: null });
-
-                if (reason === 'io server disconnect') {
-                    this.socket?.connect();
-                }
-                return;
-            }
-
-            this.updateState({ status: 'disconnected', managerId: null });
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error('[SDK Manager] Connection error:', error.message);
-            this.updateState({ status: 'error', error: error.message });
-        });
-
-        this.socket.io.on('reconnect_attempt', () => {
-            this.updateState({ status: 'reconnecting' });
-        });
-
-        this.socket.io.on('reconnect', () => {
-            console.log('[SDK Manager] Reconnected');
-            this.updateState({ status: 'connected', error: null });
-        });
-
-        // Handle messages
-        this.socket.on(SOCKET_EVENTS.MSG, (message: Message) => {
-            this.handleMessage(message);
-        });
-
-        // Handle time sync pong
-        this.socket.on(SOCKET_EVENTS.TIME_PONG, (data: TimePongData) => {
-            const result = processTimePong(data);
-            const newTimeSync = updateTimeSyncState(this.state.timeSync, result);
-            this.updateState({ timeSync: newTimeSync });
-        });
-    }
-
-    private handleMessage(message: Message): void {
-        if (isSensorDataMessage(message)) {
-            // Dispatch sensor data to handlers
-            this.sensorDataHandlers.forEach(handler => {
-                try {
-                    handler(message);
-                } catch (error) {
-                    console.error('[SDK Manager] Sensor data handler error:', error);
-                }
-            });
-        } else if (isSystemMessage(message)) {
-            this.handleSystemMessage(message as SystemMessage);
-        }
-    }
-
-    private handleSystemMessage(message: SystemMessage): void {
-        switch (message.action) {
-            case 'clientRegistered':
-                if (message.payload.clientId) {
-                    this.updateState({ managerId: message.payload.clientId });
-                    console.log('[SDK Manager] Registered as:', message.payload.clientId);
-                }
-                break;
-            case 'clientList':
-                if (message.payload.clients) {
-                    this.updateState(createStateSnapshotPatch({
-                        clients: message.payload.clients,
-                        stateStrategy: message.payload.stateStrategy,
-                        controlPlane: message.payload.controlPlane,
-                    }));
-                }
-                break;
-            case 'clientJoined':
-                console.log('[SDK Manager] Client joined:', message.payload.clientId);
-                break;
-            case 'clientLeft': {
-                console.log('[SDK Manager] Client left:', message.payload.clientId);
-                // Remove from selection if selected
-                const remaining = this.state.selectedClientIds.filter(
-                    id => id !== message.payload.clientId
-                );
-                if (remaining.length !== this.state.selectedClientIds.length) {
-                    this.updateState({ selectedClientIds: remaining });
-                }
-                break;
-            }
-        }
-    }
-
     private updateState(partial: Partial<ManagerState>): void {
         this.state = { ...this.state, ...partial };
-        this.stateListeners.forEach(listener => {
-            try {
-                listener(this.getState());
-            } catch (error) {
-                console.error('[SDK Manager] State listener error:', error);
-            }
-        });
+        notifyManagerStateListeners(this.state, this.stateListeners);
     }
 
-    private startTimeSync(): void {
-        // Do immediate sync
-        this.doTimeSync();
-
-        // Set up interval
-        this.timeSyncIntervalId = setInterval(() => {
-            this.doTimeSync();
-        }, this.config.timeSyncInterval);
+    private handleSystemMessage(message: import('@shugu/protocol').SystemMessage): void {
+        handleManagerSystemMessage(this.createSocketListenerHost(), message);
     }
 
-    private stopTimeSync(): void {
-        if (this.timeSyncIntervalId) {
-            clearInterval(this.timeSyncIntervalId);
-            this.timeSyncIntervalId = null;
-        }
-    }
-
-    private doTimeSync(): void {
-        if (!this.socket?.connected) return;
-        const pingData = createTimePing();
-        this.socket.emit(SOCKET_EVENTS.TIME_PING, pingData);
+    private createSocketListenerHost(): ManagerSocketListenerHost {
+        return {
+            getSocket: () => this.socket,
+            getState: () => this.getState(),
+            getAutoReconnect: () => this.config.autoReconnect,
+            getTimeSyncInterval: () => this.config.timeSyncInterval,
+            setTimeSyncIntervalId: (id) => {
+                this.timeSyncIntervalId = id;
+            },
+            getTimeSyncIntervalId: () => this.timeSyncIntervalId,
+            updateState: (partial) => this.updateState(partial),
+            getSensorDataHandlers: () => this.sensorDataHandlers,
+        };
     }
 }

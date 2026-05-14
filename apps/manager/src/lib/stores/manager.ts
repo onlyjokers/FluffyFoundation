@@ -23,6 +23,21 @@ import {
 } from '$lib/display/display-bridge';
 import { createDisplayTransport } from '$lib/display/display-transport';
 import { getManagerSDK, setManagerSDK } from './manager-sdk-access';
+import {
+    applyAiReadinessPayload,
+    applyClientPresence,
+    applyClientScreenshotPayload,
+    applyNodeMediaEvent,
+    applyReadinessPayload,
+    applyToneReadinessPayload,
+    removeVanishedClients,
+    type ClientAiReadiness,
+    type ClientReadiness,
+    type ClientReadinessStatus,
+    type ClientScreenshotUpload,
+    type ClientToneReadiness,
+    type NodeMediaSignal,
+} from './manager-sensor-events';
 
 const SEND_TO_DISPLAY_STORAGE_KEY = 'shugu-send-to-display';
 
@@ -55,61 +70,25 @@ export const displayTransport = createDisplayTransport({
 // Sensor data store (latest data from each client)
 export const sensorData = writable<Map<string, SensorDataMessage>>(new Map());
 
-export type NodeMediaSignal = {
-    nodeType?: string;
-    lastClientId?: string;
-    startedSeq?: number;
-    endedSeq?: number;
-    startedAt?: number;
-    endedAt?: number;
-};
+export type {
+    ClientAiReadiness,
+    ClientReadiness,
+    ClientReadinessStatus,
+    ClientScreenshotUpload,
+    ClientToneReadiness,
+    NodeMediaSignal,
+} from './manager-sensor-events';
 
 // Node-level media signals emitted by clients (e.g. load-audio/video-from-assets actual start).
 export const nodeMediaSignals = writable<Map<string, NodeMediaSignal>>(new Map());
 
-export type ClientReadinessStatus =
-    | 'connected' // connected but not verified assets yet (yellow)
-    | 'assets-loading' // actively preloading (yellow)
-    | 'assets-ready' // preload complete (green)
-    | 'assets-error'; // preload failed (red)
-
-export type ClientReadiness = {
-    status: ClientReadinessStatus;
-    manifestId?: string;
-    loaded?: number;
-    total?: number;
-    error?: string;
-    updatedAt: number;
-};
-
 // Per-client readiness (drives "client dot" UI state).
 export const clientReadiness = writable<Map<string, ClientReadiness>>(new Map());
-
-export type ClientToneReadiness = {
-    enabled: boolean | null;
-    error?: string;
-    updatedAt: number;
-};
 
 // Per-client Tone readiness (drives audio gating in show mode).
 export const clientToneReadiness = writable<Map<string, ClientToneReadiness>>(new Map());
 
-export type ClientAiReadiness = {
-    enabled: boolean | null;
-    error?: string;
-    updatedAt: number;
-};
-
 export const clientAiReadiness = writable<Map<string, ClientAiReadiness>>(new Map());
-
-export type ClientScreenshotUpload = {
-    dataUrl: string;
-    mime?: string;
-    width?: number;
-    height?: number;
-    createdAt?: number;
-    updatedAt: number;
-};
 
 // Per-client uploaded screenshots (drives `client-object.imageOut`).
 export const clientScreenshotUploads = writable<Map<string, ClientScreenshotUpload>>(new Map());
@@ -211,25 +190,13 @@ displayBridgeNodeMedia.subscribe((event) => {
     const nodeType = typeof event.nodeType === 'string' ? event.nodeType : undefined;
 
     nodeMediaSignals.update((prev) => {
-        const next = new Map(prev);
-        const current = next.get(nodeId) ?? ({} as NodeMediaSignal);
-        const startedSeq = typeof current.startedSeq === 'number' ? current.startedSeq : 0;
-        const endedSeq = typeof current.endedSeq === 'number' ? current.endedSeq : 0;
-        const patch: NodeMediaSignal = {
-            ...current,
-            nodeType: nodeType ?? current.nodeType,
-            lastClientId: LOCAL_DISPLAY_CLIENT_ID,
-        };
-        if (type === 'started') {
-            patch.startedSeq = startedSeq + 1;
-            patch.startedAt = at;
-        }
-        if (type === 'ended') {
-            patch.endedSeq = endedSeq + 1;
-            patch.endedAt = at;
-        }
-        next.set(nodeId, patch);
-        return next;
+        return applyNodeMediaEvent(prev, {
+            clientId: LOCAL_DISPLAY_CLIENT_ID,
+            event: type,
+            nodeId,
+            nodeType,
+            at,
+        });
     });
 });
 
@@ -252,67 +219,27 @@ export function connect(config: ManagerSDKConfig): void {
     // Subscribe to state changes
     sdk.onStateChange((newState) => {
         state.set(newState);
-        const ids = new Set((newState.clients ?? []).map((c) => c.clientId));
+        const ids = (newState.clients ?? []).map((c) => c.clientId);
         const now = Date.now();
 
         clientReadiness.update((prev) => {
-            const next = new Map(prev);
-
-            // Remove vanished clients
-            for (const id of next.keys()) {
-                if (!ids.has(id)) next.delete(id);
-            }
-
-            // Mark new clients as connected (yellow) until they report assets-ready.
-            for (const id of ids) {
-                if (!next.has(id)) {
-                    next.set(id, { status: 'connected', updatedAt: now });
-                }
-            }
-
-            return next;
+            return applyClientPresence(prev, ids, () => ({ status: 'connected', updatedAt: now }), now);
         });
 
         clientToneReadiness.update((prev) => {
-            const next = new Map(prev);
-            for (const id of next.keys()) {
-                if (!ids.has(id)) next.delete(id);
-            }
-            for (const id of ids) {
-                if (!next.has(id)) {
-                    next.set(id, { enabled: null, updatedAt: now });
-                }
-            }
-            return next;
+            return applyClientPresence(prev, ids, () => ({ enabled: null, updatedAt: now }), now);
         });
 
         clientAiReadiness.update((prev) => {
-            const next = new Map(prev);
-            for (const id of next.keys()) {
-                if (!ids.has(id)) next.delete(id);
-            }
-            for (const id of ids) {
-                if (!next.has(id)) {
-                    next.set(id, { enabled: null, updatedAt: now });
-                }
-            }
-            return next;
+            return applyClientPresence(prev, ids, () => ({ enabled: null, updatedAt: now }), now);
         });
 
         clientScreenshotUploads.update((prev) => {
-            const next = new Map(prev);
-            for (const id of next.keys()) {
-                if (!ids.has(id)) next.delete(id);
-            }
-            return next;
+            return removeVanishedClients(prev, ids);
         });
 
         sensorData.update((prev) => {
-            const next = new Map(prev);
-            for (const id of next.keys()) {
-                if (!ids.has(id)) next.delete(id);
-            }
-            return next;
+            return removeVanishedClients(prev, ids);
         });
 
         maybeSyncSelectAll(newState);
@@ -327,43 +254,20 @@ export function connect(config: ManagerSDKConfig): void {
             if (payload?.kind === 'client-screenshot') {
                 const dataUrl = typeof payload.dataUrl === 'string' ? payload.dataUrl : '';
                 if (dataUrl) {
-                    const mime = typeof payload.mime === 'string' ? payload.mime : undefined;
-                    const width =
-                        typeof payload.width === 'number' && Number.isFinite(payload.width)
-                            ? payload.width
-                            : undefined;
-                    const height =
-                        typeof payload.height === 'number' && Number.isFinite(payload.height)
-                            ? payload.height
-                            : undefined;
-                    const createdAt =
-                        typeof payload.createdAt === 'number' && Number.isFinite(payload.createdAt)
-                            ? payload.createdAt
-                            : undefined;
-
                     if (import.meta.env.DEV) {
                         console.info('[Manager] client-screenshot received', {
                             clientId: data.clientId,
-                            mime,
-                            width,
-                            height,
-                            createdAt,
+                            mime: payload.mime,
+                            width: payload.width,
+                            height: payload.height,
+                            createdAt: payload.createdAt,
                             dataUrlChars: dataUrl.length,
                         });
                     }
 
                     const now = Date.now();
                     clientScreenshotUploads.update((prev) => {
-                        const next = new Map(prev);
-                        next.set(data.clientId, {
-                            dataUrl,
-                            mime,
-                            width,
-                            height,
-                            createdAt,
-                            updatedAt: now,
-                        });
-                        return next;
+                        return applyClientScreenshotPayload(prev, data.clientId, payload, now) ?? prev;
                     });
                     return;
                 }
@@ -380,30 +284,13 @@ export function connect(config: ManagerSDKConfig): void {
             const payload = (data.payload ?? {}) as Record<string, unknown>;
 
             if (payload?.kind === 'tone' && payload?.event === 'ready') {
-                const enabled = typeof payload.enabled === 'boolean' ? payload.enabled : null;
-                const error = payload.error ? String(payload.error) : undefined;
                 const now = Date.now();
-
-                clientToneReadiness.update((prev) => {
-                    const next = new Map(prev);
-                    const current = next.get(data.clientId) ?? { enabled: null, updatedAt: now };
-                    next.set(data.clientId, { ...current, enabled, error, updatedAt: now });
-                    return next;
-                });
+                clientToneReadiness.update((prev) => applyToneReadinessPayload(prev, data.clientId, payload, now) ?? prev);
             }
 
             if (payload?.kind === 'node-executor' && payload?.event === 'ai') {
-                const status = typeof payload.status === 'string' ? payload.status : '';
-                const enabled = status === 'enabled' ? true : status === 'disabled' ? false : null;
-                const error = payload.error ? String(payload.error) : undefined;
                 const now = Date.now();
-
-                clientAiReadiness.update((prev) => {
-                    const next = new Map(prev);
-                    const current = next.get(data.clientId) ?? { enabled: null, updatedAt: now };
-                    next.set(data.clientId, { ...current, enabled, error, updatedAt: now });
-                    return next;
-                });
+                clientAiReadiness.update((prev) => applyAiReadinessPayload(prev, data.clientId, payload, now) ?? prev);
             }
 
             if (payload?.kind === 'node-media') {
@@ -413,70 +300,25 @@ export function connect(config: ManagerSDKConfig): void {
                 if (nodeId && (event === 'started' || event === 'ended')) {
                     const at = Date.now();
                     nodeMediaSignals.update((prev) => {
-                        const next = new Map(prev);
-                        const current = next.get(nodeId) ?? ({} as NodeMediaSignal);
-                        const startedSeq = typeof current.startedSeq === 'number' ? current.startedSeq : 0;
-                        const endedSeq = typeof current.endedSeq === 'number' ? current.endedSeq : 0;
-                        const patch: NodeMediaSignal = {
-                            ...current,
-                            nodeType: nodeType ?? current.nodeType,
-                            lastClientId: data.clientId,
-                        };
-                        if (event === 'started') {
-                            patch.startedSeq = startedSeq + 1;
-                            patch.startedAt = at;
-                        }
-                        if (event === 'ended') {
-                            patch.endedSeq = endedSeq + 1;
-                            patch.endedAt = at;
-                        }
-                        next.set(nodeId, patch);
-                        return next;
+                        return applyNodeMediaEvent(prev, {
+                            clientId: data.clientId,
+                            event,
+                            nodeId,
+                            nodeType,
+                            at,
+                        });
                     });
                 }
             }
 
             if (payload?.kind === 'multimedia-core' && payload?.event === 'asset-preload') {
-                const status = typeof payload.status === 'string' ? payload.status : '';
-                const manifestId = typeof payload.manifestId === 'string' ? payload.manifestId : undefined;
-                const loaded = typeof payload.loaded === 'number' && Number.isFinite(payload.loaded) ? payload.loaded : undefined;
-                const total = typeof payload.total === 'number' && Number.isFinite(payload.total) ? payload.total : undefined;
-                const error = payload.error ? String(payload.error) : undefined;
                 const now = Date.now();
-
-                clientReadiness.update((prev) => {
-                    const next = new Map(prev);
-                    const current = next.get(data.clientId) ?? { status: 'connected' as const, updatedAt: now };
-
-                    if (status === 'loading') {
-                        next.set(data.clientId, { ...current, status: 'assets-loading', manifestId, loaded, total, updatedAt: now });
-                        return next;
-                    }
-
-                    if (status === 'ready') {
-                        next.set(data.clientId, { ...current, status: 'assets-ready', manifestId, loaded: total ?? loaded, total, updatedAt: now });
-                        return next;
-                    }
-
-                    if (status === 'error') {
-                        next.set(data.clientId, { ...current, status: 'assets-error', manifestId, error, updatedAt: now });
-                        return next;
-                    }
-
-                    return next;
-                });
+                clientReadiness.update((prev) => applyReadinessPayload(prev, data.clientId, payload, now));
             }
 
             if (payload?.kind === 'display' && payload?.event === 'ready') {
-                const manifestId = typeof payload.manifestId === 'string' ? payload.manifestId : undefined;
                 const at = Date.now();
-
-                clientReadiness.update((prev) => {
-                    const next = new Map(prev);
-                    const current = next.get(data.clientId) ?? { status: 'connected' as const, updatedAt: at };
-                    next.set(data.clientId, { ...current, status: 'assets-ready', manifestId, updatedAt: at });
-                    return next;
-                });
+                clientReadiness.update((prev) => applyReadinessPayload(prev, data.clientId, payload, at));
             }
         }
     });
