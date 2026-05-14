@@ -560,8 +560,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
   const isCompatible = isCompatiblePortType;
 
+  const getEngineNode = (nodeId: string): NodeInstance | undefined => nodeEngine.getNode?.(nodeId);
+
   const getPortDefForSocket = (socket: { nodeId: string; side: 'input' | 'output'; key: string }): NodePort | null => {
-    return findPortDefForSocket(nodeRegistry, nodeEngine.getNode, socket);
+    return findPortDefForSocket(nodeRegistry, getEngineNode, socket);
   };
 
   const bestMatchingPort = (
@@ -573,7 +575,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   };
 
   const inputAllowsMultiple = (nodeId: string, inputKey: string): boolean => {
-    return doesInputAllowMultiple(nodeRegistry, nodeEngine.getNode, nodeId, inputKey);
+    return doesInputAllowMultiple(nodeRegistry, getEngineNode, nodeId, inputKey);
   };
 
   return {
