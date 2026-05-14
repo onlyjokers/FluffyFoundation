@@ -453,7 +453,8 @@ export type NonSystemMutatingCommandMessage = NonSystemControlMessage | NonSyste
  * Opaque semantic graph command payload shared by Canvas, CLI, and future agents.
  */
 export type SemanticCommandPayload = {
-  kind: string;
+  kind?: string;
+  type?: string;
   [key: string]: unknown;
 };
 

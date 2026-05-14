@@ -1,0 +1,34 @@
+{
+  "name": "@shugu/cli",
+  "version": "1.0.0",
+  "description": "Live semantic command CLI for ShuGu Manager graphs.",
+  "type": "module",
+  "main": "./dist-cli/index.js",
+  "module": "./dist-cli/index.js",
+  "types": "./dist-cli/index.d.ts",
+  "bin": {
+    "shugu": "./dist-cli/bin/shugu.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist-cli/index.d.ts",
+      "import": "./dist-cli/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\"",
+    "test": "pnpm exec tsx --test src/**/*.spec.ts",
+    "clean": "rm -rf dist-cli"
+  },
+  "files": [
+    "dist-cli"
+  ],
+  "dependencies": {
+    "@shugu/protocol": "workspace:*",
+    "@shugu/sdk-manager": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
