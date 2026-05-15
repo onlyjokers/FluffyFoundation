@@ -4,7 +4,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createControlMessage, createSemanticMessage, createSensorDataMessage, type Message } from '@shugu/protocol';
+import {
+  createControlMessage,
+  createSemanticMessage,
+  createSemanticResultMessage,
+  createSensorDataMessage,
+  type Message,
+} from '@shugu/protocol';
 import { MessageRouterService } from './message-router.service.js';
 
 const envelope = {
@@ -73,6 +79,52 @@ test('MessageRouterService routes semantic graph commands only to manager socket
   assert.equal(reliableMessages.length, 1);
   assert.equal(reliableMessages[0]?.type, 'semantic');
   assert.equal((reliableMessages[0] as { requestId?: string }).requestId, 'semantic-route-1');
+});
+
+test('MessageRouterService routes semantic results back to the original requester socket', () => {
+  const delivered: Array<{ socketIds: string[]; message: Message }> = [];
+  const managerSocketIds = ['manager-ui-socket', 'cli-socket'];
+  const registry = {
+    getAllClientSocketIds: () => [],
+    getAllManagerSocketIds: () => managerSocketIds,
+    getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
+    getClientsByGroup: () => [],
+  };
+  const router = new MessageRouterService(registry as never);
+  const server = {
+    to: (socketIds: string[]) => ({
+      emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+    }),
+    volatile: {
+      to: (socketIds: string[]) => ({
+        emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+      }),
+    },
+  };
+  router.setServer(server as never);
+
+  router.routeMessage(
+    createSemanticMessage({
+      target: { mode: 'manager' },
+      actor: 'cli',
+      role: 'manager',
+      command: { kind: 'node.add', node: { id: 'cli-node', type: 'number' } },
+      requestId: 'semantic-cli-request-1',
+    }),
+    'cli-socket'
+  );
+  router.routeMessage(
+    createSemanticResultMessage({
+      requestId: 'semantic-cli-request-1',
+      ok: true,
+      result: { accepted: true },
+    }),
+    'manager-ui-socket'
+  );
+
+  assert.deepEqual(delivered[0]?.socketIds, managerSocketIds);
+  assert.deepEqual(delivered[1]?.socketIds, ['cli-socket']);
+  assert.equal(delivered[1]?.message.type, 'semantic-result');
 });
 
 test('MessageRouterService keeps reliable and scheduled commands out of volatile throttling', async () => {

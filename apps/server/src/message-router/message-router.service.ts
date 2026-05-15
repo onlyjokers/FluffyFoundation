@@ -29,6 +29,7 @@ export class MessageRouterService {
         string,
         { message: ControlMessage; dueAt: number; timeoutId: ReturnType<typeof setTimeout> | null }
     > = new Map();
+    private readonly semanticRequesterByRequestId: Map<string, string> = new Map();
     private readonly deliveryMetrics: DeliveryMetrics = createDeliveryMetrics();
 
     constructor(private readonly clientRegistry: ClientRegistryService) { }
@@ -70,7 +71,7 @@ export class MessageRouterService {
                 this.routePluginMessage(timestampedMessage as PluginControlMessage);
                 break;
             case 'semantic':
-                this.routeSemanticMessage(timestampedMessage as SemanticMessage);
+                this.routeSemanticMessage(timestampedMessage as SemanticMessage, _fromSocketId);
                 break;
             case 'semantic-result':
                 this.routeSemanticResultMessage(timestampedMessage as SemanticResultMessage, _fromSocketId);
@@ -180,12 +181,13 @@ export class MessageRouterService {
     /**
      * Route semantic graph commands to Manager sockets only.
      */
-    private routeSemanticMessage(message: SemanticMessage): void {
+    private routeSemanticMessage(message: SemanticMessage, fromSocketId: string): void {
         const socketIds = this.resolveSemanticTargetSocketIds(message);
         if (socketIds.length === 0) {
             this.deliveryMetrics.rejected += 1;
             return;
         }
+        this.semanticRequesterByRequestId.set(message.requestId, fromSocketId);
         this.emitToSockets(socketIds, message);
     }
 
@@ -193,7 +195,11 @@ export class MessageRouterService {
      * Route semantic command results back through manager channels.
      */
     private routeSemanticResultMessage(message: SemanticResultMessage, fromSocketId: string): void {
-        this.emitToSockets([fromSocketId], message);
+        const requesterSocketId = this.semanticRequesterByRequestId.get(message.requestId);
+        if (requesterSocketId) {
+            this.semanticRequesterByRequestId.delete(message.requestId);
+        }
+        this.emitToSockets([requesterSocketId ?? fromSocketId], message);
     }
 
     /**

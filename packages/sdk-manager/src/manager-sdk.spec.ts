@@ -8,6 +8,24 @@ import { mergeControlPayload } from './payload-merge.js';
 import { ManagerSDK } from './manager-sdk.js';
 import { setupManagerSocketListeners } from './manager-sdk/socket-listeners.js';
 
+const originalSocketIoEnv = process.env.NODE_ENV;
+
+test('ManagerSDK forwards node TLS rejection override to Socket.IO transport options', () => {
+  process.env.NODE_ENV = 'test';
+  const sdk = new ManagerSDK({
+    serverUrl: 'https://localhost:3001',
+    rejectUnauthorized: false,
+    transports: ['websocket'],
+  });
+
+  sdk.connect();
+  const socket = (sdk as unknown as { socket: { io: { opts: Record<string, unknown> } } }).socket;
+
+  assert.equal(socket.io.opts.rejectUnauthorized, false);
+  sdk.disconnect();
+  process.env.NODE_ENV = originalSocketIoEnv;
+});
+
 test('mergeControlPayload shallow merges plain objects', () => {
   const prev = { a: 1, b: 2 };
   const next = { b: 3, c: 4 };

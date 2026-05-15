@@ -11,7 +11,12 @@ type SemanticSdk = Pick<ManagerSDK, 'onSemanticCommand' | 'sendSemanticResult'>;
 export type SemanticSdkBindingTarget = SemanticSdk;
 
 function commandFromMessage(message: SemanticMessage) {
-  return message.command as Parameters<ManagerSemanticBridge['dispatch']>[0]['command'];
+  const command = message.command as Record<string, unknown>;
+  if (typeof command.kind === 'string' && typeof command.type !== 'string') {
+    const { kind, ...rest } = command;
+    return { ...rest, type: kind } as Parameters<ManagerSemanticBridge['dispatch']>[0]['command'];
+  }
+  return command as Parameters<ManagerSemanticBridge['dispatch']>[0]['command'];
 }
 
 export function bindManagerSemanticSdk(input: {

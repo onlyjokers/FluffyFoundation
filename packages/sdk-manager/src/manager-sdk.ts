@@ -104,6 +104,9 @@ export class ManagerSDK {
             query: { role: 'manager' },
             auth: this.config.managerKey ? { managerKey: this.config.managerKey } : undefined,
             transports: this.config.transports,
+            ...(typeof this.config.rejectUnauthorized === 'boolean'
+                ? { rejectUnauthorized: this.config.rejectUnauthorized }
+                : {}),
             // Increase timeouts
             timeout: 20000,
             // Reconnection settings

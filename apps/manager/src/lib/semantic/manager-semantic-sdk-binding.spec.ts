@@ -82,7 +82,7 @@ test('bindManagerSemanticSdk dispatches semantic SDK commands and replies with s
     target: { mode: 'manager' },
     actor: 'cli',
     role: 'manager',
-    command: { type: 'node.params.update', nodeId: 'n1', params: { value: 4 } } as SemanticCommand,
+    command: { kind: 'node.params.update', nodeId: 'n1', params: { value: 4 } },
     requestId: 'semantic-live-1',
   } satisfies SemanticMessage);
 

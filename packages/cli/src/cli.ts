@@ -4,6 +4,7 @@
 
 import { ManagerSDK } from '@shugu/sdk-manager';
 import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/protocol';
+import type { ManagerSDKConfig, ManagerState, SocketTransport } from '@shugu/sdk-manager';
 
 type ParsedGraphCommand = {
   action: 'semantic';
@@ -15,6 +16,8 @@ type ParsedGraphCommand = {
 type CliSdk = {
   connect(): void;
   disconnect(): void;
+  getState(): Pick<ManagerState, 'status'>;
+  onStateChange(handler: (state: Pick<ManagerState, 'status'>) => void): () => void;
   sendSemanticCommand(input: {
     target: { mode: 'manager' };
     command: SemanticCommandPayload;
@@ -26,6 +29,7 @@ type CliSdk = {
 
 export type CliRunnerOptions = {
   createSdk?: () => CliSdk;
+  createSdkFromConfig?: (config: ManagerSDKConfig) => CliSdk;
   writeStdout?: (text: string) => void;
   writeStderr?: (text: string) => void;
   timeoutMs?: number;
@@ -70,6 +74,38 @@ function parseValue(value: string): unknown {
   return value;
 }
 
+function parseTransports(value: string | undefined): SocketTransport[] | undefined {
+  const transports = (value ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part): part is SocketTransport => part === 'polling' || part === 'websocket');
+  return transports.length > 0 ? Array.from(new Set(transports)) : undefined;
+}
+
+function parseRejectUnauthorized(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  return value.trim() === '0' ? false : undefined;
+}
+
+function waitForConnected(sdk: CliSdk, timeoutMs: number): Promise<void> {
+  if (sdk.getState().status === 'connected') return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    let unsubscribe: () => void = () => undefined;
+    const timeout = setTimeout(() => {
+      unsubscribe();
+      reject(new Error('Timed out waiting for SDK connection'));
+    }, timeoutMs);
+
+    unsubscribe = sdk.onStateChange((state) => {
+      if (state.status !== 'connected') return;
+      clearTimeout(timeout);
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
 export function parseGraphCommand(args: string[]): ParsedGraphCommand {
   if (args[0] !== 'graph') throw new Error('Only graph commands are supported');
   const subcommand = args[1];
@@ -93,7 +129,7 @@ export function parseGraphCommand(args: string[]): ParsedGraphCommand {
         action: 'semantic',
         requestId: `add-node:${id}`,
         command: {
-          type: 'node.add',
+            kind: 'node.add',
           node: {
             id,
             type,
@@ -118,7 +154,7 @@ export function parseGraphCommand(args: string[]): ParsedGraphCommand {
         action: 'semantic',
         requestId: `connect:${from}->${to}`,
         command: {
-          type: 'node.connect',
+          kind: 'node.connect',
           connection: {
             id: `conn:${from}->${to}`,
             sourceNodeId: source.nodeId,
@@ -137,7 +173,7 @@ export function parseGraphCommand(args: string[]): ParsedGraphCommand {
       return {
         action: 'semantic',
         requestId: `set-param:${nodeId}.${param}`,
-        command: { type: 'node.params.update', nodeId, params: { [param]: value } },
+        command: { kind: 'node.params.update', nodeId, params: { [param]: value } },
         ...(dryRun ? { dryRun } : {}),
       };
     }
@@ -147,7 +183,7 @@ export function parseGraphCommand(args: string[]): ParsedGraphCommand {
         action: 'semantic',
         requestId: `deploy:${partition}`,
         command: {
-          type: 'partition.deploy',
+          kind: 'partition.deploy',
           partitionId: partition,
           nodeIds: readFlag(args, '--nodes')?.split(',').filter(Boolean) ?? [],
           targetPlatform: 'client',
@@ -173,36 +209,60 @@ export function createCliRunner(options: CliRunnerOptions = {}) {
         return 0;
       }
 
+      const sdkConfig: ManagerSDKConfig = {
+        serverUrl: process.env.SHUGU_SERVER_URL ?? defaultServerUrl,
+        managerKey: process.env.SHUGU_MANAGER_KEY,
+        transports: parseTransports(process.env.SHUGU_CLI_TRANSPORTS),
+        rejectUnauthorized: parseRejectUnauthorized(process.env.SHUGU_TLS_REJECT_UNAUTHORIZED),
+        commandEnvelope: {
+          actor: process.env.SHUGU_CLI_ACTOR ?? 'shugu-cli',
+          role: 'manager',
+          scopeGroupId: process.env.SHUGU_SCOPE_GROUP_ID ?? 'cli',
+        },
+      };
+
       const sdk =
         options.createSdk?.() ??
-        new ManagerSDK({
-          serverUrl: process.env.SHUGU_SERVER_URL ?? defaultServerUrl,
-          managerKey: process.env.SHUGU_MANAGER_KEY,
-          commandEnvelope: {
-            actor: process.env.SHUGU_CLI_ACTOR ?? 'shugu-cli',
-            role: 'manager',
-            scopeGroupId: process.env.SHUGU_SCOPE_GROUP_ID ?? 'cli',
-          },
-        });
+        options.createSdkFromConfig?.(sdkConfig) ??
+        new ManagerSDK(sdkConfig);
 
-      const result = await new Promise<SemanticResultMessage>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${parsed.requestId}`)), timeoutMs);
-        const unsubscribe = sdk.onSemanticResult((message) => {
-          if (message.requestId !== parsed.requestId) return;
-          clearTimeout(timeout);
-          unsubscribe();
-          resolve(message);
-        });
-        sdk.connect();
-        sdk.sendSemanticCommand({
-          command: parsed.command,
-          requestId: parsed.requestId,
-          target: { mode: 'manager' },
-          dryRun: false,
-        });
-      });
+      const result = await (async () => {
+        try {
+          return await new Promise<SemanticResultMessage>((resolve, reject) => {
+            let unsubscribe: () => void = () => undefined;
+            const timeout = setTimeout(() => {
+              unsubscribe();
+              reject(new Error(`Timed out waiting for ${parsed.requestId}`));
+            }, timeoutMs);
 
-      sdk.disconnect();
+            unsubscribe = sdk.onSemanticResult((message) => {
+              if (message.requestId !== parsed.requestId) return;
+              clearTimeout(timeout);
+              unsubscribe();
+              resolve(message);
+            });
+
+            sdk.connect();
+            waitForConnected(sdk, timeoutMs)
+              .then(() =>
+                sdk.sendSemanticCommand({
+                  command: parsed.command,
+                  requestId: parsed.requestId,
+                  target: { mode: 'manager' },
+                  dryRun: false,
+                })
+              )
+              .catch((error) => {
+                clearTimeout(timeout);
+                unsubscribe();
+                reject(error);
+              });
+          });
+        } finally {
+          sdk.disconnect();
+        }
+      })();
+
       writeStdout(`${JSON.stringify(result)}\n`);
       return result.ok ? 0 : 1;
     } catch (error) {

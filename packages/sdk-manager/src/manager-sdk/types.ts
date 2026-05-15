@@ -41,6 +41,11 @@ export interface ManagerSDKConfig {
      */
     transports?: SocketTransport[];
     /**
+     * Node-only TLS certificate verification override for local self-signed HTTPS development.
+     * Browser builds should leave this unset.
+     */
+    rejectUnauthorized?: boolean;
+    /**
      * Minimum interval (ms) between outgoing high-frequency control messages.
      * When many clients are connected, this limits message rate to prevent backpressure.
      * Default: 33 (~30fps). Set to 0 to disable throttling.
