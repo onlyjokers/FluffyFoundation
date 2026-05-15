@@ -167,6 +167,50 @@ test('handleMessage rejects unauthorized routing with structured policy metadata
   });
 });
 
+test('handleMessage rejects semantic graph commands from non-manager sockets', () => {
+  const { gateway, routed } = createGateway({ isManager: false });
+  const warnings: unknown[][] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args);
+  };
+
+  try {
+    gateway.handleMessage(
+      {
+        type: 'semantic',
+        version: 1,
+        target: { mode: 'manager' },
+        actor: 'cli',
+        role: 'manager',
+        command: {
+          kind: 'node.params.update',
+          nodeId: 'tone-1',
+          param: 'volume',
+          value: 0.5,
+        },
+        requestId: 'semantic-unauthorized',
+      },
+      { id: 'socket-client-1' } as never
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(routed.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(loggedMetadata(warnings), {
+    socketId: 'socket-client-1',
+    actor: 'cli',
+    scope: 'server.ingress.authorization',
+    type: 'semantic',
+    path: 'role',
+    decision: 'reject',
+    code: 'server.policy.manager_required',
+    message: 'manager role is required for semantic messages',
+  });
+});
+
 test('handleConnection denies requested manager role by default when no secure key is configured', () => {
   withEnv(
     {

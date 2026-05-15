@@ -125,20 +125,10 @@
   });
 
   const canvasCommands = createNodeCanvasSemanticCommands({
-    nodeEngine,
-    nodeRegistry,
-    getGroups: () => get(groupController.nodeGroups),
-    getPartitions: () =>
-      loopController
-        ? get(loopController.localLoops).map((loop) => ({
-            id: loop.id,
-            nodeIds: loop.nodeIds,
-            status: get(loopController!.deployedLoopIds).has(loop.id) ? 'deployed' : 'draft',
-            requiredCapabilities: loop.requiredCapabilities,
-          }))
-        : [],
-    isRunningStore,
-    lastErrorStore,
+    getSDK,
+    onError: (message) => {
+      lastErrorStore.set(message);
+    },
   });
 
   const nodeVisualState = createNodeVisualState({

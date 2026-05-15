@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { nodeEngine } from '$lib/nodes';
+import { nodeEngine } from '$lib/nodes/engine';
 import type { GraphState, PortType } from '$lib/nodes/types';
 import { parameterRegistry } from '$lib/parameters/registry';
 import { minimapPreferences, type MinimapPreferences } from './uiState';
@@ -22,6 +22,10 @@ interface ProjectSnapshot {
     minimap?: MinimapPreferences;
   };
 }
+
+export type LegacyProjectMigrationSnapshot = Pick<ProjectSnapshot, 'graph' | 'groups'> & {
+  partitions?: unknown;
+};
 
 function safeGetStorage(): Storage | null {
   if (!browser) return null;
@@ -82,6 +86,25 @@ export function saveLocalProject(reason = 'auto'): void {
     storage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch (err) {
     console.warn('[ProjectManager] Failed to save project', reason, err);
+  }
+}
+
+export function readLocalProjectForServerMigration(): LegacyProjectMigrationSnapshot | null {
+  const storage = safeGetStorage();
+  if (!storage) return null;
+  const raw = storage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    const snapshot = JSON.parse(raw) as ProjectSnapshot;
+    if (!snapshot?.graph || !Array.isArray(snapshot.graph.nodes)) return null;
+    return {
+      graph: snapshot.graph,
+      ...(snapshot.groups ? { groups: snapshot.groups } : {}),
+    };
+  } catch (err) {
+    console.warn('[ProjectManager] Failed to read project for server migration', err);
+    return null;
   }
 }
 

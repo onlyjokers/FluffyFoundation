@@ -4,6 +4,8 @@ import {
     MediaMetaMessage,
     SOCKET_EVENTS,
     createPluginControlMessage,
+    createSemanticMessage,
+    createSemanticResultMessage,
     createMediaMetaMessage,
     getServerTime,
     TargetSelector,
@@ -23,6 +25,11 @@ import {
     targetClients,
     type DeliveryMetrics,
     type DisplayOperation,
+    type SemanticCommandPayload,
+    type SemanticMessage,
+    type SemanticResultMessage,
+    type SemanticTargetSelector,
+    type SemanticWarning,
 } from '@shugu/protocol';
 import {
     nextManagerCommandEnvelope,
@@ -40,7 +47,7 @@ import {
     type ManagerSocketListenerHost,
 } from './manager-sdk/socket-listeners.js';
 import { createInitialManagerState, notifyManagerStateListeners } from './manager-sdk/state.js';
-import type { ManagerSDKConfig, ManagerState, MessageHandler } from './manager-sdk/types.js';
+import type { ManagerSDKConfig, ManagerState, MessageHandler, SemanticSnapshotHandler } from './manager-sdk/types.js';
 export type {
     ConnectionStatus,
     ManagerSDKConfig,
@@ -62,6 +69,9 @@ export class ManagerSDK {
     private commandEnvelope: CommandEnvelope;
     private stateListeners: Set<(state: ManagerState) => void> = new Set();
     private sensorDataHandlers: Set<MessageHandler<SensorDataMessage>> = new Set();
+    private semanticCommandHandlers: Set<MessageHandler<SemanticMessage>> = new Set();
+    private semanticResultHandlers: Set<MessageHandler<SemanticResultMessage>> = new Set();
+    private semanticSnapshotHandlers: Set<SemanticSnapshotHandler> = new Set();
     private timeSyncIntervalId: ReturnType<typeof setInterval> | null = null;
     private readonly deliveryQueue: ManagerDeliveryQueue;
 
@@ -95,6 +105,9 @@ export class ManagerSDK {
             query: { role: 'manager' },
             auth: this.config.managerKey ? { managerKey: this.config.managerKey } : undefined,
             transports: this.config.transports,
+            ...(typeof this.config.rejectUnauthorized === 'boolean'
+                ? { rejectUnauthorized: this.config.rejectUnauthorized }
+                : {}),
             // Increase timeouts
             timeout: 20000,
             // Reconnection settings
@@ -149,6 +162,30 @@ export class ManagerSDK {
     onSensorData(handler: MessageHandler<SensorDataMessage>): () => void {
         this.sensorDataHandlers.add(handler);
         return () => this.sensorDataHandlers.delete(handler);
+    }
+
+    /**
+     * Subscribe to live semantic graph commands routed to this Manager.
+     */
+    onSemanticCommand(handler: MessageHandler<SemanticMessage>): () => void {
+        this.semanticCommandHandlers.add(handler);
+        return () => this.semanticCommandHandlers.delete(handler);
+    }
+
+    /**
+     * Subscribe to semantic command results.
+     */
+    onSemanticResult(handler: MessageHandler<SemanticResultMessage>): () => void {
+        this.semanticResultHandlers.add(handler);
+        return () => this.semanticResultHandlers.delete(handler);
+    }
+
+    /**
+     * Subscribe to server-owned semantic graph snapshots.
+     */
+    onSemanticSnapshot(handler: SemanticSnapshotHandler): () => void {
+        this.semanticSnapshotHandlers.add(handler);
+        return () => this.semanticSnapshotHandlers.delete(handler);
     }
 
     /**
@@ -259,6 +296,62 @@ export class ManagerSDK {
         if (!this.socket?.connected) return;
         const message = createPluginControlMessage(this.nextCommandEnvelope(target), target, pluginId, command, payload);
         this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Send a live semantic graph command to the Manager graph runtime.
+     */
+    sendSemanticCommand(input: {
+        target?: SemanticTargetSelector;
+        command: SemanticCommandPayload;
+        dryRun?: boolean;
+        requestId: string;
+    }): void {
+        if (!this.socket?.connected) return;
+        const message = createSemanticMessage({
+            target: input.target ?? { mode: 'server' },
+            actor: this.commandEnvelope.actor,
+            role: this.commandEnvelope.role === 'system' ? 'system' : 'manager',
+            command: input.command,
+            ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
+            requestId: input.requestId,
+        });
+        this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Request the current server-owned semantic graph snapshot.
+     */
+    requestSemanticSnapshot(requestId = 'graph-snapshot'): void {
+        this.sendSemanticCommand({
+            target: { mode: 'server' },
+            command: { kind: 'graph.snapshot' },
+            requestId,
+        });
+    }
+
+    /**
+     * Send a semantic command result back through the live manager channel.
+     */
+    sendSemanticResult(
+        input:
+            | {
+                  requestId: string;
+                  ok: true;
+                  result: Record<string, unknown>;
+                  warnings?: SemanticWarning[];
+                  snapshotRevision?: number;
+              }
+            | {
+                  requestId: string;
+                  ok: false;
+                  error: SemanticResultMessage['error'];
+                  warnings?: SemanticWarning[];
+                  snapshotRevision?: number;
+              }
+    ): void {
+        if (!this.socket?.connected) return;
+        this.socket.emit(SOCKET_EVENTS.MSG, createSemanticResultMessage(input));
     }
 
     sendDisplayOperation(operation: DisplayOperation): void {
@@ -536,6 +629,9 @@ export class ManagerSDK {
             getTimeSyncIntervalId: () => this.timeSyncIntervalId,
             updateState: (partial) => this.updateState(partial),
             getSensorDataHandlers: () => this.sensorDataHandlers,
+            getSemanticCommandHandlers: () => this.semanticCommandHandlers,
+            getSemanticResultHandlers: () => this.semanticResultHandlers,
+            getSemanticSnapshotHandlers: () => this.semanticSnapshotHandlers,
         };
     }
 }

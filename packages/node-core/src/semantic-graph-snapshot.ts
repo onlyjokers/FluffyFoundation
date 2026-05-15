@@ -85,23 +85,37 @@ const defaultRuntimeStatus: RuntimeStatus = { running: false, deployedPartitionI
 export const normalizeDefinitions = (
   definitions: SemanticSnapshotInput['definitions'] = []
 ): SemanticDefinition[] =>
-  definitions.map((def) => ({
-    type: String(def.type),
-    label: String(def.label ?? def.type),
-    category: String(def.category ?? 'Other'),
-    ports: { inputs: [...(def.inputs ?? [])], outputs: [...(def.outputs ?? [])] },
-    params: [...(def.configSchema ?? [])],
-    aiSummary: createAgentNodeDefinitionSummary({
+  definitions.map((def) => {
+    const record = def as Record<string, unknown>;
+    const ports = record.ports && typeof record.ports === 'object'
+      ? (record.ports as { inputs?: unknown; outputs?: unknown })
+      : null;
+    const inputs = Array.isArray(def.inputs) ? def.inputs : Array.isArray(ports?.inputs) ? ports.inputs : [];
+    const outputs = Array.isArray(def.outputs) ? def.outputs : Array.isArray(ports?.outputs) ? ports.outputs : [];
+    const params = Array.isArray(def.configSchema)
+      ? def.configSchema
+      : Array.isArray(record.params)
+        ? (record.params as SemanticDefinition['params'])
+        : [];
+
+    return {
       type: String(def.type),
       label: String(def.label ?? def.type),
       category: String(def.category ?? 'Other'),
-      inputs: [...(def.inputs ?? [])],
-      outputs: [...(def.outputs ?? [])],
-      configSchema: [...(def.configSchema ?? [])],
-      metadata: def.metadata,
-      process: () => ({}),
-    }),
-  }));
+      ports: { inputs: [...inputs], outputs: [...outputs] },
+      params: [...params],
+      aiSummary: createAgentNodeDefinitionSummary({
+        type: String(def.type),
+        label: String(def.label ?? def.type),
+        category: String(def.category ?? 'Other'),
+        inputs: [...inputs],
+        outputs: [...outputs],
+        configSchema: [...params],
+        metadata: def.metadata,
+        process: () => ({}),
+      }),
+    };
+  });
 
 export const normalizeGroups = (groups: SemanticSnapshotInput['groups'] = []): SemanticGroup[] =>
   groups.map((group) => ({

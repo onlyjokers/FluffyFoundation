@@ -4,6 +4,8 @@ import {
     SensorDataMessage,
     MediaMetaMessage,
     PluginControlMessage,
+    SemanticMessage,
+    SemanticResultMessage,
     SystemMessage,
     Message,
     MessageWithoutServerTimestamp,
@@ -20,6 +22,9 @@ import {
     type NonSystemControlMessage,
     type NonSystemMediaMetaMessage,
     type NonSystemPluginControlMessage,
+    type SemanticCommandPayload,
+    type SemanticTargetSelector,
+    type SemanticWarning,
 } from './types.js';
 import {
     createCommandEnvelope,
@@ -166,6 +171,67 @@ export function createPluginControlMessage(
 }
 
 /**
+ * Create a live semantic graph command message for Manager-owned graph mutation.
+ */
+export function createSemanticMessage(input: {
+    target: SemanticTargetSelector;
+    actor: string;
+    role: SemanticMessage['role'];
+    command: SemanticCommandPayload;
+    dryRun?: boolean;
+    requestId: string;
+}): Omit<SemanticMessage, 'serverTimestamp'> {
+    const message: Omit<SemanticMessage, 'serverTimestamp'> = {
+        type: 'semantic' as const,
+        version: PROTOCOL_VERSION,
+        target: input.target,
+        actor: input.actor,
+        role: input.role,
+        command: input.command,
+        requestId: input.requestId,
+        clientTimestamp: now(),
+    };
+    if (input.dryRun !== undefined) {
+        message.dryRun = input.dryRun;
+    }
+    return message;
+}
+
+/**
+ * Create a semantic command result message.
+ */
+export function createSemanticResultMessage(
+    input:
+        | {
+              requestId: string;
+              ok: true;
+              result: Record<string, unknown>;
+              warnings?: SemanticWarning[];
+              snapshotRevision?: number;
+          }
+        | {
+              requestId: string;
+              ok: false;
+              error: SemanticResultMessage['error'];
+              warnings?: SemanticWarning[];
+              snapshotRevision?: number;
+          }
+): Omit<SemanticResultMessage, 'serverTimestamp'> {
+    const base = {
+        type: 'semantic-result' as const,
+        version: PROTOCOL_VERSION,
+        requestId: input.requestId,
+        ok: input.ok,
+        clientTimestamp: now(),
+        ...(input.warnings !== undefined ? { warnings: input.warnings } : {}),
+        ...(input.snapshotRevision !== undefined ? { snapshotRevision: input.snapshotRevision } : {}),
+    };
+    return input.ok
+        ? { ...base, ok: true, result: input.result }
+        : { ...base, ok: false, error: input.error };
+}
+
+/**
  * Create a system message
  */
 export function createSystemMessage(
@@ -209,6 +275,20 @@ export function isMediaMetaMessage(msg: Message): msg is MediaMetaMessage {
  */
 export function isPluginControlMessage(msg: Message): msg is PluginControlMessage {
     return msg.type === 'plugin';
+}
+
+/**
+ * Check if a message is a SemanticMessage
+ */
+export function isSemanticMessage(msg: Message): msg is SemanticMessage {
+    return msg.type === 'semantic';
+}
+
+/**
+ * Check if a message is a SemanticResultMessage
+ */
+export function isSemanticResultMessage(msg: Message): msg is SemanticResultMessage {
+    return msg.type === 'semantic-result';
 }
 
 /**

@@ -2,6 +2,7 @@
  * Purpose: Shared public and internal types for the Manager SDK.
  */
 import type { Message } from '@shugu/protocol';
+import type { SemanticGraphSnapshot } from '@shugu/node-core';
 import type { StateSnapshotPatch } from '../state-snapshot.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -18,6 +19,8 @@ export interface ManagerState {
 }
 
 export type MessageHandler<T = Message> = (message: T) => void;
+
+export type SemanticSnapshotHandler = (snapshot: SemanticGraphSnapshot) => void;
 
 export type SocketTransport = 'polling' | 'websocket';
 
@@ -40,6 +43,11 @@ export interface ManagerSDKConfig {
      * - Performance mode: `['websocket']` (less jitter, but may fail on restrictive networks)
      */
     transports?: SocketTransport[];
+    /**
+     * Node-only TLS certificate verification override for local self-signed HTTPS development.
+     * Browser builds should leave this unset.
+     */
+    rejectUnauthorized?: boolean;
     /**
      * Minimum interval (ms) between outgoing high-frequency control messages.
      * When many clients are connected, this limits message rate to prevent backpressure.

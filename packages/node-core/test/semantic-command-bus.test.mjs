@@ -504,7 +504,42 @@ test('runtime override commands validate node, port, and ttl boundaries', () => 
   assert.equal(invalidTtl.validationErrors[0].code, 'RUNTIME.INVALID_OVERRIDE_TTL');
 });
 
-test('semantic command dry-run returns structured validation errors for param overflow and incompatible ports', () => {
+test('runtime override commands clamp numeric param values using semantic bounds', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions: [
+      {
+        type: 'number',
+        label: 'Number',
+        category: 'Values',
+        inputs: [],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 1, min: 0, max: 3 }],
+      },
+    ],
+    runtimeStatus: { running: true, deployedPartitionIds: ['partition:client'] },
+    revision: 50,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'ai:runtime', role: 'ai' },
+    command: { type: 'runtime.override.set', nodeId: 'n1', portId: 'value', kind: 'param', value: -36 },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.command.type, 'runtime.override.set');
+  assert.equal(result.command.value, 0);
+  assert.deepEqual(result.warnings, [
+    {
+      code: 'SEMANTIC.PARAM_CLAMPED',
+      path: 'nodes.n1.params.value',
+      message: 'Parameter value was clamped from -36 to 0.',
+    },
+  ]);
+  assert.equal(bus.getSnapshot().runtimeStatus.runtimeOverrides?.[0]?.value, 0);
+});
+
+test('semantic command dry-run clamps numeric param overflow and returns warnings', () => {
   const bus = createSemanticCommandBus({
     graph: {
       nodes: [
@@ -553,11 +588,62 @@ test('semantic command dry-run returns structured validation errors for param ov
     command: { type: 'node.params.update', nodeId: 'n1', params: { value: 20 } },
     dryRun: true,
   });
-  assert.equal(overflow.ok, false);
-  assert.equal(overflow.stage, 'dry-run');
-  assert.equal(overflow.validationErrors[0].code, 'GRAPH.PARAM_OUT_OF_RANGE');
-  assert.equal(overflow.validationErrors[0].path, 'nodes.n1.params.value');
+  assert.equal(overflow.ok, true);
+  assert.equal(overflow.command.type, 'node.params.update');
+  assert.equal(overflow.command.params.value, 10);
+  assert.deepEqual(overflow.warnings, [
+    {
+      code: 'SEMANTIC.PARAM_CLAMPED',
+      path: 'nodes.n1.params.value',
+      message: 'Parameter value was clamped from 20 to 10.',
+    },
+  ]);
   assert.equal(bus.getSnapshot().nodes.find((node) => node.id === 'n1')?.params.value, 2);
+});
+
+test('semantic command dry-run returns structured validation errors for incompatible ports', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'n1',
+          type: 'number',
+          position: { x: 50, y: 80 },
+          config: { value: 2 },
+          inputValues: {},
+          outputValues: { out: 2 },
+        },
+        {
+          id: 'n2',
+          type: 'math',
+          position: { x: 100, y: 100 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'number',
+        label: 'Number',
+        category: 'Values',
+        inputs: [],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 1, min: 0, max: 10 }],
+      },
+      {
+        type: 'math',
+        label: 'Math',
+        category: 'Logic',
+        inputs: [{ id: 'flag', label: 'Flag', type: 'boolean' }],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [],
+      },
+    ],
+    revision: 1,
+  });
 
   const incompatible = bus.dispatch({
     actor: { id: 'ai:wp1', role: 'ai' },
@@ -590,4 +676,62 @@ test('semantic command dry-run returns structured validation errors for param ov
   assert.equal(invalidTarget.ok, false);
   assert.equal(invalidTarget.validationErrors[0].code, 'EXECUTION.INVALID_TARGET_PLATFORM');
   assert.equal(invalidTarget.validationErrors[0].path, 'partitions.partition:bad-target.targetPlatform');
+});
+
+test('command bus returns current snapshot without mutation for graph.snapshot', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions,
+    revision: 11,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'cli', role: 'operator' },
+    command: { type: 'graph.snapshot' },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.appliedRevision, 11);
+  assert.equal(result.snapshot.revision, 11);
+  assert.equal(result.snapshot.nodes.length, 1);
+  assert.equal(bus.getHistory().length, 0);
+});
+
+test('command bus snapshots preserve normalized definition ports', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 1,
+  });
+
+  const snapshot = bus.getSnapshot();
+
+  assert.equal(snapshot.definitions[0].ports.outputs[0].id, 'out');
+  assert.equal(snapshot.definitions[1].ports.inputs[0].id, 'a');
+});
+
+test('command bus replaces graph state for server-owned graph import', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 0,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'manager', role: 'operator' },
+    command: {
+      type: 'graph.replace',
+      graph: baseGraph,
+      groups: [
+        { id: 'group:1', parentId: null, name: 'Imported', nodeIds: ['n1'], disabled: false },
+      ],
+      partitions: [{ id: 'partition:1', nodeIds: ['n1'], status: 'draft' }],
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.appliedRevision, 1);
+  assert.equal(bus.getSnapshot().nodes[0].id, 'n1');
+  assert.equal(bus.getSnapshot().groups[0].name, 'Imported');
+  assert.equal(bus.getSnapshot().partitions[0].id, 'partition:1');
 });

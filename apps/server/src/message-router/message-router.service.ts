@@ -8,13 +8,26 @@ import type {
     SensorDataMessage,
     MediaMetaMessage,
     PluginControlMessage,
+    SemanticMessage,
+    SemanticResultMessage,
     SystemMessage,
     Message,
     MessageWithoutServerTimestamp,
     TargetSelector,
     DeliveryMetrics,
 } from '@shugu/protocol';
-import { addServerTimestamp, classifyDelivery, createDeliveryMetrics } from '@shugu/protocol';
+import { addServerTimestamp, classifyDelivery, createDeliveryMetrics, createSemanticResultMessage, createSystemMessage } from '@shugu/protocol';
+import { SemanticGraphAuthorityService } from '../semantic/semantic-graph-authority.service.js';
+import type { SemanticCommand } from '@shugu/node-core';
+
+function commandFromSemanticMessage(message: SemanticMessage): SemanticCommand {
+    const command = message.command as Record<string, unknown>;
+    if (typeof command.kind === 'string' && typeof command.type !== 'string') {
+        const { kind, ...rest } = command;
+        return { ...rest, type: kind } as SemanticCommand;
+    }
+    return command as SemanticCommand;
+}
 
 @Injectable()
 export class MessageRouterService {
@@ -27,9 +40,13 @@ export class MessageRouterService {
         string,
         { message: ControlMessage; dueAt: number; timeoutId: ReturnType<typeof setTimeout> | null }
     > = new Map();
+    private readonly semanticRequesterByRequestId: Map<string, string> = new Map();
     private readonly deliveryMetrics: DeliveryMetrics = createDeliveryMetrics();
 
-    constructor(private readonly clientRegistry: ClientRegistryService) { }
+    constructor(
+        private readonly clientRegistry: ClientRegistryService,
+        private readonly semanticAuthority?: SemanticGraphAuthorityService
+    ) { }
 
     /**
      * Set Socket.io server instance
@@ -66,6 +83,12 @@ export class MessageRouterService {
                 break;
             case 'plugin':
                 this.routePluginMessage(timestampedMessage as PluginControlMessage);
+                break;
+            case 'semantic':
+                this.routeSemanticMessage(timestampedMessage as SemanticMessage, _fromSocketId);
+                break;
+            case 'semantic-result':
+                this.routeSemanticResultMessage(timestampedMessage as SemanticResultMessage, _fromSocketId);
                 break;
             case 'system':
                 this.routeSystemMessage(timestampedMessage as SystemMessage, _fromSocketId);
@@ -170,6 +193,65 @@ export class MessageRouterService {
     }
 
     /**
+     * Route semantic graph commands to Manager sockets only.
+     */
+    private routeSemanticMessage(message: SemanticMessage, fromSocketId: string): void {
+        if (this.semanticAuthority) {
+            const command = commandFromSemanticMessage(message);
+            const result = this.semanticAuthority.dispatch({
+                actor: { id: message.actor, role: message.role === 'manager' ? 'operator' : 'system' },
+                command,
+                dryRun: message.dryRun,
+            });
+
+            if (result.ok) {
+                this.emitToSockets([fromSocketId], addServerTimestamp(createSemanticResultMessage({
+                    requestId: message.requestId,
+                    ok: true,
+                    result: { snapshot: result.snapshot, audit: result.audit },
+                    warnings: result.warnings,
+                    snapshotRevision: result.appliedRevision,
+                }), Date.now()) as SemanticResultMessage);
+                if (command.type !== 'graph.snapshot' && !message.dryRun) {
+                    this.broadcastSemanticSnapshot(result.snapshot);
+                }
+                return;
+            }
+
+            this.emitToSockets([fromSocketId], addServerTimestamp(createSemanticResultMessage({
+                requestId: message.requestId,
+                ok: false,
+                error: {
+                    code: result.validationErrors?.[0]?.code ?? 'SEMANTIC_COMMAND_REJECTED',
+                    message: result.message,
+                    path: result.validationErrors?.[0]?.path,
+                },
+                snapshotRevision: result.appliedRevision,
+            }), Date.now()) as SemanticResultMessage);
+            return;
+        }
+
+        const socketIds = this.resolveSemanticTargetSocketIds(message);
+        if (socketIds.length === 0) {
+            this.deliveryMetrics.rejected += 1;
+            return;
+        }
+        this.semanticRequesterByRequestId.set(message.requestId, fromSocketId);
+        this.emitToSockets(socketIds, message);
+    }
+
+    /**
+     * Route semantic command results back through manager channels.
+     */
+    private routeSemanticResultMessage(message: SemanticResultMessage, fromSocketId: string): void {
+        const requesterSocketId = this.semanticRequesterByRequestId.get(message.requestId);
+        if (requesterSocketId) {
+            this.semanticRequesterByRequestId.delete(message.requestId);
+        }
+        this.emitToSockets([requesterSocketId ?? fromSocketId], message);
+    }
+
+    /**
      * Route system message
      */
     private routeSystemMessage(_message: SystemMessage, _fromSocketId: string): void {
@@ -198,6 +280,27 @@ export class MessageRouterService {
             default:
                 return [];
         }
+    }
+
+    private resolveSemanticTargetSocketIds(message: SemanticMessage): string[] {
+        if (message.target.mode === 'server') {
+            return [];
+        }
+        if (message.target.mode === 'manager') {
+            return this.clientRegistry.getAllManagerSocketIds();
+        }
+
+        const managerSocketIds = this.clientRegistry.getSocketIds([message.target.managerId]);
+        return managerSocketIds.filter((socketId) => this.clientRegistry.getAllManagerSocketIds().includes(socketId));
+    }
+
+    private broadcastSemanticSnapshot(snapshot: Record<string, unknown>): void {
+        const managerSocketIds = this.clientRegistry.getAllManagerSocketIds();
+        if (managerSocketIds.length === 0) return;
+        const message = addServerTimestamp(createSystemMessage('semanticSnapshot', {
+            semanticSnapshot: snapshot,
+        }), Date.now()) as SystemMessage;
+        this.emitToSockets(managerSocketIds, message);
     }
 
     /**

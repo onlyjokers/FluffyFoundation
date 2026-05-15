@@ -90,6 +90,12 @@ export type SemanticValidationError = {
   repairOptions: string[];
 };
 
+export type SemanticWarning = {
+  code: string;
+  path: string;
+  message: string;
+};
+
 export type SemanticProposal = {
   id: string;
   title: string;
@@ -125,6 +131,13 @@ export type SemanticSnapshotInput = {
 };
 
 export type SemanticCommand =
+  | { type: 'graph.snapshot' }
+  | {
+      type: 'graph.replace';
+      graph: GraphState;
+      groups?: SemanticGroup[];
+      partitions?: SemanticPartition[];
+    }
   | { type: 'node.add'; node: NodeInstance }
   | { type: 'node.remove'; nodeId: string }
   | { type: 'node.archive'; nodeId: string }
@@ -209,6 +222,7 @@ export type SemanticCommandResult =
       appliedRevision: number;
       rollbackToken: string;
       audit: CommandAuditEntry;
+      warnings?: SemanticWarning[];
       snapshot: SemanticGraphSnapshot;
     }
   | {

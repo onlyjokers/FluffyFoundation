@@ -4,8 +4,27 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createControlMessage, createSensorDataMessage, type Message } from '@shugu/protocol';
+import {
+  createControlMessage,
+  createSemanticMessage,
+  createSemanticResultMessage,
+  createSensorDataMessage,
+  type Message,
+} from '@shugu/protocol';
 import { MessageRouterService } from './message-router.service.js';
+
+const semanticSnapshot = {
+  revision: 1,
+  nodes: [],
+  definitions: [],
+  connections: [],
+  groups: [],
+  partitions: [],
+  runtimeStatus: { running: false, deployedPartitionIds: [] },
+  deviceCapabilities: [],
+  errors: [],
+  permissions: [],
+};
 
 const envelope = {
   actor: 'manager-1',
@@ -49,6 +68,177 @@ test('MessageRouterService drops volatile telemetry under backpressure and recor
 
   assert.equal(reliableMessages.length, 0);
   assert.equal(router.getDeliveryMetrics().dropped, 1);
+});
+
+test('MessageRouterService routes semantic graph commands only to manager sockets', () => {
+  const { router, reliableMessages } = createRouter(3, 2);
+
+  router.routeMessage(
+    createSemanticMessage({
+      target: { mode: 'manager' },
+      actor: 'cli',
+      role: 'manager',
+      command: {
+        kind: 'node.params.update',
+        nodeId: 'tone-1',
+        param: 'volume',
+        value: 0.5,
+      },
+      requestId: 'semantic-route-1',
+    }),
+    'socket-manager-1'
+  );
+
+  assert.equal(reliableMessages.length, 1);
+  assert.equal(reliableMessages[0]?.type, 'semantic');
+  assert.equal((reliableMessages[0] as { requestId?: string }).requestId, 'semantic-route-1');
+});
+
+test('MessageRouterService executes server semantic snapshot requests without manager broadcast', () => {
+  const semanticCommands: unknown[] = [];
+  const delivered: Array<{ socketIds: string[]; message: Message }> = [];
+  const managerSocketIds = ['manager-ui-socket'];
+  const registry = {
+    getAllClientSocketIds: () => [],
+    getAllManagerSocketIds: () => managerSocketIds,
+    getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
+    getClientsByGroup: () => [],
+  };
+  const semanticAuthority = {
+    dispatch: (input: unknown) => {
+      semanticCommands.push(input);
+      return {
+        ok: true,
+        appliedRevision: 1,
+        snapshot: semanticSnapshot,
+        audit: { id: 'audit:1' },
+        warnings: [],
+      };
+    },
+  };
+  const router = new MessageRouterService(registry as never, semanticAuthority as never);
+  const server = {
+    to: (socketIds: string[]) => ({
+      emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+    }),
+    volatile: {
+      to: (socketIds: string[]) => ({
+        emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+      }),
+    },
+  };
+  router.setServer(server as never);
+
+  router.routeMessage(
+    createSemanticMessage({
+      target: { mode: 'server' },
+      actor: 'cli',
+      role: 'manager',
+      command: { kind: 'graph.snapshot' },
+      requestId: 'semantic-server-request-1',
+    }),
+    'cli-socket'
+  );
+
+  assert.equal(semanticCommands.length, 1);
+  assert.deepEqual(delivered[0]?.socketIds, ['cli-socket']);
+  assert.equal(delivered[0]?.message.type, 'semantic-result');
+  assert.equal(delivered.length, 1);
+});
+
+test('MessageRouterService broadcasts semantic snapshots after server-owned mutations', () => {
+  const delivered: Array<{ socketIds: string[]; message: Message }> = [];
+  const managerSocketIds = ['manager-ui-socket'];
+  const registry = {
+    getAllClientSocketIds: () => [],
+    getAllManagerSocketIds: () => managerSocketIds,
+    getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
+    getClientsByGroup: () => [],
+  };
+  const semanticAuthority = {
+    dispatch: () => ({
+      ok: true,
+      appliedRevision: 2,
+      snapshot: semanticSnapshot,
+      audit: { id: 'audit:2' },
+      warnings: [],
+    }),
+  };
+  const router = new MessageRouterService(registry as never, semanticAuthority as never);
+  const server = {
+    to: (socketIds: string[]) => ({
+      emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+    }),
+    volatile: {
+      to: (socketIds: string[]) => ({
+        emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+      }),
+    },
+  };
+  router.setServer(server as never);
+
+  router.routeMessage(
+    createSemanticMessage({
+      target: { mode: 'server' },
+      actor: 'cli',
+      role: 'manager',
+      command: { kind: 'node.add', node: { id: 'cli-node', type: 'number' } },
+      requestId: 'semantic-server-mutation-1',
+    }),
+    'cli-socket'
+  );
+
+  assert.deepEqual(delivered[0]?.socketIds, ['cli-socket']);
+  assert.equal(delivered[0]?.message.type, 'semantic-result');
+  assert.deepEqual(delivered[1]?.socketIds, managerSocketIds);
+  assert.equal(delivered[1]?.message.type, 'system');
+  assert.equal((delivered[1]?.message as { action?: string }).action, 'semanticSnapshot');
+});
+
+test('MessageRouterService routes semantic results back to the original requester socket', () => {
+  const delivered: Array<{ socketIds: string[]; message: Message }> = [];
+  const managerSocketIds = ['manager-ui-socket', 'cli-socket'];
+  const registry = {
+    getAllClientSocketIds: () => [],
+    getAllManagerSocketIds: () => managerSocketIds,
+    getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
+    getClientsByGroup: () => [],
+  };
+  const router = new MessageRouterService(registry as never);
+  const server = {
+    to: (socketIds: string[]) => ({
+      emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+    }),
+    volatile: {
+      to: (socketIds: string[]) => ({
+        emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+      }),
+    },
+  };
+  router.setServer(server as never);
+
+  router.routeMessage(
+    createSemanticMessage({
+      target: { mode: 'manager' },
+      actor: 'cli',
+      role: 'manager',
+      command: { kind: 'node.add', node: { id: 'cli-node', type: 'number' } },
+      requestId: 'semantic-cli-request-1',
+    }),
+    'cli-socket'
+  );
+  router.routeMessage(
+    createSemanticResultMessage({
+      requestId: 'semantic-cli-request-1',
+      ok: true,
+      result: { accepted: true },
+    }),
+    'manager-ui-socket'
+  );
+
+  assert.deepEqual(delivered[0]?.socketIds, managerSocketIds);
+  assert.deepEqual(delivered[1]?.socketIds, ['cli-socket']);
+  assert.equal(delivered[1]?.message.type, 'semantic-result');
 });
 
 test('MessageRouterService keeps reliable and scheduled commands out of volatile throttling', async () => {

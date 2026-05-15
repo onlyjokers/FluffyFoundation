@@ -3,8 +3,8 @@
  */
 import type { ManagerSDKConfig, SocketTransport } from './types.js';
 
-export type NormalizedManagerSDKConfig = Required<Omit<ManagerSDKConfig, 'commandEnvelope'>> &
-    Pick<ManagerSDKConfig, 'commandEnvelope'>;
+export type NormalizedManagerSDKConfig = Required<Omit<ManagerSDKConfig, 'commandEnvelope' | 'rejectUnauthorized'>> &
+    Pick<ManagerSDKConfig, 'commandEnvelope' | 'rejectUnauthorized'>;
 
 export function normalizeManagerSDKConfig(config: ManagerSDKConfig): NormalizedManagerSDKConfig {
     const transports: SocketTransport[] = (() => {
@@ -23,6 +23,7 @@ export function normalizeManagerSDKConfig(config: ManagerSDKConfig): NormalizedM
         reconnectionDelay: config.reconnectionDelay ?? 1000,
         timeSyncInterval: config.timeSyncInterval ?? 5000,
         transports,
+        rejectUnauthorized: config.rejectUnauthorized,
         // Throttle high-frequency updates to ~30fps by default to prevent backpressure.
         highFreqThrottleMs: config.highFreqThrottleMs ?? 33,
         managerKey: typeof config.managerKey === 'string' ? config.managerKey.trim() : '',

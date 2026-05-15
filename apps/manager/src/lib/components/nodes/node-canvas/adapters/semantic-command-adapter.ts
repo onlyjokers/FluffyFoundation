@@ -1,47 +1,21 @@
 /**
- * Purpose: Translate Canvas semantic gestures into FF-09 command-bus commands.
+ * Purpose: Canvas adapters for semantic command dispatch.
  */
 
 import {
-  createSemanticCommandBus,
-  type NodeRegistry,
   type SemanticActor,
   type SemanticCommand,
   type SemanticCommandBus,
-  type SemanticPartition,
 } from '@shugu/node-core';
+import type { SemanticCommandPayload } from '@shugu/protocol';
+import type { ManagerSDK } from '@shugu/sdk-manager';
 import type { Connection as EngineConnection, NodeInstance } from '$lib/nodes/types';
-import type { Readable } from 'svelte/store';
-import { get } from 'svelte/store';
 
 export type CanvasSemanticCommandAdapter = {
   addNode: (node: NodeInstance) => boolean;
   connect: (connection: EngineConnection) => boolean;
+  setNodeParams: (nodeId: string, params: Record<string, unknown>) => boolean;
   dispatchForFixture: (command: SemanticCommand) => boolean;
-};
-
-export type CanvasSemanticCommandRuntime = {
-  nodeEngine: {
-    exportGraph: () => { nodes: NodeInstance[]; connections: EngineConnection[] };
-    addNode: (node: NodeInstance) => void;
-    addConnection: (connection: EngineConnection) => void;
-    lastError?: { set?: (message: string | null) => void };
-  };
-  nodeRegistry: NodeRegistry;
-  getGroups: () => Array<Record<string, unknown>>;
-  getPartitions: () => SemanticPartition[];
-  isRunningStore: Readable<boolean>;
-  lastErrorStore: Readable<string | null>;
-};
-
-const runtimeStatusFor = (runtime: CanvasSemanticCommandRuntime) => {
-  const partitions = runtime.getPartitions();
-  return {
-    running: get(runtime.isRunningStore),
-    deployedPartitionIds: partitions
-      .filter((partition) => partition.status === 'deployed')
-      .map((partition) => partition.id),
-  };
 };
 
 export function createCanvasSemanticCommandAdapter(opts: {
@@ -66,34 +40,46 @@ export function createCanvasSemanticCommandAdapter(opts: {
   return {
     addNode: (node) => dispatch({ type: 'node.add', node }),
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
     dispatchForFixture: dispatch,
   };
 }
 
-export function createNodeCanvasSemanticCommands(
-  runtime: CanvasSemanticCommandRuntime
-): CanvasSemanticCommandAdapter {
-  let semanticRevision = 0;
+type CanvasSemanticSdk = Pick<ManagerSDK, 'sendSemanticCommand'>;
 
-  return createCanvasSemanticCommandAdapter({
-    commandBus: () =>
-      createSemanticCommandBus({
-        graph: runtime.nodeEngine.exportGraph(),
-        definitions: runtime.nodeRegistry.list(),
-        groups: runtime.getGroups(),
-        partitions: runtime.getPartitions(),
-        runtimeStatus: runtimeStatusFor(runtime),
-        errors: get(runtime.lastErrorStore)
-          ? [{ code: 'last-error', message: String(get(runtime.lastErrorStore)) }]
-          : [],
-        permissions: [{ actorId: 'canvas', operations: ['node.add', 'node.connect'] }],
-        revision: semanticRevision,
-      }),
-    onCommand: (command) => {
-      semanticRevision += 1;
-      if (command.type === 'node.add') runtime.nodeEngine.addNode(command.node);
-      if (command.type === 'node.connect') runtime.nodeEngine.addConnection(command.connection);
-    },
-    onError: (message) => runtime.nodeEngine.lastError?.set?.(message),
-  });
+function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPayload {
+  const { type, ...rest } = command;
+  return { kind: type, ...rest };
+}
+
+function canvasRequestId(command: SemanticCommand): string {
+  if (command.type === 'node.add') return `canvas:node.add:${command.node.id}`;
+  if (command.type === 'node.connect') return `canvas:node.connect:${command.connection.id}`;
+  if (command.type === 'node.params.update') return `canvas:node.params.update:${command.nodeId}`;
+  return `canvas:${command.type}`;
+}
+
+export function createNodeCanvasSemanticCommands(input: {
+  getSDK: () => CanvasSemanticSdk | null;
+  onError?: (message: string) => void;
+}): CanvasSemanticCommandAdapter {
+  const dispatch = (command: SemanticCommand): boolean => {
+    const sdk = input.getSDK();
+    if (!sdk) {
+      input.onError?.('Manager SDK is not connected');
+      return false;
+    }
+    sdk.sendSemanticCommand({
+      requestId: canvasRequestId(command),
+      command: semanticPayloadFromCommand(command),
+    });
+    return true;
+  };
+
+  return {
+    addNode: (node) => dispatch({ type: 'node.add', node }),
+    connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    dispatchForFixture: dispatch,
+  };
 }
