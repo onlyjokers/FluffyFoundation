@@ -31,6 +31,8 @@ SHUGU_AI_OPENAI_API_KEY=<local secret>
 - The v1 AI Agent runtime is a server-side persistent orchestrator that calls the shared semantic command layer directly,
   not a CLI-driven automation loop.
 - CLI remains a debugging, replay, and operator automation surface over the same semantic layer.
+- Runtime ingress starts with server environment events. `client.joined` is emitted when a Client connects, and
+  `client.text.final` is emitted from Client `custom` sensor payloads shaped as `{ kind: "agent-text", text }`.
 - Node and Group knowledge should be exposed through agent-readable node metadata plus progressive-disclosure docs or
   skills, so the model can request only the specific node guidance it needs.
 - Pi Mono may be inspected locally at `/Users/ziqi/Desktop/pi` as a future reference or adapter candidate. It is not the

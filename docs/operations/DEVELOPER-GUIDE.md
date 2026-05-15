@@ -41,3 +41,30 @@ when the contract requires it.
 
 AI descriptions should tell the operator what a node or command does, what inputs it needs, what outputs it changes, and
 what policy boundaries apply. They must not expose secrets or imply that AI can bypass command-bus validation.
+
+## AI Agent Skills
+
+Add progressive-disclosure skills under `docs/agent-skills/`. Each skill should identify the node or command it teaches,
+the trigger conditions, safe parameter ranges, expected surfaces, and repair hints. Keep the summary short enough for the
+default prompt and put detailed examples in the skill content so the orchestrator can load it only when needed.
+
+Register runtime skill metadata through `packages/ai-core/src/skill-registry.ts` or the server-side defaults in
+`apps/server/src/ai/ai.module.ts`. The orchestrator resolves skills from the current semantic snapshot, event type, and
+any model-requested skill IDs before asking the model for an `AgentCommandPlan`.
+
+## AI Agent Runtime
+
+The persistent AI Agent lives on the server in `apps/server/src/ai/ai-orchestrator.service.ts`. Environment events enter
+from server routing, such as `client.joined` when a Client connects and `client.text.final` when the Client sends the
+`custom` sensor payload `{ kind: "agent-text", text }`. The orchestrator reads a compact semantic snapshot, loads matching
+skills, calls the OpenAI-compatible provider, then sends every proposed command through the semantic authority as dry-run
+before apply.
+
+Canvas and CLI are operator surfaces over the same semantic layer; they are not separate AI control planes. AI-created
+commands must still include the relevant Group scope and obey Group `agentInterface` / `agentPolicy` validation.
+
+## AI Provider Config
+
+Local AI provider config is documented in `docs/harness/AI-AGENT-RUNTIME-CONFIG.md` and loaded from ignored env files.
+Use `SHUGU_AI_OPENAI_MODEL`, `SHUGU_AI_OPENAI_BASE_URL`, `SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL`, and
+`SHUGU_AI_OPENAI_API_KEY` locally. Never place the real key in tracked docs, tests, fixtures, or harness evidence.

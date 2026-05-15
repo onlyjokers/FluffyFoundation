@@ -19,6 +19,7 @@ import type {
 import { addServerTimestamp, classifyDelivery, createDeliveryMetrics, createSemanticResultMessage, createSystemMessage } from '@shugu/protocol';
 import { SemanticGraphAuthorityService } from '../semantic/semantic-graph-authority.service.js';
 import type { SemanticCommand } from '@shugu/node-core';
+import { AiOrchestratorService, type AgentEnvironmentEvent } from '../ai/ai-orchestrator.service.js';
 
 function commandFromSemanticMessage(message: SemanticMessage): SemanticCommand {
     const command = message.command as Record<string, unknown>;
@@ -45,7 +46,8 @@ export class MessageRouterService {
 
     constructor(
         private readonly clientRegistry: ClientRegistryService,
-        private readonly semanticAuthority?: SemanticGraphAuthorityService
+        private readonly semanticAuthority?: SemanticGraphAuthorityService,
+        private readonly aiOrchestrator?: AiOrchestratorService
     ) { }
 
     /**
@@ -161,11 +163,26 @@ export class MessageRouterService {
                 'node-media',           // Media playback events
                 'node-executor',        // NodeExecutor status (deploy/stop/errors)
                 'display',              // Display readiness
+                'agent-text',           // AI Agent text input event
             ];
             
             if (typeof kind !== 'string' || !allowedKinds.includes(kind)) {
                 this.deliveryMetrics.rejected += 1;
                 return;
+            }
+
+            if (kind === 'agent-text') {
+                const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
+                if (!text) {
+                    this.deliveryMetrics.rejected += 1;
+                    return;
+                }
+                this.emitAgentEvent({
+                    type: 'client.text.final',
+                    clientId: message.from,
+                    groupId: this.getAgentGroupIdForClient(message.from),
+                    text,
+                });
             }
         }
         
@@ -345,6 +362,12 @@ export class MessageRouterService {
 
         this.emitToSockets(managerSocketIds, message);
 
+        this.emitAgentEvent({
+            type: 'client.joined',
+            clientId,
+            groupId: this.getAgentGroupIdForClient(clientId),
+        });
+
         // Also send full client list
         this.broadcastClientListUpdate();
     }
@@ -391,6 +414,19 @@ export class MessageRouterService {
         // Note: this still sends one packet per connection, but avoids per-socket JS loop jitter.
         this.server.to(socketIds).emit('msg', message);
         this.deliveryMetrics.delivered += 1;
+    }
+
+    private getAgentGroupIdForClient(clientId: string): string | undefined {
+        const client = this.clientRegistry.getClient(clientId);
+        const group = client?.group;
+        return typeof group === 'string' && group.trim() ? group : undefined;
+    }
+
+    private emitAgentEvent(event: AgentEnvironmentEvent): void {
+        if (!this.aiOrchestrator) return;
+        void this.aiOrchestrator.handleEnvironmentEvent(event).catch((error) => {
+            console.error('[Router] AI Agent event failed:', error);
+        });
     }
 
     /**
