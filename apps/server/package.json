@@ -20,6 +20,7 @@
         "@nestjs/platform-express": "^10.3.0",
         "@nestjs/platform-socket.io": "^10.3.0",
         "@nestjs/websockets": "^10.3.0",
+        "@shugu/ai-core": "workspace:*",
         "@shugu/node-core": "workspace:*",
         "@shugu/protocol": "workspace:*",
         "@socket.io/redis-adapter": "^8.3.0",
