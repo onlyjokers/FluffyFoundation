@@ -30,6 +30,9 @@ const waitFor = async (predicate: () => boolean, timeoutMs = 500): Promise<void>
   }
 };
 
+const payloadFrequency = (cmd: NodeCommand): number | undefined =>
+  (cmd.payload as { frequency?: number } | undefined)?.frequency;
+
 test('input value changes retrigger command sink effects', async () => {
   const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
   const runtime = createCommandRuntime(commands);
@@ -88,18 +91,18 @@ test('input value changes retrigger command sink effects', async () => {
 
   runtime.loadGraph(graph);
   runtime.start();
-  await waitFor(() => commands.some((entry) => entry.cmd.payload.frequency === 440));
+  await waitFor(() => commands.some((entry) => payloadFrequency(entry.cmd) === 440));
 
   const synth = runtime.getNode('synth');
   assert.ok(synth);
   synth.inputValues.frequency = 880;
-  await waitFor(() => commands.some((entry) => entry.cmd.payload.frequency === 880));
+  await waitFor(() => commands.some((entry) => payloadFrequency(entry.cmd) === 880));
   runtime.stop();
 
   assert.equal(commands[0].clientId, 'client-a');
   assert.equal(commands[0].cmd.action, 'modulateSoundUpdate');
-  assert.equal(commands[0].cmd.payload.frequency, 440);
-  const updated = commands.find((entry) => entry.cmd.payload.frequency === 880);
+  assert.equal(payloadFrequency(commands[0].cmd), 440);
+  const updated = commands.find((entry) => payloadFrequency(entry.cmd) === 880);
   assert.ok(updated);
   assert.equal(updated.clientId, 'client-a');
   assert.equal(updated.cmd.action, 'modulateSoundUpdate');

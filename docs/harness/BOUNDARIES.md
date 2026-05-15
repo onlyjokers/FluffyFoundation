@@ -26,7 +26,7 @@ this file.
 | Execution platform | partitions, deploy/start/stop/remove, watchdog, runtime status | authorization bypass |
 | Transport | Socket.IO, display local bridge, server fallback, ack/nack | product semantics |
 | Plugin host | plugin lifecycle, resource budgets, capability declaration | core graph state mutation |
-| AI Operator | planning/proposal/command execution through policy | direct Canvas/Rete mutation or secret access |
+| AI Operator | server-side event ingestion, model calls, progressive skill loading, planning/proposal/command execution through policy | direct Canvas/Rete mutation, CLI shell control as primary runtime, or secret access |
 | Observability | logs, metrics, traces, reports, evidence | hidden side effects |
 
 ## Package Direction
@@ -59,6 +59,21 @@ this file.
 - Root authoring: `apps/manager/src/routes/root`, Canvas adapters, Root-only stores.
 - Manager performance: `apps/manager/src/routes/manager`, published Group controls, lightweight stores.
 - AI: `packages/ai-core` plus future AI operator package; no direct UI mutation.
+
+## AI Runtime Boundary
+
+The v1 AI Agent runtime belongs to the server authority lane. It listens to normalized `AgentEnvironmentEvent` values,
+uses `@shugu/ai-core` for provider/client/context helpers, and sends `AgentCommandPlan` commands to the semantic command
+bus. It must not drive Canvas, Client, Display, or CLI as a hidden UI automation surface.
+
+Group-level AI access is explicit:
+
+- `agentInterface` describes the sandbox surface the model may understand and call: public inputs, outputs, events,
+  commands, and target IDs.
+- `agentPolicy` describes enforcement: target scope, denied surfaces, command/retry budgets, approval class, and
+  rollback/no-op behavior.
+
+These fields are declarative metadata. Enforcement remains in semantic validation, command bus policy, and rollback.
 
 ## Topology Change Policy
 

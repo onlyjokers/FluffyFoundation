@@ -2,6 +2,7 @@
  * Purpose: Load optional local env files for dev/prod without adding external deps.
  *
  * Supported locations (first found wins):
+ * - <repo>/.env                          (local root AI config)
  * - <repo>/secrets/server.env            (recommended; not committed)
  * - <repo>/apps/server/secrets/server.env
  * - <repo>/apps/server/.env
@@ -52,6 +53,7 @@ export function loadOptionalEnv(): { loadedFrom: string | null; keys: string[] }
   const maxDepth = 4;
   let dir: string | null = cwd;
   for (let i = 0; i < maxDepth && dir; i += 1) {
+    candidates.push(path.join(dir, '.env'));
     candidates.push(path.join(dir, 'secrets/server.env'));
     candidates.push(path.join(dir, 'apps/server/secrets/server.env'));
     candidates.push(path.join(dir, 'apps/server/.env'));
