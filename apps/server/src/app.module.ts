@@ -6,6 +6,7 @@ import { MessageRouterModule } from './message-router/message-router.module.js';
 import { GeoModule } from './geo/geo.module.js';
 import { AssetsModule } from './assets/assets.module.js';
 import { LocalMediaModule } from './local-media/local-media.module.js';
+import { SemanticModule } from './semantic/semantic.module.js';
 
 @Module({
     imports: [
@@ -15,6 +16,7 @@ import { LocalMediaModule } from './local-media/local-media.module.js';
         GeoModule,
         AssetsModule,
         LocalMediaModule,
+        SemanticModule,
     ],
     controllers: [AppController],
 })

@@ -13,8 +13,15 @@ import type {
 } from '@shugu/protocol';
 import { targetClients } from '@shugu/protocol';
 
+import { nodeEngine } from '$lib/nodes/engine';
 import { parameterRegistry } from '../parameters/registry';
 import { registerDefaultControlParameters } from '../parameters/presets';
+import { readLocalProjectForServerMigration } from '$lib/project/projectManager';
+import {
+    bindServerSemanticSync,
+    createServerSemanticMigrationCoordinator,
+    type LocalProjectForServerMigration,
+} from '$lib/semantic/server-semantic-sync';
 import {
     displayBridgeNodeMedia,
     displayBridgeState,
@@ -215,6 +222,18 @@ export function connect(config: ManagerSDKConfig): void {
 
     const sdk = new ManagerSDK(config);
     setManagerSDK(sdk);
+
+    const migrationCoordinator = createServerSemanticMigrationCoordinator({
+        storage: typeof window === 'undefined' ? null : window.localStorage,
+        readLocalProject: () => readLocalProjectForServerMigration() as LocalProjectForServerMigration | null,
+        sendSemanticCommand: (input) => sdk.sendSemanticCommand(input),
+    });
+
+    bindServerSemanticSync({
+        sdk,
+        nodeEngine,
+        migrationCoordinator,
+    });
 
     // Subscribe to state changes
     sdk.onStateChange((newState) => {

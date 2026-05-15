@@ -2,6 +2,7 @@
  * Purpose: Shared public and internal types for the Manager SDK.
  */
 import type { Message } from '@shugu/protocol';
+import type { SemanticGraphSnapshot } from '@shugu/node-core';
 import type { StateSnapshotPatch } from '../state-snapshot.js';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -18,6 +19,8 @@ export interface ManagerState {
 }
 
 export type MessageHandler<T = Message> = (message: T) => void;
+
+export type SemanticSnapshotHandler = (snapshot: SemanticGraphSnapshot) => void;
 
 export type SocketTransport = 'polling' | 'websocket';
 

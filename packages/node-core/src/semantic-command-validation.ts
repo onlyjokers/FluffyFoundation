@@ -18,6 +18,10 @@ export function validateSemanticCommandDetailed(
   definitions: SemanticDefinition[]
 ): SemanticValidationError[] {
   switch (command.type) {
+    case 'graph.snapshot':
+      return [];
+    case 'graph.replace':
+      return [];
     case 'node.add':
     case 'node.remove':
     case 'node.archive':

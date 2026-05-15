@@ -14,7 +14,7 @@ test('parseGraphCommand creates semantic commands for add-node, connect, set-par
     {
       action: 'semantic',
       requestId: 'graph-snapshot',
-      command: { type: 'proposal.create', proposal: { id: 'graph-snapshot', title: 'Graph snapshot', commands: [] } },
+      command: { kind: 'graph.snapshot' },
     }
   );
 
@@ -124,7 +124,7 @@ test('createCliRunner sends semantic command and prints structured JSON', async 
     {
       command: { kind: 'node.params.update', nodeId: 'tone-1', params: { volume: -36 } },
       requestId: 'set-param:tone-1.volume',
-      target: { mode: 'manager' },
+      target: { mode: 'server' },
       dryRun: false,
     },
   ]);

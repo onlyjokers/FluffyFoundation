@@ -162,7 +162,7 @@ test('ManagerSDK sendPluginControl preserves reclaim command envelope for Group 
   assert.equal((emitted[0] as { actor?: string }).actor, 'manager-reclaim');
 });
 
-test('ManagerSDK sends semantic graph commands through the live manager channel', () => {
+test('ManagerSDK sends semantic graph commands to the server authority by default', () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',
     commandEnvelope: { actor: 'semantic-manager', role: 'manager', scopeGroupId: 'stage-left' },
@@ -170,7 +170,6 @@ test('ManagerSDK sends semantic graph commands through the live manager channel'
   const emitted = connectFakeSocket(sdk);
 
   sdk.sendSemanticCommand({
-    target: { mode: 'manager' },
     command: {
       kind: 'node.params.update',
       nodeId: 'tone-1',
@@ -185,7 +184,7 @@ test('ManagerSDK sends semantic graph commands through the live manager channel'
   assert.deepEqual(emitted[0], {
     type: 'semantic',
     version: 1,
-    target: { mode: 'manager' },
+    target: { mode: 'server' },
     actor: 'semantic-manager',
     role: 'manager',
     command: {
@@ -198,6 +197,44 @@ test('ManagerSDK sends semantic graph commands through the live manager channel'
     dryRun: true,
     clientTimestamp: (emitted[0] as { clientTimestamp?: number }).clientTimestamp,
   });
+});
+
+test('ManagerSDK requests server semantic snapshots and dispatches snapshot system messages', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: { actor: 'snapshot-manager', role: 'manager', scopeGroupId: 'stage-left' },
+  });
+  const { emitted, triggerMsg } = connectFakeEventSocket(sdk);
+  setupManagerSocketListeners((sdk as unknown as { createSocketListenerHost: () => never }).createSocketListenerHost());
+  const snapshots: unknown[] = [];
+
+  sdk.onSemanticSnapshot((snapshot) => snapshots.push(snapshot));
+  sdk.requestSemanticSnapshot();
+  triggerMsg({
+    type: 'system',
+    version: 1,
+    serverTimestamp: 100,
+    action: 'semanticSnapshot',
+    payload: {
+      semanticSnapshot: {
+        revision: 4,
+        nodes: [],
+        definitions: [],
+        connections: [],
+        groups: [],
+        partitions: [],
+        runtimeStatus: { running: false, deployedPartitionIds: [] },
+        deviceCapabilities: [],
+        errors: [],
+        permissions: [],
+      },
+    },
+  });
+
+  assert.equal(emitted.length, 1);
+  assert.equal((emitted[0] as { target?: { mode?: string } }).target?.mode, 'server');
+  assert.deepEqual((emitted[0] as { command?: unknown }).command, { kind: 'graph.snapshot' });
+  assert.equal((snapshots[0] as { revision?: number }).revision, 4);
 });
 
 test('ManagerSDK sends semantic command results through the live manager channel', () => {

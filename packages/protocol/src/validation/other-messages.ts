@@ -93,6 +93,7 @@ export function validateSystemMessage(input: ObjectRecord, ctx: MutableValidatio
   optionalNumber(input.payload, ctx, 'clientTimestamp', 'payload.clientTimestamp', 'message.system.payload.clientTimestamp');
   validateStateStrategy(input.payload.stateStrategy, ctx);
   validateControlPlaneSnapshot(input.payload.controlPlane, ctx);
+  validateSemanticSnapshotPayload(input.payload.semanticSnapshot, ctx);
   validateClientListPayload(input.payload, ctx);
 }
 
@@ -111,12 +112,29 @@ function validateSemanticTarget(target: unknown, ctx: MutableValidationContext):
     addReason(ctx, 'protocol.field.invalid', 'message.semantic.target', 'target', 'target must be an object');
     return;
   }
-  if (target.mode === 'manager') return;
+  if (target.mode === 'server' || target.mode === 'manager') return;
   if (target.mode === 'managerId') {
     requireNonEmptyString(target, ctx, 'managerId', 'message.semantic.target.managerId', 'target.managerId');
     return;
   }
-  addReason(ctx, fieldCode(target, 'mode'), 'message.semantic.target.mode', 'target.mode', 'target.mode must be manager or managerId');
+  addReason(ctx, fieldCode(target, 'mode'), 'message.semantic.target.mode', 'target.mode', 'target.mode must be server, manager, or managerId');
+}
+
+function validateSemanticSnapshotPayload(value: unknown, ctx: MutableValidationContext): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.semanticSnapshot', 'payload.semanticSnapshot', 'payload.semanticSnapshot must be an object');
+    return;
+  }
+  requireNumber(value, ctx, 'revision', 'message.system.payload.semanticSnapshot.revision', 'payload.semanticSnapshot.revision');
+  for (const field of ['nodes', 'definitions', 'connections', 'groups', 'partitions', 'deviceCapabilities', 'errors', 'permissions']) {
+    if (!Array.isArray(value[field])) {
+      addReason(ctx, 'protocol.field.invalid', `message.system.payload.semanticSnapshot.${field}`, `payload.semanticSnapshot.${field}`, `payload.semanticSnapshot.${field} must be an array`);
+    }
+  }
+  if (!isRecord(value.runtimeStatus)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.semanticSnapshot.runtimeStatus', 'payload.semanticSnapshot.runtimeStatus', 'payload.semanticSnapshot.runtimeStatus must be an object');
+  }
 }
 
 function validateSemanticWarnings(warnings: unknown, ctx: MutableValidationContext): void {

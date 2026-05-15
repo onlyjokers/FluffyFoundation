@@ -1,5 +1,5 @@
 /**
- * Purpose: Thin Canvas adapter over the Manager-owned semantic command bridge.
+ * Purpose: Canvas adapters for semantic command dispatch.
  */
 
 import {
@@ -7,11 +7,9 @@ import {
   type SemanticCommand,
   type SemanticCommandBus,
 } from '@shugu/node-core';
+import type { SemanticCommandPayload } from '@shugu/protocol';
+import type { ManagerSDK } from '@shugu/sdk-manager';
 import type { Connection as EngineConnection, NodeInstance } from '$lib/nodes/types';
-import {
-  createManagerSemanticBridge,
-  type ManagerSemanticBridgeRuntime,
-} from '../../../../semantic/manager-semantic-bridge';
 
 export type CanvasSemanticCommandAdapter = {
   addNode: (node: NodeInstance) => boolean;
@@ -47,15 +45,41 @@ export function createCanvasSemanticCommandAdapter(opts: {
   };
 }
 
-export function createNodeCanvasSemanticCommands(
-  runtime: ManagerSemanticBridgeRuntime
-): CanvasSemanticCommandAdapter {
-  const bridge = createManagerSemanticBridge(runtime);
+type CanvasSemanticSdk = Pick<ManagerSDK, 'sendSemanticCommand'>;
+
+function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPayload {
+  const { type, ...rest } = command;
+  return { kind: type, ...rest };
+}
+
+function canvasRequestId(command: SemanticCommand): string {
+  if (command.type === 'node.add') return `canvas:node.add:${command.node.id}`;
+  if (command.type === 'node.connect') return `canvas:node.connect:${command.connection.id}`;
+  if (command.type === 'node.params.update') return `canvas:node.params.update:${command.nodeId}`;
+  return `canvas:${command.type}`;
+}
+
+export function createNodeCanvasSemanticCommands(input: {
+  getSDK: () => CanvasSemanticSdk | null;
+  onError?: (message: string) => void;
+}): CanvasSemanticCommandAdapter {
+  const dispatch = (command: SemanticCommand): boolean => {
+    const sdk = input.getSDK();
+    if (!sdk) {
+      input.onError?.('Manager SDK is not connected');
+      return false;
+    }
+    sdk.sendSemanticCommand({
+      requestId: canvasRequestId(command),
+      command: semanticPayloadFromCommand(command),
+    });
+    return true;
+  };
 
   return {
-    addNode: (node) => bridge.addNode(node).ok,
-    connect: (connection) => bridge.connect(connection).ok,
-    setNodeParams: (nodeId, params) => bridge.setNodeParams(nodeId, params).ok,
-    dispatchForFixture: (command) => bridge.dispatch({ actor: { id: 'canvas', role: 'operator' }, command }).ok,
+    addNode: (node) => dispatch({ type: 'node.add', node }),
+    connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    dispatchForFixture: dispatch,
   };
 }

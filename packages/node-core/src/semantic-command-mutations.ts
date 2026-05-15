@@ -41,6 +41,18 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
     revision: state.revision,
   };
 
+  if (command.type === 'graph.snapshot') return next;
+  if (command.type === 'graph.replace') {
+    return {
+      graph: cloneGraph(command.graph),
+      groups: cloneGroups(command.groups ?? []),
+      partitions: clonePartitions(command.partitions ?? []),
+      proposals: [],
+      runtimeStatus: cloneRuntimeStatus({ running: false, deployedPartitionIds: [] }),
+      revision: state.revision + 1,
+    };
+  }
+
   const graphChanges = commandToChanges(command);
   if (graphChanges.length > 0) next.graph = applyGraphChanges(next.graph, graphChanges);
 

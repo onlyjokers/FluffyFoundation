@@ -24,6 +24,8 @@ export const validateRuntimeCommand = (
     | { type: 'node.params.update' }
     | { type: 'node.connect' }
     | { type: 'node.disconnect' }
+    | { type: 'graph.snapshot' }
+    | { type: 'graph.replace' }
   >
 ): SemanticValidationError[] => {
   const nodeIds = new Set(state.graph.nodes.map((node) => String(node.id)));

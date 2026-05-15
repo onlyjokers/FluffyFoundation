@@ -131,6 +131,13 @@ export type SemanticSnapshotInput = {
 };
 
 export type SemanticCommand =
+  | { type: 'graph.snapshot' }
+  | {
+      type: 'graph.replace';
+      graph: GraphState;
+      groups?: SemanticGroup[];
+      partitions?: SemanticPartition[];
+    }
   | { type: 'node.add'; node: NodeInstance }
   | { type: 'node.remove'; nodeId: string }
   | { type: 'node.archive'; nodeId: string }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { createSemanticCommandBus, type SemanticCommand } from '@shugu/node-core';
-import { createCanvasSemanticCommandAdapter } from './semantic-command-adapter';
+import { createCanvasSemanticCommandAdapter, createNodeCanvasSemanticCommands } from './semantic-command-adapter';
 import type { NodeInstance } from '$lib/nodes/types';
 import type { NodeDefinition } from '@shugu/node-core';
 
@@ -101,4 +101,24 @@ test('Canvas and CLI fixture command path produce the same semantic snapshot', (
 
   assert.deepEqual(canvasBus.getSnapshot().nodes, cliBus.getSnapshot().nodes);
   assert.deepEqual(canvasBus.getSnapshot().connections, cliBus.getSnapshot().connections);
+});
+
+test('NodeCanvas semantic commands send opaque semantic payloads through the Manager SDK', () => {
+  const sent: unknown[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: (input: unknown) => sent.push(input),
+    }),
+  });
+
+  assert.equal(adapter.addNode(numberNode), true);
+  assert.deepEqual(sent, [
+    {
+      requestId: 'canvas:node.add:n1',
+      command: {
+        kind: 'node.add',
+        node: numberNode,
+      },
+    },
+  ]);
 });

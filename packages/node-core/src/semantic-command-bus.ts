@@ -166,7 +166,7 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     };
 
     auditLog.push(audit);
-    if (!dryRun) {
+    if (!dryRun && normalized.command.type !== 'graph.snapshot') {
       rollbackSnapshots.set(rollbackToken, cloneCommandState(state));
       state = nextState;
       semanticHistory.record({

@@ -677,3 +677,61 @@ test('semantic command dry-run returns structured validation errors for incompat
   assert.equal(invalidTarget.validationErrors[0].code, 'EXECUTION.INVALID_TARGET_PLATFORM');
   assert.equal(invalidTarget.validationErrors[0].path, 'partitions.partition:bad-target.targetPlatform');
 });
+
+test('command bus returns current snapshot without mutation for graph.snapshot', () => {
+  const bus = createSemanticCommandBus({
+    graph: baseGraph,
+    definitions,
+    revision: 11,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'cli', role: 'operator' },
+    command: { type: 'graph.snapshot' },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.appliedRevision, 11);
+  assert.equal(result.snapshot.revision, 11);
+  assert.equal(result.snapshot.nodes.length, 1);
+  assert.equal(bus.getHistory().length, 0);
+});
+
+test('command bus snapshots preserve normalized definition ports', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 1,
+  });
+
+  const snapshot = bus.getSnapshot();
+
+  assert.equal(snapshot.definitions[0].ports.outputs[0].id, 'out');
+  assert.equal(snapshot.definitions[1].ports.inputs[0].id, 'a');
+});
+
+test('command bus replaces graph state for server-owned graph import', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 0,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'manager', role: 'operator' },
+    command: {
+      type: 'graph.replace',
+      graph: baseGraph,
+      groups: [
+        { id: 'group:1', parentId: null, name: 'Imported', nodeIds: ['n1'], disabled: false },
+      ],
+      partitions: [{ id: 'partition:1', nodeIds: ['n1'], status: 'draft' }],
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.appliedRevision, 1);
+  assert.equal(bus.getSnapshot().nodes[0].id, 'n1');
+  assert.equal(bus.getSnapshot().groups[0].name, 'Imported');
+  assert.equal(bus.getSnapshot().partitions[0].id, 'partition:1');
+});

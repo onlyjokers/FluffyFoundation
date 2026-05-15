@@ -32,6 +32,7 @@ export type TargetSelector =
  * Target selector for live semantic graph commands.
  */
 export type SemanticTargetSelector =
+  | { mode: 'server' }
   | { mode: 'manager' }
   | { mode: 'managerId'; managerId: string };
 
@@ -513,6 +514,7 @@ export type SystemAction =
   | 'clientList'
   | 'clientJoined'
   | 'clientLeft'
+  | 'semanticSnapshot'
   | 'error'
   | 'ping'
   | 'pong';
@@ -544,6 +546,7 @@ export interface SystemMessage extends BaseMessage {
     clientTimestamp?: number;
     stateStrategy?: import('./state-strategy.js').StateStrategyStatus;
     controlPlane?: import('./state-strategy.js').ControlPlaneSnapshot;
+    semanticSnapshot?: Record<string, unknown>;
   };
 }
 

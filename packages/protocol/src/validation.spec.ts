@@ -268,6 +268,35 @@ test('validateMessage accepts semantic manager commands and semantic results', (
   assert.equal(isValidMessage(result), true);
 });
 
+test('validateMessage accepts server-owned semantic commands and semantic snapshots', () => {
+  const request = createSemanticMessage({
+    target: { mode: 'server' },
+    actor: 'cli',
+    role: 'manager',
+    command: { kind: 'graph.snapshot' },
+    requestId: 'semantic-server-snapshot',
+  });
+  const snapshot = createSystemMessage('semanticSnapshot', {
+    semanticSnapshot: {
+      revision: 1,
+      nodes: [],
+      definitions: [],
+      connections: [],
+      groups: [],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+    },
+  });
+
+  assert.equal(validateMessage(request).ok, true);
+  assert.equal(isValidMessage(request), true);
+  assert.equal(validateMessage(snapshot).ok, true);
+  assert.equal(isValidMessage(snapshot), true);
+});
+
 test('validateMessage rejects malformed semantic messages with failing field paths', () => {
   const invalidMessages = [
     {

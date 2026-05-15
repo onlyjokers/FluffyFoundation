@@ -47,7 +47,7 @@ import {
     type ManagerSocketListenerHost,
 } from './manager-sdk/socket-listeners.js';
 import { createInitialManagerState, notifyManagerStateListeners } from './manager-sdk/state.js';
-import type { ManagerSDKConfig, ManagerState, MessageHandler } from './manager-sdk/types.js';
+import type { ManagerSDKConfig, ManagerState, MessageHandler, SemanticSnapshotHandler } from './manager-sdk/types.js';
 export type {
     ConnectionStatus,
     ManagerSDKConfig,
@@ -71,6 +71,7 @@ export class ManagerSDK {
     private sensorDataHandlers: Set<MessageHandler<SensorDataMessage>> = new Set();
     private semanticCommandHandlers: Set<MessageHandler<SemanticMessage>> = new Set();
     private semanticResultHandlers: Set<MessageHandler<SemanticResultMessage>> = new Set();
+    private semanticSnapshotHandlers: Set<SemanticSnapshotHandler> = new Set();
     private timeSyncIntervalId: ReturnType<typeof setInterval> | null = null;
     private readonly deliveryQueue: ManagerDeliveryQueue;
 
@@ -177,6 +178,14 @@ export class ManagerSDK {
     onSemanticResult(handler: MessageHandler<SemanticResultMessage>): () => void {
         this.semanticResultHandlers.add(handler);
         return () => this.semanticResultHandlers.delete(handler);
+    }
+
+    /**
+     * Subscribe to server-owned semantic graph snapshots.
+     */
+    onSemanticSnapshot(handler: SemanticSnapshotHandler): () => void {
+        this.semanticSnapshotHandlers.add(handler);
+        return () => this.semanticSnapshotHandlers.delete(handler);
     }
 
     /**
@@ -300,7 +309,7 @@ export class ManagerSDK {
     }): void {
         if (!this.socket?.connected) return;
         const message = createSemanticMessage({
-            target: input.target ?? { mode: 'manager' },
+            target: input.target ?? { mode: 'server' },
             actor: this.commandEnvelope.actor,
             role: this.commandEnvelope.role === 'system' ? 'system' : 'manager',
             command: input.command,
@@ -308,6 +317,17 @@ export class ManagerSDK {
             requestId: input.requestId,
         });
         this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Request the current server-owned semantic graph snapshot.
+     */
+    requestSemanticSnapshot(requestId = 'graph-snapshot'): void {
+        this.sendSemanticCommand({
+            target: { mode: 'server' },
+            command: { kind: 'graph.snapshot' },
+            requestId,
+        });
     }
 
     /**
@@ -611,6 +631,7 @@ export class ManagerSDK {
             getSensorDataHandlers: () => this.sensorDataHandlers,
             getSemanticCommandHandlers: () => this.semanticCommandHandlers,
             getSemanticResultHandlers: () => this.semanticResultHandlers,
+            getSemanticSnapshotHandlers: () => this.semanticSnapshotHandlers,
         };
     }
 }

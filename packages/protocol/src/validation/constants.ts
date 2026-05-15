@@ -48,6 +48,7 @@ export const SYSTEM_ACTIONS = [
   'clientList',
   'clientJoined',
   'clientLeft',
+  'semanticSnapshot',
   'error',
   'ping',
   'pong',

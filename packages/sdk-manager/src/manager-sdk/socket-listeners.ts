@@ -19,7 +19,7 @@ import {
 } from '@shugu/protocol';
 import type { Socket } from 'socket.io-client';
 import { createStateSnapshotPatch } from '../state-snapshot.js';
-import type { ManagerState, MessageHandler } from './types.js';
+import type { ManagerState, MessageHandler, SemanticSnapshotHandler } from './types.js';
 
 export type ManagerSocketListenerHost = {
     getSocket(): Socket | null;
@@ -32,6 +32,7 @@ export type ManagerSocketListenerHost = {
     getSensorDataHandlers(): Set<MessageHandler<SensorDataMessage>>;
     getSemanticCommandHandlers(): Set<MessageHandler<SemanticMessage>>;
     getSemanticResultHandlers(): Set<MessageHandler<SemanticResultMessage>>;
+    getSemanticSnapshotHandlers(): Set<SemanticSnapshotHandler>;
 };
 
 export function setupManagerSocketListeners(host: ManagerSocketListenerHost): void {
@@ -134,6 +135,17 @@ export function handleManagerSystemMessage(
                     stateStrategy: message.payload.stateStrategy,
                     controlPlane: message.payload.controlPlane,
                 }));
+            }
+            break;
+        case 'semanticSnapshot':
+            if (message.payload.semanticSnapshot) {
+                host.getSemanticSnapshotHandlers().forEach(handler => {
+                    try {
+                        handler(message.payload.semanticSnapshot as never);
+                    } catch (error) {
+                        console.error('[SDK Manager] Semantic snapshot handler error:', error);
+                    }
+                });
             }
             break;
         case 'clientJoined':

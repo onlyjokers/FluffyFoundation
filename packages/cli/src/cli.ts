@@ -3,7 +3,7 @@
  */
 
 import { ManagerSDK } from '@shugu/sdk-manager';
-import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/protocol';
+import type { SemanticCommandPayload, SemanticResultMessage, SemanticTargetSelector } from '@shugu/protocol';
 import type { ManagerSDKConfig, ManagerState, SocketTransport } from '@shugu/sdk-manager';
 
 type ParsedGraphCommand = {
@@ -19,7 +19,7 @@ type CliSdk = {
   getState(): Pick<ManagerState, 'status'>;
   onStateChange(handler: (state: Pick<ManagerState, 'status'>) => void): () => void;
   sendSemanticCommand(input: {
-    target: { mode: 'manager' };
+    target: SemanticTargetSelector;
     command: SemanticCommandPayload;
     requestId: string;
     dryRun: boolean;
@@ -116,10 +116,7 @@ export function parseGraphCommand(args: string[]): ParsedGraphCommand {
       return {
         action: 'semantic',
         requestId: 'graph-snapshot',
-        command: {
-          type: 'proposal.create',
-          proposal: { id: 'graph-snapshot', title: 'Graph snapshot', commands: [] },
-        },
+        command: { kind: 'graph.snapshot' },
         ...(dryRun ? { dryRun } : {}),
       };
     case 'add-node': {
@@ -248,7 +245,7 @@ export function createCliRunner(options: CliRunnerOptions = {}) {
                 sdk.sendSemanticCommand({
                   command: parsed.command,
                   requestId: parsed.requestId,
-                  target: { mode: 'manager' },
+                  target: { mode: 'server' },
                   dryRun: false,
                 })
               )
