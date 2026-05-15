@@ -6,6 +6,7 @@ import { isExecutionTargetPlatform } from '@shugu/protocol';
 import type {
   CommandState,
   SemanticCommand,
+  SemanticGroup,
   SemanticValidationError,
 } from './semantic-graph-types.js';
 import {
@@ -35,9 +36,17 @@ export const validateRuntimeCommand = (
   switch (command.type) {
     case 'group.create':
       return isNonEmpty(command.group.id)
-        ? []
+        ? validateAgentGroupMetadata(command.group, `groups.${command.group.id}`)
         : [validationError('GRAPH.INVALID_GROUP', 'groups.id', 'Group id is required.', ['Provide a non-empty group id.'])];
     case 'group.update':
+      if (!groupIds.has(String(command.groupId))) {
+        return [
+          validationError('GRAPH.MISSING_GROUP', `groups.${command.groupId}`, `Group not found: ${command.groupId}`, [
+            'Refresh the snapshot and choose an existing group id.',
+          ]),
+        ];
+      }
+      return validateAgentGroupMetadata(command.patch, `groups.${command.groupId}`);
     case 'group.archive':
     case 'group.delete':
     case 'group.restore':
@@ -82,6 +91,46 @@ export const validateRuntimeCommand = (
             ]),
           ];
   }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const validateAgentGroupMetadata = (
+  group: Partial<SemanticGroup>,
+  path: string
+): SemanticValidationError[] => {
+  const policy = group.agentPolicy;
+  if (!isRecord(policy)) return [];
+
+  const errors: SemanticValidationError[] = [];
+  if (policy.budgets !== undefined && !isRecord(policy.budgets)) {
+    errors.push(
+      validationError('POLICY.INVALID_AGENT_POLICY', `${path}.agentPolicy.budgets`, 'Agent policy budgets must be an object.', [
+        'Provide an object with non-negative numeric limits.',
+      ])
+    );
+  }
+
+  if (isRecord(policy.budgets)) {
+    const budgetKeys = ['maxNodes', 'maxConnections', 'maxParamsPerCommand', 'maxCommandsPerTurn', 'maxRetries'] as const;
+    for (const key of budgetKeys) {
+      const value = policy.budgets[key];
+      if (value === undefined) continue;
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        errors.push(
+          validationError(
+            'POLICY.INVALID_AGENT_POLICY',
+            `${path}.agentPolicy.budgets.${key}`,
+            `Agent policy budget ${key} must be a non-negative finite number.`,
+            ['Use a non-negative finite number or omit this budget field.']
+          )
+        );
+      }
+    }
+  }
+
+  return errors;
 };
 
 const validateRuntimeOverride = (

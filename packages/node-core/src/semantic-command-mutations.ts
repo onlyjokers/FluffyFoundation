@@ -57,6 +57,15 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
   if (graphChanges.length > 0) next.graph = applyGraphChanges(next.graph, graphChanges);
 
   switch (command.type) {
+    case 'node.add':
+      if (command.scopeGroupId) {
+        next.groups = next.groups.map((group) =>
+          group.id === command.scopeGroupId && !group.nodeIds.includes(command.node.id)
+            ? { ...group, nodeIds: [...group.nodeIds, command.node.id] }
+            : group
+        );
+      }
+      break;
     case 'node.params.update':
       next.graph = {
         ...next.graph,

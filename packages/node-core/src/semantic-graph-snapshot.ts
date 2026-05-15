@@ -4,6 +4,8 @@
 
 import type { GraphState } from './types.js';
 import type {
+  AgentGroupInterface,
+  AgentGroupPolicy,
   RuntimeStatus,
   SemanticDefinition,
   SemanticGraphSnapshot,
@@ -20,6 +22,92 @@ export const cloneRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? { ...(value as Record<string, unknown>) }
     : {};
+
+const cloneStringArray = (values: string[] | undefined): string[] | undefined =>
+  values ? [...values] : undefined;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeStringArray = (value: unknown): string[] | undefined =>
+  Array.isArray(value) ? value.map(String).filter(Boolean) : undefined;
+
+const normalizeAgentPorts = (value: unknown): AgentGroupInterface['publicInputs'] | undefined =>
+  Array.isArray(value)
+    ? value
+        .filter(isRecord)
+        .map((port) => ({
+          id: String(port.id ?? ''),
+          type: String(port.type ?? 'any'),
+          ...(port.label === undefined ? {} : { label: String(port.label) }),
+          ...(port.description === undefined ? {} : { description: String(port.description) }),
+        }))
+        .filter((port) => port.id.length > 0)
+    : undefined;
+
+const cloneAgentInterface = (value: AgentGroupInterface | undefined): AgentGroupInterface | undefined =>
+  value
+    ? {
+        publicInputs: value.publicInputs ? value.publicInputs.map((port) => ({ ...port })) : undefined,
+        publicOutputs: value.publicOutputs ? value.publicOutputs.map((port) => ({ ...port })) : undefined,
+        exposedNodeIds: cloneStringArray(value.exposedNodeIds),
+        callableCommands: cloneStringArray(value.callableCommands),
+        eventBindings: cloneStringArray(value.eventBindings),
+      }
+    : undefined;
+
+const normalizeAgentInterface = (value: unknown): AgentGroupInterface | undefined => {
+  if (!isRecord(value)) return undefined;
+  return {
+    publicInputs: normalizeAgentPorts(value.publicInputs),
+    publicOutputs: normalizeAgentPorts(value.publicOutputs),
+    exposedNodeIds: normalizeStringArray(value.exposedNodeIds),
+    callableCommands: normalizeStringArray(value.callableCommands),
+    eventBindings: normalizeStringArray(value.eventBindings),
+  };
+};
+
+const cloneAgentPolicy = (value: AgentGroupPolicy | undefined): AgentGroupPolicy | undefined =>
+  value
+    ? {
+        enabled: value.enabled,
+        allowedActorIds: cloneStringArray(value.allowedActorIds),
+        allowedCommands: cloneStringArray(value.allowedCommands),
+        deniedSurfaces: value.deniedSurfaces ? [...value.deniedSurfaces] : undefined,
+        targetScope: value.targetScope
+          ? {
+              nodeIds: cloneStringArray(value.targetScope.nodeIds),
+              allowNewNodes: value.targetScope.allowNewNodes,
+            }
+          : undefined,
+        budgets: value.budgets ? { ...value.budgets } : undefined,
+        approvalRequired: value.approvalRequired,
+        rollbackOnReject: value.rollbackOnReject,
+      }
+    : undefined;
+
+const normalizeAgentPolicy = (value: unknown): AgentGroupPolicy | undefined => {
+  if (!isRecord(value)) return undefined;
+  const targetScope = isRecord(value.targetScope)
+    ? {
+        nodeIds: normalizeStringArray(value.targetScope.nodeIds),
+        allowNewNodes:
+          typeof value.targetScope.allowNewNodes === 'boolean'
+            ? value.targetScope.allowNewNodes
+            : undefined,
+      }
+    : undefined;
+  return {
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : undefined,
+    allowedActorIds: normalizeStringArray(value.allowedActorIds),
+    allowedCommands: normalizeStringArray(value.allowedCommands),
+    deniedSurfaces: normalizeStringArray(value.deniedSurfaces) as AgentGroupPolicy['deniedSurfaces'],
+    targetScope,
+    budgets: isRecord(value.budgets) ? { ...value.budgets } : undefined,
+    approvalRequired: typeof value.approvalRequired === 'boolean' ? value.approvalRequired : undefined,
+    rollbackOnReject: typeof value.rollbackOnReject === 'boolean' ? value.rollbackOnReject : undefined,
+  };
+};
 
 export const cloneGraph = (graph: GraphState): GraphState => ({
   nodes: (graph.nodes ?? []).map((node) => ({
@@ -47,6 +135,8 @@ export const cloneGroups = (groups: SemanticGroup[]): SemanticGroup[] =>
         }))
       : undefined,
     visibility: group.visibility ? { ...group.visibility } : undefined,
+    agentInterface: cloneAgentInterface(group.agentInterface),
+    agentPolicy: cloneAgentPolicy(group.agentPolicy),
   }));
 
 export const clonePartitions = (partitions: SemanticPartition[]): SemanticPartition[] =>
@@ -160,6 +250,8 @@ export const normalizeGroups = (groups: SemanticSnapshotInput['groups'] = []): S
             ) as ControlPlaneVisibilityAccess,
           }
         : undefined,
+    agentInterface: normalizeAgentInterface(group.agentInterface),
+    agentPolicy: normalizeAgentPolicy(group.agentPolicy),
   }));
 
 export function createSemanticGraphSnapshot(input: SemanticSnapshotInput): SemanticGraphSnapshot {

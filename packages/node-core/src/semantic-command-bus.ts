@@ -11,6 +11,7 @@ import type {
   SemanticCommandPolicy,
   SemanticActor,
   SemanticGraphSnapshot,
+  SemanticGroup,
 } from './semantic-graph-types.js';
 import {
   cloneGraph,
@@ -275,6 +276,10 @@ export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
           : { allowed: true };
       }
 
+      if (role === 'ai' && group.agentPolicy?.enabled) {
+        return evaluateAgentGroupPolicy({ actor, command, group, snapshot });
+      }
+
       if (role === 'root') return { allowed: true };
 
       if (command.type === 'group.reclaim') {
@@ -355,6 +360,10 @@ function requiredCapability(command: SemanticCommand): ControlPlaneCapability | 
 }
 
 function groupForCommand(groups: SemanticGraphSnapshot['groups'], command: SemanticCommand) {
+  const scopedGroupId = scopeGroupIdFor(command);
+  if (scopedGroupId) {
+    return groups.find((group) => group.id === scopedGroupId) ?? null;
+  }
   if ('groupId' in command) {
     return groups.find((group) => group.id === command.groupId) ?? null;
   }
@@ -366,4 +375,107 @@ function groupForCommand(groups: SemanticGraphSnapshot['groups'], command: Seman
   }
   if (command.type === 'node.add') return null;
   return null;
+}
+
+function scopeGroupIdFor(command: SemanticCommand): string | null {
+  return 'scopeGroupId' in command && typeof command.scopeGroupId === 'string' && command.scopeGroupId.length > 0
+    ? command.scopeGroupId
+    : null;
+}
+
+function commandSurface(command: SemanticCommand): string | null {
+  if (command.type.startsWith('partition.')) return 'partition';
+  if (command.type.startsWith('runtime.override.')) return 'device';
+  if (command.type.startsWith('node.') || command.type.startsWith('group.')) return 'canvas';
+  return null;
+}
+
+function targetNodeIdsForCommand(command: SemanticCommand, snapshot: SemanticGraphSnapshot): string[] {
+  if (command.type === 'node.add') return [command.node.id];
+  if ('nodeId' in command) return [String(command.nodeId)];
+  if (command.type === 'node.connect') {
+    return [String(command.connection.sourceNodeId), String(command.connection.targetNodeId)];
+  }
+  if (command.type === 'node.disconnect') {
+    const connection = snapshot.connections.find((item) => item.id === command.connectionId);
+    return connection ? [String(connection.sourceNodeId), String(connection.targetNodeId)] : [];
+  }
+  if (command.type === 'partition.deploy') return command.nodeIds.map(String);
+  return [];
+}
+
+function countGroupConnections(snapshot: SemanticGraphSnapshot, group: SemanticGroup): number {
+  const nodeIds = new Set(group.nodeIds);
+  return snapshot.connections.filter(
+    (connection) => nodeIds.has(String(connection.sourceNodeId)) && nodeIds.has(String(connection.targetNodeId))
+  ).length;
+}
+
+function evaluateAgentGroupPolicy(input: {
+  actor: SemanticActor;
+  command: SemanticCommand;
+  group: SemanticGroup;
+  snapshot: SemanticGraphSnapshot;
+}): { allowed: boolean; reason?: string } {
+  const policy = input.group.agentPolicy;
+  if (!policy?.enabled) return { allowed: false, reason: 'AI Group policy is disabled.' };
+
+  if (policy.allowedActorIds && !policy.allowedActorIds.includes(input.actor.id)) {
+    return { allowed: false, reason: 'AI actor is not assigned to this Group sandbox.' };
+  }
+
+  if (policy.allowedCommands && !policy.allowedCommands.includes(input.command.type)) {
+    return { allowed: false, reason: `Command ${input.command.type} is not allowed by AI Group policy.` };
+  }
+
+  if (policy.approvalRequired) {
+    return { allowed: false, reason: 'AI Group policy requires proposal approval for this command.' };
+  }
+
+  const surface = commandSurface(input.command);
+  if (surface && policy.deniedSurfaces?.includes(surface as never)) {
+    return { allowed: false, reason: `AI Group policy denies ${surface} surface commands.` };
+  }
+
+  const scopedNodes = new Set([
+    ...input.group.nodeIds.map(String),
+    ...(policy.targetScope?.nodeIds ?? []).map(String),
+  ]);
+  const targetNodeIds = targetNodeIdsForCommand(input.command, input.snapshot);
+  if (input.command.type === 'node.add') {
+    if (!policy.targetScope?.allowNewNodes) {
+      return { allowed: false, reason: 'AI Group policy does not allow new nodes.' };
+    }
+  } else {
+    const outOfScope = targetNodeIds.find((nodeId) => !scopedNodes.has(nodeId));
+    if (outOfScope) {
+      return { allowed: false, reason: `Target ${outOfScope} is outside AI Group scope.` };
+    }
+  }
+
+  const budgets = policy.budgets ?? {};
+  if (
+    input.command.type === 'node.params.update' &&
+    typeof budgets.maxParamsPerCommand === 'number' &&
+    Object.keys(input.command.params).length > budgets.maxParamsPerCommand
+  ) {
+    return { allowed: false, reason: 'AI Group budget maxParamsPerCommand exceeded.' };
+  }
+
+  if (input.command.type === 'node.add' && typeof budgets.maxNodes === 'number') {
+    const nextNodeIds = new Set(input.group.nodeIds.map(String));
+    nextNodeIds.add(String(input.command.node.id));
+    if (nextNodeIds.size > budgets.maxNodes) {
+      return { allowed: false, reason: 'AI Group budget maxNodes exceeded.' };
+    }
+  }
+
+  if (input.command.type === 'node.connect' && typeof budgets.maxConnections === 'number') {
+    const nextConnectionCount = countGroupConnections(input.snapshot, input.group) + 1;
+    if (nextConnectionCount > budgets.maxConnections) {
+      return { allowed: false, reason: 'AI Group budget maxConnections exceeded.' };
+    }
+  }
+
+  return { allowed: true };
 }

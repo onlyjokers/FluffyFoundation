@@ -36,6 +36,52 @@ export type SemanticDefinition = {
   aiSummary?: AgentNodeDefinitionSummary;
 };
 
+export type AgentGroupPort = {
+  id: string;
+  type: string;
+  label?: string;
+  description?: string;
+};
+
+export type AgentGroupInterface = {
+  publicInputs?: AgentGroupPort[];
+  publicOutputs?: AgentGroupPort[];
+  exposedNodeIds?: string[];
+  callableCommands?: string[];
+  eventBindings?: string[];
+};
+
+export type AgentGroupDeniedSurface =
+  | 'canvas'
+  | 'client'
+  | 'display'
+  | 'device'
+  | 'media'
+  | 'network'
+  | 'partition'
+  | 'secrets'
+  | 'storage';
+
+export type AgentGroupPolicy = {
+  enabled?: boolean;
+  allowedActorIds?: string[];
+  allowedCommands?: string[];
+  deniedSurfaces?: AgentGroupDeniedSurface[];
+  targetScope?: {
+    nodeIds?: string[];
+    allowNewNodes?: boolean;
+  };
+  budgets?: {
+    maxNodes?: number;
+    maxConnections?: number;
+    maxParamsPerCommand?: number;
+    maxCommandsPerTurn?: number;
+    maxRetries?: number;
+  };
+  approvalRequired?: boolean;
+  rollbackOnReject?: boolean;
+};
+
 export type SemanticGroup = {
   id: string;
   parentId: string | null;
@@ -57,6 +103,8 @@ export type SemanticGroup = {
   transferable?: boolean;
   surface?: ControlPlaneSurface;
   visibility?: { defaultAccess: ControlPlaneVisibilityAccess };
+  agentInterface?: AgentGroupInterface;
+  agentPolicy?: AgentGroupPolicy;
 };
 
 export type SemanticPartition = ExecutionPartition;
@@ -138,13 +186,13 @@ export type SemanticCommand =
       groups?: SemanticGroup[];
       partitions?: SemanticPartition[];
     }
-  | { type: 'node.add'; node: NodeInstance }
-  | { type: 'node.remove'; nodeId: string }
-  | { type: 'node.archive'; nodeId: string }
-  | { type: 'node.restore'; nodeId: string }
-  | { type: 'node.connect'; connection: Connection }
-  | { type: 'node.disconnect'; connectionId: string }
-  | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown> }
+  | { type: 'node.add'; node: NodeInstance; scopeGroupId?: string }
+  | { type: 'node.remove'; nodeId: string; scopeGroupId?: string }
+  | { type: 'node.archive'; nodeId: string; scopeGroupId?: string }
+  | { type: 'node.restore'; nodeId: string; scopeGroupId?: string }
+  | { type: 'node.connect'; connection: Connection; scopeGroupId?: string }
+  | { type: 'node.disconnect'; connectionId: string; scopeGroupId?: string }
+  | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown>; scopeGroupId?: string }
   | { type: 'group.create'; group: SemanticGroup }
   | { type: 'group.update'; groupId: string; patch: Partial<SemanticGroup> }
   | { type: 'group.archive'; groupId: string }
