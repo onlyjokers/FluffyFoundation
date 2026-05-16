@@ -2,6 +2,7 @@
 import type { SemanticGraphSnapshot, SemanticGroup, SemanticPartition } from '@shugu/node-core';
 import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/protocol';
 import type { GraphState } from '$lib/nodes/types';
+import type { NodeGroup } from '$lib/components/nodes/node-canvas/controllers/group-controller';
 
 export const SERVER_SEMANTIC_MIGRATION_KEY = 'shugu-server-semantic-migrated-v1';
 
@@ -29,6 +30,8 @@ export type ServerSemanticSyncSdk = {
   onStateChange: (handler: (state: { status: string }) => void) => () => void;
   requestSemanticSnapshot: (requestId?: string) => void;
 };
+
+export type ServerSemanticNodeGroupsSync = (groups: NodeGroup[]) => void;
 
 function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGraphSnapshot | null {
   if (!message.ok) return null;
@@ -81,6 +84,36 @@ export function graphFromServerSemanticSnapshot(
   };
 }
 
+const cloneJsonValue = <T>(value: T): T =>
+  value == null ? value : (JSON.parse(JSON.stringify(value)) as T);
+
+export function groupsFromServerSemanticSnapshot(snapshot: SemanticGraphSnapshot): NodeGroup[] {
+  return (snapshot.groups ?? [])
+    .map((group) => {
+      const record = group as SemanticGroup & { minimized?: unknown };
+      const id = String(record.id ?? '');
+      if (!id) return null;
+      return {
+        id,
+        parentId: record.parentId ? String(record.parentId) : null,
+        name: String(record.name ?? ''),
+        nodeIds: Array.from(
+          new Set((record.nodeIds ?? []).map((nodeId) => String(nodeId)).filter(Boolean))
+        ),
+        disabled: Boolean(record.disabled),
+        minimized: Boolean(record.minimized),
+        kind:
+          record.kind === 'ai-space' ? 'ai-space' : record.kind === 'group' ? 'group' : undefined,
+        runtimeActive: typeof record.runtimeActive === 'boolean' ? record.runtimeActive : undefined,
+        agentInterface:
+          record.agentInterface !== undefined ? cloneJsonValue(record.agentInterface) : undefined,
+        agentPolicy:
+          record.agentPolicy !== undefined ? cloneJsonValue(record.agentPolicy) : undefined,
+      } satisfies NodeGroup;
+    })
+    .filter(Boolean) as NodeGroup[];
+}
+
 const nodeShapeKey = (graph: GraphState): string =>
   JSON.stringify({
     nodes: (graph.nodes ?? [])
@@ -113,9 +146,11 @@ const shallowRecordEqual = (
 export function applyServerSemanticSnapshot(input: {
   snapshot: SemanticGraphSnapshot;
   nodeEngine: ServerSemanticNodeEngine;
+  setNodeGroups?: ServerSemanticNodeGroupsSync;
 }): void {
   const currentGraph = input.nodeEngine.exportGraph?.();
   const nextGraph = graphFromServerSemanticSnapshot(input.snapshot, currentGraph);
+  input.setNodeGroups?.(groupsFromServerSemanticSnapshot(input.snapshot));
 
   if (
     currentGraph &&
@@ -173,10 +208,15 @@ export function bindServerSemanticSync(input: {
   sdk: ServerSemanticSyncSdk;
   nodeEngine: ServerSemanticNodeEngine;
   migrationCoordinator: ServerSemanticMigrationCoordinator;
+  setNodeGroups?: ServerSemanticNodeGroupsSync;
 }): () => void {
   let requestedInitialSnapshot = false;
   const handleSnapshot = (snapshot: SemanticGraphSnapshot) => {
-    applyServerSemanticSnapshot({ snapshot, nodeEngine: input.nodeEngine });
+    applyServerSemanticSnapshot({
+      snapshot,
+      nodeEngine: input.nodeEngine,
+      setNodeGroups: input.setNodeGroups,
+    });
     input.migrationCoordinator.maybeImport(snapshot);
   };
   const unsubscribeSnapshot = input.sdk.onSemanticSnapshot((snapshot) => {

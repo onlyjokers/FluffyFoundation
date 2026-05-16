@@ -1,5 +1,5 @@
 {
-  "__purpose": "Manager-only routing sink that executes incoming command messages on Display (prefers local bridge, falls back to server group).",
+  "__purpose": "Manager-only routing sink that executes incoming command messages on one or more selectable Display endpoints.",
   "type": "display-object",
   "label": "Display",
   "category": "Objects",
@@ -8,7 +8,7 @@
     "platformTargets": ["manager", "display"],
     "sideEffectClass": "remote-control",
     "permissions": ["display:control", "control:send"],
-    "description": "Routes command messages to a paired Display session without exposing UI layout details.",
+    "description": "Routes command messages to selected Display endpoints without exposing UI layout details.",
     "compatibility": [
       {
         "target": "command outputs",
@@ -23,10 +23,17 @@
       }
     ],
     "risks": ["Can change the live Display surface immediately."],
-    "repairHints": ["Verify Display is paired before assuming a command failed."]
+    "repairHints": ["Verify the target Display is connected before assuming a command failed."]
   },
-  "inputs": [{ "id": "in", "label": "In", "type": "command", "kind": "sink" }],
+  "inputs": [
+    { "id": "index", "label": "Index", "type": "number", "min": 1, "step": 1 },
+    { "id": "range", "label": "Range", "type": "number", "min": 1, "step": 1 },
+    { "id": "random", "label": "Random", "type": "boolean" },
+    { "id": "in", "label": "In", "type": "command", "kind": "sink" }
+  ],
   "outputs": [],
-  "configSchema": [],
+  "configSchema": [
+    { "key": "displayId", "label": "Displays", "type": "client-picker", "defaultValue": "" }
+  ],
   "runtime": { "kind": "display-object" }
 }

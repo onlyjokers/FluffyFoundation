@@ -11,6 +11,7 @@
   export let data: Record<string, any>;
   export let hasLabel = false;
   export let audienceClients: Record<string, any>[] = [];
+  export let emptyLabel = 'No clients connected';
   export let clientPickerInputLocked = false;
   export let clientPickerView: ClientPickerItem[] = [];
   export let clientLabel: (client: ClientInfo) => string;
@@ -23,7 +24,7 @@
     <div class="control-label">{data.label}</div>
   {/if}
   {#if (audienceClients ?? []).length === 0}
-    <div class="client-empty">No clients connected</div>
+    <div class="client-empty">{emptyLabel}</div>
   {:else}
     <div class="client-grid {clientPickerInputLocked ? 'locked' : ''}">
       {#each clientPickerView as item (item.client.clientId)}
@@ -37,7 +38,8 @@
           on:pointerdown|stopPropagation
           on:click|stopPropagation={() => pickClient(item.client.clientId)}
         >
-          <span class="client-dot {readinessClass(item.client.clientId, item.client.connected)}"></span>
+          <span class="client-dot {readinessClass(item.client.clientId, item.client.connected)}"
+          ></span>
         </button>
       {/each}
     </div>

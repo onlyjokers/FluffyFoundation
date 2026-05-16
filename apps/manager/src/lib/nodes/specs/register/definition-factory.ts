@@ -87,14 +87,17 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
       return {
         ...base,
         process: () => ({}),
-        onSink: (inputs, _config, context) => {
+        onSink: (inputs, config, context) => {
           const raw = inputs.in;
           const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
           if (commands.length === 0) return;
 
           const sdk = getSDK();
+          const selectedDisplayId = typeof config.displayId === 'string' ? String(config.displayId).trim() : '';
           const availability = displayTransport.getAvailability();
-          if (!availability.hasLocalSession && !sdk) return;
+          if (selectedDisplayId) {
+            if (!sdk) return;
+          } else if (!availability.hasLocalSession && !sdk) return;
 
           if (import.meta.env.DEV && !availability.hasLocalSession && !availability.hasRemoteDisplay) {
             const nodeKey = typeof context?.nodeId === 'string' ? context.nodeId : 'display-object';
@@ -117,7 +120,13 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
             const payload = payloadRecord as ControlPayload;
             const executeAt = typeof cmdRecord.executeAt === 'number' ? cmdRecord.executeAt : undefined;
 
-            const sendResult = displayTransport.sendControl(action, payload, executeAt);
+            const directTarget = selectedDisplayId ? targetManagedClient(selectedDisplayId) : null;
+            const sendResult = directTarget && sdk
+              ? (() => {
+                  sdk.sendControl(directTarget, action, payload, executeAt);
+                  return { route: 'server' };
+                })()
+              : displayTransport.sendControl(action, payload, executeAt);
 
             if (import.meta.env.DEV && (action === 'showImage' || action === 'hideImage' || action === 'showText' || action === 'hideText')) {
               const nodeKey = typeof context?.nodeId === 'string' ? context.nodeId : 'display-object';
@@ -132,6 +141,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
                 console.info('[Manager] display-object', {
                   nodeId: context?.nodeId,
                   via: sendResult.route,
+                  targetDisplayId: selectedDisplayId || undefined,
                   action,
                   urlChars: url ? url.length : null,
                   textChars: text ? text.length : null,

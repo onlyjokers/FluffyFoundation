@@ -207,24 +207,26 @@
                   {#if isActionsCompact}↩{:else}Denodalize{/if}
                 </Button>
               {:else}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  ariaLabel="Nodalization"
-                  title="Nodalization"
-                  on:click={() => onNodalize(group.id)}
-                >
-                  {#if isActionsCompact}⧉{:else}Nodalization{/if}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  ariaLabel="Minimize"
-                  title="Minimize"
-                  on:click={() => onToggleMinimized(group.id)}
-                >
-                  {#if isActionsCompact}▁{:else}Minimize{/if}
-                </Button>
+                {#if !isAiSpace}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    ariaLabel="Nodalization"
+                    title="Nodalization"
+                    on:click={() => onNodalize(group.id)}
+                  >
+                    {#if isActionsCompact}⧉{:else}Nodalization{/if}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    ariaLabel="Minimize"
+                    title="Minimize"
+                    on:click={() => onToggleMinimized(group.id)}
+                  >
+                    {#if isActionsCompact}▁{:else}Minimize{/if}
+                  </Button>
+                {/if}
                 <Button
                   variant={isEditing ? 'primary' : 'ghost'}
                   size="sm"

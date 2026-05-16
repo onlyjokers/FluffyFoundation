@@ -7,3 +7,7 @@ export type DisplayTransportDecision = 'uninitialized' | 'pending' | 'local' | '
 export function shouldConnectDisplayServerPresence(decision: DisplayTransportDecision): boolean {
   return decision === 'pending' || decision === 'local' || decision === 'server';
 }
+
+export function shouldApplyDisplayServerMessages(decision: DisplayTransportDecision): boolean {
+  return decision === 'local' || decision === 'server';
+}

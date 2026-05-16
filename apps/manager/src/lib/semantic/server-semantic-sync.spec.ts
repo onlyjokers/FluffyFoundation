@@ -262,6 +262,58 @@ test('applyServerSemanticSnapshot patches existing node params without reloading
   assert.deepEqual(updates, [{ nodeId: 'flash-rate', config: { value: 100 } }]);
 });
 
+test('applyServerSemanticSnapshot mirrors server groups into Node Graph UI groups', () => {
+  let syncedGroups: unknown[] = [];
+
+  applyServerSemanticSnapshot({
+    snapshot: {
+      ...snapshot([
+        {
+          id: 'new-ai-node',
+          type: 'display-text',
+          params: { text: 'Hello' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ]),
+      groups: [
+        {
+          id: 'ai-space-1',
+          parentId: null,
+          name: 'AI Space',
+          nodeIds: ['existing-node', 'new-ai-node'],
+          disabled: false,
+          kind: 'ai-space',
+          runtimeActive: true,
+          agentInterface: { exposedNodeIds: ['new-ai-node'] },
+          agentPolicy: { enabled: true },
+        },
+      ],
+    },
+    nodeEngine: {
+      loadGraph: () => undefined,
+    },
+    setNodeGroups: (groups) => {
+      syncedGroups = groups;
+    },
+  });
+
+  assert.deepEqual(syncedGroups, [
+    {
+      id: 'ai-space-1',
+      parentId: null,
+      name: 'AI Space',
+      nodeIds: ['existing-node', 'new-ai-node'],
+      disabled: false,
+      minimized: false,
+      kind: 'ai-space',
+      runtimeActive: true,
+      agentInterface: { exposedNodeIds: ['new-ai-node'] },
+      agentPolicy: { enabled: true },
+    },
+  ]);
+});
+
 test('migration coordinator imports old local project only once when server graph is empty', () => {
   const sent: unknown[] = [];
   const storage = new Map<string, string>();

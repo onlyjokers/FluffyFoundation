@@ -17,6 +17,7 @@ import { nodeEngine } from '$lib/nodes/engine';
 import { parameterRegistry } from '../parameters/registry';
 import { registerDefaultControlParameters } from '../parameters/presets';
 import { readLocalProjectForServerMigration } from '$lib/project/projectManager';
+import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
 import {
     bindServerSemanticSync,
     createServerSemanticMigrationCoordinator,
@@ -233,6 +234,7 @@ export function connect(config: ManagerSDKConfig): void {
         sdk,
         nodeEngine,
         migrationCoordinator,
+        setNodeGroups: (groups) => nodeGroupsState.set(groups),
     });
 
     // Subscribe to state changes
