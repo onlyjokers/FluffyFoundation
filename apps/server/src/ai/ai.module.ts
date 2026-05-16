@@ -17,6 +17,7 @@ import {
   AI_SKILL_REGISTRY,
   AiOrchestratorService,
 } from './ai-orchestrator.service.js';
+import { AiDebugLogger, createAiDebugLoggerFromEnv } from './ai-debug-logger.js';
 
 const defaultSkills: AgentSkillDoc[] = [
   {
@@ -73,15 +74,18 @@ const createNoopAiClient = (): OpenAiCompatibleClient => ({
   }),
 });
 
-const createConfiguredAiClient = (): OpenAiCompatibleClient => {
+const createConfiguredAiClient = (aiDebugLogger?: AiDebugLogger): OpenAiCompatibleClient => {
   const apiKey = process.env.SHUGU_AI_OPENAI_API_KEY?.trim();
   const model = process.env.SHUGU_AI_OPENAI_MODEL?.trim() || 'gpt-5.5';
   const baseUrl = process.env.SHUGU_AI_OPENAI_BASE_URL?.trim() || 'https://code.b886.top/v1';
+  const timeoutMs = Number(process.env.SHUGU_AI_OPENAI_TIMEOUT_MS);
   if (!apiKey) return createNoopAiClient();
   return createOpenAiCompatibleClient({
     apiKey,
     model,
     baseUrl,
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
+    logger: (event) => aiDebugLogger?.write({ kind: 'ai.provider', providerEvent: event }),
   });
 };
 
@@ -92,17 +96,23 @@ const createConfiguredAiClient = (): OpenAiCompatibleClient => {
       provide: AI_SKILL_REGISTRY,
       useFactory: () => createAgentSkillRegistry({ skills: defaultSkills }),
     },
-    { provide: AI_CHAT_CLIENT, useFactory: createConfiguredAiClient },
+    { provide: AiDebugLogger, useFactory: createAiDebugLoggerFromEnv },
+    {
+      provide: AI_CHAT_CLIENT,
+      inject: [AiDebugLogger],
+      useFactory: createConfiguredAiClient,
+    },
     {
       provide: AiOrchestratorService,
-      inject: [SemanticGraphAuthorityService, AI_CHAT_CLIENT, AI_SKILL_REGISTRY],
+      inject: [SemanticGraphAuthorityService, AI_CHAT_CLIENT, AI_SKILL_REGISTRY, AiDebugLogger],
       useFactory: (
         semanticAuthority: SemanticGraphAuthorityService,
         chatClient: OpenAiCompatibleClient,
-        skillRegistry: AgentSkillRegistry
-      ) => new AiOrchestratorService(semanticAuthority, chatClient, skillRegistry),
+        skillRegistry: AgentSkillRegistry,
+        aiDebugLogger: AiDebugLogger
+      ) => new AiOrchestratorService(semanticAuthority, chatClient, skillRegistry, aiDebugLogger),
     },
   ],
-  exports: [AiOrchestratorService],
+  exports: [AiOrchestratorService, AiDebugLogger],
 })
 export class AiModule {}

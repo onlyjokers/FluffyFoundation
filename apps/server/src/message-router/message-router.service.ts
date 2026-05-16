@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { ClientRegistryService } from '../client-registry/client-registry.service.js';
 import {
@@ -32,6 +32,7 @@ import {
   AiOrchestratorService,
   type AgentEnvironmentEvent,
 } from '../ai/ai-orchestrator.service.js';
+import { AiDebugLogger } from '../ai/ai-debug-logger.js';
 
 function commandFromSemanticMessage(message: SemanticMessage): SemanticCommand {
   const command = message.command as Record<string, unknown>;
@@ -59,7 +60,8 @@ export class MessageRouterService {
   constructor(
     private readonly clientRegistry: ClientRegistryService,
     private readonly semanticAuthority?: SemanticGraphAuthorityService,
-    private readonly aiOrchestrator?: AiOrchestratorService
+    private readonly aiOrchestrator?: AiOrchestratorService,
+    @Optional() private readonly aiDebugLogger?: AiDebugLogger
   ) {}
 
   /**
@@ -477,9 +479,28 @@ export class MessageRouterService {
 
   private emitAgentEvent(event: AgentEnvironmentEvent): void {
     if (!this.aiOrchestrator) return;
+    this.aiDebugLogger?.write({
+      kind: 'router.agent-event.enqueued',
+      event,
+    });
     void this.aiOrchestrator
       .handleEnvironmentEvent(event)
       .then((result) => {
+        this.aiDebugLogger?.write({
+          kind: 'router.agent-event.result',
+          event,
+          turns: (result.turns ?? []).map((turn) => ({
+            targetSpaceId: turn.targetSpaceId,
+            planId: turn.plan?.id ?? null,
+            commandCount: turn.plan?.commands.length ?? 0,
+            dispatchResults: turn.dispatchResults.map((dispatchResult) => ({
+              ok: dispatchResult.ok,
+              dryRun: dispatchResult.dryRun,
+              appliedRevision: dispatchResult.appliedRevision,
+              message: 'message' in dispatchResult ? dispatchResult.message : undefined,
+            })),
+          })),
+        });
         for (const turn of result.turns ?? []) {
           const applied = [...(turn.dispatchResults ?? [])]
             .reverse()
@@ -493,6 +514,11 @@ export class MessageRouterService {
         }
       })
       .catch((error) => {
+        this.aiDebugLogger?.write({
+          kind: 'router.agent-event.error',
+          event,
+          error,
+        });
         console.error('[Router] AI Agent event failed:', error);
       });
   }

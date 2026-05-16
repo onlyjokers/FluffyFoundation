@@ -18,6 +18,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
     SHUGU_AI_OPENAI_BASE_URL: process.env.SHUGU_AI_OPENAI_BASE_URL,
     SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL: process.env.SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL,
     SHUGU_AI_OPENAI_API_KEY: process.env.SHUGU_AI_OPENAI_API_KEY,
+    SHUGU_AI_OPENAI_TIMEOUT_MS: process.env.SHUGU_AI_OPENAI_TIMEOUT_MS,
   };
 
   try {
@@ -29,6 +30,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
         'SHUGU_AI_OPENAI_BASE_URL=https://code.b886.top/v1',
         'SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL=https://code.b886.top/v1/chat/completions',
         'SHUGU_AI_OPENAI_API_KEY=test-secret',
+        'SHUGU_AI_OPENAI_TIMEOUT_MS=60000',
       ].join('\n'),
       'utf8'
     );
@@ -39,6 +41,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
     delete process.env.SHUGU_AI_OPENAI_BASE_URL;
     delete process.env.SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL;
     delete process.env.SHUGU_AI_OPENAI_API_KEY;
+    delete process.env.SHUGU_AI_OPENAI_TIMEOUT_MS;
 
     const result = loadOptionalEnv();
 
@@ -48,6 +51,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
       'SHUGU_AI_OPENAI_BASE_URL',
       'SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL',
       'SHUGU_AI_OPENAI_MODEL',
+      'SHUGU_AI_OPENAI_TIMEOUT_MS',
       'SHUGU_AI_PROVIDER',
     ]);
     assert.equal(process.env.SHUGU_AI_PROVIDER, 'openai-compatible');
@@ -58,6 +62,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
       'https://code.b886.top/v1/chat/completions'
     );
     assert.equal(process.env.SHUGU_AI_OPENAI_API_KEY, 'test-secret');
+    assert.equal(process.env.SHUGU_AI_OPENAI_TIMEOUT_MS, '60000');
 
     process.env.SHUGU_AI_OPENAI_MODEL = 'keep-existing';
     const secondResult = loadOptionalEnv();

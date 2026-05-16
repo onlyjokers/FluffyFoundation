@@ -111,3 +111,34 @@ test('createOpenAiCompatibleClient falls back to plain JSON parsing when schema 
   assert.deepEqual(JSON.parse(calls[0].init.body).response_format, { type: 'json_object' });
   assert.deepEqual(result.parsed, { status: 'fallback', count: 2 });
 });
+
+test('createOpenAiCompatibleClient parses SSE chat completion chunks into final JSON content', async () => {
+  const client = createOpenAiCompatibleClient({
+    ...baseConfig,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token d in JSON at position 0');
+      },
+      text: async () =>
+        [
+          'data: {"choices":[{"delta":{"content":"{\\"commands\\":"}}]}',
+          '',
+          'data: {"choices":[{"delta":{"content":"[]"}}]}',
+          '',
+          'data: {"choices":[{"delta":{"content":"}"}}]}',
+          '',
+          'data: [DONE]',
+          '',
+        ].join('\n'),
+    }),
+  });
+
+  const result = await client.completeJson({
+    messages: [{ role: 'user', content: 'Return a command plan' }],
+  });
+
+  assert.equal(result.content, '{"commands":[]}');
+  assert.deepEqual(result.parsed, { commands: [] });
+});

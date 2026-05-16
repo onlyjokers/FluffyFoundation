@@ -30,8 +30,42 @@ const extractContent = (raw: unknown): string => {
   if (!isRecord(firstChoice)) return '';
   const message = isRecord(firstChoice.message) ? firstChoice.message : null;
   if (message && typeof message.content === 'string') return message.content;
+  const delta = isRecord(firstChoice.delta) ? firstChoice.delta : null;
+  if (delta && typeof delta.content === 'string') return delta.content;
   if (typeof firstChoice.text === 'string') return firstChoice.text;
   return '';
+};
+
+const parseSsePayloads = (text: string): unknown[] | null => {
+  const payloads: unknown[] = [];
+  let sawDataLine = false;
+
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    sawDataLine = true;
+
+    const payloadText = trimmed.slice('data:'.length).trim();
+    if (!payloadText || payloadText === '[DONE]') continue;
+
+    const payload = jsonParse<unknown>(payloadText);
+    if (payload !== null) payloads.push(payload);
+  }
+
+  return sawDataLine ? payloads : null;
+};
+
+const parseCompletionResponse = (text: string): { raw: unknown; content: string } => {
+  const ssePayloads = parseSsePayloads(text);
+  if (ssePayloads) {
+    return {
+      raw: ssePayloads,
+      content: ssePayloads.map((payload) => extractContent(payload)).join(''),
+    };
+  }
+
+  const raw = jsonParse<unknown>(text);
+  return { raw, content: extractContent(raw) };
 };
 
 const responseFormatFor = (
@@ -114,8 +148,8 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleClientConfi
           throw new Error(`OpenAI-compatible request failed with HTTP ${response.status}${errorText ? `: ${errorText}` : ''}`);
         }
 
-        const raw = (await response.json()) as unknown;
-        const content = extractContent(raw);
+        const responseText = await response.text();
+        const { raw, content } = parseCompletionResponse(responseText);
         const parsed = content ? jsonParse<T>(content) : null;
         config.logger?.({
           kind: 'response',

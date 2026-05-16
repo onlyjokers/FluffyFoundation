@@ -43,6 +43,7 @@ vite-cache*
 *.log
 npm-debug.log*
 pnpm-debug.log*
+apps/**/logs/
 
 # Testing
 coverage

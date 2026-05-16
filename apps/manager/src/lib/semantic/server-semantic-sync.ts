@@ -8,6 +8,7 @@ export const SERVER_SEMANTIC_MIGRATION_KEY = 'shugu-server-semantic-migrated-v1'
 export type ServerSemanticNodeEngine = {
   exportGraph?: () => GraphState;
   loadGraph: (graph: GraphState) => void;
+  updateNodeConfig?: (nodeId: string, config: Record<string, unknown>) => void;
 };
 
 export type LocalProjectForServerMigration = {
@@ -70,13 +71,60 @@ export function graphFromServerSemanticSnapshot(
   };
 }
 
+const nodeShapeKey = (graph: GraphState): string =>
+  JSON.stringify({
+    nodes: (graph.nodes ?? [])
+      .map((node) => ({ id: String(node.id), type: String(node.type) }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    connections: (graph.connections ?? [])
+      .map((connection) => ({
+        id: String(connection.id),
+        sourceNodeId: String(connection.sourceNodeId),
+        sourcePortId: String(connection.sourcePortId),
+        targetNodeId: String(connection.targetNodeId),
+        targetPortId: String(connection.targetPortId),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+  });
+
+const canPatchExistingNodeParams = (currentGraph: GraphState, nextGraph: GraphState): boolean =>
+  nodeShapeKey(currentGraph) === nodeShapeKey(nextGraph);
+
+const shallowRecordEqual = (
+  left: Record<string, unknown>,
+  right: Record<string, unknown>
+): boolean => {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => Object.is(left[key], right[key]));
+};
+
 export function applyServerSemanticSnapshot(input: {
   snapshot: SemanticGraphSnapshot;
   nodeEngine: ServerSemanticNodeEngine;
 }): void {
-  input.nodeEngine.loadGraph(
-    graphFromServerSemanticSnapshot(input.snapshot, input.nodeEngine.exportGraph?.())
-  );
+  const currentGraph = input.nodeEngine.exportGraph?.();
+  const nextGraph = graphFromServerSemanticSnapshot(input.snapshot, currentGraph);
+
+  if (
+    currentGraph &&
+    input.nodeEngine.updateNodeConfig &&
+    canPatchExistingNodeParams(currentGraph, nextGraph)
+  ) {
+    const currentById = new Map((currentGraph.nodes ?? []).map((node) => [String(node.id), node]));
+    for (const nextNode of nextGraph.nodes ?? []) {
+      const currentNode = currentById.get(String(nextNode.id));
+      if (!currentNode) continue;
+      const nextConfig = nextNode.config ?? {};
+      if (!shallowRecordEqual(currentNode.config ?? {}, nextConfig)) {
+        input.nodeEngine.updateNodeConfig(String(nextNode.id), nextConfig);
+      }
+    }
+    return;
+  }
+
+  input.nodeEngine.loadGraph(nextGraph);
 }
 
 export function createServerSemanticMigrationCoordinator(input: {

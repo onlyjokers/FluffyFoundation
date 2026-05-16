@@ -143,6 +143,74 @@ test('applyServerSemanticSnapshot preserves local positions while applying seman
   ]);
 });
 
+test('applyServerSemanticSnapshot patches existing node params without reloading the runtime graph', () => {
+  const loaded: GraphState[] = [];
+  const updates: Array<{ nodeId: string; config: Record<string, unknown> }> = [];
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'flash-rate',
+        type: 'number',
+        position: { x: 42, y: 64 },
+        config: { value: 3 },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'flashlight',
+        type: 'proc-flashlight',
+        position: { x: 120, y: 64 },
+        config: { frequencyHz: 3, dutyCycle: 0.5 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'rate-to-flash',
+        sourceNodeId: 'flash-rate',
+        sourcePortId: 'value',
+        targetNodeId: 'flashlight',
+        targetPortId: 'frequencyHz',
+      },
+    ],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot(
+      [
+        {
+          id: 'flash-rate',
+          type: 'number',
+          params: { value: 100 },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'flashlight',
+          type: 'proc-flashlight',
+          params: { frequencyHz: 3, dutyCycle: 0.5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      localGraph.connections
+    ),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded.push(graph);
+      },
+      updateNodeConfig: (nodeId, config) => {
+        updates.push({ nodeId, config });
+      },
+    },
+  });
+
+  assert.deepEqual(loaded, []);
+  assert.deepEqual(updates, [{ nodeId: 'flash-rate', config: { value: 100 } }]);
+});
+
 test('migration coordinator imports old local project only once when server graph is empty', () => {
   const sent: unknown[] = [];
   const storage = new Map<string, string>();
