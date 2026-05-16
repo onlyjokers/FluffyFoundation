@@ -1,4 +1,4 @@
-// Purpose: verify AI-operable Group sandbox policy and no-op rejection behavior.
+// Purpose: verify AI-operable Space sandbox policy and no-op rejection behavior.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -15,7 +15,9 @@ const definitions = [
     category: 'Values',
     inputs: [{ id: 'in', label: 'In', type: 'number' }],
     outputs: [{ id: 'out', label: 'Out', type: 'number' }],
-    configSchema: [{ key: 'value', label: 'Value', type: 'number', min: 0, max: 10, defaultValue: 1 }],
+    configSchema: [
+      { key: 'value', label: 'Value', type: 'number', min: 0, max: 10, defaultValue: 1 },
+    ],
   },
 ];
 
@@ -42,11 +44,12 @@ const graph = {
 };
 
 const agentGroup = {
-  id: 'group:agent',
+  id: 'ai-space:agent',
   parentId: null,
-  name: 'Agent Sandbox',
+  name: 'Agent Space',
   nodeIds: ['inside'],
   disabled: false,
+  kind: 'ai-space',
   owner: { actorId: 'manager-a', role: 'manager', capabilities: ['group.mutate'] },
   surface: 'internal',
   visibility: { defaultAccess: 'visible-readonly' },
@@ -85,12 +88,17 @@ function createBus() {
 
 const aiActor = { id: 'ai-1', role: 'ai' };
 
-test('AI can mutate and create nodes inside an assigned Group sandbox', () => {
+test('AI can mutate and create nodes inside an assigned AI Space sandbox', () => {
   const bus = createBus();
 
   const updated = bus.dispatch({
     actor: aiActor,
-    command: { type: 'node.params.update', nodeId: 'inside', scopeGroupId: 'group:agent', params: { value: 4 } },
+    command: {
+      type: 'node.params.update',
+      nodeId: 'inside',
+      scopeGroupId: 'ai-space:agent',
+      params: { value: 4 },
+    },
   });
   assert.equal(updated.ok, true);
   assert.equal(bus.getSnapshot().nodes.find((node) => node.id === 'inside')?.params.value, 4);
@@ -99,7 +107,7 @@ test('AI can mutate and create nodes inside an assigned Group sandbox', () => {
     actor: aiActor,
     command: {
       type: 'node.add',
-      scopeGroupId: 'group:agent',
+      scopeGroupId: 'ai-space:agent',
       node: {
         id: 'agent:new',
         type: 'number',
@@ -121,11 +129,16 @@ test('AI sandbox rejects out-of-scope targets and budget overflow without live m
 
   const deniedOutside = bus.dispatch({
     actor: aiActor,
-    command: { type: 'node.params.update', nodeId: 'outside', scopeGroupId: 'group:agent', params: { value: 9 } },
+    command: {
+      type: 'node.params.update',
+      nodeId: 'outside',
+      scopeGroupId: 'ai-space:agent',
+      params: { value: 9 },
+    },
   });
   assert.equal(deniedOutside.ok, false);
   assert.equal(deniedOutside.stage, 'policy');
-  assert.match(deniedOutside.message, /outside AI Group scope/);
+  assert.match(deniedOutside.message, /outside AI Space scope/);
   assert.equal(bus.getSnapshot().nodes.find((node) => node.id === 'outside')?.params.value, 1);
   assert.equal(bus.getSnapshot().revision, 10);
   assert.equal(bus.getHistory().length, 0);
@@ -134,7 +147,7 @@ test('AI sandbox rejects out-of-scope targets and budget overflow without live m
     actor: aiActor,
     command: {
       type: 'node.add',
-      scopeGroupId: 'group:agent',
+      scopeGroupId: 'ai-space:agent',
       node: {
         id: 'agent:first',
         type: 'number',
@@ -151,7 +164,7 @@ test('AI sandbox rejects out-of-scope targets and budget overflow without live m
     actor: aiActor,
     command: {
       type: 'node.add',
-      scopeGroupId: 'group:agent',
+      scopeGroupId: 'ai-space:agent',
       node: {
         id: 'agent:second',
         type: 'number',
@@ -164,8 +177,11 @@ test('AI sandbox rejects out-of-scope targets and budget overflow without live m
   });
   assert.equal(deniedBudget.ok, false);
   assert.equal(deniedBudget.stage, 'policy');
-  assert.match(deniedBudget.message, /AI Group budget/);
-  assert.equal(bus.getSnapshot().nodes.some((node) => node.id === 'agent:second'), false);
+  assert.match(deniedBudget.message, /AI Space budget/);
+  assert.equal(
+    bus.getSnapshot().nodes.some((node) => node.id === 'agent:second'),
+    false
+  );
 });
 
 test('Group agent policy metadata rejects invalid budgets during validation', () => {
@@ -175,7 +191,7 @@ test('Group agent policy metadata rejects invalid budgets during validation', ()
     actor: { id: 'manager-a', role: 'manager' },
     command: {
       type: 'group.update',
-      groupId: 'group:agent',
+      groupId: 'ai-space:agent',
       patch: {
         agentPolicy: {
           budgets: {

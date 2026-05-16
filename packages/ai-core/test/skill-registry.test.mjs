@@ -21,7 +21,7 @@ const skills = [
   {
     id: 'command.node-add',
     title: 'Scoped Node Add',
-    summary: 'Explains how scoped node.add works inside an AI Group sandbox.',
+    summary: 'Explains how scoped node.add works inside an AI Space sandbox.',
     triggers: {
       commandTypes: ['node.add'],
       eventTypes: ['client.joined'],
@@ -49,7 +49,10 @@ test('AgentSkillRegistry selects only skills matching current node, command, or 
     eventTypes: ['display.ready'],
   });
 
-  assert.deepEqual(refs.map((ref) => ref.id), ['node.display-breathing']);
+  assert.deepEqual(
+    refs.map((ref) => ref.id),
+    ['node.display-breathing']
+  );
   assert.equal(refs[0].title, 'Display Breathing Node');
   assert.equal(refs[0].summary.includes('bounded intensity'), true);
   assert.equal('content' in refs[0], false);
@@ -65,7 +68,10 @@ test('AgentSkillRegistry progressively discloses full content only for requested
     requestedSkillIds: ['command.node-add'],
   });
 
-  assert.deepEqual(refs.map((ref) => ref.id), ['node.display-breathing', 'command.node-add']);
+  assert.deepEqual(
+    refs.map((ref) => ref.id),
+    ['node.display-breathing', 'command.node-add']
+  );
   assert.equal('content' in refs[0], false);
   assert.equal(refs[1].content, 'Full scoped node.add guidance.');
   assert.equal(refs[1].disclosure, 'full');

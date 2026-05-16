@@ -16,7 +16,11 @@ import type {
   SemanticSnapshotInput,
 } from './semantic-graph-types.js';
 import { createAgentNodeDefinitionSummary } from './node-definition-metadata.js';
-import type { ControlPlaneActorRole, ControlPlaneCapability, ControlPlaneVisibilityAccess } from '@shugu/protocol';
+import type {
+  ControlPlaneActorRole,
+  ControlPlaneCapability,
+  ControlPlaneVisibilityAccess,
+} from '@shugu/protocol';
 
 export const cloneRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -45,11 +49,17 @@ const normalizeAgentPorts = (value: unknown): AgentGroupInterface['publicInputs'
         .filter((port) => port.id.length > 0)
     : undefined;
 
-const cloneAgentInterface = (value: AgentGroupInterface | undefined): AgentGroupInterface | undefined =>
+const cloneAgentInterface = (
+  value: AgentGroupInterface | undefined
+): AgentGroupInterface | undefined =>
   value
     ? {
-        publicInputs: value.publicInputs ? value.publicInputs.map((port) => ({ ...port })) : undefined,
-        publicOutputs: value.publicOutputs ? value.publicOutputs.map((port) => ({ ...port })) : undefined,
+        publicInputs: value.publicInputs
+          ? value.publicInputs.map((port) => ({ ...port }))
+          : undefined,
+        publicOutputs: value.publicOutputs
+          ? value.publicOutputs.map((port) => ({ ...port }))
+          : undefined,
         exposedNodeIds: cloneStringArray(value.exposedNodeIds),
         callableCommands: cloneStringArray(value.callableCommands),
         eventBindings: cloneStringArray(value.eventBindings),
@@ -101,11 +111,15 @@ const normalizeAgentPolicy = (value: unknown): AgentGroupPolicy | undefined => {
     enabled: typeof value.enabled === 'boolean' ? value.enabled : undefined,
     allowedActorIds: normalizeStringArray(value.allowedActorIds),
     allowedCommands: normalizeStringArray(value.allowedCommands),
-    deniedSurfaces: normalizeStringArray(value.deniedSurfaces) as AgentGroupPolicy['deniedSurfaces'],
+    deniedSurfaces: normalizeStringArray(
+      value.deniedSurfaces
+    ) as AgentGroupPolicy['deniedSurfaces'],
     targetScope,
     budgets: isRecord(value.budgets) ? { ...value.budgets } : undefined,
-    approvalRequired: typeof value.approvalRequired === 'boolean' ? value.approvalRequired : undefined,
-    rollbackOnReject: typeof value.rollbackOnReject === 'boolean' ? value.rollbackOnReject : undefined,
+    approvalRequired:
+      typeof value.approvalRequired === 'boolean' ? value.approvalRequired : undefined,
+    rollbackOnReject:
+      typeof value.rollbackOnReject === 'boolean' ? value.rollbackOnReject : undefined,
   };
 };
 
@@ -125,6 +139,7 @@ export const cloneGroups = (groups: SemanticGroup[]): SemanticGroup[] =>
     ...group,
     parentId: group.parentId ? String(group.parentId) : null,
     nodeIds: [...(group.nodeIds ?? [])],
+    kind: group.kind === 'ai-space' ? 'ai-space' : group.kind === 'group' ? 'group' : undefined,
     owner: group.owner
       ? { ...group.owner, capabilities: [...(group.owner.capabilities ?? [])] }
       : undefined,
@@ -149,19 +164,25 @@ export const clonePartitions = (partitions: SemanticPartition[]): SemanticPartit
       : undefined,
     resourceBudget: partition.resourceBudget ? { ...partition.resourceBudget } : undefined,
     watchdog: partition.watchdog ? { ...partition.watchdog } : undefined,
-    failureReport: partition.failureReport ? {
-      ...partition.failureReport,
-      watchdog: partition.failureReport.watchdog ? { ...partition.failureReport.watchdog } : undefined,
-      resourceBudget: partition.failureReport.resourceBudget
-        ? { ...partition.failureReport.resourceBudget }
-        : undefined,
-    } : undefined,
+    failureReport: partition.failureReport
+      ? {
+          ...partition.failureReport,
+          watchdog: partition.failureReport.watchdog
+            ? { ...partition.failureReport.watchdog }
+            : undefined,
+          resourceBudget: partition.failureReport.resourceBudget
+            ? { ...partition.failureReport.resourceBudget }
+            : undefined,
+        }
+      : undefined,
   }));
 
 export const cloneProposals = (proposals: SemanticProposal[]): SemanticProposal[] =>
   proposals.map((proposal) => ({ ...proposal, commands: [...(proposal.commands ?? [])] }));
 
-export const cloneRuntimeStatus = (runtimeStatus: RuntimeStatus = defaultRuntimeStatus): RuntimeStatus => ({
+export const cloneRuntimeStatus = (
+  runtimeStatus: RuntimeStatus = defaultRuntimeStatus
+): RuntimeStatus => ({
   ...defaultRuntimeStatus,
   ...runtimeStatus,
   deployedPartitionIds: [...(runtimeStatus.deployedPartitionIds ?? [])],
@@ -177,11 +198,20 @@ export const normalizeDefinitions = (
 ): SemanticDefinition[] =>
   definitions.map((def) => {
     const record = def as Record<string, unknown>;
-    const ports = record.ports && typeof record.ports === 'object'
-      ? (record.ports as { inputs?: unknown; outputs?: unknown })
-      : null;
-    const inputs = Array.isArray(def.inputs) ? def.inputs : Array.isArray(ports?.inputs) ? ports.inputs : [];
-    const outputs = Array.isArray(def.outputs) ? def.outputs : Array.isArray(ports?.outputs) ? ports.outputs : [];
+    const ports =
+      record.ports && typeof record.ports === 'object'
+        ? (record.ports as { inputs?: unknown; outputs?: unknown })
+        : null;
+    const inputs = Array.isArray(def.inputs)
+      ? def.inputs
+      : Array.isArray(ports?.inputs)
+        ? ports.inputs
+        : [];
+    const outputs = Array.isArray(def.outputs)
+      ? def.outputs
+      : Array.isArray(ports?.outputs)
+        ? ports.outputs
+        : [];
     const params = Array.isArray(def.configSchema)
       ? def.configSchema
       : Array.isArray(record.params)
@@ -216,32 +246,38 @@ export const normalizeGroups = (groups: SemanticSnapshotInput['groups'] = []): S
       ? group.nodeIds.map((id) => String(id)).filter(Boolean)
       : [],
     disabled: Boolean(group.disabled),
+    kind: group.kind === 'ai-space' ? 'ai-space' : group.kind === 'group' ? 'group' : undefined,
     archived: group.archived === undefined ? undefined : Boolean(group.archived),
     runtimeActive: group.runtimeActive === undefined ? undefined : Boolean(group.runtimeActive),
     owner:
       group.owner && typeof group.owner === 'object'
         ? {
             actorId: String((group.owner as Record<string, unknown>).actorId ?? ''),
-            role: String((group.owner as Record<string, unknown>).role ?? 'client') as ControlPlaneActorRole,
+            role: String(
+              (group.owner as Record<string, unknown>).role ?? 'client'
+            ) as ControlPlaneActorRole,
             capabilities: Array.isArray((group.owner as Record<string, unknown>).capabilities)
-              ? ((group.owner as Record<string, unknown>).capabilities as unknown[]).map(String) as ControlPlaneCapability[]
+              ? (((group.owner as Record<string, unknown>).capabilities as unknown[]).map(
+                  String
+                ) as ControlPlaneCapability[])
               : [],
           }
         : undefined,
     ownerStack: Array.isArray(group.ownerStack)
       ? group.ownerStack.map((owner) => ({
           actorId: String((owner as Record<string, unknown>).actorId ?? ''),
-          role: String((owner as Record<string, unknown>).role ?? 'client') as ControlPlaneActorRole,
+          role: String(
+            (owner as Record<string, unknown>).role ?? 'client'
+          ) as ControlPlaneActorRole,
           capabilities: Array.isArray((owner as Record<string, unknown>).capabilities)
-            ? ((owner as Record<string, unknown>).capabilities as unknown[]).map(String) as ControlPlaneCapability[]
+            ? (((owner as Record<string, unknown>).capabilities as unknown[]).map(
+                String
+              ) as ControlPlaneCapability[])
             : [],
         }))
       : undefined,
     transferable: group.transferable === undefined ? undefined : Boolean(group.transferable),
-    surface:
-      group.surface === 'public' || group.surface === 'internal'
-        ? group.surface
-        : undefined,
+    surface: group.surface === 'public' || group.surface === 'internal' ? group.surface : undefined,
     visibility:
       group.visibility && typeof group.visibility === 'object'
         ? {

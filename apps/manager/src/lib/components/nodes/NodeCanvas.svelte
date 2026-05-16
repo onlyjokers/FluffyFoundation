@@ -34,10 +34,11 @@
   import type { NodeInstance, Connection as EngineConnection, GraphState } from '$lib/nodes/types';
   import type { LocalLoop } from '$lib/nodes';
   import { createNodeCanvasFileActionBundle } from './node-canvas/io/node-canvas-file-actions';
+  import { createImportedGraphReplaceCommand } from './node-canvas/io/server-semantic-import-sync';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
   import { createNodeCanvasSemanticCommands } from './node-canvas/adapters/semantic-command-adapter';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
-  import { createGroupController, type GroupFrame } from './node-canvas/controllers/group-controller';
+  import { createGroupController, type NodeGroup } from './node-canvas/controllers/group-controller';
   import { createFocusController } from './node-canvas/controllers/focus-controller';
   import { createGroupPortNodesController } from './node-canvas/controllers/group-port-nodes-controller';
   import { createClipboardController } from './node-canvas/controllers/clipboard-controller';
@@ -130,6 +131,21 @@
       lastErrorStore.set(message);
     },
   });
+
+  const syncImportedGraphToServerSemantic = async (snapshot: {
+    graph: GraphState;
+    groups: NodeGroup[];
+  }) => {
+    const sdk = getSDK();
+    if (!sdk) {
+      lastErrorStore.set('Manager SDK is not connected; imported graph was not synced to server semantic graph.');
+      return;
+    }
+    sdk.sendSemanticCommand({
+      requestId: `import-graph-sync:${Date.now()}`,
+      command: createImportedGraphReplaceCommand(snapshot),
+    });
+  };
 
   const nodeVisualState = createNodeVisualState({
     viewAdapter,
@@ -346,6 +362,14 @@
     closePicker,
     handlePick: handlePickerPick,
   } = pickerController;
+
+  const handlePickerQueryChange = (value: string) => {
+    pickerQuery.set(value);
+  };
+
+  const handlePickerSelectedCategoryChange = (value: string) => {
+    pickerSelectedCategory.set(value);
+  };
 
   $: setPickerElement(pickerElement);
 
@@ -565,6 +589,7 @@
     requestMinimapUpdate: () => minimapController?.requestUpdate(),
     setSelectedNode,
     focusController,
+    onGraphImported: syncImportedGraphToServerSemantic,
   });
 
   const closeToolbarMenu = () => {
@@ -734,6 +759,8 @@
     query: $pickerQuery,
     categories: $pickerCategories,
     selectedCategory: $pickerSelectedCategory,
+    onQueryChange: handlePickerQueryChange,
+    onSelectedCategoryChange: handlePickerSelectedCategoryChange,
     items: $pickerItems,
     onClose: closePicker,
     onPick: handlePickerPick,

@@ -35,6 +35,13 @@ test('classifyDelivery assigns explicit FF-07 delivery classes', () => {
       expected: 'latest-state-control',
     },
     {
+      label: 'latest-state display text',
+      message: createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'showText', {
+        text: '你好',
+      }),
+      expected: 'latest-state-control',
+    },
+    {
       label: 'reliable command',
       message: createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'playMedia', {
         url: '/show.mp4',

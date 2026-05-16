@@ -1,5 +1,5 @@
 <!--
-Purpose: Describe scoped node.add behavior inside an AI-operable Group sandbox.
+Purpose: Describe scoped node.add behavior inside an AI-operable AI Space sandbox.
 -->
 
 # command.node-add
@@ -11,14 +11,14 @@ Purpose: Describe scoped node.add behavior inside an AI-operable Group sandbox.
 
 ## Summary
 
-Use `node.add` with `scopeGroupId` to create a node inside an AI-operable Group sandbox.
+Use `node.add` with `scopeGroupId` to create a node inside an AI-operable AI Space sandbox.
 
 ## Required Shape
 
 ```json
 {
   "type": "node.add",
-  "scopeGroupId": "group:agent",
+  "scopeGroupId": "ai-space:agent",
   "node": {
     "id": "agent:effect-1",
     "type": "number",
@@ -32,7 +32,7 @@ Use `node.add` with `scopeGroupId` to create a node inside an AI-operable Group 
 
 ## Rules
 
-- `scopeGroupId` must point to a Group with enabled `agentPolicy`.
-- The Group policy must allow `node.add` and `targetScope.allowNewNodes`.
-- The command must fit within the Group budget, especially `budgets.maxNodes`.
-- Successful scoped adds automatically add the new node ID to the Group `nodeIds`.
+- `scopeGroupId` must point to an AI Space with enabled `agentPolicy`.
+- The AI Space policy must allow `node.add` and `targetScope.allowNewNodes`.
+- The command must fit within the AI Space budget, especially `budgets.maxNodes`.
+- Successful scoped adds automatically add the new node ID to the AI Space `nodeIds`.

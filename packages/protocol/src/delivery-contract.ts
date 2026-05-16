@@ -29,6 +29,8 @@ const LATEST_STATE_ACTIONS = new Set<ControlAction>([
   'vibrate',
   'setDataReportingRate',
   'setSensorState',
+  'showText',
+  'hideText',
 ]);
 
 export function createDeliveryMetrics(): DeliveryMetrics {

@@ -34,11 +34,26 @@ const envelope = {
   idempotencyKey: 'idem-1',
 };
 
+const waitFor = async (condition: () => boolean): Promise<void> => {
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(condition(), true);
+};
+
 function createRouter(clientCount = 51, managerCount = 1) {
   const reliableMessages: Message[] = [];
   const volatileMessages: Message[] = [];
-  const clientSocketIds = Array.from({ length: clientCount }, (_, index) => `client-socket-${index}`);
-  const managerSocketIds = Array.from({ length: managerCount }, (_, index) => `manager-socket-${index}`);
+  const clientSocketIds = Array.from(
+    { length: clientCount },
+    (_, index) => `client-socket-${index}`
+  );
+  const managerSocketIds = Array.from(
+    { length: managerCount },
+    (_, index) => `manager-socket-${index}`
+  );
   const registry = {
     getAllClientSocketIds: () => clientSocketIds,
     getAllManagerSocketIds: () => managerSocketIds,
@@ -64,7 +79,10 @@ function createRouter(clientCount = 51, managerCount = 1) {
 test('MessageRouterService drops volatile telemetry under backpressure and records metrics', () => {
   const { router, reliableMessages } = createRouter();
 
-  router.routeMessage(createSensorDataMessage('client-1', 'gyro', { alpha: 1, beta: 2, gamma: 3 }), 'socket-client-1');
+  router.routeMessage(
+    createSensorDataMessage('client-1', 'gyro', { alpha: 1, beta: 2, gamma: 3 }),
+    'socket-client-1'
+  );
 
   assert.equal(reliableMessages.length, 0);
   assert.equal(router.getDeliveryMetrics().dropped, 1);
@@ -195,6 +213,71 @@ test('MessageRouterService broadcasts semantic snapshots after server-owned muta
   assert.equal((delivered[1]?.message as { action?: string }).action, 'semanticSnapshot');
 });
 
+test('MessageRouterService broadcasts semantic snapshots after AI agent mutations', async () => {
+  const delivered: Array<{ socketIds: string[]; message: Message }> = [];
+  const managerSocketIds = ['manager-ui-socket'];
+  const aiSnapshot = {
+    ...semanticSnapshot,
+    revision: 8,
+    nodes: [{ id: 'display:greeting', type: 'display-breathing', params: { intensity: 0.8 } }],
+  };
+  const registry = {
+    getAllClientSocketIds: () => ['client-socket'],
+    getAllManagerSocketIds: () => managerSocketIds,
+    getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
+    getClientsByGroup: () => [],
+    getClient: () => ({ clientId: 'client-1', socketId: 'client-socket', group: 'ai-space:demo' }),
+    getAllClients: () => [{ clientId: 'client-1', connected: true, group: 'ai-space:demo' }],
+    getAllGroupOwnershipEntries: () => [],
+  };
+  const aiOrchestrator = {
+    handleEnvironmentEvent: async () => ({
+      event: { type: 'client.joined', clientId: 'client-1', groupId: 'ai-space:demo' },
+      turns: [
+        {
+          targetSpaceId: 'ai-space:demo',
+          plan: null,
+          skills: [],
+          dispatchResults: [
+            { ok: true, dryRun: true, snapshot: semanticSnapshot },
+            { ok: true, dryRun: false, snapshot: aiSnapshot },
+          ],
+        },
+      ],
+    }),
+  };
+  const router = new MessageRouterService(registry as never, undefined, aiOrchestrator as never);
+  const server = {
+    to: (socketIds: string[]) => ({
+      emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+    }),
+    volatile: {
+      to: (socketIds: string[]) => ({
+        emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),
+      }),
+    },
+  };
+  router.setServer(server as never);
+
+  router.notifyClientJoined('client-1');
+  await waitFor(() =>
+    delivered.some(
+      (entry) =>
+        entry.message.type === 'system' &&
+        (entry.message as { action?: string }).action === 'semanticSnapshot' &&
+        (entry.message as { payload?: { semanticSnapshot?: { revision?: number } } }).payload
+          ?.semanticSnapshot?.revision === 8
+    )
+  );
+
+  const semanticSnapshotBroadcast = delivered.find(
+    (entry) =>
+      entry.message.type === 'system' &&
+      (entry.message as { action?: string }).action === 'semanticSnapshot'
+  );
+  assert.deepEqual(semanticSnapshotBroadcast?.socketIds, managerSocketIds);
+});
+
 test('MessageRouterService routes semantic results back to the original requester socket', () => {
   const delivered: Array<{ socketIds: string[]; message: Message }> = [];
   const managerSocketIds = ['manager-ui-socket', 'cli-socket'];
@@ -245,15 +328,21 @@ test('MessageRouterService keeps reliable and scheduled commands out of volatile
   const { router, reliableMessages, volatileMessages } = createRouter();
 
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#111111',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#222222',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'playMedia', { url: '/reliable.mp4' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'playMedia', {
+      url: '/reliable.mp4',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
@@ -302,11 +391,15 @@ test('MessageRouterService replays the final latest-state value without a later 
   const { router, reliableMessages } = createRouter();
 
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#111111',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#222222',
+    }),
     'socket-manager-1'
   );
 
@@ -329,15 +422,21 @@ test('MessageRouterService replaces same-key pending latest-state without delive
   const { router, reliableMessages } = createRouter();
 
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#111111',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#222222',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#333333' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#333333',
+    }),
     'socket-manager-1'
   );
 
@@ -361,11 +460,15 @@ test('MessageRouterService records late latest-state replay metrics', async () =
   (router as unknown as { minBroadcastIntervalMs: number }).minBroadcastIntervalMs = 1;
 
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#111111',
+    }),
     'socket-manager-1'
   );
   router.routeMessage(
-    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' }),
+    createControlMessage(envelope, { mode: 'group', groupId: 'stage-left' }, 'screenColor', {
+      color: '#222222',
+    }),
     'socket-manager-1'
   );
 

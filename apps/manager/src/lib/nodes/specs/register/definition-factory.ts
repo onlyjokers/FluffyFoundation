@@ -119,7 +119,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
 
             const sendResult = displayTransport.sendControl(action, payload, executeAt);
 
-            if (import.meta.env.DEV && (action === 'showImage' || action === 'hideImage')) {
+            if (import.meta.env.DEV && (action === 'showImage' || action === 'hideImage' || action === 'showText' || action === 'hideText')) {
               const nodeKey = typeof context?.nodeId === 'string' ? context.nodeId : 'display-object';
               const now = Date.now();
               const lastAt = displayObjectLogLastAt.get(nodeKey) ?? 0;
@@ -127,11 +127,14 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
                 displayObjectLogLastAt.set(nodeKey, now);
                 const urlCandidate = (payload as Record<string, unknown>)?.url;
                 const url = typeof urlCandidate === 'string' ? urlCandidate : '';
+                const textCandidate = (payload as Record<string, unknown>)?.text;
+                const text = typeof textCandidate === 'string' ? textCandidate : '';
                 console.info('[Manager] display-object', {
                   nodeId: context?.nodeId,
                   via: sendResult.route,
                   action,
                   urlChars: url ? url.length : null,
+                  textChars: text ? text.length : null,
                 });
               }
             }
@@ -141,6 +144,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
           // Clear any long-lived effects when the Display route is disabled (e.g. group gate closed / graph stop).
           displayTransport.sendControl('stopMedia', {}, undefined);
           displayTransport.sendControl('hideImage', {}, undefined);
+          displayTransport.sendControl('hideText', {}, undefined);
           displayTransport.sendControl(
             'screenColor',
             { color: '#000000', opacity: 0, mode: 'solid' },

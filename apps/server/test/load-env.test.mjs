@@ -25,7 +25,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
       path.join(tempRoot, '.env'),
       [
         'SHUGU_AI_PROVIDER=openai-compatible',
-        'SHUGU_AI_OPENAI_MODEL=GPT5.5-low',
+        'SHUGU_AI_OPENAI_MODEL=gpt-5.5',
         'SHUGU_AI_OPENAI_BASE_URL=https://code.b886.top/v1',
         'SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL=https://code.b886.top/v1/chat/completions',
         'SHUGU_AI_OPENAI_API_KEY=test-secret',
@@ -51,7 +51,7 @@ test('loadOptionalEnv loads AI config from the repository root .env without over
       'SHUGU_AI_PROVIDER',
     ]);
     assert.equal(process.env.SHUGU_AI_PROVIDER, 'openai-compatible');
-    assert.equal(process.env.SHUGU_AI_OPENAI_MODEL, 'GPT5.5-low');
+    assert.equal(process.env.SHUGU_AI_OPENAI_MODEL, 'gpt-5.5');
     assert.equal(process.env.SHUGU_AI_OPENAI_BASE_URL, 'https://code.b886.top/v1');
     assert.equal(
       process.env.SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL,

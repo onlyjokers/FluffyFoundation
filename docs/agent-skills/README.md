@@ -22,4 +22,4 @@ Each skill should declare:
 ## Runtime Rule
 
 Skill text cannot grant permission. AI may use a skill to draft better commands, but live mutations must still pass
-Group `agentPolicy`, semantic validation, audit, and rollback.
+AI Space `agentPolicy`, semantic validation, audit, and rollback.

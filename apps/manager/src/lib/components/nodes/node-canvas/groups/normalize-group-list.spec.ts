@@ -76,3 +76,31 @@ test('normalizeGroupList coerces ids to strings and ignores empty ids', () => {
   assert.equal(result[0].parentId, null);
   assert.deepEqual(result[0].nodeIds, ['a', '0', 'b']);
 });
+
+test('normalizeGroupList preserves AI Space metadata fields', () => {
+  const input = [
+    {
+      id: 'g-ai',
+      parentId: null,
+      kind: 'ai-space',
+      name: 'AI Space',
+      nodeIds: ['n1'],
+      disabled: false,
+      minimized: false,
+      agentInterface: {
+        publicInputs: [{ id: 'voice_in', type: 'string', label: 'Voice Input' }],
+      },
+      agentPolicy: {
+        enabled: true,
+        allowedCommands: ['node.params.update'],
+        targetScope: { allowNewNodes: true },
+      },
+    },
+  ] as any[];
+
+  const result = normalizeGroupList(input as NodeGroup[]);
+
+  assert.equal(result[0].kind, 'ai-space');
+  assert.deepEqual(result[0].agentInterface, input[0].agentInterface);
+  assert.deepEqual(result[0].agentPolicy, input[0].agentPolicy);
+});

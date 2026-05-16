@@ -61,7 +61,7 @@ skills, calls the OpenAI-compatible provider, then sends every proposed command 
 before apply.
 
 Canvas and CLI are operator surfaces over the same semantic layer; they are not separate AI control planes. AI-created
-commands must still include the relevant Group scope and obey Group `agentInterface` / `agentPolicy` validation.
+commands must still include the relevant AI Space scope and obey AI Space `agentInterface` / `agentPolicy` validation.
 
 ## AI Provider Config
 

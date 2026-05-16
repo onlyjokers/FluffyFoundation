@@ -52,6 +52,8 @@ export type ControlAction =
   | 'stopMedia'
   | 'showImage'
   | 'hideImage'
+  | 'showText'
+  | 'hideText'
   | 'shutdown'
   | 'visualScenes'
   | 'visualEffects'
@@ -170,6 +172,19 @@ export interface ShowImagePayload {
 }
 
 /**
+ * Text overlay payload for Display surfaces.
+ */
+export interface ShowTextPayload {
+  text: string;
+  /** CSS text color. */
+  color?: string;
+  /** CSS background color behind the text block. */
+  backgroundColor?: string;
+  /** Duration in milliseconds. If not set, stays visible until hideText or another showText. */
+  duration?: number;
+}
+
+/**
  * Visual scene layer item.
  *
  * Used by `visualScenes` to describe an ordered enabled scene list on the client.
@@ -261,6 +276,7 @@ export type BaseControlPayload =
   | PlaySoundPayload
   | PlayMediaPayload
   | ShowImagePayload
+  | ShowTextPayload
   | VisualScenesPayload
   | VisualEffectsPayload
   | DataReportingRatePayload

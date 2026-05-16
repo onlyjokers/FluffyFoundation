@@ -253,6 +253,15 @@ function teardownPort(): void {
           message: createControlMessage(
             { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
             { mode: 'all' },
+            'hideText',
+            {}
+          ) as unknown as ControlMessage,
+        },
+        {
+          type: 'shugu:display:control',
+          message: createControlMessage(
+            { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+            { mode: 'all' },
             'screenColor',
             { color: '#000000', opacity: 0, mode: 'solid' } as ControlPayload
           ) as unknown as ControlMessage,

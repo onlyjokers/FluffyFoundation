@@ -1,6 +1,8 @@
 <!-- Purpose: Node picker overlay for adding and connecting nodes. -->
 <script lang="ts">
   // @ts-nocheck
+  import { updatePickerCategory, updatePickerQuery } from './picker-overlay-events';
+
   type PickerMode = 'add' | 'connect';
 
   export let isOpen = false;
@@ -9,6 +11,8 @@
   export let query = '';
   export let categories: string[] = [];
   export let selectedCategory = '';
+  export let onQueryChange: (value: string) => void = () => undefined;
+  export let onSelectedCategoryChange: (value: string) => void = () => undefined;
   type PickerItem = {
     type?: string;
     label?: string;
@@ -32,6 +36,15 @@
   let lastIsOpen = false;
 
   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+  function handleQueryInput(event: Event) {
+    const target = event.currentTarget as HTMLInputElement;
+    query = updatePickerQuery(target.value, { onQueryChange });
+  }
+
+  function handleCategoryPick(category: string) {
+    selectedCategory = updatePickerCategory(category, { onSelectedCategoryChange });
+  }
 
   $: {
     if (isOpen && !lastIsOpen) {
@@ -102,7 +115,8 @@
         <input
           class="picker-search"
           placeholder="Search…"
-          bind:value={query}
+          value={query}
+          on:input={handleQueryInput}
           on:pointerdown|stopPropagation
         />
       </div>
@@ -113,7 +127,7 @@
             <button
               type="button"
               class="picker-category {cat === selectedCategory ? 'active' : ''}"
-              on:click={() => (selectedCategory = cat)}
+              on:click={() => handleCategoryPick(cat)}
             >
               {cat}
             </button>

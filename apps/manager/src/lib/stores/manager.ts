@@ -422,7 +422,7 @@ function resolveAudienceTarget(toAll: boolean): TargetSelector | null {
 }
 
 function shouldMirrorToDisplay(action: ControlAction): boolean {
-    return action === 'showImage' || action === 'hideImage' || action === 'playMedia' || action === 'stopMedia' || action === 'screenColor';
+    return action === 'showImage' || action === 'hideImage' || action === 'showText' || action === 'hideText' || action === 'playMedia' || action === 'stopMedia' || action === 'screenColor';
 }
 
 function maybeMirrorToDisplay(action: ControlAction, payload: ControlPayload, executeAt?: number): void {

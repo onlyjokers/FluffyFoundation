@@ -1,16 +1,17 @@
-# AI Agent Runtime and Group Interface Implementation Plan
+# AI Agent Runtime and AI Space Interface Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build a persistent AI Agent runtime that listens to environment events, loads skill docs progressively, and drives Manager/Client/Display through the shared semantic command bus.
 
-**Architecture:** Use a server-side orchestrator that owns model calls, event ingestion, skill retrieval, and command execution. Keep Canvas and CLI as alternate entry surfaces to the same semantic layer. Treat Group as an AI-operable sandbox with explicit interface and policy metadata, not as an unconstrained mutation zone.
+**Architecture:** Use a server-side orchestrator that owns model calls, event ingestion, skill retrieval, and command execution. Keep Canvas and CLI as alternate entry surfaces to the same semantic layer. Treat AI Space as the AI-operable sandbox with explicit interface and policy metadata. AI Space is rendered with the same frame mechanics as Group, but it is semantically distinct so ordinary Groups stay focused on human structure.
 
 **Tech Stack:** TypeScript, SvelteKit/NestJS app code, `@shugu/node-core` semantic bus, `@shugu/ai-core` helpers, OpenAI-compatible Chat Completions, JSON Schema structured outputs, local skill/docs registry, env-based config.
 
 ### Task 1: Lock the AI runtime contract
 
 **Files:**
+
 - Modify: `docs/harness/AI-OPERATOR.md`
 - Modify: `docs/harness/BOUNDARIES.md`
 - Modify: `docs/harness/AI-AGENT-RUNTIME-CONFIG.md`
@@ -21,7 +22,7 @@ Document that v1 uses a server-side persistent orchestrator, not CLI automation,
 
 **Step 2: Add interface boundaries**
 
-Describe `AgentEnvironmentEvent`, `AgentCommandPlan`, `AgentSkillRef`, and Group-level `agentInterface` / `agentPolicy` fields.
+Describe `AgentEnvironmentEvent`, `AgentCommandPlan`, `AgentSkillRef`, and AI Space-level `agentInterface` / `agentPolicy` fields.
 
 **Step 3: Define the safety rule**
 
@@ -30,6 +31,7 @@ State that AI may propose and retry freely inside its sandbox, but all live muta
 ### Task 2: Add model provider config and client
 
 **Files:**
+
 - Modify: `apps/server/src/bootstrap/load-env.ts`
 - Modify: `packages/ai-core/src/types.ts`
 - Modify: `packages/ai-core/src/factory.ts`
@@ -38,7 +40,7 @@ State that AI may propose and retry freely inside its sandbox, but all live muta
 
 **Step 1: Write the failing test**
 
-Verify the client builds the correct `POST /v1/chat/completions` request, sends `GPT5.5-low`, and never logs the secret key.
+Verify the client builds the correct `POST /v1/chat/completions` request, sends `gpt-5.5`, and never logs the secret key.
 
 **Step 2: Run the test to confirm failure**
 
@@ -52,9 +54,10 @@ Use an OpenAI-compatible request body with structured JSON output; keep a fallba
 
 Confirm request shape, timeout behavior, and redaction behavior.
 
-### Task 3: Make Group an AI-operable sandbox
+### Task 3: Make AI Space an AI-operable sandbox
 
 **Files:**
+
 - Modify: `packages/node-core/src/semantic-graph-types.ts`
 - Modify: `packages/node-core/src/semantic-command-runtime-validation.ts`
 - Modify: `packages/node-core/src/semantic-command-bus.ts`
@@ -63,15 +66,15 @@ Confirm request shape, timeout behavior, and redaction behavior.
 
 **Step 1: Write the failing test**
 
-Assert that a Group with `agentInterface` / `agentPolicy` can allow internal graph edits while rejecting out-of-scope targets.
+Assert that an AI Space with `agentInterface` / `agentPolicy` can allow internal graph edits while rejecting out-of-scope targets.
 
 **Step 2: Implement minimal type additions**
 
-Add typed public inputs, outputs, target scope, and policy metadata to `SemanticGroup`.
+Add typed public inputs, outputs, target scope, and policy metadata to AI Space records (`kind: "ai-space"` in the group-like frame list for v1).
 
 **Step 3: Enforce policy**
 
-Reject commands that escape the assigned Group, exceed budgets, or touch denied surfaces.
+Reject commands that escape the assigned AI Space, exceed budgets, or touch denied surfaces.
 
 **Step 4: Verify rollback and no-op behavior**
 
@@ -80,6 +83,7 @@ Rejected AI attempts must not change live state or broadcast product-visible cha
 ### Task 4: Add skill-based progressive disclosure
 
 **Files:**
+
 - Create: `docs/agent-skills/README.md`
 - Create: `docs/agent-skills/<node-or-command>.md`
 - Create: `packages/ai-core/src/skill-registry.ts`
@@ -100,6 +104,7 @@ Load summaries first, then the node-specific skill only when the model needs it.
 ### Task 5: Build the persistent AI orchestrator
 
 **Files:**
+
 - Create: `apps/server/src/ai/ai-orchestrator.service.ts`
 - Create: `apps/server/src/ai/ai.module.ts`
 - Modify: `apps/server/src/app.module.ts`
@@ -124,6 +129,7 @@ If a plan is rejected, the orchestrator retries or no-ops without disturbing the
 ### Task 6: Add the first demo loop
 
 **Files:**
+
 - Modify: `apps/client/src/routes/+page.svelte`
 - Modify: `apps/server/src/message-router/message-router.service.ts`
 - Create: `apps/server/src/ai/agent-demo.spec.ts`
@@ -143,6 +149,7 @@ Check that greeting, pulse, and response commands are routed through the shared 
 ### Task 7: Verify, document, and keep the config local
 
 **Files:**
+
 - Modify: `docs/harness/AI-AGENT-RUNTIME-CONFIG.md`
 - Modify: `docs/operations/DEVELOPER-GUIDE.md`
 - Add/keep local only: `.env`

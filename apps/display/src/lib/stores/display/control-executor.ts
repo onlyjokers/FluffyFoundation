@@ -9,6 +9,7 @@ import type {
   PlayMediaPayload,
   ScreenColorPayload,
   ShowImagePayload,
+  ShowTextPayload,
 } from '@shugu/protocol';
 import type { NodeExecutor } from '@shugu/sdk-client';
 import { stopAllDisplaySideEffects } from '../display-stop-all';
@@ -16,6 +17,11 @@ import {
   createDisplayScreenOverlayState,
   type ScreenOverlayState,
 } from '../display-screen-overlay';
+import {
+  createClearedDisplayTextOverlayState,
+  createDisplayTextOverlayState,
+  type TextOverlayState,
+} from '../display-text-overlay';
 import {
   clearActiveImageObjectUrl,
   isDataImageUrl,
@@ -32,6 +38,7 @@ export type DisplayControlExecutorDeps = {
   getMultimediaCore: () => MultimediaCore | null;
   getNodeExecutor: () => NodeExecutor | null;
   screenOverlay: Writable<ScreenOverlayState>;
+  textOverlay: Writable<TextOverlayState>;
   isDev: boolean;
 };
 
@@ -39,9 +46,18 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
   executeControl: (action: ControlAction, payload: ControlPayload, executeAtLocal?: number) => void;
 } {
   let lastControlLogAt = 0;
+  let textClearHandle: ReturnType<typeof setTimeout> | null = null;
 
   const setScreenColor = (payload: ScreenColorPayload): void => {
     deps.screenOverlay.set(createDisplayScreenOverlayState(payload));
+  };
+
+  const clearText = (): void => {
+    if (textClearHandle) {
+      clearTimeout(textClearHandle);
+      textClearHandle = null;
+    }
+    deps.textOverlay.set(createClearedDisplayTextOverlayState());
   };
 
   const executeNow = (action: ControlAction, payload: ControlPayload): void => {
@@ -139,6 +155,24 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
         setScreenColor(payload as ScreenColorPayload);
         return;
 
+      case 'showText':
+        if (textClearHandle) {
+          clearTimeout(textClearHandle);
+          textClearHandle = null;
+        }
+        {
+          const state = createDisplayTextOverlayState(payload as ShowTextPayload);
+          deps.textOverlay.set(state);
+          if (state.visible && typeof state.duration === 'number') {
+            textClearHandle = setTimeout(clearText, state.duration);
+          }
+        }
+        return;
+
+      case 'hideText':
+        clearText();
+        return;
+
       case 'shutdown': {
         const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
         if (record?.reason !== 'root-stop-all' && record?.kind !== 'stop-all') return;
@@ -149,6 +183,7 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
           setScreenColor,
           clearActiveImageObjectUrl,
         });
+        clearText();
         return;
       }
 

@@ -88,6 +88,7 @@ export type SemanticGroup = {
   name: string;
   nodeIds: string[];
   disabled: boolean;
+  kind?: 'group' | 'ai-space';
   archived?: boolean;
   runtimeActive?: boolean;
   owner?: {
@@ -192,7 +193,12 @@ export type SemanticCommand =
   | { type: 'node.restore'; nodeId: string; scopeGroupId?: string }
   | { type: 'node.connect'; connection: Connection; scopeGroupId?: string }
   | { type: 'node.disconnect'; connectionId: string; scopeGroupId?: string }
-  | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown>; scopeGroupId?: string }
+  | {
+      type: 'node.params.update';
+      nodeId: string;
+      params: Record<string, unknown>;
+      scopeGroupId?: string;
+    }
   | { type: 'group.create'; group: SemanticGroup }
   | { type: 'group.update'; groupId: string; patch: Partial<SemanticGroup> }
   | { type: 'group.archive'; groupId: string }

@@ -16,6 +16,8 @@ export const CONTROL_ACTIONS = [
   'stopMedia',
   'showImage',
   'hideImage',
+  'showText',
+  'hideText',
   'shutdown',
   'visualScenes',
   'visualEffects',

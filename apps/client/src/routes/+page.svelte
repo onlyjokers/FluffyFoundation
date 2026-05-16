@@ -25,6 +25,7 @@
   import { handleWheelNavigationGuard, tryFullscreen } from '$lib/client-page/browser-shell';
   import { formatMeters, haversineDistanceM } from '$lib/client-page/geo-gate';
   import { createAgentTextPayload } from '$lib/client-page/agent-text';
+  import { getClientConnectionLifecycleAction } from '$lib/client-page/connection-lifecycle';
 
   let hasStarted = false;
   let serverUrl = 'https://localhost:3001';
@@ -160,23 +161,24 @@
   });
 
   function handlePageHide(): void {
-    disconnectFromServer();
+    const action = getClientConnectionLifecycleAction({
+      event: 'pagehide',
+      hasStarted,
+      visibilityState: document.visibilityState,
+    });
+    if (action === 'disconnect') disconnectFromServer();
   }
 
   function handleVisibilityChange(): void {
     if (typeof document === 'undefined') return;
 
-    const visible = document.visibilityState === 'visible';
-    if (!visible) {
-      // Treat background/lock-screen as offline so managers see the client as disconnected.
-      disconnectFromServer();
-      return;
-    }
-
-    // Reconnect when visible again (only after Start gate passed).
-    if (hasStarted) {
-      connectToServer();
-    }
+    const action = getClientConnectionLifecycleAction({
+      event: 'visibilitychange',
+      hasStarted,
+      visibilityState: document.visibilityState,
+    });
+    if (action === 'connect') connectToServer();
+    if (action === 'disconnect') disconnectFromServer();
   }
 
   function startRetryCooldown(seconds = 3): void {

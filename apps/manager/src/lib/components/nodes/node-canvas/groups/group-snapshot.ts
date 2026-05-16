@@ -19,6 +19,7 @@ export function groupSnapshotKey(groups: NodeGroup[]): string {
         String(g.id ?? ''),
         String(g.parentId ?? ''),
         String(g.name ?? ''),
+        String(g.kind ?? ''),
         g.disabled ? '1' : '0',
         g.minimized ? '1' : '0',
         runtimeActive,
@@ -40,6 +41,7 @@ export function normalizeGroupsForSnapshot(
       name: getString(record.name, ''),
       nodeIds: Array.from(new Set(nodeIds.map((id) => String(id)).filter(Boolean))),
       disabled: getBoolean(record.disabled, false),
+      kind: record.kind === 'ai-space' ? 'ai-space' : record.kind === 'group' ? 'group' : undefined,
       minimized: getBoolean(record.minimized, false),
       runtimeActive:
         typeof record.runtimeActive === 'boolean' ? Boolean(record.runtimeActive) : undefined,

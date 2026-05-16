@@ -89,7 +89,11 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     const previousRevision = state.revision;
     const rollbackToken = `rollback:${previousRevision}:${history.length + auditLog.length + 1}`;
     const normalized = normalizeSemanticCommand(state, command, definitions);
-    const validationErrors = validateSemanticCommandDetailed(state, normalized.command, definitions);
+    const validationErrors = validateSemanticCommandDetailed(
+      state,
+      normalized.command,
+      definitions
+    );
     if (validationErrors.length > 0) {
       return {
         ok: false,
@@ -276,7 +280,7 @@ export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
           : { allowed: true };
       }
 
-      if (role === 'ai' && group.agentPolicy?.enabled) {
+      if (role === 'ai' && group.kind === 'ai-space' && group.agentPolicy?.enabled) {
         return evaluateAgentGroupPolicy({ actor, command, group, snapshot });
       }
 
@@ -303,9 +307,13 @@ export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
 
       const capability = requiredCapability(command);
       if (capability && !capabilities.has(capability)) {
-        return { allowed: false, reason: role === 'ai'
-          ? 'AI actors must use proposal workflow for direct Canvas mutations.'
-          : `Actor lacks ${capability} capability.` };
+        return {
+          allowed: false,
+          reason:
+            role === 'ai'
+              ? 'AI actors must use proposal workflow for direct Canvas mutations.'
+              : `Actor lacks ${capability} capability.`,
+        };
       }
 
       if (!isOwner(actor.id, group)) {
@@ -355,7 +363,8 @@ function requiredCapability(command: SemanticCommand): ControlPlaneCapability | 
     command.type === 'partition.stop' ||
     command.type === 'partition.remove' ||
     command.type === 'partition.report.failure'
-  ) return 'partition.stop';
+  )
+    return 'partition.stop';
   return null;
 }
 
@@ -378,7 +387,9 @@ function groupForCommand(groups: SemanticGraphSnapshot['groups'], command: Seman
 }
 
 function scopeGroupIdFor(command: SemanticCommand): string | null {
-  return 'scopeGroupId' in command && typeof command.scopeGroupId === 'string' && command.scopeGroupId.length > 0
+  return 'scopeGroupId' in command &&
+    typeof command.scopeGroupId === 'string' &&
+    command.scopeGroupId.length > 0
     ? command.scopeGroupId
     : null;
 }
@@ -390,7 +401,10 @@ function commandSurface(command: SemanticCommand): string | null {
   return null;
 }
 
-function targetNodeIdsForCommand(command: SemanticCommand, snapshot: SemanticGraphSnapshot): string[] {
+function targetNodeIdsForCommand(
+  command: SemanticCommand,
+  snapshot: SemanticGraphSnapshot
+): string[] {
   if (command.type === 'node.add') return [command.node.id];
   if ('nodeId' in command) return [String(command.nodeId)];
   if (command.type === 'node.connect') {
@@ -407,7 +421,8 @@ function targetNodeIdsForCommand(command: SemanticCommand, snapshot: SemanticGra
 function countGroupConnections(snapshot: SemanticGraphSnapshot, group: SemanticGroup): number {
   const nodeIds = new Set(group.nodeIds);
   return snapshot.connections.filter(
-    (connection) => nodeIds.has(String(connection.sourceNodeId)) && nodeIds.has(String(connection.targetNodeId))
+    (connection) =>
+      nodeIds.has(String(connection.sourceNodeId)) && nodeIds.has(String(connection.targetNodeId))
   ).length;
 }
 
@@ -418,23 +433,29 @@ function evaluateAgentGroupPolicy(input: {
   snapshot: SemanticGraphSnapshot;
 }): { allowed: boolean; reason?: string } {
   const policy = input.group.agentPolicy;
-  if (!policy?.enabled) return { allowed: false, reason: 'AI Group policy is disabled.' };
+  if (!policy?.enabled) return { allowed: false, reason: 'AI Space policy is disabled.' };
 
   if (policy.allowedActorIds && !policy.allowedActorIds.includes(input.actor.id)) {
-    return { allowed: false, reason: 'AI actor is not assigned to this Group sandbox.' };
+    return { allowed: false, reason: 'AI actor is not assigned to this AI Space sandbox.' };
   }
 
   if (policy.allowedCommands && !policy.allowedCommands.includes(input.command.type)) {
-    return { allowed: false, reason: `Command ${input.command.type} is not allowed by AI Group policy.` };
+    return {
+      allowed: false,
+      reason: `Command ${input.command.type} is not allowed by AI Space policy.`,
+    };
   }
 
   if (policy.approvalRequired) {
-    return { allowed: false, reason: 'AI Group policy requires proposal approval for this command.' };
+    return {
+      allowed: false,
+      reason: 'AI Space policy requires proposal approval for this command.',
+    };
   }
 
   const surface = commandSurface(input.command);
   if (surface && policy.deniedSurfaces?.includes(surface as never)) {
-    return { allowed: false, reason: `AI Group policy denies ${surface} surface commands.` };
+    return { allowed: false, reason: `AI Space policy denies ${surface} surface commands.` };
   }
 
   const scopedNodes = new Set([
@@ -444,12 +465,12 @@ function evaluateAgentGroupPolicy(input: {
   const targetNodeIds = targetNodeIdsForCommand(input.command, input.snapshot);
   if (input.command.type === 'node.add') {
     if (!policy.targetScope?.allowNewNodes) {
-      return { allowed: false, reason: 'AI Group policy does not allow new nodes.' };
+      return { allowed: false, reason: 'AI Space policy does not allow new nodes.' };
     }
   } else {
     const outOfScope = targetNodeIds.find((nodeId) => !scopedNodes.has(nodeId));
     if (outOfScope) {
-      return { allowed: false, reason: `Target ${outOfScope} is outside AI Group scope.` };
+      return { allowed: false, reason: `Target ${outOfScope} is outside AI Space scope.` };
     }
   }
 
@@ -459,21 +480,21 @@ function evaluateAgentGroupPolicy(input: {
     typeof budgets.maxParamsPerCommand === 'number' &&
     Object.keys(input.command.params).length > budgets.maxParamsPerCommand
   ) {
-    return { allowed: false, reason: 'AI Group budget maxParamsPerCommand exceeded.' };
+    return { allowed: false, reason: 'AI Space budget maxParamsPerCommand exceeded.' };
   }
 
   if (input.command.type === 'node.add' && typeof budgets.maxNodes === 'number') {
     const nextNodeIds = new Set(input.group.nodeIds.map(String));
     nextNodeIds.add(String(input.command.node.id));
     if (nextNodeIds.size > budgets.maxNodes) {
-      return { allowed: false, reason: 'AI Group budget maxNodes exceeded.' };
+      return { allowed: false, reason: 'AI Space budget maxNodes exceeded.' };
     }
   }
 
   if (input.command.type === 'node.connect' && typeof budgets.maxConnections === 'number') {
     const nextConnectionCount = countGroupConnections(input.snapshot, input.group) + 1;
     if (nextConnectionCount > budgets.maxConnections) {
-      return { allowed: false, reason: 'AI Group budget maxConnections exceeded.' };
+      return { allowed: false, reason: 'AI Space budget maxConnections exceeded.' };
     }
   }
 

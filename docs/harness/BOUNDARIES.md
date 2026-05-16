@@ -14,20 +14,20 @@ this file.
 
 ## Layers
 
-| Layer | Owns | Must Not Own |
-| --- | --- | --- |
-| Root UI | authoring workflows, Canvas gestures, Group publishing views | direct graph mutation outside command bus |
-| Manager UI | live performance controls for published Groups | heavy graph editor, Rete internals, unauthorized target control |
-| Canvas adapter | visual projection, selection, positions, pan/zoom, gesture-to-command translation | business validation, execution, permissions |
-| Semantic command bus | graph/Group/partition commands, transactions, history, audit | DOM state, Rete state, transport-specific routing |
-| Node Registry | node definitions, versions, schemas, AI summaries, compatibility | per-node global switches, UI-only behavior |
-| Graph validation | connection/param/group/deployability checks | applying changes |
-| ControlPlane | actor, ownership, transfer, safe mode, policy decisions | rendering, media execution |
-| Execution platform | partitions, deploy/start/stop/remove, watchdog, runtime status | authorization bypass |
-| Transport | Socket.IO, display local bridge, server fallback, ack/nack | product semantics |
-| Plugin host | plugin lifecycle, resource budgets, capability declaration | core graph state mutation |
-| AI Operator | server-side event ingestion, model calls, progressive skill loading, planning/proposal/command execution through policy | direct Canvas/Rete mutation, CLI shell control as primary runtime, or secret access |
-| Observability | logs, metrics, traces, reports, evidence | hidden side effects |
+| Layer                | Owns                                                                                                                    | Must Not Own                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Root UI              | authoring workflows, Canvas gestures, Group publishing views                                                            | direct graph mutation outside command bus                                           |
+| Manager UI           | live performance controls for published Groups                                                                          | heavy graph editor, Rete internals, unauthorized target control                     |
+| Canvas adapter       | visual projection, selection, positions, pan/zoom, gesture-to-command translation                                       | business validation, execution, permissions                                         |
+| Semantic command bus | graph/Group/partition commands, transactions, history, audit                                                            | DOM state, Rete state, transport-specific routing                                   |
+| Node Registry        | node definitions, versions, schemas, AI summaries, compatibility                                                        | per-node global switches, UI-only behavior                                          |
+| Graph validation     | connection/param/group/deployability checks                                                                             | applying changes                                                                    |
+| ControlPlane         | actor, ownership, transfer, safe mode, policy decisions                                                                 | rendering, media execution                                                          |
+| Execution platform   | partitions, deploy/start/stop/remove, watchdog, runtime status                                                          | authorization bypass                                                                |
+| Transport            | Socket.IO, display local bridge, server fallback, ack/nack                                                              | product semantics                                                                   |
+| Plugin host          | plugin lifecycle, resource budgets, capability declaration                                                              | core graph state mutation                                                           |
+| AI Operator          | server-side event ingestion, model calls, progressive skill loading, planning/proposal/command execution through policy | direct Canvas/Rete mutation, CLI shell control as primary runtime, or secret access |
+| Observability        | logs, metrics, traces, reports, evidence                                                                                | hidden side effects                                                                 |
 
 ## Package Direction
 
@@ -66,7 +66,7 @@ The v1 AI Agent runtime belongs to the server authority lane. It listens to norm
 uses `@shugu/ai-core` for provider/client/context helpers, and sends `AgentCommandPlan` commands to the semantic command
 bus. It must not drive Canvas, Client, Display, or CLI as a hidden UI automation surface.
 
-Group-level AI access is explicit:
+AI Space-level access is explicit:
 
 - `agentInterface` describes the sandbox surface the model may understand and call: public inputs, outputs, events,
   commands, and target IDs.
@@ -74,6 +74,8 @@ Group-level AI access is explicit:
   rollback/no-op behavior.
 
 These fields are declarative metadata. Enforcement remains in semantic validation, command bus policy, and rollback.
+AI Space may reuse the same frame renderer as Group in Canvas, but it is a distinct semantic target (`kind: "ai-space"`)
+so ordinary Groups do not become AI mutation sandboxes.
 
 ## Topology Change Policy
 

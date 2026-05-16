@@ -9,10 +9,10 @@ import { createOpenAiCompatibleClient } from '../dist-ai-core/index.js';
 const baseConfig = {
   baseUrl: 'https://code.b886.top/v1',
   apiKey: 'sk-test-secret-123',
-  model: 'GPT5.5-low',
+  model: 'gpt-5.5',
 };
 
-test('createOpenAiCompatibleClient posts GPT5.5-low to chat completions with schema mode and redacted logging', async () => {
+test('createOpenAiCompatibleClient posts gpt-5.5 to chat completions with schema mode and redacted logging', async () => {
   const calls = [];
   const logs = [];
   const client = createOpenAiCompatibleClient({
@@ -57,7 +57,7 @@ test('createOpenAiCompatibleClient posts GPT5.5-low to chat completions with sch
   assert.equal(calls[0].url, 'https://code.b886.top/v1/chat/completions');
   assert.equal(calls[0].init.method, 'POST');
   assert.equal(calls[0].init.headers.Authorization, 'Bearer sk-test-secret-123');
-  assert.equal(JSON.parse(calls[0].init.body).model, 'GPT5.5-low');
+  assert.equal(JSON.parse(calls[0].init.body).model, 'gpt-5.5');
   assert.deepEqual(JSON.parse(calls[0].init.body).messages, [{ role: 'user', content: 'Say hello' }]);
   assert.deepEqual(JSON.parse(calls[0].init.body).response_format, {
     type: 'json_schema',

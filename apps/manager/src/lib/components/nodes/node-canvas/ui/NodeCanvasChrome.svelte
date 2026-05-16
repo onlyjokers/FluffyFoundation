@@ -166,9 +166,11 @@
         ? (reteBuilder.getPortDefForSocket(picker.initialSocket)?.type ?? 'any')
         : 'any'}
       anchor={picker.anchor}
-      bind:query={picker.query}
+      query={picker.query}
+      onQueryChange={picker.onQueryChange}
       categories={picker.categories}
-      bind:selectedCategory={picker.selectedCategory}
+      selectedCategory={picker.selectedCategory}
+      onSelectedCategoryChange={picker.onSelectedCategoryChange}
       items={picker.items}
       onClose={picker.onClose}
       onPick={picker.onPick}

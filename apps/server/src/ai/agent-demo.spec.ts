@@ -33,9 +33,10 @@ const createDemoSnapshot = () => ({
   connections: [],
   groups: [
     {
-      id: 'client:client-1',
+      id: 'ai-space:client-1',
       parentId: null,
-      name: 'Client 1 Agent Group',
+      kind: 'ai-space',
+      name: 'Client 1 AI Space',
       nodeIds: ['display:greeting', 'client:pulse'],
       disabled: false,
       surface: 'internal',
@@ -52,6 +53,7 @@ const createDemoSnapshot = () => ({
         publicOutputs: [{ id: 'display', type: 'string', label: 'Display response' }],
         exposedNodeIds: ['display:greeting', 'client:pulse'],
         callableCommands: ['node.params.update'],
+        eventBindings: ['client.joined', 'client.text.final'],
       },
     },
   ],
@@ -74,7 +76,7 @@ const skillRegistry = createAgentSkillRegistry({
         commandTypes: ['node.params.update'],
         eventTypes: ['client.joined', 'client.text.final'],
       },
-      content: 'Use node.params.update inside the assigned client group.',
+      content: 'Use node.params.update inside the assigned AI Space.',
     },
   ],
 });
@@ -110,7 +112,7 @@ test('AI demo loop routes client join and text through the shared semantic layer
   const chatClient = {
     describeConfig: () => ({
       baseUrl: 'https://code.b886.top/v1',
-      model: 'GPT5.5-low',
+      model: 'gpt-5.5',
       apiKey: '[REDACTED]',
       supportsJsonSchema: true,
       timeoutMs: 30_000,
@@ -127,13 +129,13 @@ test('AI demo loop routes client join and text through the shared semantic layer
             commands: [
               {
                 type: 'node.params.update',
-                scopeGroupId: 'client:client-1',
+                scopeGroupId: 'ai-space:client-1',
                 nodeId: 'display:greeting',
                 params: { message: '你好，旅行者', intensity: 0.7 },
               },
               {
                 type: 'node.params.update',
-                scopeGroupId: 'client:client-1',
+                scopeGroupId: 'ai-space:client-1',
                 nodeId: 'client:pulse',
                 params: { brightness: 1, flicker: 0.5 },
               },
@@ -151,7 +153,7 @@ test('AI demo loop routes client join and text through the shared semantic layer
           commands: [
             {
               type: 'node.params.update',
-              scopeGroupId: 'client:client-1',
+              scopeGroupId: 'ai-space:client-1',
               nodeId: 'display:greeting',
               params: { message: '我听见了你的声音', intensity: 0.9 },
             },
@@ -171,14 +173,14 @@ test('AI demo loop routes client join and text through the shared semantic layer
     getAllManagerSocketIds: () => ['socket-manager-1'],
     getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
     getClientsByGroup: () => [
-      { clientId: 'client-1', socketId: 'socket-client-1', group: 'client:client-1' },
+      { clientId: 'client-1', socketId: 'socket-client-1', group: 'ai-space:client-1' },
     ],
     getClient: () => ({
       clientId: 'client-1',
       socketId: 'socket-client-1',
-      group: 'client:client-1',
+      group: 'ai-space:client-1',
     }),
-    getAllClients: () => [{ clientId: 'client-1', connected: true, group: 'client:client-1' }],
+    getAllClients: () => [{ clientId: 'client-1', connected: true, group: 'ai-space:client-1' }],
     getAllGroupOwnershipEntries: () => [],
   };
   const RouterCtor = MessageRouterService as unknown as new (
