@@ -6,6 +6,7 @@ import type { GraphState } from '$lib/nodes/types';
 export const SERVER_SEMANTIC_MIGRATION_KEY = 'shugu-server-semantic-migrated-v1';
 
 export type ServerSemanticNodeEngine = {
+  exportGraph?: () => GraphState;
   loadGraph: (graph: GraphState) => void;
 };
 
@@ -34,12 +35,33 @@ function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGra
   return result?.snapshot ?? null;
 }
 
-export function graphFromServerSemanticSnapshot(snapshot: SemanticGraphSnapshot): GraphState {
+const defaultSemanticNodePosition = { x: 0, y: 0 };
+
+const positionFromGraph = (
+  graph: GraphState | undefined
+): Map<string, { x: number; y: number }> => {
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const node of graph?.nodes ?? []) {
+    const x = Number(node.position?.x);
+    const y = Number(node.position?.y);
+    positions.set(String(node.id), {
+      x: Number.isFinite(x) ? x : defaultSemanticNodePosition.x,
+      y: Number.isFinite(y) ? y : defaultSemanticNodePosition.y,
+    });
+  }
+  return positions;
+};
+
+export function graphFromServerSemanticSnapshot(
+  snapshot: SemanticGraphSnapshot,
+  currentGraph?: GraphState
+): GraphState {
+  const currentPositions = positionFromGraph(currentGraph);
   return {
     nodes: (snapshot.nodes ?? []).map((node) => ({
       id: String(node.id),
       type: String(node.type),
-      position: { x: 0, y: 0 },
+      position: currentPositions.get(String(node.id)) ?? { ...defaultSemanticNodePosition },
       config: { ...(node.params ?? {}) },
       inputValues: { ...(node.inputValues ?? {}) },
       outputValues: { ...(node.outputValues ?? {}) },
@@ -52,7 +74,9 @@ export function applyServerSemanticSnapshot(input: {
   snapshot: SemanticGraphSnapshot;
   nodeEngine: ServerSemanticNodeEngine;
 }): void {
-  input.nodeEngine.loadGraph(graphFromServerSemanticSnapshot(input.snapshot));
+  input.nodeEngine.loadGraph(
+    graphFromServerSemanticSnapshot(input.snapshot, input.nodeEngine.exportGraph?.())
+  );
 }
 
 export function createServerSemanticMigrationCoordinator(input: {
@@ -100,10 +124,11 @@ export function bindServerSemanticSync(input: {
   const unsubscribeSnapshot = input.sdk.onSemanticSnapshot((snapshot) => {
     handleSnapshot(snapshot);
   });
-  const unsubscribeResult = input.sdk.onSemanticResult?.((message) => {
-    const snapshot = snapshotFromSemanticResult(message);
-    if (snapshot) handleSnapshot(snapshot);
-  }) ?? (() => undefined);
+  const unsubscribeResult =
+    input.sdk.onSemanticResult?.((message) => {
+      const snapshot = snapshotFromSemanticResult(message);
+      if (snapshot) handleSnapshot(snapshot);
+    }) ?? (() => undefined);
   const unsubscribeState = input.sdk.onStateChange((state) => {
     if (requestedInitialSnapshot) return;
     if (state.status !== 'connected') return;

@@ -12,6 +12,7 @@ type PlanGroupFromSelectionOptions = {
   groups: NodeGroup[];
   localLoops: LocalLoop[];
   createId: () => string;
+  kind?: 'group' | 'ai-space';
 };
 
 type PlanGroupFromSelectionResult = {
@@ -48,7 +49,8 @@ function createDepthResolver(byId: Map<string, NodeGroup>) {
     visiting.add(groupId);
 
     const group = byId.get(groupId);
-    const parentId = group?.parentId && byId.has(String(group.parentId)) ? String(group.parentId) : null;
+    const parentId =
+      group?.parentId && byId.has(String(group.parentId)) ? String(group.parentId) : null;
     const depth = parentId ? getDepth(parentId, visiting) + 1 : 0;
 
     visiting.delete(groupId);
@@ -58,8 +60,11 @@ function createDepthResolver(byId: Map<string, NodeGroup>) {
   return getDepth;
 }
 
-export function planGroupFromSelection(options: PlanGroupFromSelectionOptions): PlanGroupFromSelectionResult {
+export function planGroupFromSelection(
+  options: PlanGroupFromSelectionOptions
+): PlanGroupFromSelectionResult {
   const { selectionNodeIds, graph, groups, localLoops, createId } = options;
+  const kind = options.kind === 'ai-space' ? 'ai-space' : 'group';
   const nodeById = new Map((graph.nodes ?? []).map((node) => [String(node.id), node]));
   const selected = selectionNodeIds
     .map((id) => String(id))
@@ -133,19 +138,60 @@ export function planGroupFromSelection(options: PlanGroupFromSelectionOptions): 
     for (const nodeId of loopIds) ids.add(nodeId);
   }
 
-  const nextName = parentId
-    ? `Sub Group ${(groups.filter((group) => String(group.parentId ?? '') === String(parentId)).length ?? 0) + 1}`
-    : `Group ${groups.filter((group) => !group.parentId).length + 1}`;
+  const nextName =
+    kind === 'ai-space'
+      ? `AI Space ${groups.filter((group) => group.kind === 'ai-space').length + 1}`
+      : parentId
+        ? `Sub Group ${(groups.filter((group) => String(group.parentId ?? '') === String(parentId)).length ?? 0) + 1}`
+        : `Group ${groups.filter((group) => !group.parentId).length + 1}`;
+
+  const nodeIds = Array.from(ids);
 
   return {
     group: {
       id: createId(),
       parentId,
       name: nextName,
-      nodeIds: Array.from(ids),
+      nodeIds,
       disabled: false,
       minimized: false,
       runtimeActive: true,
+      ...(kind === 'ai-space'
+        ? {
+            kind: 'ai-space' as const,
+            agentInterface: {
+              exposedNodeIds: [...nodeIds],
+              callableCommands: [
+                'node.params.update',
+                'node.add',
+                'node.connect',
+                'node.disconnect',
+              ],
+              eventBindings: ['client.joined', 'client.text.final', 'display.ready'],
+            },
+            agentPolicy: {
+              enabled: true,
+              allowedActorIds: ['ai-orchestrator'],
+              allowedCommands: [
+                'node.params.update',
+                'node.add',
+                'node.connect',
+                'node.disconnect',
+              ],
+              deniedSurfaces: ['network', 'secrets', 'storage'],
+              targetScope: { nodeIds: [...nodeIds], allowNewNodes: true },
+              budgets: {
+                maxNodes: 16,
+                maxConnections: 20,
+                maxParamsPerCommand: 8,
+                maxCommandsPerTurn: 12,
+                maxRetries: 2,
+              },
+              approvalRequired: false,
+              rollbackOnReject: true,
+            },
+          }
+        : {}),
     },
     deniedNodeIds,
   };

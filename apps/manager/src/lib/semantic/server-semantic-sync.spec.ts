@@ -11,7 +11,10 @@ import {
 } from './server-semantic-sync';
 import type { GraphState } from '$lib/nodes/types';
 
-const snapshot = (nodes: SemanticGraphSnapshot['nodes'], connections: SemanticGraphSnapshot['connections'] = []): SemanticGraphSnapshot => ({
+const snapshot = (
+  nodes: SemanticGraphSnapshot['nodes'],
+  connections: SemanticGraphSnapshot['connections'] = []
+): SemanticGraphSnapshot => ({
   revision: 7,
   nodes,
   definitions: [],
@@ -78,6 +81,68 @@ test('applyServerSemanticSnapshot mirrors server graph into the Manager NodeEngi
   });
 });
 
+test('applyServerSemanticSnapshot preserves local positions while applying semantic node updates', () => {
+  let loaded: GraphState | null = null;
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'client-a',
+        type: 'client-object',
+        position: { x: 321, y: 654 },
+        config: { label: 'Old label' },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'client-a',
+        type: 'client-object',
+        params: { label: 'Client A' },
+        inputValues: { active: true },
+        outputValues: { ready: false },
+      },
+      {
+        id: 'display-a',
+        type: 'display-object',
+        params: { label: 'Display A' },
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(loaded.nodes, [
+    {
+      id: 'client-a',
+      type: 'client-object',
+      position: { x: 321, y: 654 },
+      config: { label: 'Client A' },
+      inputValues: { active: true },
+      outputValues: { ready: false },
+    },
+    {
+      id: 'display-a',
+      type: 'display-object',
+      position: { x: 0, y: 0 },
+      config: { label: 'Display A' },
+      inputValues: {},
+      outputValues: {},
+    },
+  ]);
+});
+
 test('migration coordinator imports old local project only once when server graph is empty', () => {
   const sent: unknown[] = [];
   const storage = new Map<string, string>();
@@ -100,7 +165,16 @@ test('migration coordinator imports old local project only once when server grap
         ],
         connections: [],
       },
-      groups: [{ id: 'g1', parentId: null, name: 'Group', nodeIds: ['local-node'], disabled: false, minimized: false }],
+      groups: [
+        {
+          id: 'g1',
+          parentId: null,
+          name: 'Group',
+          nodeIds: ['local-node'],
+          disabled: false,
+          minimized: false,
+        },
+      ],
       partitions: [],
     }),
     sendSemanticCommand: (input) => sent.push(input),
@@ -127,7 +201,16 @@ test('migration coordinator imports old local project only once when server grap
         ],
         connections: [],
       },
-      groups: [{ id: 'g1', parentId: null, name: 'Group', nodeIds: ['local-node'], disabled: false, minimized: false }],
+      groups: [
+        {
+          id: 'g1',
+          parentId: null,
+          name: 'Group',
+          nodeIds: ['local-node'],
+          disabled: false,
+          minimized: false,
+        },
+      ],
       partitions: [],
     },
   });
@@ -159,7 +242,9 @@ test('bindServerSemanticSync requests server snapshot when Manager SDK reaches c
 });
 
 test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot requests', () => {
-  let resultHandler: ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void) | null = null;
+  let resultHandler:
+    | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
+    | null = null;
   let loaded: GraphState | null = null;
 
   bindServerSemanticSync({

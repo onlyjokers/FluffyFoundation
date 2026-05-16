@@ -45,6 +45,25 @@ test('planGroupFromSelection filters decoration nodes and creates a root group n
   assert.equal(result.deniedNodeIds.length, 0);
 });
 
+test('planGroupFromSelection can create an AI Space from the current selection', () => {
+  const result = planGroupFromSelection({
+    selectionNodeIds: ['a'],
+    graph: graph(['a']),
+    groups: [],
+    localLoops: [],
+    createId: () => 'ai-space:new',
+    kind: 'ai-space',
+  });
+
+  assert.equal(result.group?.id, 'ai-space:new');
+  assert.equal(result.group?.kind, 'ai-space');
+  assert.equal(result.group?.name, 'AI Space 1');
+  assert.deepEqual(result.group?.agentPolicy?.targetScope, {
+    nodeIds: ['a'],
+    allowNewNodes: true,
+  });
+});
+
 test('planGroupFromSelection denies cross-group selections', () => {
   const result = planGroupFromSelection({
     selectionNodeIds: ['a', 'b'],

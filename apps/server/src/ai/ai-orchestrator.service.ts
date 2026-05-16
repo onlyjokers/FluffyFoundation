@@ -175,15 +175,22 @@ const commandWithDefaultScope = (
   command: SemanticCommand,
   targetSpaceId: string
 ): SemanticCommand => {
-  if (!command.type.startsWith('node.')) return command;
-  if (
-    'scopeGroupId' in command &&
-    typeof command.scopeGroupId === 'string' &&
-    command.scopeGroupId.trim()
-  ) {
-    return command;
-  }
-  return { ...command, scopeGroupId: targetSpaceId } as SemanticCommand;
+  const scoped =
+    command.type.startsWith('node.') &&
+    (!('scopeGroupId' in command) ||
+      typeof command.scopeGroupId !== 'string' ||
+      !command.scopeGroupId.trim())
+      ? ({ ...command, scopeGroupId: targetSpaceId } as SemanticCommand)
+      : command;
+
+  if (scoped.type !== 'node.add') return scoped;
+  return {
+    ...scoped,
+    node: {
+      ...scoped.node,
+      position: { x: 0, y: 0 },
+    },
+  };
 };
 
 @Injectable()

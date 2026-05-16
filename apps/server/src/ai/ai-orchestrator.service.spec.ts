@@ -220,6 +220,10 @@ test('orchestrator emits semantic commands for joined and text events through th
   assert.equal(dispatches[0].command.type, 'node.add');
   assert.equal(dispatches[0].dryRun, true);
   assert.equal(dispatches[0].command.scopeGroupId, 'ai-space:agent');
+  assert.deepEqual(
+    (dispatches[0].command as { node: { position: { x: number; y: number } } }).node.position,
+    { x: 0, y: 0 }
+  );
   assert.equal(dispatches[1].command.type, 'node.add');
   assert.equal(dispatches[1].dryRun, false);
 

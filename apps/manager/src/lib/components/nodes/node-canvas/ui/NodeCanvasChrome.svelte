@@ -72,6 +72,7 @@
   export let groupSelectionBounds = null;
   export let groupSelectionCount = 0;
   export let createGroupFromSelection;
+  export let createAiSpaceFromSelection;
 
   export let minimapUi;
   export let minimap;
@@ -80,13 +81,7 @@
   export let minimapController;
 </script>
 
-<NodeCanvasLayout
-  bind:container
-  {isRunning}
-  {edgeShadowsEnabled}
-  {gridScale}
-  {gridOffset}
->
+<NodeCanvasLayout bind:container {isRunning} {edgeShadowsEnabled} {gridScale} {gridOffset}>
   <svelte:fragment slot="toolbar">
     <input
       bind:this={importGraphInputEl}
@@ -135,7 +130,11 @@
   <svelte:fragment slot="logs">
     {#if showExecutorLogs && logsClientId}
       {@const logsStatus = executorStatusByClient.get(logsClientId)}
-      <ExecutorLogsPanel clientId={logsClientId} status={logsStatus} onClose={onCloseExecutorLogs} />
+      <ExecutorLogsPanel
+        clientId={logsClientId}
+        status={logsStatus}
+        onClose={onCloseExecutorLogs}
+      />
     {/if}
   </svelte:fragment>
 
@@ -221,6 +220,7 @@
       selectionBounds={groupSelectionBounds}
       selectionCount={groupSelectionCount}
       onCreateGroup={createGroupFromSelection}
+      onCreateAiSpace={createAiSpaceFromSelection}
     />
   </svelte:fragment>
 
