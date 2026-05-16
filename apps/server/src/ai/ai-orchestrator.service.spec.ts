@@ -1067,3 +1067,110 @@ test('orchestrator repairs natural-language-plus-json output instead of using fl
     ['node.params.update', false],
   ]);
 });
+
+test('orchestrator includes bounded per-space conversation memory in later turns', async () => {
+  const prompts: string[] = [];
+  const authority = {
+    getSnapshot: () => ({
+      revision: 51,
+      nodes: [
+        {
+          id: 'display:text',
+          type: 'proc-display-text',
+          params: { text: 'idle' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [],
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:agent',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Agent Space',
+          nodeIds: ['display:text'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update'],
+            targetScope: { nodeIds: ['display:text'], allowNewNodes: false },
+          },
+          agentInterface: {
+            exposedNodeIds: ['display:text'],
+            callableCommands: ['node.params.update'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: { command: Record<string, unknown>; dryRun?: boolean }) => ({
+      ok: true,
+      command: input.command,
+      dryRun: Boolean(input.dryRun),
+      previousRevision: 51,
+      appliedRevision: 52,
+      rollbackToken: 'rollback:51',
+      snapshot: authority.getSnapshot(),
+    }),
+  };
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+      prompts.push(input.messages.map((message) => message.content).join('\n'));
+      const text = prompts.length === 1 ? '你好，我在' : '继续刚才的问候';
+      return {
+        raw: { ok: true },
+        content: JSON.stringify({
+          version: 1,
+          id: `turn:${prompts.length}`,
+          summary: prompts.length === 1 ? 'first greeting' : 'follow-up greeting',
+          actions: [{ op: 'setParam', nodeId: 'display:text', param: 'text', value: text }],
+        }),
+        parsed: {
+          version: 1,
+          id: `turn:${prompts.length}`,
+          summary: prompts.length === 1 ? 'first greeting' : 'follow-up greeting',
+          actions: [{ op: 'setParam', nodeId: 'display:text', param: 'text', value: text }],
+        },
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry
+  );
+
+  await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    text: '你好',
+  });
+  await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    text: '继续',
+  });
+
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[0].includes('"memory"'), true);
+  assert.equal(prompts[1].includes('"first greeting"'), true);
+  assert.equal(prompts[1].includes('"maxTurns"'), true);
+});

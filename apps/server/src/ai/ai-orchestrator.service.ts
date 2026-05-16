@@ -24,6 +24,10 @@ import {
   parseAgentPlan,
   type AgentPlan,
 } from './agent-action-dsl.js';
+import {
+  createAiConversationMemoryStore,
+  type AiConversationMemoryStore,
+} from './ai-conversation-memory.js';
 import { loadAiSystemPromptFromEnv, type AiPromptConfig } from './ai-prompt-config.js';
 
 export const AI_CHAT_CLIENT = 'SHUGU_AI_CHAT_CLIENT';
@@ -72,11 +76,24 @@ const aiActor: SemanticActor = { id: 'ai-orchestrator', role: 'ai' };
 const planSchema = {
   type: 'object',
   additionalProperties: true,
-  required: ['id', 'commands'],
+  required: ['id'],
+  anyOf: [{ required: ['actions'] }, { required: ['commands'] }],
   properties: {
+    version: { type: 'number' },
     id: { type: 'string' },
     summary: { type: 'string' },
     requestedSkillIds: { type: 'array', items: { type: 'string' } },
+    actions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['op'],
+        properties: {
+          op: { type: 'string' },
+        },
+      },
+    },
     commands: {
       type: 'array',
       items: {
@@ -152,7 +169,8 @@ export class AiOrchestratorService {
     private readonly chatClient: OpenAiCompatibleClient,
     private readonly skillRegistry: AgentSkillRegistry,
     private readonly aiDebugLogger?: Pick<AiDebugLogger, 'write'>,
-    promptConfig: AiPromptConfig = loadAiSystemPromptFromEnv()
+    promptConfig: AiPromptConfig = loadAiSystemPromptFromEnv(),
+    private readonly memory: AiConversationMemoryStore = createAiConversationMemoryStore()
   ) {
     this.promptConfig = promptConfig;
   }
@@ -183,6 +201,7 @@ export class AiOrchestratorService {
         targetSpace: compactGroup(targetSpace),
         snapshot: compactSemanticSnapshot(snapshot, targetSpace),
         capabilityManifest: buildCapabilityManifest(snapshot, targetSpace),
+        memory: this.memory.snapshot(targetSpace.id),
         skills,
       };
       const messages = [
@@ -249,10 +268,20 @@ export class AiOrchestratorService {
           error,
           request: activeCompletionRequest,
         });
+        this.memory.rememberFailure({
+          targetSpaceId: targetSpace.id,
+          event,
+          error: error instanceof Error ? error.message : String(error),
+        });
         turns.push({ targetSpaceId: targetSpace.id, plan: null, skills, dispatchResults: [] });
         continue;
       }
       if (!plan) {
+        this.memory.rememberFailure({
+          targetSpaceId: targetSpace.id,
+          event,
+          error: 'AI turn did not produce a valid plan.',
+        });
         turns.push({ targetSpaceId: targetSpace.id, plan: null, skills, dispatchResults: [] });
         continue;
       }
@@ -274,6 +303,12 @@ export class AiOrchestratorService {
           commands: plan.commands,
         })
       );
+      this.memory.rememberTurn({
+        targetSpaceId: targetSpace.id,
+        event,
+        plan,
+        dispatchResults,
+      });
 
       turns.push({ targetSpaceId: targetSpace.id, plan, skills: activeSkills, dispatchResults });
       this.aiDebugLogger?.write({
@@ -424,6 +459,10 @@ export class AiOrchestratorService {
     const maxAttempts = Number(process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS ?? 1);
     const repairDepth = input.repairDepth ?? 0;
     if (!Number.isFinite(maxAttempts) || maxAttempts <= repairDepth) return null;
+    this.memory.rememberRepair({
+      targetSpaceId: input.targetSpace.id,
+      error: input.planError,
+    });
 
     const messages = [
       ...input.baseMessages,

@@ -32,9 +32,15 @@ test('AI debug logger writes JSONL records when enabled and redacts secret field
     assert.equal(files.length, 1);
     assert.match(files[0], /^ai-agent-debug-\d{4}-\d{2}-\d{2}\.jsonl$/);
 
-    const line = fs.readFileSync(path.join(logDir, files[0]), 'utf8').trim();
-    const record = JSON.parse(line);
+    const records = fs
+      .readFileSync(path.join(logDir, files[0]), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const ready = records.find((record) => record.kind === 'ai.debug.logger.ready');
+    const record = records.find((item) => item.kind === 'ai.turn.request');
 
+    assert.equal(ready.enabled, true);
     assert.equal(record.kind, 'ai.turn.request');
     assert.equal(record.turnId, 'turn-1');
     assert.equal(record.apiKey, '[REDACTED]');

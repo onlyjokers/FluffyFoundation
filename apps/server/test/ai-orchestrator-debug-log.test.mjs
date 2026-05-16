@@ -123,7 +123,7 @@ test('AI orchestrator writes structured debug events around a successful turn', 
   assert.equal(dispatches[1].result.ok, true);
 });
 
-test('AI orchestrator falls back to local flashlight edits but not text mirroring when provider returns no plan', async () => {
+test('AI orchestrator does not use local flashlight fallback when provider returns no plan', async () => {
   const dispatches = [];
   const fallbackSnapshot = {
     ...snapshot,
@@ -234,17 +234,9 @@ test('AI orchestrator falls back to local flashlight edits but not text mirrorin
     text: '请把闪光的频率调整为 100',
   });
 
-  assert.equal(rate.turns[0].plan.id, 'fallback:flashlight-frequency');
-  assert.deepEqual(rate.turns[0].plan.commands, [
-    {
-      type: 'node.params.update',
-      scopeGroupId: 'ai-space:test',
-      nodeId: 'rate',
-      params: { value: 100 },
-    },
-  ]);
-  assert.equal(dispatches.length, 2);
-  assert.equal(events.some((event) => event.kind === 'ai.turn.fallback'), true);
+  assert.equal(rate.turns[0].plan, null);
+  assert.equal(dispatches.length, 0);
+  assert.equal(events.some((event) => event.kind === 'ai.turn.fallback'), false);
 });
 
 test('AI orchestrator does not mirror client text when provider aborts', async () => {

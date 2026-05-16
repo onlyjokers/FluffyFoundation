@@ -73,7 +73,10 @@ function sanitizeValue(
   const key = options.key ?? '';
 
   if (SECRET_KEYS.has(key)) return '[REDACTED]';
-  if (options.includePrompts === false && (key === 'messages' || key === 'prompt')) {
+  if (
+    options.includePrompts === false &&
+    (key === 'messages' || key === 'prompt' || key === 'promptPayload')
+  ) {
     return '[PROMPT_LOGGING_DISABLED]';
   }
   if (typeof value === 'string') return truncateString(value, maxFieldChars);
@@ -128,6 +131,15 @@ export class AiDebugLogger {
     this.includePrompts = config.includePrompts ?? true;
     this.maxFieldChars = config.maxFieldChars ?? DEFAULT_MAX_FIELD_CHARS;
     this.now = config.now ?? (() => new Date());
+    if (this.enabled) {
+      this.write({
+        kind: 'ai.debug.logger.ready',
+        enabled: this.enabled,
+        logDir: this.logDir,
+        includePrompts: this.includePrompts,
+        maxFieldChars: this.maxFieldChars,
+      });
+    }
   }
 
   isEnabled(): boolean {
