@@ -551,3 +551,519 @@ test('orchestrator stays silent when no AI space binds the event', async () => {
   assert.equal(dispatches.length, 0);
   assert.equal(result.turns.length, 0);
 });
+
+test('orchestrator compiles action DSL with manifest context, driver-node param updates, and hard delete', async () => {
+  const dispatches: Array<{
+    actor: { id: string; role: string };
+    command: Record<string, unknown>;
+    dryRun?: boolean;
+  }> = [];
+  const prompts: string[] = [];
+  const authority = {
+    getSnapshot: () => ({
+      revision: 21,
+      nodes: [
+        {
+          id: 'value:frequency',
+          type: 'number',
+          params: { value: 2 },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'client:flashlight',
+          type: 'proc-flashlight',
+          params: { active: true, mode: 'blink', frequencyHz: 2 },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'note:remove-me',
+          type: 'note',
+          params: { text: 'obsolete' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [
+        {
+          type: 'number',
+          label: 'Number',
+          category: 'Values',
+          ports: {
+            inputs: [{ id: 'value', label: 'Value', type: 'number' }],
+            outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+          },
+          params: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 0, min: 0, max: 30 }],
+          aiSummary: {
+            type: 'number',
+            label: 'Number',
+            version: '1.0.0',
+            category: 'Values',
+            description: 'Editable numeric constant.',
+            platforms: ['manager', 'client'],
+            sideEffects: 'none',
+            permissions: [],
+            ports: { inputs: [], outputs: [{ id: 'value', type: 'number' }] },
+            params: [{ key: 'value', type: 'number', default: 0, min: 0, max: 30 }],
+            compatibility: [],
+            examples: [],
+            risks: [],
+            repairHints: [],
+          },
+        },
+        {
+          type: 'proc-flashlight',
+          label: 'Flashlight',
+          category: 'Processors',
+          ports: {
+            inputs: [
+              { id: 'active', label: 'Active', type: 'boolean' },
+              { id: 'frequencyHz', label: 'Freq', type: 'number' },
+            ],
+            outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+          },
+          params: [
+            { key: 'active', label: 'Active', type: 'boolean', defaultValue: true },
+            { key: 'frequencyHz', label: 'Frequency', type: 'number', defaultValue: 2, min: 0, max: 30 },
+          ],
+          aiSummary: {
+            type: 'proc-flashlight',
+            label: 'Flashlight',
+            version: '1.0.0',
+            category: 'Processors',
+            description: 'Controls client flashlight.',
+            platforms: ['client'],
+            sideEffects: 'remote-control',
+            permissions: ['control:send'],
+            ports: {
+              inputs: [
+                { id: 'active', type: 'boolean' },
+                { id: 'frequencyHz', type: 'number', min: 0, max: 30 },
+              ],
+              outputs: [{ id: 'cmd', type: 'command' }],
+            },
+            params: [
+              { key: 'active', type: 'boolean', default: true },
+              { key: 'frequencyHz', type: 'number', default: 2, min: 0, max: 30 },
+            ],
+            compatibility: [],
+            examples: [],
+            risks: [],
+            repairHints: ['Use active=false to turn the flashlight off.'],
+          },
+        },
+        {
+          type: 'note',
+          label: 'Note',
+          category: 'Other',
+          ports: { inputs: [], outputs: [] },
+          params: [{ key: 'text', label: 'Text', type: 'string', defaultValue: '' }],
+        },
+      ],
+      connections: [
+        {
+          id: 'conn:frequency',
+          sourceNodeId: 'value:frequency',
+          sourcePortId: 'value',
+          targetNodeId: 'client:flashlight',
+          targetPortId: 'frequencyHz',
+        },
+      ],
+      groups: [
+        {
+          id: 'ai-space:agent',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Agent Space',
+          nodeIds: ['value:frequency', 'client:flashlight', 'note:remove-me'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update', 'node.remove'],
+            targetScope: {
+              nodeIds: ['value:frequency', 'client:flashlight', 'note:remove-me'],
+              allowNewNodes: false,
+            },
+          },
+          agentInterface: {
+            exposedNodeIds: ['value:frequency', 'client:flashlight', 'note:remove-me'],
+            callableCommands: ['node.params.update', 'node.remove'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: {
+      actor: { id: string; role: string };
+      command: Record<string, unknown>;
+      dryRun?: boolean;
+    }) => {
+      dispatches.push(input);
+      return {
+        ok: true,
+        command: input.command,
+        dryRun: Boolean(input.dryRun),
+        previousRevision: 21,
+        appliedRevision: 22,
+        rollbackToken: 'rollback:21',
+        audit: {
+          id: 'audit:21',
+          actor: { ...input.actor },
+          command: input.command,
+          dryRun: Boolean(input.dryRun),
+          lifecycle: ['dry-run', 'policy', 'apply', 'audit', 'history', 'rollback-token'],
+          policy: { allowed: true },
+          previousRevision: 21,
+          appliedRevision: 22,
+          rollbackToken: 'rollback:21',
+          createdAt: '1970-01-01T00:00:00.000Z',
+        },
+        snapshot: authority.getSnapshot(),
+      };
+    },
+  };
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+      prompts.push(input.messages.map((message) => message.content).join('\n'));
+      return {
+        raw: { ok: true },
+        content: [
+          'I will return JSON.',
+          '{"version":1,"id":"turn:dsl","summary":"adjust","actions":[',
+          '{"op":"setParam","nodeId":"client:flashlight","param":"frequencyHz","value":100},',
+          '{"op":"setParam","nodeId":"client:flashlight","param":"active","value":false},',
+          '{"op":"removeNode","nodeId":"note:remove-me"}',
+          ']}',
+        ].join('\n'),
+        parsed: null,
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry
+  );
+
+  const result = await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    groupId: 'ai-space:agent',
+    text: '请把闪光频率设为 100，然后关闭 flashlight 并删除旧 note',
+  });
+
+  assert.equal(result.turns[0]?.plan?.commands.length, 3);
+  assert.equal(prompts[0].includes('"capabilityManifest"'), true);
+  assert.equal(prompts[0].includes('"position"'), false);
+  assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
+    ['node.params.update', true],
+    ['node.params.update', true],
+    ['node.remove', true],
+    ['node.params.update', false],
+    ['node.params.update', false],
+    ['node.remove', false],
+  ]);
+  assert.deepEqual(dispatches[0].command, {
+    type: 'node.params.update',
+    scopeGroupId: 'ai-space:agent',
+    nodeId: 'value:frequency',
+    params: { value: 100 },
+  });
+  assert.deepEqual(dispatches[1].command, {
+    type: 'node.params.update',
+    scopeGroupId: 'ai-space:agent',
+    nodeId: 'client:flashlight',
+    params: { active: false },
+  });
+  assert.deepEqual(dispatches[2].command, {
+    type: 'node.remove',
+    scopeGroupId: 'ai-space:agent',
+    nodeId: 'note:remove-me',
+  });
+});
+
+test('orchestrator repairs invalid JSON/action output with validation feedback before applying', async () => {
+  const dispatches: Array<{
+    actor: { id: string; role: string };
+    command: Record<string, unknown>;
+    dryRun?: boolean;
+  }> = [];
+  const prompts: string[] = [];
+  const loggerRecords: Record<string, unknown>[] = [];
+  const authority = {
+    getSnapshot: () => ({
+      revision: 31,
+      nodes: [
+        {
+          id: 'client:flashlight',
+          type: 'proc-flashlight',
+          params: { active: true },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [
+        {
+          type: 'proc-flashlight',
+          label: 'Flashlight',
+          category: 'Processors',
+          ports: { inputs: [], outputs: [] },
+          params: [{ key: 'active', label: 'Active', type: 'boolean', defaultValue: true }],
+        },
+      ],
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:agent',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Agent Space',
+          nodeIds: ['client:flashlight'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update'],
+            targetScope: { nodeIds: ['client:flashlight'], allowNewNodes: false },
+          },
+          agentInterface: {
+            exposedNodeIds: ['client:flashlight'],
+            callableCommands: ['node.params.update'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: {
+      actor: { id: string; role: string };
+      command: Record<string, unknown>;
+      dryRun?: boolean;
+    }) => {
+      dispatches.push(input);
+      const ok = input.command.type === 'node.params.update';
+      return ok
+        ? {
+            ok: true,
+            command: input.command,
+            dryRun: Boolean(input.dryRun),
+            previousRevision: 31,
+            appliedRevision: 32,
+            rollbackToken: 'rollback:31',
+            audit: {
+              id: 'audit:31',
+              actor: { ...input.actor },
+              command: input.command,
+              dryRun: Boolean(input.dryRun),
+              lifecycle: ['dry-run', 'policy', 'apply', 'audit', 'history', 'rollback-token'],
+              policy: { allowed: true },
+              previousRevision: 31,
+              appliedRevision: 32,
+              rollbackToken: 'rollback:31',
+              createdAt: '1970-01-01T00:00:00.000Z',
+            },
+            snapshot: authority.getSnapshot(),
+          }
+        : {
+            ok: false,
+            command: input.command,
+            dryRun: Boolean(input.dryRun),
+            stage: 'dry-run',
+            message: 'Unsupported action.',
+            validationErrors: [
+              {
+                code: 'GRAPH.UNSUPPORTED',
+                path: 'actions.0.op',
+                severity: 'error',
+                message: 'Unsupported action.',
+                repairOptions: ['Use setParam.'],
+              },
+            ],
+            previousRevision: 31,
+            appliedRevision: 31,
+            snapshot: authority.getSnapshot(),
+          };
+    },
+  };
+  const responses = [
+    {
+      content: '{"version":1,"id":"turn:bad","actions":[{"op":"unsupported","nodeId":"client:flashlight"}]}',
+      parsed: null,
+    },
+    {
+      content: '{"version":1,"id":"turn:repaired","actions":[{"op":"setParam","nodeId":"client:flashlight","param":"active","value":false}]}',
+      parsed: null,
+    },
+  ];
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+      prompts.push(input.messages.map((message) => message.content).join('\n'));
+      const response = responses.shift();
+      assert.ok(response);
+      return {
+        raw: { ok: true },
+        content: response.content,
+        parsed: response.parsed,
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry,
+    { write: (record) => loggerRecords.push(record) }
+  );
+
+  const result = await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    text: '关闭 flashlight',
+  });
+
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[1].includes('repair'), true);
+  assert.equal(result.turns[0]?.plan?.id, 'turn:repaired');
+  assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
+    ['node.params.update', true],
+    ['node.params.update', false],
+  ]);
+  assert.equal(loggerRecords.some((record) => record.kind === 'ai.turn.repair.request'), true);
+});
+
+test('orchestrator repairs natural-language-plus-json output instead of using flashlight regex fallback', async () => {
+  const dispatches: Array<{ command: Record<string, unknown>; dryRun?: boolean }> = [];
+  const prompts: string[] = [];
+  const authority = {
+    getSnapshot: () => ({
+      revision: 41,
+      nodes: [
+        {
+          id: 'client:flashlight',
+          type: 'proc-flashlight',
+          params: { frequencyHz: 2 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [],
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:agent',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Agent Space',
+          nodeIds: ['client:flashlight'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update'],
+            targetScope: { nodeIds: ['client:flashlight'], allowNewNodes: false },
+          },
+          agentInterface: {
+            exposedNodeIds: ['client:flashlight'],
+            callableCommands: ['node.params.update'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: { command: Record<string, unknown>; dryRun?: boolean }) => {
+      dispatches.push(input);
+      return {
+        ok: true,
+        command: input.command,
+        dryRun: Boolean(input.dryRun),
+        previousRevision: 41,
+        appliedRevision: 41,
+        rollbackToken: 'rollback:41',
+        snapshot: authority.getSnapshot(),
+      };
+    },
+  };
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+      prompts.push(input.messages.map((message) => message.content).join('\n'));
+      if (prompts.length === 1) {
+        return {
+          raw: { ok: true },
+          content:
+            'I think this should change flashlight speed. {"version":1,"id":"turn:base","actions":[{"op":"unsupported","nodeId":"client:flashlight"}]}',
+          parsed: null,
+          request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+        };
+      }
+      return {
+        raw: { ok: true },
+        content:
+          '{"version":1,"id":"turn:fixed","actions":[{"op":"setParam","nodeId":"client:flashlight","param":"frequencyHz","value":100}]}',
+        parsed: null,
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry
+  );
+
+  const result = await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    text: '请把闪光频率调整为 100',
+  });
+
+  assert.equal(prompts.length, 2);
+  assert.equal(result.turns[0]?.plan?.id, 'turn:fixed');
+  assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
+    ['node.params.update', true],
+    ['node.params.update', false],
+  ]);
+});

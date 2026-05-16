@@ -14,6 +14,17 @@ import type {
 } from '@shugu/node-core';
 import { SemanticGraphAuthorityService } from '../semantic/semantic-graph-authority.service.js';
 import type { AiDebugLogger } from './ai-debug-logger.js';
+import {
+  buildCapabilityManifest,
+  compactSemanticSnapshot,
+  nodeTypesFor,
+} from './agent-capability-manifest.js';
+import {
+  compileAgentPlan,
+  parseAgentPlan,
+  type AgentPlan,
+} from './agent-action-dsl.js';
+import { loadAiSystemPromptFromEnv, type AiPromptConfig } from './ai-prompt-config.js';
 
 export const AI_CHAT_CLIENT = 'SHUGU_AI_CHAT_CLIENT';
 export const AI_SKILL_REGISTRY = 'SHUGU_AI_SKILL_REGISTRY';
@@ -80,108 +91,6 @@ const planSchema = {
   },
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
-const stringArray = (value: unknown): string[] =>
-  Array.isArray(value) ? value.map(String).filter(Boolean) : [];
-
-const sanitizePlan = (value: unknown): AgentCommandPlan | null => {
-  if (!isRecord(value) || !Array.isArray(value.commands)) return null;
-  const commands = value.commands
-    .filter(isRecord)
-    .filter((command) => typeof command.type === 'string') as SemanticCommand[];
-  if (commands.length === 0) return null;
-  return {
-    id: String(value.id ?? `ai-turn:${Date.now()}`),
-    summary: typeof value.summary === 'string' ? value.summary : undefined,
-    commands,
-    requestedSkillIds: stringArray(value.requestedSkillIds),
-  };
-};
-
-const textFromEvent = (event: AgentEnvironmentEvent): string =>
-  event.type === 'client.text.final' ? event.text.trim() : '';
-
-const firstNumberFromText = (text: string): number | null => {
-  const match = text.match(/-?\d+(?:\.\d+)?/);
-  if (!match) return null;
-  const value = Number(match[0]);
-  return Number.isFinite(value) ? value : null;
-};
-
-const nodesForGroup = (
-  snapshot: SemanticGraphSnapshot,
-  targetSpace: SemanticGroup
-): SemanticGraphSnapshot['nodes'] => {
-  const scopedNodeIds = scopedNodeIdsFor(targetSpace);
-  return snapshot.nodes.filter((node) => scopedNodeIds.has(String(node.id)));
-};
-
-const findNodeByType = (
-  snapshot: SemanticGraphSnapshot,
-  targetSpace: SemanticGroup,
-  type: string
-): SemanticGraphSnapshot['nodes'][number] | null =>
-  nodesForGroup(snapshot, targetSpace).find((node) => String(node.type) === type) ?? null;
-
-const upstreamParamDriverNodeId = (
-  snapshot: SemanticGraphSnapshot,
-  targetNodeId: string,
-  targetPortId: string
-): string | null => {
-  const connection = snapshot.connections.find(
-    (item) =>
-      String(item.targetNodeId) === targetNodeId && String(item.targetPortId) === targetPortId
-  );
-  return connection ? String(connection.sourceNodeId) : null;
-};
-
-const fallbackPlanFor = (
-  event: AgentEnvironmentEvent,
-  snapshot: SemanticGraphSnapshot,
-  targetSpace: SemanticGroup
-): AgentCommandPlan | null => {
-  const text = textFromEvent(event);
-  if (!text) return null;
-  const scopeGroupId = targetSpace.id;
-  const lowerText = text.toLowerCase();
-
-  if (
-    lowerText.includes('flash') ||
-    text.includes('闪光') ||
-    text.includes('闪烁') ||
-    text.includes('频率')
-  ) {
-    const frequency = firstNumberFromText(text);
-    if (frequency !== null) {
-      const flashlight = findNodeByType(snapshot, targetSpace, 'proc-flashlight');
-      if (!flashlight) return null;
-      const driverNodeId = upstreamParamDriverNodeId(
-        snapshot,
-        String(flashlight.id),
-        'frequencyHz'
-      );
-      const targetNodeId = driverNodeId ?? String(flashlight.id);
-      const params = driverNodeId ? { value: frequency } : { frequencyHz: frequency };
-      return {
-        id: 'fallback:flashlight-frequency',
-        summary: `Set flashlight frequency to ${frequency}.`,
-        commands: [
-          {
-            type: 'node.params.update',
-            scopeGroupId,
-            nodeId: targetNodeId,
-            params,
-          },
-        ],
-      };
-    }
-  }
-
-  return null;
-};
-
 const compactGroup = (group: SemanticGroup): Record<string, unknown> => ({
   id: group.id,
   kind: group.kind,
@@ -197,52 +106,6 @@ const scopedNodeIdsFor = (space: SemanticGroup): Set<string> =>
     ...(space.agentPolicy?.targetScope?.nodeIds ?? []).map(String),
   ]);
 
-const compactSnapshot = (
-  snapshot: SemanticGraphSnapshot,
-  targetSpace?: SemanticGroup
-): Record<string, unknown> => {
-  const scopedNodeIds = targetSpace ? scopedNodeIdsFor(targetSpace) : null;
-  const nodes = scopedNodeIds
-    ? snapshot.nodes.filter((node) => scopedNodeIds.has(String(node.id)))
-    : snapshot.nodes;
-  const connections = scopedNodeIds
-    ? snapshot.connections.filter(
-        (connection) =>
-          scopedNodeIds.has(String(connection.sourceNodeId)) &&
-          scopedNodeIds.has(String(connection.targetNodeId))
-      )
-    : snapshot.connections;
-
-  return {
-    revision: snapshot.revision,
-    nodes: nodes.map((node) => ({
-      id: node.id,
-      type: node.type,
-      params: node.params,
-      inputValues: node.inputValues,
-      outputValues: node.outputValues,
-    })),
-    connections,
-    groups: targetSpace ? [compactGroup(targetSpace)] : snapshot.groups.map(compactGroup),
-    runtimeStatus: snapshot.runtimeStatus,
-    deviceCapabilities: snapshot.deviceCapabilities,
-    errors: snapshot.errors,
-  };
-};
-
-const nodeTypesFor = (snapshot: SemanticGraphSnapshot, targetSpace?: SemanticGroup): string[] => {
-  if (!targetSpace) return [...new Set(snapshot.nodes.map((node) => node.type).filter(Boolean))];
-  const scopedNodeIds = scopedNodeIdsFor(targetSpace);
-  return [
-    ...new Set(
-      snapshot.nodes
-        .filter((node) => scopedNodeIds.has(String(node.id)))
-        .map((node) => node.type)
-        .filter(Boolean)
-    ),
-  ];
-};
-
 const spaceBindsEvent = (space: SemanticGroup, eventType: AgentEnvironmentEvent['type']): boolean =>
   space.agentPolicy?.enabled === true &&
   space.kind === 'ai-space' &&
@@ -254,28 +117,6 @@ const aiSpacesForEvent = (
   snapshot: SemanticGraphSnapshot,
   event: AgentEnvironmentEvent
 ): SemanticGroup[] => snapshot.groups.filter((group) => spaceBindsEvent(group, event.type));
-
-const commandWithDefaultScope = (
-  command: SemanticCommand,
-  targetSpaceId: string
-): SemanticCommand => {
-  const scoped =
-    command.type.startsWith('node.') &&
-    (!('scopeGroupId' in command) ||
-      typeof command.scopeGroupId !== 'string' ||
-      !command.scopeGroupId.trim())
-      ? ({ ...command, scopeGroupId: targetSpaceId } as SemanticCommand)
-      : command;
-
-  if (scoped.type !== 'node.add') return scoped;
-  return {
-    ...scoped,
-    node: {
-      ...scoped.node,
-      position: { x: 0, y: 0 },
-    },
-  };
-};
 
 const snapshotSummary = (snapshot: SemanticGraphSnapshot): Record<string, unknown> => ({
   revision: snapshot.revision,
@@ -301,6 +142,8 @@ const dispatchResultForLog = (result: SemanticCommandResult): Record<string, unk
 
 @Injectable()
 export class AiOrchestratorService {
+  private readonly promptConfig: AiPromptConfig;
+
   constructor(
     private readonly semanticAuthority: Pick<
       SemanticGraphAuthorityService,
@@ -308,8 +151,11 @@ export class AiOrchestratorService {
     >,
     private readonly chatClient: OpenAiCompatibleClient,
     private readonly skillRegistry: AgentSkillRegistry,
-    private readonly aiDebugLogger?: Pick<AiDebugLogger, 'write'>
-  ) {}
+    private readonly aiDebugLogger?: Pick<AiDebugLogger, 'write'>,
+    promptConfig: AiPromptConfig = loadAiSystemPromptFromEnv()
+  ) {
+    this.promptConfig = promptConfig;
+  }
 
   async handleEnvironmentEvent(event: AgentEnvironmentEvent): Promise<AiTurnResult> {
     const eventId = `ai-event:${Date.now()}:${randomUUID()}`;
@@ -335,14 +181,14 @@ export class AiOrchestratorService {
         event,
         targetSpaceId: targetSpace.id,
         targetSpace: compactGroup(targetSpace),
-        snapshot: compactSnapshot(snapshot, targetSpace),
+        snapshot: compactSemanticSnapshot(snapshot, targetSpace),
+        capabilityManifest: buildCapabilityManifest(snapshot, targetSpace),
         skills,
       };
       const messages = [
         {
           role: 'system' as const,
-          content:
-            'You are the FluffyFoundation AI orchestrator. Return only an AgentCommandPlan JSON object. Target only the assigned AI Space and use scopeGroupId for scoped node commands.',
+          content: this.promptConfig.systemPrompt,
         },
         {
           role: 'user' as const,
@@ -359,18 +205,40 @@ export class AiOrchestratorService {
         targetSpace: compactGroup(targetSpace),
         skills,
         chatClient: this.chatClient.describeConfig(),
+        promptSource: this.promptConfig.source,
         messages,
       });
 
       const startedAt = Date.now();
-      let completion;
+      let plan: AgentPlan | null = null;
+      let activeCompletionRequest: unknown = null;
       try {
-        completion = await this.chatClient.completeJson<AgentCommandPlan>({
+        const completion = await this.chatClient.completeJson<AgentCommandPlan>({
           messages,
           schema: { name: 'agent_command_plan', schema: planSchema },
         });
+        activeCompletionRequest = completion.request;
+        this.aiDebugLogger?.write({
+          kind: 'ai.turn.response',
+          eventId,
+          turnId,
+          targetSpaceId: targetSpace.id,
+          durationMs: Date.now() - startedAt,
+          raw: completion.raw,
+          content: completion.content,
+          parsed: completion.parsed,
+          request: completion.request,
+        });
+        plan = await this.planFromCompletion({
+          eventId,
+          turnId,
+          targetSpace,
+          snapshot,
+          promptPayload,
+          baseMessages: messages,
+          completion,
+        });
       } catch (error) {
-        const fallbackPlan = fallbackPlanFor(event, snapshot, targetSpace);
         this.aiDebugLogger?.write({
           kind: 'ai.turn.error',
           eventId,
@@ -379,82 +247,15 @@ export class AiOrchestratorService {
           phase: 'completion',
           durationMs: Date.now() - startedAt,
           error,
+          request: activeCompletionRequest,
         });
-        if (fallbackPlan) {
-          this.aiDebugLogger?.write({
-            kind: 'ai.turn.fallback',
-            eventId,
-            turnId,
-            targetSpaceId: targetSpace.id,
-            event,
-            plan: fallbackPlan,
-            reason: 'provider-error',
-          });
-          const dispatchResults = this.dispatchPlanCommands({
-            eventId,
-            turnId,
-            targetSpaceId: targetSpace.id,
-            commands: fallbackPlan.commands,
-          });
-          turns.push({
-            targetSpaceId: targetSpace.id,
-            plan: fallbackPlan,
-            skills,
-            dispatchResults,
-          });
-          this.aiDebugLogger?.write({
-            kind: 'ai.turn.complete',
-            eventId,
-            turnId,
-            targetSpaceId: targetSpace.id,
-            commandCount: fallbackPlan.commands.length,
-            dispatchResults: dispatchResults.map(dispatchResultForLog),
-          });
-          continue;
-        }
         turns.push({ targetSpaceId: targetSpace.id, plan: null, skills, dispatchResults: [] });
         continue;
-      }
-
-      this.aiDebugLogger?.write({
-        kind: 'ai.turn.response',
-        eventId,
-        turnId,
-        targetSpaceId: targetSpace.id,
-        durationMs: Date.now() - startedAt,
-        raw: completion.raw,
-        content: completion.content,
-        parsed: completion.parsed,
-        request: completion.request,
-      });
-
-      const plan = sanitizePlan(completion.parsed) ?? fallbackPlanFor(event, snapshot, targetSpace);
-      this.aiDebugLogger?.write({
-        kind: 'ai.turn.plan',
-        eventId,
-        turnId,
-        targetSpaceId: targetSpace.id,
-        plan,
-      });
-      if (plan?.id.startsWith('fallback:')) {
-        this.aiDebugLogger?.write({
-          kind: 'ai.turn.fallback',
-          eventId,
-          turnId,
-          targetSpaceId: targetSpace.id,
-          event,
-          plan,
-          reason: completion.parsed ? 'invalid-provider-plan' : 'missing-provider-plan',
-        });
       }
       if (!plan) {
         turns.push({ targetSpaceId: targetSpace.id, plan: null, skills, dispatchResults: [] });
         continue;
       }
-
-      plan.commands = plan.commands.map((command) =>
-        commandWithDefaultScope(command, targetSpace.id)
-      );
 
       const activeSkills = plan.requestedSkillIds?.length
         ? this.skillRegistry.resolve({
@@ -466,7 +267,7 @@ export class AiOrchestratorService {
 
       const dispatchResults: SemanticCommandResult[] = [];
       dispatchResults.push(
-        ...this.dispatchPlanCommands({
+        ...this.applyPlanCommands({
           eventId,
           turnId,
           targetSpaceId: targetSpace.id,
@@ -488,7 +289,31 @@ export class AiOrchestratorService {
     return { event, turns };
   }
 
-  private dispatchPlanCommands(input: {
+  private applyPlanCommands(input: {
+    eventId: string;
+    turnId: string;
+    targetSpaceId: string;
+    commands: SemanticCommand[];
+  }): SemanticCommandResult[] {
+    const dispatchResults: SemanticCommandResult[] = [];
+    for (const command of input.commands) {
+      const applied = this.semanticAuthority.dispatch({ actor: aiActor, command, dryRun: false });
+      dispatchResults.push(applied);
+      this.aiDebugLogger?.write({
+        kind: 'ai.turn.dispatch',
+        eventId: input.eventId,
+        turnId: input.turnId,
+        targetSpaceId: input.targetSpaceId,
+        dryRun: false,
+        command,
+        result: dispatchResultForLog(applied),
+      });
+      if (!applied.ok) break;
+    }
+    return dispatchResults;
+  }
+
+  private dryRunCommands(input: {
     eventId: string;
     turnId: string;
     targetSpaceId: string;
@@ -508,20 +333,147 @@ export class AiOrchestratorService {
         result: dispatchResultForLog(dryRun),
       });
       if (!dryRun.ok) break;
-
-      const applied = this.semanticAuthority.dispatch({ actor: aiActor, command, dryRun: false });
-      dispatchResults.push(applied);
-      this.aiDebugLogger?.write({
-        kind: 'ai.turn.dispatch',
-        eventId: input.eventId,
-        turnId: input.turnId,
-        targetSpaceId: input.targetSpaceId,
-        dryRun: false,
-        command,
-        result: dispatchResultForLog(applied),
-      });
-      if (!applied.ok) break;
     }
     return dispatchResults;
+  }
+
+  private async planFromCompletion(input: {
+    eventId: string;
+    turnId: string;
+    targetSpace: SemanticGroup;
+    snapshot: SemanticGraphSnapshot;
+    promptPayload: Record<string, unknown>;
+    baseMessages: Array<{ role: 'system' | 'user'; content: string }>;
+    completion: { parsed: unknown; content: string };
+    repairDepth?: number;
+  }): Promise<AgentPlan | null> {
+    const parsed = parseAgentPlan(input.completion.parsed, input.completion.content);
+    if (!parsed.ok) {
+      this.aiDebugLogger?.write({
+        kind: 'ai.turn.plan.invalid',
+        eventId: input.eventId,
+        turnId: input.turnId,
+        targetSpaceId: input.targetSpace.id,
+        error: parsed.error,
+      });
+      return this.repairPlan({
+        ...input,
+        planError: parsed.error,
+        repairDetails: parsed,
+      });
+    }
+
+    const compiled = compileAgentPlan({
+      plan: parsed.value,
+      snapshot: input.snapshot,
+      targetSpace: input.targetSpace,
+    });
+    if (!compiled.ok) {
+      return this.repairPlan({
+        ...input,
+        planError: compiled.error,
+        repairDetails: compiled,
+      });
+    }
+
+    const dryRunResults = this.dryRunCommands({
+      eventId: input.eventId,
+      turnId: input.turnId,
+      targetSpaceId: input.targetSpace.id,
+      commands: compiled.commands,
+    });
+    const failed = dryRunResults.find((result) => !result.ok);
+    if (failed) {
+      return this.repairPlan({
+        ...input,
+        planError: 'Dry-run rejected compiled semantic commands.',
+        repairDetails: failed,
+      });
+    }
+
+    const plan = {
+      id: parsed.value.id,
+      summary: parsed.value.summary,
+      commands: compiled.commands,
+      requestedSkillIds: parsed.value.requestedSkillIds,
+    };
+    this.aiDebugLogger?.write({
+      kind: 'ai.turn.plan',
+      eventId: input.eventId,
+      turnId: input.turnId,
+      targetSpaceId: input.targetSpace.id,
+      source: parsed.source,
+      plan,
+      warnings: compiled.warnings,
+    });
+    return plan;
+  }
+
+  private async repairPlan(input: {
+    eventId: string;
+    turnId: string;
+    targetSpace: SemanticGroup;
+    snapshot: SemanticGraphSnapshot;
+    promptPayload: Record<string, unknown>;
+    baseMessages: Array<{ role: 'system' | 'user'; content: string }>;
+    completion: { parsed: unknown; content: string };
+    planError: string;
+    repairDetails: unknown;
+    repairDepth?: number;
+  }): Promise<AgentPlan | null> {
+    const maxAttempts = Number(process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS ?? 1);
+    const repairDepth = input.repairDepth ?? 0;
+    if (!Number.isFinite(maxAttempts) || maxAttempts <= repairDepth) return null;
+
+    const messages = [
+      ...input.baseMessages,
+      {
+        role: 'assistant' as const,
+        content: input.completion.content,
+      },
+      {
+        role: 'user' as const,
+        content: JSON.stringify({
+          kind: 'repair',
+          error: input.planError,
+          details: input.repairDetails,
+          instruction: 'Return a corrected valid AgentActionPlan JSON object only.',
+          promptPayload: input.promptPayload,
+        }),
+      },
+    ];
+    this.aiDebugLogger?.write({
+      kind: 'ai.turn.repair.request',
+      eventId: input.eventId,
+      turnId: input.turnId,
+      targetSpaceId: input.targetSpace.id,
+      error: input.planError,
+      details: input.repairDetails,
+      messages,
+    });
+    const completion = await this.chatClient.completeJson<AgentCommandPlan>({
+      messages,
+      schema: { name: 'agent_command_plan_repair', schema: planSchema },
+    });
+    this.aiDebugLogger?.write({
+      kind: 'ai.turn.repair.response',
+      eventId: input.eventId,
+      turnId: input.turnId,
+      targetSpaceId: input.targetSpace.id,
+      raw: completion.raw,
+      content: completion.content,
+      parsed: completion.parsed,
+      request: completion.request,
+    });
+    return this.planFromCompletion({
+      eventId: input.eventId,
+      turnId: input.turnId,
+      targetSpace: input.targetSpace,
+      snapshot: input.snapshot,
+      promptPayload: input.promptPayload,
+      baseMessages: input.baseMessages,
+      completion,
+      repairDepth: repairDepth + 1,
+    });
   }
 }
