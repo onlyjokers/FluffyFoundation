@@ -5,7 +5,6 @@
 import { Module } from '@nestjs/common';
 import {
   createAgentSkillRegistry,
-  createOpenAiCompatibleClient,
   type AgentSkillDoc,
   type AgentSkillRegistry,
   type OpenAiCompatibleClient,
@@ -17,6 +16,7 @@ import {
   AI_SKILL_REGISTRY,
   AiOrchestratorService,
 } from './ai-orchestrator.service.js';
+import { createConfiguredAiClient } from './ai-client-factory.js';
 import { AiDebugLogger, createAiDebugLoggerFromEnv } from './ai-debug-logger.js';
 
 const defaultSkills: AgentSkillDoc[] = [
@@ -57,37 +57,6 @@ const defaultSkills: AgentSkillDoc[] = [
       'Use node.params.update with the target AI Space scopeGroupId. On client.text.final, write a concise answer into the proc-display-text text param and mirror it into the string preview value. Keep colors, rates, opacity, and text concise. Do not touch network or secret surfaces.',
   },
 ];
-
-const createNoopAiClient = (): OpenAiCompatibleClient => ({
-  describeConfig: () => ({
-    baseUrl: '',
-    model: 'disabled',
-    apiKey: '[REDACTED]',
-    supportsJsonSchema: true,
-    timeoutMs: 0,
-  }),
-  completeJson: async (input) => ({
-    raw: null,
-    content: '',
-    parsed: null,
-    request: { url: '', body: { messages: input.messages } },
-  }),
-});
-
-const createConfiguredAiClient = (aiDebugLogger?: AiDebugLogger): OpenAiCompatibleClient => {
-  const apiKey = process.env.SHUGU_AI_OPENAI_API_KEY?.trim();
-  const model = process.env.SHUGU_AI_OPENAI_MODEL?.trim() || 'gpt-5.5';
-  const baseUrl = process.env.SHUGU_AI_OPENAI_BASE_URL?.trim() || 'https://code.b886.top/v1';
-  const timeoutMs = Number(process.env.SHUGU_AI_OPENAI_TIMEOUT_MS);
-  if (!apiKey) return createNoopAiClient();
-  return createOpenAiCompatibleClient({
-    apiKey,
-    model,
-    baseUrl,
-    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {}),
-    logger: (event) => aiDebugLogger?.write({ kind: 'ai.provider', providerEvent: event }),
-  });
-};
 
 @Module({
   imports: [SemanticModule],
