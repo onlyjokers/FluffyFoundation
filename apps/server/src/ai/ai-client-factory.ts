@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import {
   createOpenAiCompatibleClient,
   type OpenAiCompatibleClient,
+  type OpenAiCompatibleClientConfig,
   type OpenAiCompatibleCompletionInput,
   type OpenAiCompatibleCompletionResult,
   type OpenAiCompatibleLoggerEvent,
@@ -66,6 +67,28 @@ const timeoutFromEnv = (): number => {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
 };
 
+const fallbackModelsFromEnv = (primaryModel: string): string[] => {
+  const explicit = process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS?.trim();
+  if (explicit) {
+    return explicit
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .filter((item) => item !== primaryModel);
+  }
+
+  if (primaryModel === 'gpt-5.5') {
+    return ['gpt-5.5-openai-compact', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
+  }
+  if (primaryModel === 'gpt-5.4') {
+    return ['gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
+  }
+  if (primaryModel === 'gpt-5.3-codex') {
+    return ['gpt-5.2'];
+  }
+  return [];
+};
+
 const createNoopAiClient = (): OpenAiCompatibleClient => ({
   describeConfig: () => ({
     baseUrl: '',
@@ -82,17 +105,31 @@ const createNoopAiClient = (): OpenAiCompatibleClient => ({
   }),
 });
 
-const createOpenAiClientFromEnv = (logger?: (event: OpenAiCompatibleLoggerEvent) => void): OpenAiCompatibleClient => {
+const createOpenAiClientFromEnv = (aiDebugLogger?: AiLogger): OpenAiCompatibleClient => {
   const apiKey = process.env.SHUGU_AI_OPENAI_API_KEY?.trim();
   const model = process.env.SHUGU_AI_OPENAI_MODEL?.trim() || 'gpt-5.5';
   const baseUrl = process.env.SHUGU_AI_OPENAI_BASE_URL?.trim() || 'https://code.b886.top/v1';
   if (!apiKey) return createNoopAiClient();
-  return createOpenAiCompatibleClient({
+  const providerLogger = (event: OpenAiCompatibleLoggerEvent) =>
+    aiDebugLogger?.write({ kind: 'ai.provider', providerEvent: event });
+
+  const baseConfig: OpenAiCompatibleClientConfig = {
     apiKey,
     model,
     baseUrl,
     timeoutMs: timeoutFromEnv(),
-    logger,
+    logger: providerLogger,
+  };
+
+  return createFallbackAwareAiClient({
+    primaryModel: model,
+    fallbackModels: fallbackModelsFromEnv(model),
+    createClient: (candidateModel) =>
+      createOpenAiCompatibleClient({
+        ...baseConfig,
+        model: candidateModel,
+      }),
+    logger: aiDebugLogger,
   });
 };
 
@@ -146,6 +183,66 @@ const toPiMessages = (messages: OpenAiCompatibleMessage[]): JsonRecord[] => {
       return { role: 'user', content: message.content, timestamp: now };
     });
 };
+
+export function createFallbackAwareAiClient(input: {
+  primaryModel: string;
+  fallbackModels: string[];
+  createClient: (model: string) => OpenAiCompatibleClient;
+  logger?: AiLogger;
+}): OpenAiCompatibleClient {
+  const models = [input.primaryModel, ...input.fallbackModels.filter((model) => model !== input.primaryModel)];
+  const clients = models.map((model) => input.createClient(model));
+
+  return {
+    describeConfig: () => clients[0]?.describeConfig() ?? {
+      baseUrl: '',
+      model: input.primaryModel,
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 0,
+    },
+    completeJson: async <T = unknown>(
+      completionInput: OpenAiCompatibleCompletionInput
+    ): Promise<OpenAiCompatibleCompletionResult<T>> => {
+      let lastCompletion: OpenAiCompatibleCompletionResult<T> | null = null;
+
+      for (const [index, client] of clients.entries()) {
+        const completion = await client.completeJson<T>(completionInput);
+        lastCompletion = completion;
+        if (completion.content.trim()) {
+          if (index > 0) {
+            input.logger?.write({
+              kind: 'ai.provider.model.fallback.used',
+              primaryModel: input.primaryModel,
+              fallbackModel: models[index],
+              attempt: index + 1,
+            });
+          }
+          return completion;
+        }
+
+        if (index < clients.length - 1) {
+          input.logger?.write({
+            kind: 'ai.provider.model.fallback.empty',
+            primaryModel: models[index],
+            fallbackModel: models[index + 1],
+            attempt: index + 1,
+            request: completion.request,
+          });
+        }
+      }
+
+      return (
+        lastCompletion ?? {
+          raw: null,
+          content: '',
+          parsed: null,
+          request: { url: '', body: { messages: completionInput.messages } },
+        }
+      );
+    },
+  };
+}
 
 async function importPiAi(importImpl: DynamicImport): Promise<PiAiModule | null> {
   for (const specifier of piAiSpecifiersFromEnv()) {
@@ -224,9 +321,7 @@ export async function createAiChatClient(input: AiChatClientInput): Promise<Open
 }
 
 export async function createConfiguredAiClient(aiDebugLogger?: AiLogger): Promise<OpenAiCompatibleClient> {
-  const openAiClient = createOpenAiClientFromEnv((event) =>
-    aiDebugLogger?.write({ kind: 'ai.provider', providerEvent: event })
-  );
+  const openAiClient = createOpenAiClientFromEnv(aiDebugLogger);
   return createAiChatClient({
     runtime: runtimeFromEnv(),
     openAiClient,
