@@ -41,6 +41,10 @@ function createRuntime() {
           nodes.push({ ...node });
         },
         addConnection: () => undefined,
+        removeNode: (nodeId: string) => {
+          const index = nodes.findIndex((candidate) => candidate.id === nodeId);
+          if (index >= 0) nodes.splice(index, 1);
+        },
         updateNodeConfig: (nodeId: string, patch: Record<string, unknown>) => {
           const node = nodes.find((candidate) => candidate.id === nodeId);
           if (node) node.config = { ...(node.config ?? {}), ...patch };

@@ -419,6 +419,7 @@
     getSelectedNodeId: () => selectedNodeId,
     setSelectedNode,
     confirm,
+    removeNodeCommand: (nodeId) => canvasCommands.removeNode(nodeId),
   });
 
   const expandedCustomByGroupId = new Map<string, ExpandedCustomNodeFrame>();

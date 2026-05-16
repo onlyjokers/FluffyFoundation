@@ -60,6 +60,10 @@ function createRuntime() {
         const node = nodes.find((candidate) => candidate.id === nodeId);
         if (node) node.config = { ...(node.config ?? {}), ...patch };
       },
+      removeNode: (nodeId: string) => {
+        const index = nodes.findIndex((candidate) => candidate.id === nodeId);
+        if (index >= 0) nodes.splice(index, 1);
+      },
       lastError: writable<string | null>(null),
     },
     nodeRegistry: { list: () => definitions },
@@ -133,4 +137,18 @@ test('Manager semantic bridge applies node.params.update through nodeEngine.upda
   assert.equal(result.ok, true);
   assert.deepEqual(configPatches, [{ nodeId: 'n-param', patch: { gain: 2 } }]);
   assert.deepEqual(nodes[0]?.config, { gain: 2 });
+});
+
+test('Manager semantic bridge applies node.remove through nodeEngine.removeNode', () => {
+  const { runtime, nodes } = createRuntime();
+  const bridge = createManagerSemanticBridge(runtime);
+
+  assert.equal(bridge.addNode(numberNode).ok, true);
+  const result = bridge.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.remove', nodeId: 'n1' },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(nodes, []);
 });

@@ -2,6 +2,8 @@
  * Purpose: Verify pure Node Graph import execution emits server-sync snapshots.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { NodeRegistry, type NodeDefinition } from '@shugu/node-core';
@@ -21,6 +23,22 @@ function registryWith(type: string): NodeRegistry {
     process: () => ({}),
   };
   registry.register(definition);
+  return registry;
+}
+
+function registryWithTypes(types: string[]): NodeRegistry {
+  const registry = new NodeRegistry();
+  for (const type of types) {
+    registry.register({
+      type,
+      label: type,
+      category: 'Test',
+      inputs: [],
+      outputs: [],
+      configSchema: [],
+      process: () => ({}),
+    });
+  }
   return registry;
 }
 
@@ -91,4 +109,57 @@ test('executeParsedNodeGraphImport notifies with complete graph and remapped AI 
   assert.equal(imported.groups.length, 1);
   assert.equal(imported.groups[0].kind, 'ai-space');
   assert.equal(imported.groups[0].nodeIds[0], imported.graph.nodes[0].id);
+});
+
+test('executeParsedNodeGraphImport can import the AI agent demo template without skips', async () => {
+  const parsed = JSON.parse(
+    readFileSync(join(process.cwd(), '..', '..', 'docs/templates/ai-agent-demo-template.json'), 'utf8')
+  );
+  const registry = registryWithTypes([
+    'note',
+    'string',
+    'show-anything',
+    'proc-display-text',
+    'client-count',
+    'number',
+    'client-object',
+    'proc-flashlight',
+    'proc-screen-color',
+    'display-object',
+    'cmd-aggregator',
+  ]);
+  const graph: GraphState = { nodes: [], connections: [] };
+  const connectedInputs = new Set<string>();
+
+  const result = await executeParsedNodeGraphImport({
+    parsedFile: parsed,
+    nodeRegistry: registry,
+    nodeEngine: {
+      exportGraph: () => ({
+        nodes: graph.nodes.map((node) => ({ ...node })),
+        connections: graph.connections.map((connection) => ({ ...connection })),
+      }),
+      addNode: (node) => {
+        graph.nodes.push(node);
+      },
+      addConnection: (connection) => {
+        const key = `${connection.targetNodeId}:${connection.targetPortId}`;
+        if (connectedInputs.has(key)) return false;
+        connectedInputs.add(key);
+        graph.connections.push(connection);
+        return true;
+      },
+      updateNodeConfig: (nodeId, config) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (node) node.config = { ...(node.config ?? {}), ...config };
+      },
+    },
+    getNodeGroups: () => [],
+    appendNodeGroups: () => undefined,
+    getViewportCenterGraphPos: () => ({ x: 0, y: 0 }),
+    createId: (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`,
+  });
+
+  assert.equal(result.skippedNodes, 0);
+  assert.equal(result.skippedConnections, 0);
 });

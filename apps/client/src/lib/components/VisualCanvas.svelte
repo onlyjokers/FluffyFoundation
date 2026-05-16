@@ -37,6 +37,7 @@
     type VisualEffectPipeline,
   } from '@shugu/visual-effects';
   import { drawBaseFrame as renderBaseFrame } from '$lib/features/visual-layer/base-frame';
+  import { createMicSensorPayload } from './audio-sensor-payload';
 
   let container: HTMLElement;
   let sceneManager: DefaultSceneManager | null = null;
@@ -182,12 +183,7 @@
         // Send audio features to server
         const sdk = getSDK();
         if (sdk) {
-          sdk.sendSensorData('mic', {
-            volume: feature.rms,
-            lowEnergy: feature.lowEnergy,
-            highEnergy: feature.highEnergy,
-            bpm: feature.bpm,
-          });
+          sdk.sendSensorData('mic', createMicSensorPayload(feature));
         }
       });
 

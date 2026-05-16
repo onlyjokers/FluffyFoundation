@@ -44,6 +44,27 @@ test('SemanticGraphAuthorityService persists accepted graph mutations and restor
   assert.equal(restarted.getSnapshot().nodes[0]?.id, 'n1');
 });
 
+test('SemanticGraphAuthorityService accepts canvas node.remove and persists deletion', () => {
+  const { path, service } = createService();
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: { type: 'node.add', node: numberNode },
+    }).ok,
+    true
+  );
+
+  const removed = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.remove', nodeId: 'n1' },
+  });
+
+  assert.equal(removed.ok, true);
+  assert.equal(service.getSnapshot().nodes.length, 0);
+  assert.equal(JSON.parse(readFileSync(path, 'utf8')).graph.nodes.length, 0);
+});
+
 test('SemanticGraphAuthorityService rejects invalid commands without modifying persisted state', () => {
   const { path, service } = createService();
 

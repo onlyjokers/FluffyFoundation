@@ -126,6 +126,14 @@
         "config": {},
         "inputValues": {},
         "outputValues": {}
+      },
+      {
+        "id": "n-cmd-aggregator",
+        "type": "cmd-aggregator",
+        "position": { "x": 1120, "y": 260 },
+        "config": {},
+        "inputValues": {},
+        "outputValues": {}
       }
     ],
     "connections": [
@@ -189,12 +197,19 @@
         "id": "c-screen-cmd",
         "sourceNodeId": "n-screen-color",
         "sourcePortId": "cmd",
-        "targetNodeId": "n-display",
-        "targetPortId": "in"
+        "targetNodeId": "n-cmd-aggregator",
+        "targetPortId": "in1"
       },
       {
         "id": "c-display-text-cmd",
         "sourceNodeId": "n-display-text",
+        "sourcePortId": "cmd",
+        "targetNodeId": "n-cmd-aggregator",
+        "targetPortId": "in2"
+      },
+      {
+        "id": "c-display-cmd",
+        "sourceNodeId": "n-cmd-aggregator",
         "sourcePortId": "cmd",
         "targetNodeId": "n-display",
         "targetPortId": "in"
@@ -219,6 +234,7 @@
         "n-rate",
         "n-duty",
         "n-screen-color",
+        "n-cmd-aggregator",
         "n-display"
       ],
       "disabled": false,
@@ -245,6 +261,7 @@
           "n-rate",
           "n-duty",
           "n-screen-color",
+          "n-cmd-aggregator",
           "n-display"
         ],
         "callableCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect"],
@@ -267,6 +284,7 @@
             "n-rate",
             "n-duty",
             "n-screen-color",
+            "n-cmd-aggregator",
             "n-display"
           ],
           "allowNewNodes": true

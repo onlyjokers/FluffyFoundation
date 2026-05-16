@@ -20,6 +20,7 @@ export type ManagerSemanticBridgeRuntime = {
     exportGraph: () => { nodes: NodeInstance[]; connections: EngineConnection[] };
     addNode: (node: NodeInstance) => void;
     addConnection: (connection: EngineConnection) => void | boolean;
+    removeNode: (nodeId: string) => void;
     updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
     lastError?: { set?: (message: string | null) => void };
   };
@@ -33,6 +34,7 @@ export type ManagerSemanticBridgeRuntime = {
 export type ManagerSemanticBridge = {
   addNode: (node: NodeInstance, actor?: SemanticActor) => SemanticCommandResult;
   connect: (connection: EngineConnection, actor?: SemanticActor) => SemanticCommandResult;
+  removeNode: (nodeId: string, actor?: SemanticActor) => SemanticCommandResult;
   setNodeParams: (
     nodeId: string,
     params: Record<string, unknown>,
@@ -76,11 +78,11 @@ export function createManagerSemanticBridge(
       permissions: [
         {
           actorId: 'canvas',
-          operations: ['node.add', 'node.connect', 'node.params.update'],
+          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove'],
         },
         {
           actorId: 'cli',
-          operations: ['node.add', 'node.connect', 'node.params.update'],
+          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove'],
         },
       ],
       revision: semanticRevision,
@@ -90,6 +92,7 @@ export function createManagerSemanticBridge(
     semanticRevision += 1;
     if (command.type === 'node.add') runtime.nodeEngine.addNode(command.node);
     if (command.type === 'node.connect') runtime.nodeEngine.addConnection(command.connection);
+    if (command.type === 'node.remove') runtime.nodeEngine.removeNode(command.nodeId);
     if (command.type === 'node.params.update') runtime.nodeEngine.updateNodeConfig(command.nodeId, command.params);
   };
 
@@ -108,6 +111,8 @@ export function createManagerSemanticBridge(
       dispatch({ actor, command: { type: 'node.add', node } }),
     connect: (connection, actor = defaultCanvasActor) =>
       dispatch({ actor, command: { type: 'node.connect', connection } }),
+    removeNode: (nodeId, actor = defaultCanvasActor) =>
+      dispatch({ actor, command: { type: 'node.remove', nodeId } }),
     setNodeParams: (nodeId, params, actor = defaultCanvasActor) =>
       dispatch({ actor, command: { type: 'node.params.update', nodeId, params } }),
     dispatch,

@@ -4,7 +4,10 @@
 import type { NodeSpec } from './types';
 
 export function loadSpecs(): NodeSpec[] {
-  const modules = import.meta.glob('./**/*.json', { eager: true }) as Record<string, { default: unknown }>;
+  const modules = import.meta.glob(['../*.json', './**/*.json'], { eager: true }) as Record<
+    string,
+    { default: unknown }
+  >;
   const specs: NodeSpec[] = [];
 
   for (const mod of Object.values(modules)) {

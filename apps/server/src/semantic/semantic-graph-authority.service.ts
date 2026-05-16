@@ -112,8 +112,14 @@ export class SemanticGraphAuthorityService {
       definitions: this.registry.list(),
       runtimeStatus: { running: false, deployedPartitionIds: [] },
       permissions: [
-        { actorId: 'cli', operations: ['node.add', 'node.connect', 'node.params.update', 'graph.replace'] },
-        { actorId: 'canvas', operations: ['node.add', 'node.connect', 'node.params.update', 'graph.replace'] },
+        {
+          actorId: 'cli',
+          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+        },
+        {
+          actorId: 'canvas',
+          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+        },
       ],
       revision: this.persisted.revision,
     });

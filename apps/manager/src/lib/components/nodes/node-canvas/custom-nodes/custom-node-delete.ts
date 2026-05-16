@@ -18,6 +18,7 @@ export function createDeleteNodeWithRules(opts: {
   getSelectedNodeId: () => string;
   setSelectedNode: (id: string) => void;
   confirm: (message: string) => boolean;
+  removeNodeCommand?: (nodeId: string) => boolean;
 }) {
   return (nodeId: string) => {
     const id = String(nodeId ?? '');
@@ -26,9 +27,14 @@ export function createDeleteNodeWithRules(opts: {
     const node = opts.nodeEngine.getNode(id);
     if (!node) return;
 
+    const removeNode = (targetId: string): void => {
+      opts.removeNodeCommand?.(targetId);
+      opts.nodeEngine.removeNode(targetId);
+    };
+
     const state = opts.readCustomNodeState(asRecord(node.config));
     if (!state || state.role !== 'mother') {
-      opts.nodeEngine.removeNode(id);
+      removeNode(id);
       return;
     }
 
@@ -57,8 +63,8 @@ export function createDeleteNodeWithRules(opts: {
     );
     if (!ok) return;
 
-    for (const cid of coupledChildren) opts.nodeEngine.removeNode(cid);
-    opts.nodeEngine.removeNode(id);
+    for (const cid of coupledChildren) removeNode(cid);
+    removeNode(id);
     opts.removeCustomNodeDefinition(state.definitionId);
 
     if (opts.getSelectedNodeId() === id) opts.setSelectedNode('');

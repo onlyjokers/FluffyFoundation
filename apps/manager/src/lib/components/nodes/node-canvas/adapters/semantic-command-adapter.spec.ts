@@ -122,3 +122,23 @@ test('NodeCanvas semantic commands send opaque semantic payloads through the Man
     },
   ]);
 });
+
+test('NodeCanvas semantic commands send node.remove payloads through the Manager SDK', () => {
+  const sent: unknown[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: (input: unknown) => sent.push(input),
+    }),
+  });
+
+  assert.equal(adapter.removeNode('n1'), true);
+  assert.deepEqual(sent, [
+    {
+      requestId: 'canvas:node.remove:n1',
+      command: {
+        kind: 'node.remove',
+        nodeId: 'n1',
+      },
+    },
+  ]);
+});
