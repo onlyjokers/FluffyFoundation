@@ -58,11 +58,21 @@ export function graphFromServerSemanticSnapshot(
   currentGraph?: GraphState
 ): GraphState {
   const currentPositions = positionFromGraph(currentGraph);
+  const existingPositions = [...currentPositions.values()];
+  const defaultY = existingPositions[0]?.y ?? defaultSemanticNodePosition.y;
+  const nextPositionX =
+    existingPositions.length > 0
+      ? Math.max(...existingPositions.map((position) => position.x)) + 240
+      : defaultSemanticNodePosition.x;
+  let missingNodeIndex = 0;
   return {
     nodes: (snapshot.nodes ?? []).map((node) => ({
       id: String(node.id),
       type: String(node.type),
-      position: currentPositions.get(String(node.id)) ?? { ...defaultSemanticNodePosition },
+      position: currentPositions.get(String(node.id)) ?? {
+        x: nextPositionX + missingNodeIndex++ * 240,
+        y: defaultY,
+      },
       config: { ...(node.params ?? {}) },
       inputValues: { ...(node.inputValues ?? {}) },
       outputValues: { ...(node.outputValues ?? {}) },

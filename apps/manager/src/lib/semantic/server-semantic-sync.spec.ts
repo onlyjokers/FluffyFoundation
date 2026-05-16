@@ -135,12 +135,63 @@ test('applyServerSemanticSnapshot preserves local positions while applying seman
     {
       id: 'display-a',
       type: 'display-object',
-      position: { x: 0, y: 0 },
+      position: { x: 561, y: 654 },
       config: { label: 'Display A' },
       inputValues: {},
       outputValues: {},
     },
   ]);
+});
+
+test('applyServerSemanticSnapshot places newly added server nodes away from existing local nodes', () => {
+  let loaded: GraphState | null = null;
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'client-a',
+        type: 'client-object',
+        position: { x: 321, y: 654 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'client-a',
+        type: 'client-object',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'client-b',
+        type: 'client-object',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(
+    loaded.nodes.map((node) => node.position),
+    [
+      { x: 321, y: 654 },
+      { x: 561, y: 654 },
+    ]
+  );
 });
 
 test('applyServerSemanticSnapshot patches existing node params without reloading the runtime graph', () => {

@@ -73,13 +73,18 @@ export function enforceGroupOwnership(input: {
         message: `manager role is required for ${message.type} messages`,
       });
     }
-    return createPolicyDeny(message, `Group is ${entry.visibility.defaultAccess}; actor is not the owner`);
+    return createPolicyDeny(
+      message,
+      `Group is ${entry.visibility.defaultAccess}; actor is not the owner`
+    );
   }
   return null;
 }
 
 function normalizeControlPlaneRole(role: string): ControlPlaneActorRole {
-  return role === 'manager' || role === 'client' || role === 'service' || role === 'ai' ? role : 'client';
+  return role === 'manager' || role === 'client' || role === 'service' || role === 'ai'
+    ? role
+    : 'client';
 }
 
 function isServerManagedClientGroup(
@@ -89,7 +94,7 @@ function isServerManagedClientGroup(
   actorRole: ControlPlaneActorRole
 ): boolean {
   return (
-    groupId.startsWith('client:') &&
+    (groupId.startsWith('client:') || groupId === 'display') &&
     ownerActorId === 'server-process' &&
     ownerRole === 'service' &&
     actorRole === 'manager'

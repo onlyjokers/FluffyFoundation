@@ -79,32 +79,83 @@ const normalizeAction = (value: unknown): AgentAction | null => {
     return { op: 'setParam', nodeId: value.nodeId, param: value.param, value: value.value };
   }
   if (value.op === 'addNode') {
-    if (typeof value.nodeType !== 'string') return null;
+    const nodeType =
+      typeof value.nodeType === 'string'
+        ? value.nodeType
+        : typeof value.type === 'string'
+          ? value.type
+          : null;
+    if (!nodeType) return null;
     return {
       op: 'addNode',
-      nodeType: value.nodeType,
-      id: typeof value.id === 'string' ? value.id : undefined,
-      params: isRecord(value.params) ? value.params : undefined,
+      nodeType,
+      id:
+        typeof value.id === 'string'
+          ? value.id
+          : typeof value.nodeId === 'string'
+            ? value.nodeId
+            : undefined,
+      params: isRecord(value.params)
+        ? value.params
+        : isRecord(value.config)
+          ? value.config
+          : undefined,
     };
   }
   if (value.op === 'connect') {
-    if (!isRecord(value.source) || !isRecord(value.target)) return null;
-    if (typeof value.source.nodeId !== 'string' || typeof value.source.port !== 'string') return null;
-    if (typeof value.target.nodeId !== 'string' || typeof value.target.port !== 'string') return null;
+    const source = isRecord(value.source) ? value.source : isRecord(value.from) ? value.from : null;
+    const target = isRecord(value.target) ? value.target : isRecord(value.to) ? value.to : null;
+    if (!source || !target) return null;
+    const sourcePort =
+      typeof source.port === 'string'
+        ? source.port
+        : typeof source.portId === 'string'
+          ? source.portId
+          : null;
+    const targetPort =
+      typeof target.port === 'string'
+        ? target.port
+        : typeof target.portId === 'string'
+          ? target.portId
+          : null;
+    if (
+      typeof source.nodeId !== 'string' ||
+      typeof target.nodeId !== 'string' ||
+      !sourcePort ||
+      !targetPort
+    )
+      return null;
     return {
       op: 'connect',
-      source: { nodeId: value.source.nodeId, port: value.source.port },
-      target: { nodeId: value.target.nodeId, port: value.target.port },
-      id: typeof value.id === 'string' ? value.id : undefined,
+      source: { nodeId: source.nodeId, port: sourcePort },
+      target: { nodeId: target.nodeId, port: targetPort },
+      id:
+        typeof value.id === 'string'
+          ? value.id
+          : typeof value.connectionId === 'string'
+            ? value.connectionId
+            : undefined,
     };
   }
   if (value.op === 'disconnect') {
-    if (typeof value.connectionId !== 'string') return null;
-    return { op: 'disconnect', connectionId: value.connectionId };
+    const connectionId =
+      typeof value.connectionId === 'string'
+        ? value.connectionId
+        : typeof value.id === 'string'
+          ? value.id
+          : null;
+    if (!connectionId) return null;
+    return { op: 'disconnect', connectionId };
   }
   if (value.op === 'removeNode') {
-    if (typeof value.nodeId !== 'string') return null;
-    return { op: 'removeNode', nodeId: value.nodeId };
+    const nodeId =
+      typeof value.nodeId === 'string'
+        ? value.nodeId
+        : typeof value.id === 'string'
+          ? value.id
+          : null;
+    if (!nodeId) return null;
+    return { op: 'removeNode', nodeId };
   }
   return null;
 };
@@ -176,11 +227,16 @@ export function parseAgentPlan(parsed: unknown, content: string): AgentPlanParse
   const extractedPlan = normalizeActionPlan(extracted) ?? normalizeCommandPlan(extracted);
   if (extractedPlan) return { ok: true, value: extractedPlan, source: 'extracted' };
 
-  return { ok: false, error: 'Model output did not contain a valid AgentActionPlan or AgentCommandPlan JSON object.' };
+  return {
+    ok: false,
+    error: 'Model output did not contain a valid AgentActionPlan or AgentCommandPlan JSON object.',
+  };
 }
 
-const definitionForType = (definitions: SemanticDefinition[], type: string): SemanticDefinition | null =>
-  definitions.find((definition) => definition.type === type) ?? null;
+const definitionForType = (
+  definitions: SemanticDefinition[],
+  type: string
+): SemanticDefinition | null => definitions.find((definition) => definition.type === type) ?? null;
 
 const nodeFor = (snapshot: SemanticGraphSnapshot, nodeId: string) =>
   snapshot.nodes.find((node) => String(node.id) === String(nodeId)) ?? null;
@@ -286,11 +342,12 @@ export function compileAgentPlan(input: {
           repairOptions: ['Choose a nodeType listed in capabilityManifest.nodeTypes.'],
         };
       }
+      const nodeId = action.id ?? `ai:${action.nodeType}:${randomUUID()}`;
       commands.push({
         type: 'node.add',
         scopeGroupId: input.targetSpace.id,
         node: {
-          id: action.id ?? `ai:${action.nodeType}:${randomUUID()}`,
+          id: nodeId,
           type: action.nodeType,
           position: { x: 0, y: 0 },
           config: action.params ?? {},
@@ -298,6 +355,7 @@ export function compileAgentPlan(input: {
           outputValues: {},
         },
       });
+      scopedNodeIds.add(String(nodeId));
       continue;
     }
 
@@ -342,7 +400,11 @@ export function compileAgentPlan(input: {
           repairOptions: ['Choose an existing node listed in capabilityManifest.nodes.'],
         };
       }
-      commands.push({ type: 'node.remove', scopeGroupId: input.targetSpace.id, nodeId: action.nodeId });
+      commands.push({
+        type: 'node.remove',
+        scopeGroupId: input.targetSpace.id,
+        nodeId: action.nodeId,
+      });
       continue;
     }
 

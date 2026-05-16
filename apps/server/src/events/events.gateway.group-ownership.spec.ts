@@ -198,3 +198,46 @@ test('server allows Manager controls for server-managed client groups', () => {
 
   assert.equal(routed.length, 1);
 });
+
+test('server allows Manager controls for the server-managed display group', () => {
+  const routed: unknown[] = [];
+  const gateway = new EventsGateway(
+    {
+      onClientExpired: () => () => undefined,
+      isManager: () => true,
+      getDisplayDescriptors: () => [],
+      getGroupOwnershipEntry: (groupId: string) =>
+        groupId === 'display'
+          ? {
+              groupId,
+              owner: { actorId: 'server-process', role: 'service', capabilities: ['group.mutate'] },
+              ownerStack: [],
+              transferable: true,
+              surface: 'public',
+              visibility: { defaultAccess: 'visible-readonly' },
+              selectedClientIds: [],
+            }
+          : undefined,
+    } as never,
+    { routeMessage: (message: unknown) => routed.push(message) } as never
+  );
+
+  gateway.handleMessage(
+    {
+      type: 'control',
+      version: 1,
+      from: 'manager',
+      target: { mode: 'group', groupId: 'display' },
+      action: 'screenColor',
+      payload: { color: '#00ff00' },
+      scopeGroupId: 'display',
+      actor: 'manager',
+      role: 'manager',
+      correlationId: 'corr-display-group',
+      idempotencyKey: 'idem-display-group',
+    },
+    { id: 'socket-display-group' } as never
+  );
+
+  assert.equal(routed.length, 1);
+});
