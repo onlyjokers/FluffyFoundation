@@ -184,6 +184,52 @@ test('AI sandbox rejects out-of-scope targets and budget overflow without live m
   );
 });
 
+test('AI sandbox rejects node.add for node types disabled by the AI Space policy', () => {
+  const bus = createSemanticCommandBus({
+    graph,
+    groups: [
+      {
+        ...agentGroup,
+        agentPolicy: {
+          ...agentGroup.agentPolicy,
+          targetScope: {
+            ...agentGroup.agentPolicy.targetScope,
+            allowedNodeTypes: ['string'],
+            deniedNodeTypes: ['number'],
+          },
+        },
+      },
+    ],
+    definitions,
+    policy: createGroupSovereigntyPolicy(),
+    revision: 10,
+  });
+
+  const denied = bus.dispatch({
+    actor: aiActor,
+    command: {
+      type: 'node.add',
+      scopeGroupId: 'ai-space:agent',
+      node: {
+        id: 'agent:number',
+        type: 'number',
+        position: { x: 30, y: 0 },
+        config: { value: 2 },
+        inputValues: {},
+        outputValues: {},
+      },
+    },
+  });
+
+  assert.equal(denied.ok, false);
+  assert.equal(denied.stage, 'policy');
+  assert.match(denied.message, /node type number/i);
+  assert.equal(
+    bus.getSnapshot().nodes.some((node) => node.id === 'agent:number'),
+    false
+  );
+});
+
 test('Group agent policy metadata rejects invalid budgets during validation', () => {
   const bus = createBus();
 

@@ -105,6 +105,8 @@ const normalizeAgentPolicy = (value: unknown): AgentGroupPolicy | undefined => {
           typeof value.targetScope.allowNewNodes === 'boolean'
             ? value.targetScope.allowNewNodes
             : undefined,
+        allowedNodeTypes: normalizeStringArray(value.targetScope.allowedNodeTypes),
+        deniedNodeTypes: normalizeStringArray(value.targetScope.deniedNodeTypes),
       }
     : undefined;
   return {

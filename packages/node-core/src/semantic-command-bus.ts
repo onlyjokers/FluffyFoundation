@@ -467,6 +467,21 @@ function evaluateAgentGroupPolicy(input: {
     if (!policy.targetScope?.allowNewNodes) {
       return { allowed: false, reason: 'AI Space policy does not allow new nodes.' };
     }
+    const nodeType = String(input.command.node.type);
+    const allowedNodeTypes = policy.targetScope?.allowedNodeTypes ?? [];
+    if (allowedNodeTypes.length > 0 && !allowedNodeTypes.includes(nodeType)) {
+      return {
+        allowed: false,
+        reason: `AI Space policy does not allow node type ${nodeType}.`,
+      };
+    }
+    const deniedNodeTypes = policy.targetScope?.deniedNodeTypes ?? [];
+    if (deniedNodeTypes.includes(nodeType)) {
+      return {
+        allowed: false,
+        reason: `AI Space policy denies node type ${nodeType}.`,
+      };
+    }
   } else {
     const outOfScope = targetNodeIds.find((nodeId) => !scopedNodes.has(nodeId));
     if (outOfScope) {

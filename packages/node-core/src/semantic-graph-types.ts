@@ -70,6 +70,8 @@ export type AgentGroupPolicy = {
   targetScope?: {
     nodeIds?: string[];
     allowNewNodes?: boolean;
+    allowedNodeTypes?: string[];
+    deniedNodeTypes?: string[];
   };
   budgets?: {
     maxNodes?: number;

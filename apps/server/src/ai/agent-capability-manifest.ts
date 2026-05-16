@@ -19,6 +19,14 @@ const compactGroup = (group: SemanticGroup): Record<string, unknown> => ({
   agentPolicy: group.agentPolicy,
 });
 
+const nodeTypeAllowedByPolicy = (type: string, targetSpace: SemanticGroup): boolean => {
+  const allowedNodeTypes = targetSpace.agentPolicy?.targetScope?.allowedNodeTypes ?? [];
+  const deniedNodeTypes = targetSpace.agentPolicy?.targetScope?.deniedNodeTypes ?? [];
+  if (deniedNodeTypes.includes(type)) return false;
+  if (allowedNodeTypes.length > 0) return allowedNodeTypes.includes(type);
+  return true;
+};
+
 export const compactSemanticSnapshot = (
   snapshot: SemanticGraphSnapshot,
   targetSpace?: SemanticGroup
@@ -59,13 +67,27 @@ export const buildCapabilityManifest = (
   const scopedNodeIds = scopedNodeIdsFor(targetSpace);
   const scopedNodes = snapshot.nodes.filter((node) => scopedNodeIds.has(String(node.id)));
   const scopedTypes = new Set(scopedNodes.map((node) => String(node.type)));
-  const exposedDefinitions = snapshot.definitions.filter((definition) => scopedTypes.has(definition.type));
+  const createableDefinitions = targetSpace.agentPolicy?.targetScope?.allowNewNodes === true
+    ? snapshot.definitions.filter((definition) => nodeTypeAllowedByPolicy(definition.type, targetSpace))
+    : [];
+  const visibleDefinitions = snapshot.definitions.filter((definition) => {
+    if (scopedTypes.has(definition.type)) return true;
+    return createableDefinitions.some((item) => item.type === definition.type);
+  });
 
   return {
     version: 1,
     targetSpace: compactGroup(targetSpace),
     allowedCommands: targetSpace.agentPolicy?.allowedCommands ?? targetSpace.agentInterface?.callableCommands ?? [],
-    nodeTypes: exposedDefinitions.map((definition) => ({
+    nodeTypes: visibleDefinitions.map((definition) => ({
+      type: definition.type,
+      label: definition.label,
+      category: definition.category,
+      ports: definition.ports,
+      params: definition.params,
+      aiSummary: definition.aiSummary,
+    })),
+    createableNodeTypes: createableDefinitions.map((definition) => ({
       type: definition.type,
       label: definition.label,
       category: definition.category,
