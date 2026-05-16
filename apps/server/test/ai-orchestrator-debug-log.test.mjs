@@ -123,7 +123,7 @@ test('AI orchestrator writes structured debug events around a successful turn', 
   assert.equal(dispatches[1].result.ok, true);
 });
 
-test('AI orchestrator falls back to local text and flashlight edits when provider returns no plan', async () => {
+test('AI orchestrator falls back to local flashlight edits but not text mirroring when provider returns no plan', async () => {
   const dispatches = [];
   const fallbackSnapshot = {
     ...snapshot,
@@ -222,11 +222,9 @@ test('AI orchestrator falls back to local text and flashlight edits when provide
     text: '你好',
   });
 
-  assert.equal(hello.turns[0].plan.id, 'fallback:client-text');
-  assert.deepEqual(hello.turns[0].plan.commands.map((command) => command.nodeId), [
-    'message',
-    'displayText',
-  ]);
+  assert.equal(hello.turns[0].plan, null);
+  assert.equal(dispatches.length, 0);
+  assert.equal(events.some((event) => event.kind === 'ai.turn.fallback'), false);
 
   dispatches.length = 0;
   const rate = await orchestrator.handleEnvironmentEvent({
@@ -249,7 +247,7 @@ test('AI orchestrator falls back to local text and flashlight edits when provide
   assert.equal(events.some((event) => event.kind === 'ai.turn.fallback'), true);
 });
 
-test('AI orchestrator falls back to local text edits when provider aborts', async () => {
+test('AI orchestrator does not mirror client text when provider aborts', async () => {
   const dispatches = [];
   const authority = {
     getSnapshot: () => snapshot,
@@ -292,8 +290,8 @@ test('AI orchestrator falls back to local text edits when provider aborts', asyn
     text: '你好',
   });
 
-  assert.equal(result.turns[0].plan.id, 'fallback:client-text');
-  assert.equal(dispatches.length, 2);
+  assert.equal(result.turns[0].plan, null);
+  assert.equal(dispatches.length, 0);
   assert.equal(events.some((event) => event.kind === 'ai.turn.error'), true);
-  assert.equal(events.some((event) => event.kind === 'ai.turn.fallback'), true);
+  assert.equal(events.some((event) => event.kind === 'ai.turn.fallback'), false);
 });

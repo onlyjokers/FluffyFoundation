@@ -8,7 +8,10 @@ import type {
   SemanticDefinition,
   SemanticWarning,
 } from './semantic-graph-types.js';
-import { definitionForNode } from './semantic-command-validation-helpers.js';
+import {
+  definitionForNode,
+  normalizeSelectFieldValue,
+} from './semantic-command-validation-helpers.js';
 
 export type NormalizedSemanticCommand = {
   command: SemanticCommand;
@@ -69,6 +72,18 @@ export const normalizeSemanticCommand = (
       code: 'SEMANTIC.PARAM_CLAMPED',
       path: `nodes.${command.nodeId}.params.${field.key}`,
       message: `Parameter ${field.key} was clamped from ${value} to ${normalizedValue}.`,
+    });
+  }
+
+  for (const field of definition.params) {
+    if (field.type !== 'select' || !(field.key in params)) continue;
+    const normalizedValue = normalizeSelectFieldValue(field, params[field.key]);
+    if (normalizedValue === null || normalizedValue === params[field.key]) continue;
+    params[field.key] = normalizedValue;
+    warnings.push({
+      code: 'SEMANTIC.PARAM_NORMALIZED',
+      path: `nodes.${command.nodeId}.params.${field.key}`,
+      message: `Parameter ${field.key} was normalized to ${normalizedValue}.`,
     });
   }
 

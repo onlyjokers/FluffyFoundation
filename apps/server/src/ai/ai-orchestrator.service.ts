@@ -179,33 +179,7 @@ const fallbackPlanFor = (
     }
   }
 
-  const commands: SemanticCommand[] = [];
-  const stringNode = findNodeByType(snapshot, targetSpace, 'string');
-  if (stringNode) {
-    commands.push({
-      type: 'node.params.update',
-      scopeGroupId,
-      nodeId: String(stringNode.id),
-      params: { value: text },
-    });
-  }
-
-  const displayText = findNodeByType(snapshot, targetSpace, 'proc-display-text');
-  if (displayText) {
-    commands.push({
-      type: 'node.params.update',
-      scopeGroupId,
-      nodeId: String(displayText.id),
-      params: { text },
-    });
-  }
-
-  if (commands.length === 0) return null;
-  return {
-    id: 'fallback:client-text',
-    summary: 'Mirror client text into the AI Space text nodes.',
-    commands,
-  };
+  return null;
 };
 
 const compactGroup = (group: SemanticGroup): Record<string, unknown> => ({
@@ -438,7 +412,8 @@ export class AiOrchestratorService {
           });
           continue;
         }
-        throw error;
+        turns.push({ targetSpaceId: targetSpace.id, plan: null, skills, dispatchResults: [] });
+        continue;
       }
 
       this.aiDebugLogger?.write({

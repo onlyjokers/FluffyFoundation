@@ -71,7 +71,15 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
         ...next.graph,
         nodes: next.graph.nodes.map((node) =>
           String(node.id) === String(command.nodeId)
-            ? { ...node, config: { ...(node.config ?? {}), ...command.params } }
+            ? {
+                ...node,
+                config: { ...(node.config ?? {}), ...command.params },
+                inputValues: Object.fromEntries(
+                  Object.entries(node.inputValues ?? {}).filter(
+                    ([key]) => !(key in command.params)
+                  )
+                ),
+              }
             : node
         ),
       };

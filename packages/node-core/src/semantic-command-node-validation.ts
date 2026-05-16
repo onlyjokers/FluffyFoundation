@@ -12,6 +12,7 @@ import {
   definitionForNode,
   isCompatiblePortType,
   isNonEmpty,
+  normalizeSelectFieldValue,
   paramValidationError,
   portFor,
   validateNode,
@@ -109,14 +110,30 @@ const validateParamUpdate = (
   if (!definition) return [];
   const errors: SemanticValidationError[] = [];
   for (const field of definition.params) {
-    if (field.type !== 'number' || !(field.key in command.params)) continue;
+    if (!(field.key in command.params)) continue;
     const value = command.params[field.key];
-    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-    if (typeof field.min === 'number' && value < field.min) {
-      errors.push(paramValidationError(String(command.nodeId), field.key, value, 'min', field.min));
+    if (field.type === 'number') {
+      if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+      if (typeof field.min === 'number' && value < field.min) {
+        errors.push(paramValidationError(String(command.nodeId), field.key, value, 'min', field.min));
+      }
+      if (typeof field.max === 'number' && value > field.max) {
+        errors.push(paramValidationError(String(command.nodeId), field.key, value, 'max', field.max));
+      }
     }
-    if (typeof field.max === 'number' && value > field.max) {
-      errors.push(paramValidationError(String(command.nodeId), field.key, value, 'max', field.max));
+    if (field.type === 'select') {
+      if (normalizeSelectFieldValue(field, value) !== null) continue;
+      errors.push(
+        validationError(
+          'GRAPH.PARAM_INVALID',
+          `nodes.${command.nodeId}.params.${field.key}`,
+          `Param ${field.key} is not supported.`,
+          [
+            `Choose one of: ${(field.options ?? []).map((option) => String(option.value)).join(', ')}`,
+          ],
+          `Unsupported value: ${String(value)}`
+        )
+      );
     }
   }
   return errors;
