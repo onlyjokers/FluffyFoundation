@@ -7,7 +7,7 @@
     "intent": "Persistent AI operator sandbox for greeting, client signaling, display pulses, and follow-up reactions.",
     "runtimeConfig": "gpt-5.5 is configured by server env variables, not by a canvas node.",
     "eventBindings": ["client.joined", "client.text.final", "display.ready"],
-    "expectedCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect"]
+    "expectedCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect", "node.remove"]
   },
   "graph": {
     "nodes": [
@@ -123,8 +123,8 @@
         "id": "n-display",
         "type": "display-object",
         "position": { "x": 1280, "y": 180 },
-        "config": {},
-        "inputValues": {},
+        "config": { "displayId": "" },
+        "inputValues": { "index": 1, "range": 1, "random": false },
         "outputValues": {}
       },
       {
@@ -264,13 +264,25 @@
           "n-cmd-aggregator",
           "n-display"
         ],
-        "callableCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect"],
+        "callableCommands": [
+          "node.params.update",
+          "node.add",
+          "node.connect",
+          "node.disconnect",
+          "node.remove"
+        ],
         "eventBindings": ["client.joined", "client.text.final", "display.ready"]
       },
       "agentPolicy": {
         "enabled": true,
         "allowedActorIds": ["ai-orchestrator"],
-        "allowedCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect"],
+        "allowedCommands": [
+          "node.params.update",
+          "node.add",
+          "node.connect",
+          "node.disconnect",
+          "node.remove"
+        ],
         "deniedSurfaces": ["network", "secrets", "storage"],
         "targetScope": {
           "nodeIds": [

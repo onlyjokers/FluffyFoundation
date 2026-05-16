@@ -109,3 +109,18 @@ test('template import payload classifier recognizes the AI Agent demo as a node 
 
   assert.equal(getTemplateImportPayloadKind(parsed), 'node-graph');
 });
+
+test('AI Agent demo template uses current display-object routing defaults', () => {
+  const parsed = readAiAgentDemoTemplate() as {
+    graph?: { nodes?: Array<{ id?: string; type?: string; config?: unknown; inputValues?: unknown }> };
+    groups?: Array<{ agentInterface?: { callableCommands?: string[] }; agentPolicy?: { allowedCommands?: string[] } }>;
+  };
+  const displayNode = parsed.graph?.nodes?.find((node) => node.id === 'n-display');
+  assert.equal(displayNode?.type, 'display-object');
+  assert.deepEqual(displayNode?.config, { displayId: '' });
+  assert.deepEqual(displayNode?.inputValues, { index: 1, range: 1, random: false });
+
+  const aiSpace = parsed.groups?.[0];
+  assert.equal(aiSpace?.agentInterface?.callableCommands?.includes('node.remove'), true);
+  assert.equal(aiSpace?.agentPolicy?.allowedCommands?.includes('node.remove'), true);
+});
