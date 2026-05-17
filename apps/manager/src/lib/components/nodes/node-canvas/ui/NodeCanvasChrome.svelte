@@ -190,8 +190,8 @@
       onToggleDisabled={groupOverlayActions.onToggleDisabled}
       onToggleMinimized={groupOverlayActions.onToggleMinimized}
       onToggleEditMode={groupOverlayActions.onToggleEditMode}
-      onNodalize={groupOverlayActions.onNodalize}
-      onDenodalize={groupOverlayActions.onDenodalize}
+      onNodelize={groupOverlayActions.onNodelize}
+      onDenodelize={groupOverlayActions.onDenodelize}
       onCollapseCustomNode={groupOverlayActions.onCollapseCustomNode}
       onDisassemble={groupOverlayActions.onDisassemble}
       onRename={groupOverlayActions.onRename}

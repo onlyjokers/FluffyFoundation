@@ -24,5 +24,5 @@ Keep Node Graph behavior unchanged while preventing NodeCanvas from becoming mon
 
 - `custom-nodes/custom-node-expansion.ts` owns Custom Node expand/collapse behavior.
 - `custom-nodes/custom-node-events.ts` binds Custom Node UI events to handlers.
-- `custom-nodes/custom-node-actions.ts` owns nodalize/denodalize/uncouple logic.
+- `custom-nodes/custom-node-actions.ts` owns nodelize/denodelize/uncouple logic.
 - `groups/group-events.ts` binds Group frame UI events to handlers.

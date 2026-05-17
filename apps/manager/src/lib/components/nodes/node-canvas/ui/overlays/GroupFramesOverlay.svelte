@@ -33,8 +33,8 @@
   export let onToggleDisabled: (groupId: string) => void = () => undefined;
   export let onToggleMinimized: (groupId: string) => void = () => undefined;
   export let onToggleEditMode: (groupId: string) => void = () => undefined;
-  export let onNodalize: (groupId: string) => void = () => undefined;
-  export let onDenodalize: (groupId: string) => void = () => undefined;
+  export let onNodelize: (groupId: string) => void = () => undefined;
+  export let onDenodelize: (groupId: string) => void = () => undefined;
   export let onCollapseCustomNode: (groupId: string) => void = () => undefined;
   export let onDisassemble: (groupId: string) => void = () => undefined;
   export let onRename: (groupId: string, name: string) => void = () => undefined;
@@ -202,7 +202,7 @@
                   size="sm"
                   ariaLabel="Denodelize"
                   title="Denodelize"
-                  on:click={() => onDenodalize(group.id)}
+                  on:click={() => onDenodelize(group.id)}
                 >
                   {#if isActionsCompact}↩{:else}Denodelize{/if}
                 </Button>
@@ -213,7 +213,7 @@
                     size="sm"
                     ariaLabel="Nodelization"
                     title="Nodelization"
-                    on:click={() => onNodalize(group.id)}
+                    on:click={() => onNodelize(group.id)}
                   >
                     {#if isActionsCompact}⧉{:else}Nodelization{/if}
                   </Button>

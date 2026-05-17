@@ -113,7 +113,7 @@ test('handleExpandCustomNode skips non-object internal entries', () => {
   assert.equal(addedConnections.length, 0);
 });
 
-test('handleDenodalizeGroup ignores non-object graph nodes', () => {
+test('handleDenodelizeGroup ignores non-object graph nodes', () => {
   const motherNode: NodeInstance = {
     id: 'mother-1',
     type: 'custom-node',
@@ -190,7 +190,7 @@ test('handleDenodalizeGroup ignores non-object graph nodes', () => {
     setSelectedNode: () => {},
   });
 
-  assert.doesNotThrow(() => actions.handleDenodalizeGroup('group-1'));
+  assert.doesNotThrow(() => actions.handleDenodelizeGroup('group-1'));
 
   if (originalConfirm) {
     globalThis.confirm = originalConfirm;

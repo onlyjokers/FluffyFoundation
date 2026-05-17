@@ -10,8 +10,8 @@ import { cloneGraphState } from './custom-node-graph';
 
 export type CustomNodeActions = {
   handleUncoupleCustomNode: (nodeId: string) => void;
-  handleDenodalizeGroup: (groupId: string) => void;
-  handleNodalizeGroup: (groupId: string) => void;
+  handleDenodelizeGroup: (groupId: string) => void;
+  handleNodelizeGroup: (groupId: string) => void;
 };
 
 type GroupController = {
@@ -139,7 +139,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     opts.nodeEngine.updateNodeInputValue(id, 'gate', state.manualGate);
   };
 
-  const handleDenodalizeGroup = (groupId: string) => {
+  const handleDenodelizeGroup = (groupId: string) => {
     const id = String(groupId ?? '');
     if (!id) return;
 
@@ -295,7 +295,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     opts.groupPortNodesController.scheduleNormalizeProxies();
   };
 
-  const handleNodalizeGroup = (groupId: string) => {
+  const handleNodelizeGroup = (groupId: string) => {
     const rootId = String(groupId ?? '');
     if (!rootId) return;
 
@@ -601,5 +601,5 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     opts.setSelectedNode(motherNodeId);
   };
 
-  return { handleUncoupleCustomNode, handleDenodalizeGroup, handleNodalizeGroup };
+  return { handleUncoupleCustomNode, handleDenodelizeGroup, handleNodelizeGroup };
 };
