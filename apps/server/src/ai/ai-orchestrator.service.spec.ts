@@ -389,6 +389,8 @@ test('orchestrator orders prompt messages for provider prefix caching and logs p
   assert.ok(capturedMessages.length >= 6);
   assert.match(capturedMessages[1]?.content ?? '', /AI_ORCHESTRATOR_PROTOCOL_V1/);
   assert.match(capturedMessages[2]?.content ?? '', /"kind":"capabilityManifest"/);
+  assert.match(capturedMessages[3]?.content ?? '', /"kind":"skills"/);
+  assert.match(capturedMessages[4]?.content ?? '', /"kind":"targetSpace"/);
   assert.match(capturedMessages.at(-1)?.content ?? '', /"kind":"event"/);
   assert.match(capturedMessages.at(-1)?.content ?? '', /"text":"你好"/);
   assert.equal(
@@ -400,6 +402,10 @@ test('orchestrator orders prompt messages for provider prefix caching and logs p
     | { promptMessages?: Array<{ id?: string; sha256?: string; chars?: number }> }
     | undefined;
   assert.ok(requestLog);
+  assert.deepEqual(
+    requestLog.promptMessages?.map((message) => message.id),
+    ['system', 'protocol', 'capabilityManifest', 'skills', 'targetSpace', 'snapshot', 'memory', 'event']
+  );
   assert.equal(requestLog.promptMessages?.at(-1)?.id, 'event');
   assert.match(requestLog.promptMessages?.at(-1)?.sha256 ?? '', /^[a-f0-9]{64}$/);
   assert.equal(typeof requestLog.promptMessages?.at(-1)?.chars, 'number');

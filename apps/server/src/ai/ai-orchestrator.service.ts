@@ -220,6 +220,10 @@ const buildPromptMessages = (input: {
       kind: 'capabilityManifest',
       capabilityManifest: input.capabilityManifest,
     }),
+    promptMessage('skills', 'user', {
+      kind: 'skills',
+      skills: input.skills,
+    }),
     promptMessage('targetSpace', 'user', {
       kind: 'targetSpace',
       targetSpaceId: input.targetSpace.id,
@@ -232,10 +236,6 @@ const buildPromptMessages = (input: {
     promptMessage('memory', 'user', {
       kind: 'conversationMemory',
       memory: input.memory,
-    }),
-    promptMessage('skills', 'user', {
-      kind: 'skills',
-      skills: input.skills,
     }),
     promptMessage('event', 'user', {
       kind: 'event',
