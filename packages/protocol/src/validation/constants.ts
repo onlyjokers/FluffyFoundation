@@ -43,6 +43,7 @@ export const PLUGIN_COMMANDS = [
   'restore',
   'override-set',
   'override-remove',
+  'display-operation',
 ] as const;
 
 export const SYSTEM_ACTIONS = [

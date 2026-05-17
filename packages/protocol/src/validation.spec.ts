@@ -107,6 +107,29 @@ test('validateMessage accepts media and plugin messages when optional object fie
   assert.equal(isValidMessage(plugin), true);
 });
 
+test('validateMessage accepts display operation plugin commands', () => {
+  const plugin = createPluginControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'group', groupId: 'stage-left' },
+    'display-router',
+    'display-operation',
+    {
+      displayIds: ['display-1'],
+      operation: {
+        kind: 'display-operation',
+        target: { mode: 'displayId', displayId: 'display-1' },
+        control: {
+          action: 'showText',
+          payload: { text: 'hello' },
+        },
+      },
+    }
+  );
+
+  assert.equal(validateMessage(plugin).ok, true);
+  assert.equal(isValidMessage(plugin), true);
+});
+
 test('validateMessage rejects non-system mutating commands without envelope metadata', () => {
   for (const message of [
     {

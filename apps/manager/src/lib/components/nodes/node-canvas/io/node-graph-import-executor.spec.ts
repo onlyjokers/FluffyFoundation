@@ -3,8 +3,9 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { NodeRegistry, type NodeDefinition } from '@shugu/node-core';
 import type { GraphState } from '$lib/nodes/types';
@@ -112,8 +113,12 @@ test('executeParsedNodeGraphImport notifies with complete graph and remapped AI 
 });
 
 test('executeParsedNodeGraphImport can import the AI agent demo template without skips', async () => {
+  const repoRoot = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../../../../../..'
+  );
   const parsed = JSON.parse(
-    readFileSync(join(process.cwd(), '..', '..', 'docs/templates/ai-agent-demo-template.json'), 'utf8')
+    readFileSync(join(repoRoot, 'docs/templates/ai-agent-demo-template.json'), 'utf8')
   );
   const registry = registryWithTypes([
     'note',
@@ -130,6 +135,7 @@ test('executeParsedNodeGraphImport can import the AI agent demo template without
   ]);
   const graph: GraphState = { nodes: [], connections: [] };
   const connectedInputs = new Set<string>();
+  let importedGroups: NodeGroup[] = [];
 
   const result = await executeParsedNodeGraphImport({
     parsedFile: parsed,
@@ -155,11 +161,17 @@ test('executeParsedNodeGraphImport can import the AI agent demo template without
       },
     },
     getNodeGroups: () => [],
-    appendNodeGroups: () => undefined,
+    appendNodeGroups: (next) => {
+      importedGroups = next;
+    },
     getViewportCenterGraphPos: () => ({ x: 0, y: 0 }),
     createId: (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`,
   });
 
   assert.equal(result.skippedNodes, 0);
   assert.equal(result.skippedConnections, 0);
+  assert.equal(importedGroups.length, 1);
+  assert.equal(importedGroups[0].kind, 'ai-space');
+  assert.equal(importedGroups[0].agentPolicy?.enabled, true);
+  assert.equal(importedGroups[0].agentInterface?.eventBindings?.includes('client.text.final'), true);
 });
