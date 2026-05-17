@@ -142,3 +142,19 @@ test('NodeCanvas semantic commands send node.remove payloads through the Manager
     },
   ]);
 });
+
+test('NodeCanvas semantic commands send graph.replace payloads for canvas clear', () => {
+  const sent: unknown[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: (input: unknown) => sent.push(input),
+    }),
+  });
+
+  assert.equal(adapter.replaceGraph({ nodes: [], connections: [] }), true);
+  assert.equal((sent[0] as { requestId?: string }).requestId?.startsWith('canvas:graph.replace:'), true);
+  assert.deepEqual((sent[0] as { command?: unknown }).command, {
+    kind: 'graph.replace',
+    graph: { nodes: [], connections: [] },
+  });
+});

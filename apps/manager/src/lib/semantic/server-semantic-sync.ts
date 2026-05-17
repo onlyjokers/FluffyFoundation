@@ -34,6 +34,7 @@ export type ServerSemanticSyncSdk = {
 
 export type ServerSemanticNodeGroupsSync = (groups: NodeGroup[]) => void;
 export type ServerSemanticCustomDefinitionsSync = (definitions: CustomNodeDefinition[]) => void;
+export type ServerSemanticLayoutPositions = Map<string, { x: number; y: number }>;
 
 function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGraphSnapshot | null {
   if (!message.ok) return null;
@@ -60,10 +61,11 @@ const positionFromGraph = (
 
 export function graphFromServerSemanticSnapshot(
   snapshot: SemanticGraphSnapshot,
-  currentGraph?: GraphState
+  currentGraph?: GraphState,
+  layoutPositions?: ServerSemanticLayoutPositions
 ): GraphState {
   const currentPositions = positionFromGraph(currentGraph);
-  const existingPositions = [...currentPositions.values()];
+  const existingPositions = [...currentPositions.values(), ...(layoutPositions?.values() ?? [])];
   const defaultY = existingPositions[0]?.y ?? defaultSemanticNodePosition.y;
   const nextPositionX =
     existingPositions.length > 0
@@ -74,10 +76,13 @@ export function graphFromServerSemanticSnapshot(
     nodes: (snapshot.nodes ?? []).map((node) => ({
       id: String(node.id),
       type: String(node.type),
-      position: currentPositions.get(String(node.id)) ?? {
-        x: nextPositionX + missingNodeIndex++ * 240,
-        y: defaultY,
-      },
+      position:
+        currentPositions.get(String(node.id)) ??
+        layoutPositions?.get(String(node.id)) ??
+        {
+          x: nextPositionX + missingNodeIndex++ * 240,
+          y: defaultY,
+        },
       config: { ...(node.params ?? {}) },
       inputValues: { ...(node.inputValues ?? {}) },
       outputValues: { ...(node.outputValues ?? {}) },
@@ -150,9 +155,14 @@ export function applyServerSemanticSnapshot(input: {
   nodeEngine: ServerSemanticNodeEngine;
   setNodeGroups?: ServerSemanticNodeGroupsSync;
   setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
+  layoutPositions?: ServerSemanticLayoutPositions;
 }): void {
   const currentGraph = input.nodeEngine.exportGraph?.();
-  const nextGraph = graphFromServerSemanticSnapshot(input.snapshot, currentGraph);
+  const nextGraph = graphFromServerSemanticSnapshot(
+    input.snapshot,
+    currentGraph,
+    input.layoutPositions
+  );
   input.setNodeGroups?.(groupsFromServerSemanticSnapshot(input.snapshot));
   input.setCustomNodeDefinitions?.(
     cloneJsonValue((input.snapshot.customDefinitions ?? []) as CustomNodeDefinition[])
@@ -216,6 +226,7 @@ export function bindServerSemanticSync(input: {
   migrationCoordinator: ServerSemanticMigrationCoordinator;
   setNodeGroups?: ServerSemanticNodeGroupsSync;
   setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
+  getLayoutPositions?: () => ServerSemanticLayoutPositions;
   onSnapshot?: (snapshot: SemanticGraphSnapshot) => void;
 }): () => void {
   let requestedInitialSnapshot = false;
@@ -226,6 +237,7 @@ export function bindServerSemanticSync(input: {
       nodeEngine: input.nodeEngine,
       setNodeGroups: input.setNodeGroups,
       setCustomNodeDefinitions: input.setCustomNodeDefinitions,
+      layoutPositions: input.getLayoutPositions?.(),
     });
     input.migrationCoordinator.maybeImport(snapshot);
   };

@@ -1,11 +1,13 @@
 // Purpose: Top-level NodeCanvas toolbar actions with injected runtime dependencies.
 import { get, type Readable, type Writable } from 'svelte/store';
 import type { nodeEngine as managerNodeEngine } from '$lib/nodes/engine';
+import type { GraphState } from '$lib/nodes/types';
 import type { GroupController } from '../controllers/group-controller';
 import type { LoopController } from '../controllers/loop-controller';
 
 type CanvasActionsOptions = {
   nodeEngine: typeof managerNodeEngine;
+  replaceGraphCommand?: (graph: GraphState) => boolean;
   isRunningStore: Readable<boolean>;
   getLoopController: () => LoopController | null;
   groupController: GroupController;
@@ -45,6 +47,7 @@ export function createCanvasActions(opts: CanvasActionsOptions) {
     if (!opts.confirm('Clear all nodes?')) return;
     opts.nodeEngine.clear();
     resetGroups();
+    opts.replaceGraphCommand?.({ nodes: [], connections: [] });
   };
 
   const viewportCenterGraphPos = (): { x: number; y: number } => {

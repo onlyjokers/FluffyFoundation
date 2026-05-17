@@ -580,6 +580,7 @@
   const { handleToggleEngine, handleClear, resetGroups, viewportCenterGraphPos } =
     createCanvasActions({
       nodeEngine,
+      replaceGraphCommand: (graph) => canvasCommands.replaceGraph(graph),
       isRunningStore,
       getLoopController: () => loopController,
       groupController,

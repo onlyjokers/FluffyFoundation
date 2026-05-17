@@ -9,13 +9,15 @@ import {
 } from '@shugu/node-core';
 import type { SemanticCommandPayload } from '@shugu/protocol';
 import type { ManagerSDK } from '@shugu/sdk-manager';
-import type { Connection as EngineConnection, NodeInstance } from '$lib/nodes/types';
+import type { Connection as EngineConnection, GraphState, NodeInstance } from '$lib/nodes/types';
+import { patchNodeGraphLayoutPosition } from '$lib/project/nodeGraphLayout';
 
 export type CanvasSemanticCommandAdapter = {
   addNode: (node: NodeInstance) => boolean;
   connect: (connection: EngineConnection) => boolean;
   removeNode: (nodeId: string) => boolean;
   setNodeParams: (nodeId: string, params: Record<string, unknown>) => boolean;
+  replaceGraph: (graph: GraphState) => boolean;
   dispatch: (command: SemanticCommand) => boolean;
   dispatchForFixture: (command: SemanticCommand) => boolean;
 };
@@ -44,6 +46,7 @@ export function createCanvasSemanticCommandAdapter(opts: {
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
     removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    replaceGraph: (graph) => dispatch({ type: 'graph.replace', graph }),
     dispatch,
     dispatchForFixture: dispatch,
   };
@@ -61,6 +64,7 @@ function canvasRequestId(command: SemanticCommand): string {
   if (command.type === 'node.connect') return `canvas:node.connect:${command.connection.id}`;
   if (command.type === 'node.remove') return `canvas:node.remove:${command.nodeId}`;
   if (command.type === 'node.params.update') return `canvas:node.params.update:${command.nodeId}`;
+  if (command.type === 'graph.replace') return `canvas:graph.replace:${Date.now()}`;
   return `canvas:${command.type}`;
 }
 
@@ -82,10 +86,14 @@ export function createNodeCanvasSemanticCommands(input: {
   };
 
   return {
-    addNode: (node) => dispatch({ type: 'node.add', node }),
+    addNode: (node) => {
+      patchNodeGraphLayoutPosition(String(node.id), node.position);
+      return dispatch({ type: 'node.add', node });
+    },
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
     removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    replaceGraph: (graph) => dispatch({ type: 'graph.replace', graph }),
     dispatch,
     dispatchForFixture: dispatch,
   };

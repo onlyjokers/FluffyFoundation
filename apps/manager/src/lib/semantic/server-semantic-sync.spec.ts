@@ -11,6 +11,8 @@ import {
 } from './server-semantic-sync';
 import type { GraphState } from '$lib/nodes/types';
 
+const positions = (entries: Array<[string, { x: number; y: number }]>) => new Map(entries);
+
 const snapshot = (
   nodes: SemanticGraphSnapshot['nodes'],
   connections: SemanticGraphSnapshot['connections'] = []
@@ -190,6 +192,48 @@ test('applyServerSemanticSnapshot places newly added server nodes away from exis
     [
       { x: 321, y: 654 },
       { x: 561, y: 654 },
+    ]
+  );
+});
+
+test('applyServerSemanticSnapshot restores node positions from local layout storage after Manager reload', () => {
+  let loaded: GraphState | null = null;
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'client-a',
+        type: 'client-object',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'display-a',
+        type: 'display-object',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => ({ nodes: [], connections: [] }),
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+    layoutPositions: positions([
+      ['client-a', { x: 420, y: 180 }],
+      ['display-a', { x: 780, y: 260 }],
+    ]),
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(
+    loaded.nodes.map((node) => [node.id, node.position]),
+    [
+      ['client-a', { x: 420, y: 180 }],
+      ['display-a', { x: 780, y: 260 }],
     ]
   );
 });

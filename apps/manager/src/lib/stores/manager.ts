@@ -18,6 +18,7 @@ import { nodeEngine } from '$lib/nodes/engine';
 import { parameterRegistry } from '../parameters/registry';
 import { registerDefaultControlParameters } from '../parameters/presets';
 import { readLocalProjectForServerMigration } from '$lib/project/projectManager';
+import { readNodeGraphLayoutPositions } from '$lib/project/nodeGraphLayout';
 import { replaceCustomNodeDefinitions } from '$lib/nodes/custom-nodes/store';
 import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
 import {
@@ -240,6 +241,7 @@ export function connect(config: ManagerSDKConfig): void {
         migrationCoordinator,
         setNodeGroups: (groups) => nodeGroupsState.set(groups),
         setCustomNodeDefinitions: replaceCustomNodeDefinitions,
+        getLayoutPositions: readNodeGraphLayoutPositions,
         onSnapshot: (snapshot) => semanticSnapshot.set(snapshot),
     });
 
