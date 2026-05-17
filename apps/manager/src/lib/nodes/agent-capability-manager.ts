@@ -22,6 +22,16 @@ export type AgentCapabilityRow = {
   customDefinition?: CustomNodeDefinition;
 };
 
+export type AgentCapabilityManagerSummary = {
+  total: number;
+  enabled: number;
+  disabled: number;
+  custom: number;
+  builtin: number;
+  plugin: number;
+  categories: Array<{ category: string; count: number; enabled: number }>;
+};
+
 const SOURCE_ORDER: Record<AgentCapabilityNodeSource, number> = {
   custom: 0,
   builtin: 1,
@@ -107,5 +117,31 @@ export function createAgentCapabilityCommand(input: {
     ...(input.source ? { source: input.source } : {}),
     ...(aiNotes ? { aiNotes } : {}),
     ...(disabledReason ? { disabledReason } : {}),
+  };
+}
+
+export function summarizeAgentCapabilityRows(
+  rows: AgentCapabilityRow[]
+): AgentCapabilityManagerSummary {
+  const categories = new Map<string, { category: string; count: number; enabled: number }>();
+  for (const row of rows) {
+    const category = row.category || 'Other';
+    const entry = categories.get(category) ?? { category, count: 0, enabled: 0 };
+    entry.count += 1;
+    if (row.enabled) entry.enabled += 1;
+    categories.set(category, entry);
+  }
+
+  return {
+    total: rows.length,
+    enabled: rows.filter((row) => row.enabled).length,
+    disabled: rows.filter((row) => !row.enabled).length,
+    custom: rows.filter((row) => row.source === 'custom').length,
+    builtin: rows.filter((row) => row.source === 'builtin').length,
+    plugin: rows.filter((row) => row.source === 'plugin').length,
+    categories: [...categories.values()].sort((left, right) => {
+      if (right.count !== left.count) return right.count - left.count;
+      return left.category.localeCompare(right.category);
+    }),
   };
 }

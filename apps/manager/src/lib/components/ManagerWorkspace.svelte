@@ -75,7 +75,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
 <svelte:window on:resize={() => void updateTabSlider()} />
 
 <AppShell
-  fullBleed={activePage === 'nodes' || activePage === 'assets'}
+  fullBleed={activePage === 'nodes' || activePage === 'assets' || activePage === 'node-manager'}
   collapseHeader={false}
 >
   <div slot="headerActions">

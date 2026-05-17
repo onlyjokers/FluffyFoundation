@@ -6,6 +6,7 @@ import type { SemanticGraphSnapshot } from '@shugu/node-core';
 import {
   buildAgentCapabilityRows,
   createAgentCapabilityCommand,
+  summarizeAgentCapabilityRows,
 } from './agent-capability-manager';
 
 const snapshot = (): SemanticGraphSnapshot => ({
@@ -135,4 +136,22 @@ test('createAgentCapabilityCommand emits a semantic command with source and reas
       aiNotes: 'Internal beta node',
     }
   );
+});
+
+test('summarizeAgentCapabilityRows counts AI availability by source and category', () => {
+  const summary = summarizeAgentCapabilityRows(buildAgentCapabilityRows(snapshot()));
+
+  assert.deepEqual(summary, {
+    total: 3,
+    enabled: 2,
+    disabled: 1,
+    custom: 1,
+    builtin: 1,
+    plugin: 1,
+    categories: [
+      { category: 'Custom', count: 1, enabled: 1 },
+      { category: 'Display', count: 1, enabled: 0 },
+      { category: 'Plugin', count: 1, enabled: 1 },
+    ],
+  });
 });
