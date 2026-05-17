@@ -9,6 +9,7 @@ import {
   applySemanticCommand,
   cloneAgentCapabilities,
   cloneCustomDefinitions,
+  createCustomNodeDefinitionNode,
   createSemanticCommandBus,
   cloneGroups,
   cloneGraph,
@@ -45,6 +46,7 @@ export class SemanticGraphAuthorityService {
     const service = new SemanticGraphAuthorityService();
     service.storagePath = storagePath;
     service.persisted = service.load();
+    service.syncCustomNodeRegistry();
     return service;
   }
 
@@ -64,6 +66,7 @@ export class SemanticGraphAuthorityService {
       executeCommandForClientId: () => undefined,
     });
     this.persisted = this.load();
+    this.syncCustomNodeRegistry();
   }
 
   getSnapshot(): SemanticGraphSnapshot {
@@ -91,6 +94,7 @@ export class SemanticGraphAuthorityService {
           customDefinitions: cloneCustomDefinitions(this.persisted.customDefinitions),
           agentCapabilities: cloneAgentCapabilities(this.persisted.agentCapabilities),
         };
+        this.syncCustomNodeRegistry();
         this.persist();
         return result;
       }
@@ -112,6 +116,12 @@ export class SemanticGraphAuthorityService {
         customDefinitions: cloneCustomDefinitions(result.snapshot.customDefinitions),
         agentCapabilities: cloneAgentCapabilities(result.snapshot.agentCapabilities),
       };
+      if (
+        result.command.type === 'definition.custom.upsert' ||
+        result.command.type === 'definition.custom.remove'
+      ) {
+        this.syncCustomNodeRegistry();
+      }
       this.persist();
     }
     return result;
@@ -163,6 +173,16 @@ export class SemanticGraphAuthorityService {
       ),
       agentCapabilities: cloneAgentCapabilities(raw.agentCapabilities),
     };
+  }
+
+  private syncCustomNodeRegistry(): void {
+    for (const definition of this.registry.list()) {
+      if (definition.type.startsWith('custom:')) this.registry.unregister(definition.type);
+    }
+    for (const definition of this.persisted.customDefinitions) {
+      if (!definition.definitionId) continue;
+      this.registry.register(createCustomNodeDefinitionNode(definition));
+    }
   }
 
   private persist(): void {

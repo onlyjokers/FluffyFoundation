@@ -150,8 +150,13 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
   const snapshot = service.getSnapshot() as never as {
     customDefinitions?: unknown[];
     agentCapabilities?: { nodes?: Array<{ nodeType: string; enabled: boolean; aiNotes?: string }> };
+    definitions?: Array<{ type: string; ports: { outputs: Array<{ id: string; type: string }> } }>;
   };
   assert.equal(snapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
+  assert.deepEqual(
+    snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.ports.outputs,
+    [{ id: 'value', label: 'Value', type: 'number' }]
+  );
   assert.deepEqual(snapshot.agentCapabilities?.nodes, [
     {
       nodeType: 'custom:triplet-pulse',
@@ -168,6 +173,10 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
   const restarted = SemanticGraphAuthorityService.withStoragePath(path);
   const restartedSnapshot = restarted.getSnapshot() as never as typeof snapshot;
   assert.equal(restartedSnapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
+  assert.equal(
+    restartedSnapshot.definitions?.some((definition) => definition.type === 'custom:triplet-pulse'),
+    true
+  );
   assert.equal(restartedSnapshot.agentCapabilities?.nodes?.[0]?.nodeType, 'custom:triplet-pulse');
 });
 

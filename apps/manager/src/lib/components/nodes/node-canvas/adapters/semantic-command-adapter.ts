@@ -16,6 +16,7 @@ export type CanvasSemanticCommandAdapter = {
   connect: (connection: EngineConnection) => boolean;
   removeNode: (nodeId: string) => boolean;
   setNodeParams: (nodeId: string, params: Record<string, unknown>) => boolean;
+  dispatch: (command: SemanticCommand) => boolean;
   dispatchForFixture: (command: SemanticCommand) => boolean;
 };
 
@@ -43,6 +44,7 @@ export function createCanvasSemanticCommandAdapter(opts: {
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
     removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    dispatch,
     dispatchForFixture: dispatch,
   };
 }
@@ -84,6 +86,7 @@ export function createNodeCanvasSemanticCommands(input: {
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
     removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    dispatch,
     dispatchForFixture: dispatch,
   };
 }

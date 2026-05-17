@@ -458,7 +458,17 @@
     isGroupPortNodeType,
     customNodeType,
     addCustomNodeDefinition,
+    upsertCustomNodeDefinitionCommand: (definition) =>
+      canvasCommands.dispatch({
+        type: 'definition.custom.upsert',
+        definition,
+      }),
     removeCustomNodeDefinition,
+    removeCustomNodeDefinitionCommand: (definitionId) =>
+      canvasCommands.dispatch({
+        type: 'definition.custom.remove',
+        definitionId,
+      }),
     getCustomNodeDefinition,
     upsertCustomNodeDefinition,
     customNodeDefinitions,

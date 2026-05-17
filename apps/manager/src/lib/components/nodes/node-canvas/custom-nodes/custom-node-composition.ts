@@ -26,7 +26,9 @@ type CustomNodeCompositionOptions = {
   setExpandedCustomGroupIds: (next: Set<string>) => void;
   customNodeType: (definitionId: string) => string;
   addCustomNodeDefinition: (def: CustomNodeDefinition) => void;
+  upsertCustomNodeDefinitionCommand?: (definition: CustomNodeDefinition) => void;
   removeCustomNodeDefinition: (definitionId: string) => void;
+  removeCustomNodeDefinitionCommand?: (definitionId: string) => void;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
   upsertCustomNodeDefinition: (def: CustomNodeDefinition) => void;
   customNodeDefinitions: Readable<CustomNodeDefinition[]>;
@@ -99,7 +101,9 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
     groupIdFromNode: opts.groupIdFromNode,
     customNodeType: opts.customNodeType,
     addCustomNodeDefinition: opts.addCustomNodeDefinition,
+    upsertCustomNodeDefinitionCommand: opts.upsertCustomNodeDefinitionCommand,
     removeCustomNodeDefinition: opts.removeCustomNodeDefinition,
+    removeCustomNodeDefinitionCommand: opts.removeCustomNodeDefinitionCommand,
     getCustomNodeDefinition: opts.getCustomNodeDefinition,
     readCustomNodeState: opts.readCustomNodeState,
     writeCustomNodeState: opts.writeCustomNodeState,

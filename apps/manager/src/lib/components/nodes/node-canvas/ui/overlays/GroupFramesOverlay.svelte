@@ -200,22 +200,22 @@
                 <Button
                   variant="ghost"
                   size="sm"
-                  ariaLabel="Denodalize"
-                  title="Denodalize"
+                  ariaLabel="Denodelize"
+                  title="Denodelize"
                   on:click={() => onDenodalize(group.id)}
                 >
-                  {#if isActionsCompact}↩{:else}Denodalize{/if}
+                  {#if isActionsCompact}↩{:else}Denodelize{/if}
                 </Button>
               {:else}
                 {#if !isAiSpace}
                   <Button
                     variant="ghost"
                     size="sm"
-                    ariaLabel="Nodalization"
-                    title="Nodalization"
+                    ariaLabel="Nodelization"
+                    title="Nodelization"
                     on:click={() => onNodalize(group.id)}
                   >
-                    {#if isActionsCompact}⧉{:else}Nodalization{/if}
+                    {#if isActionsCompact}⧉{:else}Nodelization{/if}
                   </Button>
                   <Button
                     variant="ghost"
