@@ -463,6 +463,9 @@
         type: 'definition.custom.upsert',
         definition,
       }),
+    replaceSemanticGraphCommand: (snapshot) => {
+      void syncImportedGraphToServerSemantic(snapshot);
+    },
     removeCustomNodeDefinition,
     removeCustomNodeDefinitionCommand: (definitionId) =>
       canvasCommands.dispatch({

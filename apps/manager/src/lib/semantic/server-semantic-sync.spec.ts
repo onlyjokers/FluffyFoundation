@@ -314,6 +314,39 @@ test('applyServerSemanticSnapshot mirrors server groups into Node Graph UI group
   ]);
 });
 
+test('applyServerSemanticSnapshot mirrors server custom node definitions into Manager custom-node store', () => {
+  let syncedDefinitions: unknown[] = [];
+
+  applyServerSemanticSnapshot({
+    snapshot: {
+      ...snapshot([]),
+      customDefinitions: [
+        {
+          definitionId: 'def-server',
+          name: 'Server Custom',
+          template: { nodes: [], connections: [] },
+          ports: [],
+        },
+      ],
+    },
+    nodeEngine: {
+      loadGraph: () => undefined,
+    },
+    setCustomNodeDefinitions: (definitions) => {
+      syncedDefinitions = definitions;
+    },
+  });
+
+  assert.deepEqual(syncedDefinitions, [
+    {
+      definitionId: 'def-server',
+      name: 'Server Custom',
+      template: { nodes: [], connections: [] },
+      ports: [],
+    },
+  ]);
+});
+
 test('migration coordinator imports old local project only once when server graph is empty', () => {
   const sent: unknown[] = [];
   const storage = new Map<string, string>();

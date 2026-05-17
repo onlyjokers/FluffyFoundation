@@ -2,6 +2,7 @@
 import type { SemanticGraphSnapshot, SemanticGroup, SemanticPartition } from '@shugu/node-core';
 import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/protocol';
 import type { GraphState } from '$lib/nodes/types';
+import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeGroup } from '$lib/components/nodes/node-canvas/controllers/group-controller';
 
 export const SERVER_SEMANTIC_MIGRATION_KEY = 'shugu-server-semantic-migrated-v1';
@@ -32,6 +33,7 @@ export type ServerSemanticSyncSdk = {
 };
 
 export type ServerSemanticNodeGroupsSync = (groups: NodeGroup[]) => void;
+export type ServerSemanticCustomDefinitionsSync = (definitions: CustomNodeDefinition[]) => void;
 
 function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGraphSnapshot | null {
   if (!message.ok) return null;
@@ -147,10 +149,14 @@ export function applyServerSemanticSnapshot(input: {
   snapshot: SemanticGraphSnapshot;
   nodeEngine: ServerSemanticNodeEngine;
   setNodeGroups?: ServerSemanticNodeGroupsSync;
+  setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
 }): void {
   const currentGraph = input.nodeEngine.exportGraph?.();
   const nextGraph = graphFromServerSemanticSnapshot(input.snapshot, currentGraph);
   input.setNodeGroups?.(groupsFromServerSemanticSnapshot(input.snapshot));
+  input.setCustomNodeDefinitions?.(
+    cloneJsonValue((input.snapshot.customDefinitions ?? []) as CustomNodeDefinition[])
+  );
 
   if (
     currentGraph &&
@@ -209,6 +215,7 @@ export function bindServerSemanticSync(input: {
   nodeEngine: ServerSemanticNodeEngine;
   migrationCoordinator: ServerSemanticMigrationCoordinator;
   setNodeGroups?: ServerSemanticNodeGroupsSync;
+  setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
   onSnapshot?: (snapshot: SemanticGraphSnapshot) => void;
 }): () => void {
   let requestedInitialSnapshot = false;
@@ -218,6 +225,7 @@ export function bindServerSemanticSync(input: {
       snapshot,
       nodeEngine: input.nodeEngine,
       setNodeGroups: input.setNodeGroups,
+      setCustomNodeDefinitions: input.setCustomNodeDefinitions,
     });
     input.migrationCoordinator.maybeImport(snapshot);
   };

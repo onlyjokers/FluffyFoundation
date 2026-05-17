@@ -72,6 +72,7 @@ type CustomNodeActionsOptions = {
   customNodeType: (definitionId: string) => string;
   addCustomNodeDefinition: (def: CustomNodeDefinition) => void;
   upsertCustomNodeDefinitionCommand?: (definition: CustomNodeDefinition) => void;
+  replaceSemanticGraphCommand?: (state: { graph: GraphState; groups: NodeGroup[] }) => void;
   removeCustomNodeDefinition: (definitionId: string) => void;
   removeCustomNodeDefinitionCommand?: (definitionId: string) => void;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
@@ -599,6 +600,10 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     }
 
     opts.setSelectedNode(motherNodeId);
+    opts.replaceSemanticGraphCommand?.({
+      graph: opts.nodeEngine.exportGraph(),
+      groups: get(opts.groupController.nodeGroups) ?? [],
+    });
   };
 
   return { handleUncoupleCustomNode, handleDenodelizeGroup, handleNodelizeGroup };

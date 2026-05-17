@@ -27,6 +27,7 @@ type CustomNodeCompositionOptions = {
   customNodeType: (definitionId: string) => string;
   addCustomNodeDefinition: (def: CustomNodeDefinition) => void;
   upsertCustomNodeDefinitionCommand?: (definition: CustomNodeDefinition) => void;
+  replaceSemanticGraphCommand?: (state: { graph: GraphState; groups: NodeGroup[] }) => void;
   removeCustomNodeDefinition: (definitionId: string) => void;
   removeCustomNodeDefinitionCommand?: (definitionId: string) => void;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
@@ -102,6 +103,7 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
     customNodeType: opts.customNodeType,
     addCustomNodeDefinition: opts.addCustomNodeDefinition,
     upsertCustomNodeDefinitionCommand: opts.upsertCustomNodeDefinitionCommand,
+    replaceSemanticGraphCommand: opts.replaceSemanticGraphCommand,
     removeCustomNodeDefinition: opts.removeCustomNodeDefinition,
     removeCustomNodeDefinitionCommand: opts.removeCustomNodeDefinitionCommand,
     getCustomNodeDefinition: opts.getCustomNodeDefinition,

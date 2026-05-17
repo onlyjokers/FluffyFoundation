@@ -18,6 +18,7 @@ import { nodeEngine } from '$lib/nodes/engine';
 import { parameterRegistry } from '../parameters/registry';
 import { registerDefaultControlParameters } from '../parameters/presets';
 import { readLocalProjectForServerMigration } from '$lib/project/projectManager';
+import { replaceCustomNodeDefinitions } from '$lib/nodes/custom-nodes/store';
 import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
 import {
     bindServerSemanticSync,
@@ -238,6 +239,7 @@ export function connect(config: ManagerSDKConfig): void {
         nodeEngine,
         migrationCoordinator,
         setNodeGroups: (groups) => nodeGroupsState.set(groups),
+        setCustomNodeDefinitions: replaceCustomNodeDefinitions,
         onSnapshot: (snapshot) => semanticSnapshot.set(snapshot),
     });
 
