@@ -14,7 +14,9 @@ import type { Connection as EngineConnection, NodeInstance } from '$lib/nodes/ty
 export type CanvasSemanticCommandAdapter = {
   addNode: (node: NodeInstance) => boolean;
   connect: (connection: EngineConnection) => boolean;
+  removeNode: (nodeId: string) => boolean;
   setNodeParams: (nodeId: string, params: Record<string, unknown>) => boolean;
+  dispatch: (command: SemanticCommand) => boolean;
   dispatchForFixture: (command: SemanticCommand) => boolean;
 };
 
@@ -40,7 +42,9 @@ export function createCanvasSemanticCommandAdapter(opts: {
   return {
     addNode: (node) => dispatch({ type: 'node.add', node }),
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    dispatch,
     dispatchForFixture: dispatch,
   };
 }
@@ -55,6 +59,7 @@ function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPa
 function canvasRequestId(command: SemanticCommand): string {
   if (command.type === 'node.add') return `canvas:node.add:${command.node.id}`;
   if (command.type === 'node.connect') return `canvas:node.connect:${command.connection.id}`;
+  if (command.type === 'node.remove') return `canvas:node.remove:${command.nodeId}`;
   if (command.type === 'node.params.update') return `canvas:node.params.update:${command.nodeId}`;
   return `canvas:${command.type}`;
 }
@@ -79,7 +84,9 @@ export function createNodeCanvasSemanticCommands(input: {
   return {
     addNode: (node) => dispatch({ type: 'node.add', node }),
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    dispatch,
     dispatchForFixture: dispatch,
   };
 }

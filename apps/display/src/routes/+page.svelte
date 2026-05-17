@@ -15,6 +15,7 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     videoState,
     imageState,
     screenOverlay,
+    textOverlay,
     initializeDisplay,
     destroyDisplay,
     executeControl,
@@ -105,6 +106,17 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
       style={`background:${sampledScreenOverlay.color}; opacity:${sampledScreenOverlay.opacity}`}
     ></div>
   {/if}
+
+  {#if isConnected && $textOverlay.visible}
+    <div class="text-overlay">
+      <div
+        class="text-panel"
+        style={`color:${$textOverlay.color}; background:${$textOverlay.backgroundColor}`}
+      >
+        {$textOverlay.text}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -120,5 +132,27 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     inset: 0;
     z-index: 1;
     pointer-events: none;
+  }
+
+  .text-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(24px, 6vw, 96px);
+    pointer-events: none;
+  }
+
+  .text-panel {
+    max-width: min(980px, 92vw);
+    padding: clamp(18px, 3vw, 44px) clamp(22px, 4vw, 56px);
+    border-radius: 8px;
+    font-size: clamp(32px, 6vw, 88px);
+    line-height: 1.16;
+    text-align: center;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 </style>

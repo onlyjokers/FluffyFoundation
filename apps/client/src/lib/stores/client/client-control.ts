@@ -17,6 +17,7 @@ import { executeDeviceControl } from './client-control/device-control-handler';
 import { recordE2ECommand } from './client-control/e2e-recorder';
 import { executeMediaControl } from './client-control/media-control-handler';
 import { handlePluginControlMessage as executePluginControlMessage } from './client-control/plugin-control-handler';
+import { executeTextControl } from './client-control/text-control-handler';
 import { executeVisualControl } from './client-control/visual-control-handler';
 import type { ClientControlDeps } from './client-control/types';
 import { asRecord } from './client-control/types';
@@ -66,6 +67,7 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
 
       if (executeDeviceControl(deps, action, payload, delaySeconds)) return;
       if (executeMediaControl(deps, action, payload, delaySeconds)) return;
+      if (deps.textOverlay && executeTextControl({ textOverlay: deps.textOverlay }, action, payload)) return;
       if (executeVisualControl(action, payload)) return;
       if (action === 'shutdown') {
         deps.stopAllCleanup?.();

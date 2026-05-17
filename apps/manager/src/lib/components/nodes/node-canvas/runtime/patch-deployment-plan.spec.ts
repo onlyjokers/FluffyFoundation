@@ -30,15 +30,19 @@ const connection = (
   targetPortId: string
 ): Connection => ({ id, sourceNodeId, sourcePortId, targetNodeId, targetPortId });
 
-const plan = (graph: GraphState, opts: Partial<Parameters<typeof resolvePatchDeploymentPlan>[0]> = {}) =>
+const plan = (
+  graph: GraphState,
+  opts: Partial<Parameters<typeof resolvePatchDeploymentPlan>[0]> = {}
+) =>
   resolvePatchDeploymentPlan({
     graph,
     disabledNodeIds: new Set(),
-    clientIdsInOrder: () => ['client-a', 'display-1'],
+    clientIdsInOrder: () => ['client-a', 'display-1', 'display-2'],
     audienceClientIdsInOrder: () => ['client-a'],
     getManagerClients: () => [
       { clientId: 'client-a', group: 'audience' },
       { clientId: 'display-1', group: 'display' },
+      { clientId: 'display-2', group: 'display' },
     ],
     localDisplayTargetId: 'local:display',
     getDisplayAvailability: () => ({
@@ -60,7 +64,10 @@ const plan = (graph: GraphState, opts: Partial<Parameters<typeof resolvePatchDep
 test('resolvePatchDeploymentPlan routes a single patch root to a connected client-object', () => {
   errors.length = 0;
   const graph: GraphState = {
-    nodes: [node('root', 'image-out'), node('client-node', 'client-object', {}, { clientId: 'client-a' })],
+    nodes: [
+      node('root', 'image-out'),
+      node('client-node', 'client-object', {}, { clientId: 'client-a' }),
+    ],
     connections: [connection('c1', 'root', 'cmd', 'client-node', 'in')],
   };
 
@@ -82,10 +89,102 @@ test('resolvePatchDeploymentPlan routes display-object to local display before r
   const result = plan(graph);
 
   assert.ok(result);
-  assert.deepEqual(result.targetClientIds, ['local:display', 'display-1']);
+  assert.deepEqual(result.targetClientIds, ['local:display', 'display-1', 'display-2']);
   assert.deepEqual(result.rootIdsByClientId.get('local:display'), ['root']);
   assert.deepEqual(result.rootIdsByClientId.get('display-1'), ['root']);
-  assert.equal(result.planKey, 'display-1=root|local:display=root');
+  assert.deepEqual(result.rootIdsByClientId.get('display-2'), ['root']);
+  assert.equal(result.planKey, 'display-1=root|display-2=root|local:display=root');
+});
+
+test('resolvePatchDeploymentPlan ignores disconnected remote displays', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph, {
+    getDisplayAvailability: () => ({
+      hasLocalSession: false,
+      hasLocalReady: false,
+    }),
+    getManagerClients: () => [
+      { clientId: 'client-a', group: 'audience', connected: true },
+      { clientId: 'display-1', group: 'display', connected: false },
+      { clientId: 'display-2', group: 'display', connected: true },
+    ],
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['display-2']);
+  assert.equal(result.rootIdsByClientId.has('display-1'), false);
+  assert.deepEqual(result.rootIdsByClientId.get('display-2'), ['root']);
+});
+
+test('resolvePatchDeploymentPlan records target revisions for reconnect redeploys', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph, {
+    getDisplayAvailability: () => ({
+      hasLocalSession: true,
+      hasLocalReady: true,
+      localSessionKey: 'local-ready-2',
+    }),
+    getManagerClients: () => [
+      { clientId: 'client-a', group: 'audience', connectedAt: 100 },
+      { clientId: 'display-1', group: 'display', connectedAt: 200 },
+      { clientId: 'display-2', group: 'display', connectedAt: 300 },
+    ],
+  });
+
+  assert.ok(result);
+  assert.equal(result.targetRevisionByClientId.get('local:display'), 'local-ready-2');
+  assert.equal(result.targetRevisionByClientId.get('display-1'), '200');
+  assert.equal(result.targetRevisionByClientId.get('display-2'), '300');
+});
+
+test('resolvePatchDeploymentPlan avoids local display when the paired session is not ready', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph, {
+    getDisplayAvailability: () => ({
+      hasLocalSession: true,
+      hasLocalReady: false,
+    }),
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['display-1', 'display-2']);
+  assert.equal(result.rootIdsByClientId.has('local:display'), false);
+  assert.equal(result.planKey, 'display-1=root|display-2=root');
+});
+
+test('resolvePatchDeploymentPlan routes display-object to the selected display client', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [
+      node('root', 'video-out'),
+      node('display-node', 'display-object', {}, { displayId: 'display-2' }),
+    ],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph);
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['display-2']);
+  assert.equal(result.rootIdsByClientId.has('local:display'), false);
+  assert.equal(result.rootIdsByClientId.has('display-1'), false);
+  assert.deepEqual(result.rootIdsByClientId.get('display-2'), ['root']);
+  assert.equal(result.planKey, 'display-2=root');
 });
 
 test('resolvePatchDeploymentPlan reports multiple enabled roots without active deploy routing', () => {

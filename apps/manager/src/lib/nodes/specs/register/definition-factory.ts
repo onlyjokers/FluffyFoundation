@@ -6,12 +6,13 @@ import { type ControlAction, type ControlPayload } from '@shugu/protocol';
 import type { NodeDefinition, ProcessContext } from '../../types';
 import { parameterRegistry } from '$lib/parameters/registry';
 import { displayTransport, getSDK, state } from '$lib/stores/manager';
+import { nodeEngine } from '$lib/nodes/engine';
 import { midiNodeBridge, type MidiSource } from '$lib/features/midi/midi-node-bridge';
 import { mapRangeWithOptions } from '$lib/features/midi/midi-math';
 import { applyClientSelectionFromInputs, clientSelectionState, displayObjectLogLastAt, getSelectedClientIndexOut, midiBooleanState, midiSourceKey } from './client-selection';
 import { createCommandProcess } from './command-mapping';
 import { coreRuntimeImplByKind } from './core-runtime';
-import { targetManagedClient } from './client-target';
+import { sendDisplayNodeCommand } from './display-targets';
 import { asRecord, coerceBoolean, isFiniteNumber } from './helpers';
 import type { MidiBooleanState, NodeRuntime, NodeSpec } from './types';
 
@@ -87,14 +88,21 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
       return {
         ...base,
         process: () => ({}),
-        onSink: (inputs, _config, context) => {
+        onSink: (inputs, config, context) => {
           const raw = inputs.in;
           const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
           if (commands.length === 0) return;
 
           const sdk = getSDK();
+          const selectedDisplayId = typeof config.displayId === 'string' ? String(config.displayId).trim() : '';
           const availability = displayTransport.getAvailability();
-          if (!availability.hasLocalSession && !sdk) return;
+          const nodeId = typeof context?.nodeId === 'string' ? context.nodeId : 'display-object';
+          const runtimeNode = nodeEngine.getNode(nodeId);
+          const graphState = get(nodeEngine.graphState);
+          const computedInputs = nodeEngine.getLastComputedInputs(nodeId);
+          if (selectedDisplayId) {
+            if (!sdk) return;
+          } else if (!availability.hasLocalSession && !sdk) return;
 
           if (import.meta.env.DEV && !availability.hasLocalSession && !availability.hasRemoteDisplay) {
             const nodeKey = typeof context?.nodeId === 'string' ? context.nodeId : 'display-object';
@@ -117,9 +125,32 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
             const payload = payloadRecord as ControlPayload;
             const executeAt = typeof cmdRecord.executeAt === 'number' ? cmdRecord.executeAt : undefined;
 
-            const sendResult = displayTransport.sendControl(action, payload, executeAt);
+            const sendResult = sendDisplayNodeCommand({
+              nodeId,
+              clients: (get(state).clients ?? []).map((client) => ({
+                clientId: String(client.clientId ?? ''),
+                group: String(client.group ?? ''),
+                connected: client.connected !== false,
+              })),
+              node: runtimeNode
+                ? {
+                    config: runtimeNode.config as Record<string, unknown>,
+                    inputValues: runtimeNode.inputValues as Record<string, unknown>,
+                  }
+                : selectedDisplayId
+                  ? { config: { displayId: selectedDisplayId }, inputValues: {} }
+                  : null,
+              computedInputs,
+              graph: graphState,
+              action,
+              payload,
+              executeAt,
+              sendLocalControl: (nextAction, nextPayload, nextExecuteAt) =>
+                displayTransport.sendControl(nextAction, nextPayload, nextExecuteAt),
+              sendDisplayOperation: sdk ? (operation) => sdk.sendDisplayOperation(operation) : undefined,
+            });
 
-            if (import.meta.env.DEV && (action === 'showImage' || action === 'hideImage')) {
+            if (import.meta.env.DEV && (action === 'showImage' || action === 'hideImage' || action === 'showText' || action === 'hideText')) {
               const nodeKey = typeof context?.nodeId === 'string' ? context.nodeId : 'display-object';
               const now = Date.now();
               const lastAt = displayObjectLogLastAt.get(nodeKey) ?? 0;
@@ -127,11 +158,15 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
                 displayObjectLogLastAt.set(nodeKey, now);
                 const urlCandidate = (payload as Record<string, unknown>)?.url;
                 const url = typeof urlCandidate === 'string' ? urlCandidate : '';
+                const textCandidate = (payload as Record<string, unknown>)?.text;
+                const text = typeof textCandidate === 'string' ? textCandidate : '';
                 console.info('[Manager] display-object', {
                   nodeId: context?.nodeId,
                   via: sendResult.route,
+                  targetDisplayId: selectedDisplayId || undefined,
                   action,
                   urlChars: url ? url.length : null,
+                  textChars: text ? text.length : null,
                 });
               }
             }
@@ -141,6 +176,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
           // Clear any long-lived effects when the Display route is disabled (e.g. group gate closed / graph stop).
           displayTransport.sendControl('stopMedia', {}, undefined);
           displayTransport.sendControl('hideImage', {}, undefined);
+          displayTransport.sendControl('hideText', {}, undefined);
           displayTransport.sendControl(
             'screenColor',
             { color: '#000000', opacity: 0, mode: 'solid' },

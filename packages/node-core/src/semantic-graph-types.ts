@@ -36,12 +36,61 @@ export type SemanticDefinition = {
   aiSummary?: AgentNodeDefinitionSummary;
 };
 
+export type AgentGroupPort = {
+  id: string;
+  type: string;
+  label?: string;
+  description?: string;
+};
+
+export type AgentGroupInterface = {
+  publicInputs?: AgentGroupPort[];
+  publicOutputs?: AgentGroupPort[];
+  exposedNodeIds?: string[];
+  callableCommands?: string[];
+  eventBindings?: string[];
+};
+
+export type AgentGroupDeniedSurface =
+  | 'canvas'
+  | 'client'
+  | 'display'
+  | 'device'
+  | 'media'
+  | 'network'
+  | 'partition'
+  | 'secrets'
+  | 'storage';
+
+export type AgentGroupPolicy = {
+  enabled?: boolean;
+  allowedActorIds?: string[];
+  allowedCommands?: string[];
+  deniedSurfaces?: AgentGroupDeniedSurface[];
+  targetScope?: {
+    nodeIds?: string[];
+    allowNewNodes?: boolean;
+    allowedNodeTypes?: string[];
+    deniedNodeTypes?: string[];
+  };
+  budgets?: {
+    maxNodes?: number;
+    maxConnections?: number;
+    maxParamsPerCommand?: number;
+    maxCommandsPerTurn?: number;
+    maxRetries?: number;
+  };
+  approvalRequired?: boolean;
+  rollbackOnReject?: boolean;
+};
+
 export type SemanticGroup = {
   id: string;
   parentId: string | null;
   name: string;
   nodeIds: string[];
   disabled: boolean;
+  kind?: 'group' | 'ai-space';
   archived?: boolean;
   runtimeActive?: boolean;
   owner?: {
@@ -57,6 +106,8 @@ export type SemanticGroup = {
   transferable?: boolean;
   surface?: ControlPlaneSurface;
   visibility?: { defaultAccess: ControlPlaneVisibilityAccess };
+  agentInterface?: AgentGroupInterface;
+  agentPolicy?: AgentGroupPolicy;
 };
 
 export type SemanticPartition = ExecutionPartition;
@@ -80,6 +131,46 @@ export type RuntimeOverride = {
 export type DeviceCapability = { deviceId: string; capabilities: string[]; status?: string };
 export type SemanticError = { code: string; message: string; targetId?: string };
 export type SemanticPermission = { actorId: string; operations: string[] };
+
+export type CustomNodePortSide = 'input' | 'output';
+
+export type CustomNodePortBinding = {
+  nodeId: string;
+  portId: string;
+};
+
+export type CustomNodePort = {
+  portKey: string;
+  side: CustomNodePortSide;
+  label: string;
+  type: string;
+  pinned: boolean;
+  y: number;
+  binding: CustomNodePortBinding;
+};
+
+export type CustomNodeDefinition = {
+  definitionId: string;
+  name: string;
+  template: GraphState;
+  ports: CustomNodePort[];
+};
+
+export type AgentCapabilityNodeSource = 'builtin' | 'custom' | 'plugin';
+
+export type AgentCapabilityNodeSetting = {
+  nodeType: string;
+  enabled: boolean;
+  source?: AgentCapabilityNodeSource;
+  aiNotes?: string;
+  disabledReason?: string;
+  updatedAt?: string;
+};
+
+export type AgentCapabilitySettings = {
+  version: 1;
+  nodes: AgentCapabilityNodeSetting[];
+};
 
 export type SemanticValidationError = {
   code: string;
@@ -107,6 +198,8 @@ export type SemanticGraphSnapshot = {
   revision: number;
   nodes: SemanticNode[];
   definitions: SemanticDefinition[];
+  customDefinitions: CustomNodeDefinition[];
+  agentCapabilities: AgentCapabilitySettings;
   connections: Connection[];
   groups: SemanticGroup[];
   partitions: SemanticPartition[];
@@ -120,6 +213,8 @@ export type SemanticGraphSnapshot = {
 export type SemanticSnapshotInput = {
   graph: GraphState;
   definitions?: Array<Partial<NodeDefinition> & Pick<NodeDefinition, 'type'>>;
+  customDefinitions?: CustomNodeDefinition[];
+  agentCapabilities?: AgentCapabilitySettings;
   groups?: Array<Record<string, unknown>>;
   partitions?: SemanticPartition[];
   runtimeStatus?: RuntimeStatus;
@@ -132,19 +227,34 @@ export type SemanticSnapshotInput = {
 
 export type SemanticCommand =
   | { type: 'graph.snapshot' }
+  | { type: 'definition.custom.upsert'; definition: CustomNodeDefinition }
+  | { type: 'definition.custom.remove'; definitionId: string }
+  | {
+      type: 'agent.capability.set';
+      nodeType: string;
+      enabled: boolean;
+      source?: AgentCapabilityNodeSource;
+      aiNotes?: string;
+      disabledReason?: string;
+    }
   | {
       type: 'graph.replace';
       graph: GraphState;
       groups?: SemanticGroup[];
       partitions?: SemanticPartition[];
     }
-  | { type: 'node.add'; node: NodeInstance }
-  | { type: 'node.remove'; nodeId: string }
-  | { type: 'node.archive'; nodeId: string }
-  | { type: 'node.restore'; nodeId: string }
-  | { type: 'node.connect'; connection: Connection }
-  | { type: 'node.disconnect'; connectionId: string }
-  | { type: 'node.params.update'; nodeId: string; params: Record<string, unknown> }
+  | { type: 'node.add'; node: NodeInstance; scopeGroupId?: string }
+  | { type: 'node.remove'; nodeId: string; scopeGroupId?: string }
+  | { type: 'node.archive'; nodeId: string; scopeGroupId?: string }
+  | { type: 'node.restore'; nodeId: string; scopeGroupId?: string }
+  | { type: 'node.connect'; connection: Connection; scopeGroupId?: string }
+  | { type: 'node.disconnect'; connectionId: string; scopeGroupId?: string }
+  | {
+      type: 'node.params.update';
+      nodeId: string;
+      params: Record<string, unknown>;
+      scopeGroupId?: string;
+    }
   | { type: 'group.create'; group: SemanticGroup }
   | { type: 'group.update'; groupId: string; patch: Partial<SemanticGroup> }
   | { type: 'group.archive'; groupId: string }
@@ -268,6 +378,8 @@ export type CommandState = {
   graph: GraphState;
   groups: SemanticGroup[];
   partitions: SemanticPartition[];
+  customDefinitions: CustomNodeDefinition[];
+  agentCapabilities: AgentCapabilitySettings;
   proposals: SemanticProposal[];
   runtimeStatus: RuntimeStatus;
   revision: number;

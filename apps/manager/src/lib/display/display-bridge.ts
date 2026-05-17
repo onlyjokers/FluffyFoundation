@@ -92,7 +92,8 @@ type DisplayPluginMessage = {
 export type AssetManifestSnapshot = {
   manifestId: string;
   assets: string[];
-  updatedAt?: number; entries?: unknown[];
+  updatedAt?: number;
+  entries?: unknown[];
 };
 
 type DisplayReadyMessage = {
@@ -112,7 +113,7 @@ type DisplayNodeMediaMessage = {
 const DISPLAY_DEV_PORT = 5175;
 const DEFAULT_SERVER_PORT = 3001;
 const ASSET_READ_TOKEN_STORAGE_KEY = 'shugu-asset-read-token';
-const DISPLAY_BASE_PATH = '/display';
+const DISPLAY_BASE_PATH = '/display/';
 const LOCAL_MEDIA_BROADCAST_DEDUP_MS = 1500;
 const LOCAL_DISPLAY_PAIR_RETRY_DELAYS_MS = [250, 750, 1500, 2500];
 
@@ -191,10 +192,15 @@ function createRandomToken(prefix: string): string {
   return `${prefix}${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
 }
 
-function getDefaultDisplayUrl(): URL {
-  const base = new URL(window.location.origin);
+export function buildDefaultDisplayUrl(
+  opts: {
+    origin: string;
+    dev?: boolean;
+  } = { origin: window.location.origin, dev: import.meta.env.DEV }
+): URL {
+  const base = new URL(opts.origin);
   // In dev, Display runs on a dedicated Vite port. In production, it is served under `DISPLAY_BASE_PATH` on the same origin.
-  if (import.meta.env.DEV) {
+  if (opts.dev ?? import.meta.env.DEV) {
     base.port = String(DISPLAY_DEV_PORT);
   }
   base.pathname = DISPLAY_BASE_PATH;
@@ -225,9 +231,12 @@ function stopCloseWatch(): void {
   }
 }
 
-function teardownPort(): void {
-  // Best-effort: clear any long-lived effects so an unpaired Display doesn't stay "stuck" showing old content.
-  if (controlPort) {
+function teardownPort(options: { cleanup?: boolean } = {}): void {
+  const cleanup = options.cleanup !== false;
+
+  // Best-effort: clear any long-lived effects when explicitly closing a Display.
+  // When opening another Display, keep the previous Display alive as a server-routed remote target.
+  if (controlPort && cleanup) {
     try {
       const cleanup: DisplayControlMessage[] = [
         {
@@ -245,6 +254,15 @@ function teardownPort(): void {
             { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
             { mode: 'all' },
             'hideImage',
+            {}
+          ) as unknown as ControlMessage,
+        },
+        {
+          type: 'shugu:display:control',
+          message: createControlMessage(
+            { actorId: 'manager', actorRole: 'manager', scopeGroupId: SYSTEM_SCOPE_GROUP_ID },
+            { mode: 'all' },
+            'hideText',
             {}
           ) as unknown as ControlMessage,
         },
@@ -379,16 +397,9 @@ export function openDisplay(options?: {
 }): void {
   if (typeof window === 'undefined') return;
 
-  if (displayWindow && !displayWindow.closed) {
-    try {
-      displayWindow.close();
-    } catch {
-      // ignore
-    }
-  }
   stopCloseWatch();
   displayWindow = null;
-  teardownPort();
+  teardownPort({ cleanup: false });
 
   const serverUrl = options?.serverUrl?.trim() ? options.serverUrl.trim() : getDefaultServerUrl();
   const assetReadToken =
@@ -399,7 +410,7 @@ export function openDisplay(options?: {
 
   const displayUrl = (() => {
     if (options?.displayUrl?.trim()) return new URL(options.displayUrl.trim());
-    return getDefaultDisplayUrl();
+    return buildDefaultDisplayUrl();
   })();
 
   displayUrl.searchParams.set('pairToken', pairToken);
@@ -458,7 +469,7 @@ export function pairDisplay(options?: {
     return;
   }
 
-  teardownPort();
+  teardownPort({ cleanup: false });
 
   const stateSnapshot = get(displayBridgeState);
   const displayUrl = stateSnapshot.displayUrl ? new URL(stateSnapshot.displayUrl) : null;
@@ -478,7 +489,7 @@ export function pairDisplay(options?: {
 
   const displayOrigin = options?.displayOrigin?.trim()
     ? options.displayOrigin.trim()
-    : (stateSnapshot.displayOrigin ?? getDefaultDisplayUrl().origin);
+    : (stateSnapshot.displayOrigin ?? buildDefaultDisplayUrl().origin);
 
   const channel = new MessageChannel();
   controlPort = channel.port1;

@@ -4,8 +4,12 @@
 import { Injectable } from '@nestjs/common';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   applySemanticCommand,
+  cloneAgentCapabilities,
+  cloneCustomDefinitions,
+  createCustomNodeDefinitionNode,
   createSemanticCommandBus,
   cloneGroups,
   cloneGraph,
@@ -13,6 +17,8 @@ import {
   registerDefaultNodeDefinitions,
   NodeRegistry,
   type GraphState,
+  type AgentCapabilitySettings,
+  type CustomNodeDefinition,
   type SemanticActor,
   type SemanticCommand,
   type SemanticCommandResult,
@@ -26,9 +32,11 @@ type PersistedSemanticGraph = {
   graph: GraphState;
   groups: SemanticGroup[];
   partitions: SemanticPartition[];
+  customDefinitions: CustomNodeDefinition[];
+  agentCapabilities: AgentCapabilitySettings;
 };
 
-const defaultStoragePath = join(process.cwd(), 'data', 'semantic-graph.json');
+const defaultStoragePath = fileURLToPath(new URL('../../data/semantic-graph.json', import.meta.url));
 const emptyGraph: GraphState = { nodes: [], connections: [] };
 
 @Injectable()
@@ -38,6 +46,7 @@ export class SemanticGraphAuthorityService {
     const service = new SemanticGraphAuthorityService();
     service.storagePath = storagePath;
     service.persisted = service.load();
+    service.syncCustomNodeRegistry();
     return service;
   }
 
@@ -57,6 +66,7 @@ export class SemanticGraphAuthorityService {
       executeCommandForClientId: () => undefined,
     });
     this.persisted = this.load();
+    this.syncCustomNodeRegistry();
   }
 
   getSnapshot(): SemanticGraphSnapshot {
@@ -81,7 +91,10 @@ export class SemanticGraphAuthorityService {
           graph: result.command.graph,
           groups: result.command.groups ?? [],
           partitions: result.command.partitions ?? [],
+          customDefinitions: cloneCustomDefinitions(this.persisted.customDefinitions),
+          agentCapabilities: cloneAgentCapabilities(this.persisted.agentCapabilities),
         };
+        this.syncCustomNodeRegistry();
         this.persist();
         return result;
       }
@@ -92,13 +105,23 @@ export class SemanticGraphAuthorityService {
           graph: cloneGraph(this.persisted.graph),
           groups: cloneGroups(this.persisted.groups),
           partitions: clonePartitions(this.persisted.partitions),
+          customDefinitions: cloneCustomDefinitions(this.persisted.customDefinitions),
+          agentCapabilities: cloneAgentCapabilities(this.persisted.agentCapabilities),
           proposals: [],
           runtimeStatus: { running: false, deployedPartitionIds: [] },
           revision: this.persisted.revision,
         }, result.command).graph,
         groups: result.snapshot.groups,
         partitions: result.snapshot.partitions,
+        customDefinitions: cloneCustomDefinitions(result.snapshot.customDefinitions),
+        agentCapabilities: cloneAgentCapabilities(result.snapshot.agentCapabilities),
       };
+      if (
+        result.command.type === 'definition.custom.upsert' ||
+        result.command.type === 'definition.custom.remove'
+      ) {
+        this.syncCustomNodeRegistry();
+      }
       this.persist();
     }
     return result;
@@ -109,11 +132,19 @@ export class SemanticGraphAuthorityService {
       graph: this.persisted.graph,
       groups: this.persisted.groups,
       partitions: this.persisted.partitions,
+      customDefinitions: this.persisted.customDefinitions,
+      agentCapabilities: this.persisted.agentCapabilities,
       definitions: this.registry.list(),
       runtimeStatus: { running: false, deployedPartitionIds: [] },
       permissions: [
-        { actorId: 'cli', operations: ['node.add', 'node.connect', 'node.params.update', 'graph.replace'] },
-        { actorId: 'canvas', operations: ['node.add', 'node.connect', 'node.params.update', 'graph.replace'] },
+        {
+          actorId: 'cli',
+          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+        },
+        {
+          actorId: 'canvas',
+          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+        },
       ],
       revision: this.persisted.revision,
     });
@@ -121,7 +152,14 @@ export class SemanticGraphAuthorityService {
 
   private load(): PersistedSemanticGraph {
     if (!existsSync(this.storagePath)) {
-      return { revision: 0, graph: emptyGraph, groups: [], partitions: [] };
+      return {
+        revision: 0,
+        graph: emptyGraph,
+        groups: [],
+        partitions: [],
+        customDefinitions: [],
+        agentCapabilities: { version: 1, nodes: [] },
+      };
     }
 
     const raw = JSON.parse(readFileSync(this.storagePath, 'utf8')) as Partial<PersistedSemanticGraph>;
@@ -130,7 +168,21 @@ export class SemanticGraphAuthorityService {
       graph: raw.graph ?? emptyGraph,
       groups: Array.isArray(raw.groups) ? raw.groups : [],
       partitions: Array.isArray(raw.partitions) ? raw.partitions : [],
+      customDefinitions: cloneCustomDefinitions(
+        Array.isArray(raw.customDefinitions) ? raw.customDefinitions : []
+      ),
+      agentCapabilities: cloneAgentCapabilities(raw.agentCapabilities),
     };
+  }
+
+  private syncCustomNodeRegistry(): void {
+    for (const definition of this.registry.list()) {
+      if (definition.type.startsWith('custom:')) this.registry.unregister(definition.type);
+    }
+    for (const definition of this.persisted.customDefinitions) {
+      if (!definition.definitionId) continue;
+      this.registry.register(createCustomNodeDefinitionNode(definition, this.registry.list()));
+    }
   }
 
   private persist(): void {

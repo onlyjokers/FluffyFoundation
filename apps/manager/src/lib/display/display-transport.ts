@@ -11,7 +11,12 @@
  */
 
 import { get, type Readable } from 'svelte/store';
-import { targetGroup, type ControlAction, type ControlPayload, type TargetSelector } from '@shugu/protocol';
+import {
+  targetGroup,
+  type ControlAction,
+  type ControlPayload,
+  type TargetSelector,
+} from '@shugu/protocol';
 import type { ManagerState } from '@shugu/sdk-manager';
 import type { DisplayBridgeState } from '$lib/display/display-bridge';
 
@@ -22,6 +27,7 @@ export type DisplayTransportAvailability = {
   hasLocalSession: boolean;
   hasLocalReady: boolean;
   hasRemoteDisplay: boolean;
+  localSessionKey: string;
 };
 
 export type DisplayTransportSendOptions = {
@@ -65,12 +71,23 @@ export type DisplayTransportDeps = {
 };
 
 function hasRemoteDisplayClients(manager: ManagerState): boolean {
-  return (manager.clients ?? []).some((c) => c.group === 'display');
+  return (manager.clients ?? []).some((c) => c.group === 'display' && c.connected !== false);
 }
 
-function getLocalRouteInfo(bridge: DisplayBridgeState): { hasLocalSession: boolean; hasLocalReady: boolean } {
+function getLocalRouteInfo(bridge: DisplayBridgeState): {
+  hasLocalSession: boolean;
+  hasLocalReady: boolean;
+  localSessionKey: string;
+} {
   const hasLocalSession = bridge.status === 'connected';
-  return { hasLocalSession, hasLocalReady: hasLocalSession && bridge.ready === true };
+  const readyAt =
+    typeof bridge.readyAt === 'number' && Number.isFinite(bridge.readyAt) ? bridge.readyAt : 0;
+  const pairToken = typeof bridge.pairToken === 'string' ? bridge.pairToken : '';
+  return {
+    hasLocalSession,
+    hasLocalReady: hasLocalSession && bridge.ready === true,
+    localSessionKey: hasLocalSession ? `${pairToken}:${readyAt}` : '',
+  };
 }
 
 export function createDisplayTransport(deps: DisplayTransportDeps): {
@@ -91,7 +108,7 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
   const getAvailability = (): DisplayTransportAvailability => {
     const manager = get(deps.managerState);
     const bridge = get(deps.displayBridgeState);
-    const { hasLocalSession, hasLocalReady } = getLocalRouteInfo(bridge);
+    const { hasLocalSession, hasLocalReady, localSessionKey } = getLocalRouteInfo(bridge);
     const hasRemoteDisplay = hasRemoteDisplayClients(manager);
 
     const route: DisplayTransportRoute = hasLocalSession
@@ -100,7 +117,7 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
         ? 'server'
         : 'none';
 
-    return { route, hasLocalSession, hasLocalReady, hasRemoteDisplay };
+    return { route, hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
   };
 
   const sendControl = (
@@ -113,7 +130,7 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
     const bridge = get(deps.displayBridgeState);
     const sdk = deps.getSDK();
 
-    const { hasLocalSession, hasLocalReady } = getLocalRouteInfo(bridge);
+    const { hasLocalSession, hasLocalReady, localSessionKey } = getLocalRouteInfo(bridge);
     const hasRemoteDisplay = hasRemoteDisplayClients(manager);
 
     let route: DisplayTransportRoute = 'none';
@@ -121,27 +138,38 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
     else if (hasRemoteDisplay) route = 'server';
 
     if (!hasLocalSession && !hasRemoteDisplay) {
-      return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+      return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
     }
 
     if (options?.localOnly) {
-      if (!hasLocalSession) return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+      if (!hasLocalSession)
+        return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
 
       const offset = typeof manager.timeSync?.offset === 'number' ? manager.timeSync.offset : 0;
       const executeAtLocal =
-        typeof executeAtServer === 'number' && Number.isFinite(executeAtServer) ? executeAtServer - offset : undefined;
+        typeof executeAtServer === 'number' && Number.isFinite(executeAtServer)
+          ? executeAtServer - offset
+          : undefined;
       deps.local.sendControl(action, payload, executeAtLocal);
-      return { route: 'local', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+      return { route: 'local', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
     }
 
     const offset = typeof manager.timeSync?.offset === 'number' ? manager.timeSync.offset : 0;
 
     if (hasLocalSession) {
       const executeAtLocal =
-        typeof executeAtServer === 'number' && Number.isFinite(executeAtServer) ? executeAtServer - offset : undefined;
+        typeof executeAtServer === 'number' && Number.isFinite(executeAtServer)
+          ? executeAtServer - offset
+          : undefined;
       deps.local.sendControl(action, payload, executeAtLocal);
       if (hasLocalReady && options?.forceServer !== true) {
-        return { route: 'local', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+        return {
+          route: 'local',
+          hasLocalSession,
+          hasLocalReady,
+          hasRemoteDisplay,
+          localSessionKey,
+        };
       }
     }
 
@@ -150,7 +178,7 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
       if (hasLocalSession) route = 'local+server';
     }
 
-    return { route, hasLocalSession, hasLocalReady, hasRemoteDisplay };
+    return { route, hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
   };
 
   const sendPlugin = (
@@ -163,7 +191,7 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
     const bridge = get(deps.displayBridgeState);
     const sdk = deps.getSDK();
 
-    const { hasLocalSession, hasLocalReady } = getLocalRouteInfo(bridge);
+    const { hasLocalSession, hasLocalReady, localSessionKey } = getLocalRouteInfo(bridge);
     const hasRemoteDisplay = hasRemoteDisplayClients(manager);
 
     let route: DisplayTransportRoute = 'none';
@@ -171,20 +199,28 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
     else if (hasRemoteDisplay) route = 'server';
 
     if (!hasLocalSession && !hasRemoteDisplay) {
-      return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+      return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
     }
 
     if (options?.localOnly) {
-      if (!hasLocalSession) return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay };
-      if (!deps.local.sendPlugin) return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+      if (!hasLocalSession)
+        return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
+      if (!deps.local.sendPlugin)
+        return { route: 'none', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
       deps.local.sendPlugin(pluginId, command, payload);
-      return { route: 'local', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+      return { route: 'local', hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
     }
 
     if (hasLocalSession && deps.local.sendPlugin) {
       deps.local.sendPlugin(pluginId, command, payload);
       if (hasLocalReady && options?.forceServer !== true) {
-        return { route: 'local', hasLocalSession, hasLocalReady, hasRemoteDisplay };
+        return {
+          route: 'local',
+          hasLocalSession,
+          hasLocalReady,
+          hasRemoteDisplay,
+          localSessionKey,
+        };
       }
     }
 
@@ -193,7 +229,7 @@ export function createDisplayTransport(deps: DisplayTransportDeps): {
       if (hasLocalSession) route = 'local+server';
     }
 
-    return { route, hasLocalSession, hasLocalReady, hasRemoteDisplay };
+    return { route, hasLocalSession, hasLocalReady, hasRemoteDisplay, localSessionKey };
   };
 
   return { getAvailability, sendControl, sendPlugin };

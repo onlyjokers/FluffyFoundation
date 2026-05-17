@@ -11,9 +11,12 @@ import type {
   SemanticCommandPolicy,
   SemanticActor,
   SemanticGraphSnapshot,
+  SemanticGroup,
 } from './semantic-graph-types.js';
 import {
   cloneGraph,
+  cloneAgentCapabilities,
+  cloneCustomDefinitions,
   cloneGroups,
   clonePartitions,
   cloneProposals,
@@ -61,6 +64,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     graph: cloneGraph(input.graph ?? { nodes: [], connections: [] }),
     groups: normalizeGroups(input.groups),
     partitions: clonePartitions(input.partitions ?? []),
+    customDefinitions: cloneCustomDefinitions(input.customDefinitions),
+    agentCapabilities: cloneAgentCapabilities(input.agentCapabilities),
     proposals: cloneProposals(input.proposals ?? []),
     runtimeStatus: cloneRuntimeStatus(input.runtimeStatus),
     revision: Number.isFinite(input.revision) ? Number(input.revision) : 0,
@@ -77,6 +82,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       ...input,
       graph: state.graph,
       definitions,
+      customDefinitions: state.customDefinitions,
+      agentCapabilities: state.agentCapabilities,
       groups: state.groups,
       partitions: state.partitions,
       proposals: state.proposals,
@@ -88,7 +95,11 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     const previousRevision = state.revision;
     const rollbackToken = `rollback:${previousRevision}:${history.length + auditLog.length + 1}`;
     const normalized = normalizeSemanticCommand(state, command, definitions);
-    const validationErrors = validateSemanticCommandDetailed(state, normalized.command, definitions);
+    const validationErrors = validateSemanticCommandDetailed(
+      state,
+      normalized.command,
+      definitions
+    );
     if (validationErrors.length > 0) {
       return {
         ok: false,
@@ -173,6 +184,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
         graph: state.graph,
         groups: state.groups,
         partitions: state.partitions,
+        customDefinitions: state.customDefinitions,
+        agentCapabilities: state.agentCapabilities,
         revision: state.revision,
       });
       history.push(audit);
@@ -199,6 +212,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       graph: cloneGraph(previous.graph),
       groups: cloneGroups(previous.groups),
       partitions: clonePartitions(previous.partitions),
+      customDefinitions: cloneCustomDefinitions(previous.customDefinitions),
+      agentCapabilities: cloneAgentCapabilities(previous.agentCapabilities),
       proposals: cloneProposals(previous.proposals),
       runtimeStatus: cloneRuntimeStatus(previous.runtimeStatus),
       revision: state.revision + 1,
@@ -275,6 +290,10 @@ export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
           : { allowed: true };
       }
 
+      if (role === 'ai' && group.kind === 'ai-space' && group.agentPolicy?.enabled) {
+        return evaluateAgentGroupPolicy({ actor, command, group, snapshot });
+      }
+
       if (role === 'root') return { allowed: true };
 
       if (command.type === 'group.reclaim') {
@@ -298,9 +317,13 @@ export function createGroupSovereigntyPolicy(): SemanticCommandPolicy {
 
       const capability = requiredCapability(command);
       if (capability && !capabilities.has(capability)) {
-        return { allowed: false, reason: role === 'ai'
-          ? 'AI actors must use proposal workflow for direct Canvas mutations.'
-          : `Actor lacks ${capability} capability.` };
+        return {
+          allowed: false,
+          reason:
+            role === 'ai'
+              ? 'AI actors must use proposal workflow for direct Canvas mutations.'
+              : `Actor lacks ${capability} capability.`,
+        };
       }
 
       if (!isOwner(actor.id, group)) {
@@ -350,11 +373,16 @@ function requiredCapability(command: SemanticCommand): ControlPlaneCapability | 
     command.type === 'partition.stop' ||
     command.type === 'partition.remove' ||
     command.type === 'partition.report.failure'
-  ) return 'partition.stop';
+  )
+    return 'partition.stop';
   return null;
 }
 
 function groupForCommand(groups: SemanticGraphSnapshot['groups'], command: SemanticCommand) {
+  const scopedGroupId = scopeGroupIdFor(command);
+  if (scopedGroupId) {
+    return groups.find((group) => group.id === scopedGroupId) ?? null;
+  }
   if ('groupId' in command) {
     return groups.find((group) => group.id === command.groupId) ?? null;
   }
@@ -366,4 +394,134 @@ function groupForCommand(groups: SemanticGraphSnapshot['groups'], command: Seman
   }
   if (command.type === 'node.add') return null;
   return null;
+}
+
+function scopeGroupIdFor(command: SemanticCommand): string | null {
+  return 'scopeGroupId' in command &&
+    typeof command.scopeGroupId === 'string' &&
+    command.scopeGroupId.length > 0
+    ? command.scopeGroupId
+    : null;
+}
+
+function commandSurface(command: SemanticCommand): string | null {
+  if (command.type.startsWith('partition.')) return 'partition';
+  if (command.type.startsWith('runtime.override.')) return 'device';
+  if (command.type.startsWith('node.') || command.type.startsWith('group.')) return 'canvas';
+  return null;
+}
+
+function targetNodeIdsForCommand(
+  command: SemanticCommand,
+  snapshot: SemanticGraphSnapshot
+): string[] {
+  if (command.type === 'node.add') return [command.node.id];
+  if ('nodeId' in command) return [String(command.nodeId)];
+  if (command.type === 'node.connect') {
+    return [String(command.connection.sourceNodeId), String(command.connection.targetNodeId)];
+  }
+  if (command.type === 'node.disconnect') {
+    const connection = snapshot.connections.find((item) => item.id === command.connectionId);
+    return connection ? [String(connection.sourceNodeId), String(connection.targetNodeId)] : [];
+  }
+  if (command.type === 'partition.deploy') return command.nodeIds.map(String);
+  return [];
+}
+
+function countGroupConnections(snapshot: SemanticGraphSnapshot, group: SemanticGroup): number {
+  const nodeIds = new Set(group.nodeIds);
+  return snapshot.connections.filter(
+    (connection) =>
+      nodeIds.has(String(connection.sourceNodeId)) && nodeIds.has(String(connection.targetNodeId))
+  ).length;
+}
+
+function evaluateAgentGroupPolicy(input: {
+  actor: SemanticActor;
+  command: SemanticCommand;
+  group: SemanticGroup;
+  snapshot: SemanticGraphSnapshot;
+}): { allowed: boolean; reason?: string } {
+  const policy = input.group.agentPolicy;
+  if (!policy?.enabled) return { allowed: false, reason: 'AI Space policy is disabled.' };
+
+  if (policy.allowedActorIds && !policy.allowedActorIds.includes(input.actor.id)) {
+    return { allowed: false, reason: 'AI actor is not assigned to this AI Space sandbox.' };
+  }
+
+  if (policy.allowedCommands && !policy.allowedCommands.includes(input.command.type)) {
+    return {
+      allowed: false,
+      reason: `Command ${input.command.type} is not allowed by AI Space policy.`,
+    };
+  }
+
+  if (policy.approvalRequired) {
+    return {
+      allowed: false,
+      reason: 'AI Space policy requires proposal approval for this command.',
+    };
+  }
+
+  const surface = commandSurface(input.command);
+  if (surface && policy.deniedSurfaces?.includes(surface as never)) {
+    return { allowed: false, reason: `AI Space policy denies ${surface} surface commands.` };
+  }
+
+  const scopedNodes = new Set([
+    ...input.group.nodeIds.map(String),
+    ...(policy.targetScope?.nodeIds ?? []).map(String),
+  ]);
+  const targetNodeIds = targetNodeIdsForCommand(input.command, input.snapshot);
+  if (input.command.type === 'node.add') {
+    if (!policy.targetScope?.allowNewNodes) {
+      return { allowed: false, reason: 'AI Space policy does not allow new nodes.' };
+    }
+    const nodeType = String(input.command.node.type);
+    const allowedNodeTypes = policy.targetScope?.allowedNodeTypes ?? [];
+    if (allowedNodeTypes.length > 0 && !allowedNodeTypes.includes(nodeType)) {
+      return {
+        allowed: false,
+        reason: `AI Space policy does not allow node type ${nodeType}.`,
+      };
+    }
+    const deniedNodeTypes = policy.targetScope?.deniedNodeTypes ?? [];
+    if (deniedNodeTypes.includes(nodeType)) {
+      return {
+        allowed: false,
+        reason: `AI Space policy denies node type ${nodeType}.`,
+      };
+    }
+  } else {
+    const outOfScope = targetNodeIds.find((nodeId) => !scopedNodes.has(nodeId));
+    if (outOfScope) {
+      return { allowed: false, reason: `Target ${outOfScope} is outside AI Space scope.` };
+    }
+  }
+
+  const budgets = policy.budgets ?? {};
+  if (
+    input.command.type === 'node.params.update' &&
+    typeof budgets.maxParamsPerCommand === 'number' &&
+    Object.keys(input.command.params).length > budgets.maxParamsPerCommand
+  ) {
+    return { allowed: false, reason: 'AI Space budget maxParamsPerCommand exceeded.' };
+  }
+
+  if (input.command.type === 'node.add' && typeof budgets.maxNodes === 'number') {
+    const nextNodeIds = new Set(input.group.nodeIds.map(String));
+    nextNodeIds.add(String(input.command.node.id));
+    if (nextNodeIds.size > budgets.maxNodes) {
+      return { allowed: false, reason: 'AI Space budget maxNodes exceeded.' };
+    }
+  }
+
+  if (input.command.type === 'node.connect' && typeof budgets.maxConnections === 'number') {
+    const nextConnectionCount = countGroupConnections(input.snapshot, input.group) + 1;
+    if (nextConnectionCount > budgets.maxConnections) {
+      return { allowed: false, reason: 'AI Space budget maxConnections exceeded.' };
+    }
+  }
+
+  return { allowed: true };
 }

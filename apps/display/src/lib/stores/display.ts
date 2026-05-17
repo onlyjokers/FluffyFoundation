@@ -26,7 +26,12 @@ import {
   createClearedDisplayScreenOverlayState,
   type ScreenOverlayState,
 } from './display-screen-overlay';
+import {
+  createClearedDisplayTextOverlayState,
+  type TextOverlayState,
+} from './display-text-overlay';
 import { createDisplayControlExecutor } from './display/control-executor';
+import { applyDisplayAssetManifest } from './display-asset-manifest';
 import {
   clearActiveImageObjectUrl,
 } from './display/image-object-url';
@@ -40,6 +45,7 @@ import {
 } from './display/local-media';
 import { createLocalPluginMessage, isAllowedManagerOrigin } from './display/local-pairing';
 import { createDisplayServerTransport } from './display/server-transport';
+import { shouldConnectDisplayServerPresence, type DisplayTransportDecision } from './display/transport-mode';
 
 export type DisplayInitConfig = {
   serverUrl: string;
@@ -101,7 +107,7 @@ let nodeExecutor: NodeExecutor | null = null;
 let localPort: MessagePort | null = null;
 let windowPairListener: ((event: MessageEvent) => void) | null = null;
 let pairTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-let transportDecision: 'uninitialized' | 'pending' | 'local' | 'server' = 'uninitialized';
+let transportDecision: DisplayTransportDecision = 'uninitialized';
 
 export const runtime = writable<{
   serverUrl: string;
@@ -167,6 +173,7 @@ export const imageState = writable<MediaEngineState['image']>({
 export const audioPlaybackState = writable<MediaEngineState['audio']>({ url: null, playing: false, loop: false, volume: 1 });
 
 export const screenOverlay = writable<ScreenOverlayState>(createClearedDisplayScreenOverlayState());
+export const textOverlay = writable<TextOverlayState>(createClearedDisplayTextOverlayState());
 
 export const isReady = derived(coreState, ($coreState) => $coreState.status === 'ready');
 
@@ -277,8 +284,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   const reportReadyIfPossible = () => {
     if (!readySent) return;
 
-    if (transportDecision === 'local' && localPort) {
-      if (readyReportedToLocal) return;
+    if (transportDecision === 'local' && localPort && !readyReportedToLocal) {
       try {
         localPort.postMessage({
           type: 'shugu:display:ready',
@@ -301,10 +307,9 @@ export function initializeDisplay(config: DisplayInitConfig): void {
           console.warn('[Display] ready -> local failed');
         }
       }
-      return;
     }
 
-    if (transportDecision !== 'server' || !sdk) return;
+    if (!shouldConnectDisplayServerPresence(transportDecision) || !sdk) return;
     if (readyReportedToServer) return;
 
     const state = sdk.getState();
@@ -389,6 +394,11 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   pluginUnsub = serverTransport.unsubs.plugin;
   mediaMsgUnsub = serverTransport.unsubs.media;
 
+  const connectServerPresenceIfNeeded = () => {
+    if (!shouldConnectDisplayServerPresence(transportDecision)) return;
+    sdk?.connect();
+  };
+
   const enterServerMode = () => {
     if (transportDecision !== 'pending' && transportDecision !== 'uninitialized') return;
     transportDecision = 'server';
@@ -402,7 +412,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     if (import.meta.env.DEV) {
       console.info('[Display] transport -> server (pair timeout fallback)');
     }
-    sdk?.connect();
+    connectServerPresenceIfNeeded();
   };
 
   if (!pairToken) {
@@ -412,6 +422,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
   }
 
   transportDecision = 'pending';
+  connectServerPresenceIfNeeded();
 
   const onLocalPortMessage = (event: MessageEvent) => {
     const data = event.data as unknown;
@@ -484,7 +495,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
         const assetsCount = Array.isArray(snapshot?.assets) ? snapshot.assets.length : null;
         console.info('[Display] local manifest configure', { manifestId, assetsCount });
       }
-      handleAssetManifest((payload ?? undefined) as Record<string, unknown> | undefined);
+      applyDisplayAssetManifest((payload ?? undefined) as Record<string, unknown> | undefined, () => multimediaCore);
       return;
     }
 
@@ -516,6 +527,7 @@ export function initializeDisplay(config: DisplayInitConfig): void {
     if (import.meta.env.DEV) {
       console.info('[Display] transport -> local (paired via MessagePort)');
     }
+    connectServerPresenceIfNeeded();
     reportReadyIfPossible();
   };
 
@@ -580,6 +592,7 @@ const controlExecutor = createDisplayControlExecutor({
   getMultimediaCore: () => multimediaCore,
   getNodeExecutor: () => nodeExecutor,
   screenOverlay,
+  textOverlay,
   isDev: import.meta.env.DEV,
 });
 

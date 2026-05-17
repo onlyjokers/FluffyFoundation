@@ -735,3 +735,121 @@ test('command bus replaces graph state for server-owned graph import', () => {
   assert.equal(bus.getSnapshot().groups[0].name, 'Imported');
   assert.equal(bus.getSnapshot().partitions[0].id, 'partition:1');
 });
+
+test('semantic command params update clears stale inline input values for the same key', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'n1',
+          type: 'values-string',
+          position: { x: 0, y: 0 },
+          config: { value: 'config-value' },
+          inputValues: { value: 'inline-value', other: 'keep-me' },
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'values-string',
+        label: 'Values String',
+        category: 'Values',
+        inputs: [],
+        outputs: [],
+        configSchema: [
+          { key: 'value', label: 'Value', type: 'string', defaultValue: '' },
+          { key: 'other', label: 'Other', type: 'string', defaultValue: '' },
+        ],
+      },
+    ],
+    revision: 1,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'ai:wp1', role: 'ai' },
+    command: {
+      type: 'node.params.update',
+      nodeId: 'n1',
+      params: { value: 'new-value' },
+    },
+  });
+
+  assert.equal(result.ok, true);
+  const node = bus.getSnapshot().nodes.find((item) => item.id === 'n1');
+  assert.equal(node?.params.value, 'new-value');
+  assert.equal(node?.inputValues.value, undefined);
+  assert.equal(node?.inputValues.other, 'keep-me');
+});
+
+test('semantic command normalizes select aliases and rejects unsupported select values', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'flashlight',
+          type: 'proc-flashlight',
+          position: { x: 0, y: 0 },
+          config: { active: true, mode: 'blink', frequencyHz: 2, dutyCycle: 0.5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'proc-flashlight',
+        label: 'Flashlight',
+        category: 'Processors',
+        inputs: [],
+        outputs: [],
+        configSchema: [
+          { key: 'active', label: 'Active', type: 'boolean', defaultValue: true },
+          {
+            key: 'mode',
+            label: 'Mode',
+            type: 'select',
+            defaultValue: 'blink',
+            options: [
+              { value: 'off', label: 'Off' },
+              { value: 'on', label: 'On' },
+              { value: 'blink', label: 'Blink' },
+            ],
+          },
+          { key: 'frequencyHz', label: 'Frequency', type: 'number', defaultValue: 2 },
+          { key: 'dutyCycle', label: 'Duty', type: 'number', defaultValue: 0.5 },
+        ],
+      },
+    ],
+    revision: 1,
+  });
+
+  const aliased = bus.dispatch({
+    actor: { id: 'ai:wp1', role: 'ai' },
+    command: {
+      type: 'node.params.update',
+      nodeId: 'flashlight',
+      params: { mode: 'pulse' },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(aliased.ok, true);
+  assert.equal(aliased.command.params.mode, 'blink');
+  assert.equal(aliased.warnings?.[0]?.code, 'SEMANTIC.PARAM_NORMALIZED');
+
+  const rejected = bus.dispatch({
+    actor: { id: 'ai:wp1', role: 'ai' },
+    command: {
+      type: 'node.params.update',
+      nodeId: 'flashlight',
+      params: { mode: 'spark' },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.validationErrors[0].code, 'GRAPH.PARAM_INVALID');
+});

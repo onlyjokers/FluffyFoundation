@@ -11,12 +11,7 @@ import type {
   PluginControlMessage,
 } from '@shugu/protocol';
 import type { GraphChange } from '@shugu/node-core';
-import {
-  ClientSDK,
-  NodeExecutor,
-  type ClientState,
-  type NodeCommand,
-} from '@shugu/sdk-client';
+import { ClientSDK, NodeExecutor, type ClientState, type NodeCommand } from '@shugu/sdk-client';
 import { applyDisplayAssetManifest } from '../display-asset-manifest';
 import { applyGraphChangesToExecutor } from '../graph-change-consumer';
 import { getOrCreateDisplayIdentity, persistAssignedClientId } from './identity';
@@ -25,6 +20,7 @@ import {
   resolveDisplayFileUrl,
   warnMissingDisplayLocalMedia,
 } from './local-media';
+import { shouldApplyDisplayServerMessages } from './transport-mode';
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
@@ -49,7 +45,9 @@ export type DisplayServerTransport = {
   };
 };
 
-export function createDisplayServerTransport(deps: DisplayServerTransportDeps): DisplayServerTransport {
+export function createDisplayServerTransport(
+  deps: DisplayServerTransportDeps
+): DisplayServerTransport {
   const sdk = new ClientSDK({
     serverUrl: deps.serverUrl,
     identity: getOrCreateDisplayIdentity() ?? undefined,
@@ -65,7 +63,7 @@ export function createDisplayServerTransport(deps: DisplayServerTransportDeps): 
   });
 
   const controlUnsub = sdk.onControl((message) => {
-    if (deps.getTransportDecision() !== 'server') return;
+    if (!shouldApplyDisplayServerMessages(deps.getTransportDecision())) return;
     const executeAtLocal = toLocalExecuteAt(message.executeAt, sdk.getOffset());
     deps.executeControl(message.action, message.payload, executeAtLocal);
   });
@@ -97,7 +95,7 @@ export function createDisplayServerTransport(deps: DisplayServerTransportDeps): 
   };
 
   const pluginUnsub = sdk.onPluginControl((message: PluginControlMessage) => {
-    if (deps.getTransportDecision() !== 'server') return;
+    if (!shouldApplyDisplayServerMessages(deps.getTransportDecision())) return;
     if (message.pluginId === 'node-executor') {
       handleNodeExecutorPluginMessage(nodeExecutor, message);
       return;
@@ -112,7 +110,7 @@ export function createDisplayServerTransport(deps: DisplayServerTransportDeps): 
   });
 
   const mediaUnsub = sdk.onMedia((message: MediaMetaMessage) => {
-    if (deps.getTransportDecision() !== 'server') return;
+    if (!shouldApplyDisplayServerMessages(deps.getTransportDecision())) return;
     const payload = createPlayMediaPayload(message);
     deps.executeControl('playMedia', payload, toLocalExecuteAt(message.executeAt, sdk.getOffset()));
   });

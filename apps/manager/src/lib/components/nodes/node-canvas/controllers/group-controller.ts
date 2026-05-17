@@ -47,18 +47,26 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   const nodeGroups = writable<NodeGroup[]>([]);
   const groupFrames = writable<GroupFrame[]>([]);
   const groupSelectionNodeIds = writable<Set<string>>(new Set());
-  const groupSelectionBounds = writable<{ left: number; top: number; width: number; height: number } | null>(null);
+  const groupSelectionBounds = writable<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const selectedGroupId = writable<string | null>(null);
   const editModeGroupId = writable<string | null>(null);
   const canvasToast = writable<string | null>(null);
   const groupEditToast = writable<GroupEditToast>(null);
   const groupDisabledNodeIds = writable<Set<string>>(new Set());
-  const marqueeRect = writable<{ left: number; top: number; width: number; height: number } | null>(null);
+  const marqueeRect = writable<{ left: number; top: number; width: number; height: number } | null>(
+    null
+  );
 
   let groupHighlightDirty = false;
   let groupEditToastTimeout: ReturnType<typeof setTimeout> | null = null;
   let canvasToastTimeout: ReturnType<typeof setTimeout> | null = null;
-  let editModeGroupBounds: { left: number; top: number; right: number; bottom: number } | null = null;
+  let editModeGroupBounds: { left: number; top: number; right: number; bottom: number } | null =
+    null;
 
   let programmaticTranslateDepth = 0;
   const isProgrammaticTranslate = () => programmaticTranslateDepth > 0;
@@ -119,7 +127,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     const prev = get(groupDisabledNodeIds);
     const next = new Set<string>();
     const graph = opts.getGraphState();
-    const typeByNodeId = new Map((graph.nodes ?? []).map((node) => [String(node.id), String(node.type ?? '')]));
+    const typeByNodeId = new Map(
+      (graph.nodes ?? []).map((node) => [String(node.id), String(node.type ?? '')])
+    );
 
     for (const g of nextGroups) {
       const runtimeActive = g.runtimeActive ?? true;
@@ -227,7 +237,11 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     requestAnimationFrame(step);
   };
 
-  const pushNodesOutOfBounds = (bounds: NodeBounds, excludeNodeIds: Set<string>, frameMoves?: FrameMoveContext) => {
+  const pushNodesOutOfBounds = (
+    bounds: NodeBounds,
+    excludeNodeIds: Set<string>,
+    frameMoves?: FrameMoveContext
+  ) => {
     const adapter = opts.getAdapter();
     if (!adapter) return;
 
@@ -307,7 +321,12 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       if (!bounds) continue;
       const loopNodeSet = loopNodeSets.get(loopId) ?? new Set();
 
-      const shouldEnforce = shouldEnforceFrameForMovedNodes(nodeIds, loopNodeSet, bounds, getNodeCenter);
+      const shouldEnforce = shouldEnforceFrameForMovedNodes(
+        nodeIds,
+        loopNodeSet,
+        bounds,
+        getNodeCenter
+      );
       if (!shouldEnforce) continue;
 
       pushNodesOutOfBounds(bounds, loopNodeSet, frameMoves);
@@ -329,11 +348,17 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
           const graph = opts.getGraphState();
           for (const id of added) {
             const node = graph.nodes.find((n) => String(n.id) === id);
-            showGroupEditToast(group.id, `Add ${node ? nodeLabel(node) : id} to ${group.name ?? 'Group'}`);
+            showGroupEditToast(
+              group.id,
+              `Add ${node ? nodeLabel(node) : id} to ${group.name ?? 'Group'}`
+            );
           }
           for (const id of removed) {
             const node = graph.nodes.find((n) => String(n.id) === id);
-            showGroupEditToast(group.id, `Remove ${node ? nodeLabel(node) : id} from ${group.name ?? 'Group'}`);
+            showGroupEditToast(
+              group.id,
+              `Remove ${node ? nodeLabel(node) : id} from ${group.name ?? 'Group'}`
+            );
           }
           const result = applyEditGroupMembershipChange({
             groups: get(nodeGroups),
@@ -360,7 +385,12 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       if (!bounds) continue;
       const groupNodeSet = groupNodeSets.get(String(group.id)) ?? new Set();
 
-      const shouldEnforce = shouldEnforceFrameForMovedNodes(nodeIds, groupNodeSet, bounds, getNodeCenter);
+      const shouldEnforce = shouldEnforceFrameForMovedNodes(
+        nodeIds,
+        groupNodeSet,
+        bounds,
+        getNodeCenter
+      );
       if (!shouldEnforce) continue;
 
       pushNodesOutOfBounds(bounds, groupNodeSet, frameMoves);
@@ -381,10 +411,16 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     const createdId = String(nodeId ?? '');
     if (!rootId || !createdId) return;
 
-    const createdType = String(opts.getGraphState().nodes.find((n) => String(n.id) === createdId)?.type ?? '');
+    const createdType = String(
+      opts.getGraphState().nodes.find((n) => String(n.id) === createdId)?.type ?? ''
+    );
     if (isGroupDecorationNodeType(createdType)) return;
 
-    const result = planAddNodeToGroupChain({ groups: get(nodeGroups), groupId: rootId, nodeId: createdId });
+    const result = planAddNodeToGroupChain({
+      groups: get(nodeGroups),
+      groupId: rootId,
+      nodeId: createdId,
+    });
     if (!result.didAdd) return;
 
     nodeGroups.set(result.nextGroups);
@@ -425,7 +461,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     const gy = Number(dropGraphPos?.y);
     if (!Number.isFinite(gx) || !Number.isFinite(gy)) return;
 
-    const candidates = get(nodeGroups).filter((g) => (g.nodeIds ?? []).some((id) => String(id) === initialId));
+    const candidates = get(nodeGroups).filter((g) =>
+      (g.nodeIds ?? []).some((id) => String(id) === initialId)
+    );
     if (candidates.length === 0) return;
 
     const picked = pickGroupAtPoint(candidates, gx, gy);
@@ -434,14 +472,16 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     addNodeToGroupChain(picked.id, createdId);
   };
 
-  const createGroupFromSelection = () => {
+  const createGroupFromSelection = (kind: 'group' | 'ai-space' = 'group') => {
     const groups = get(nodeGroups);
     const result = planGroupFromSelection({
       selectionNodeIds: Array.from(get(groupSelectionNodeIds)),
       graph: opts.getGraphState(),
       groups,
       localLoops: opts.getLocalLoops(),
-      createId: () => `group:${crypto.randomUUID?.() ?? Date.now()}`,
+      createId: () =>
+        `${kind === 'ai-space' ? 'ai-space' : 'group'}:${crypto.randomUUID?.() ?? Date.now()}`,
+      kind,
     });
 
     if (result.deniedNodeIds.length > 0) showCanvasToast('无法创建跨组组合');
@@ -476,7 +516,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     if (!group) return;
 
     const nextDisabled = !group.disabled;
-    nodeGroups.set(get(nodeGroups).map((g) => (g.id === groupId ? { ...g, disabled: nextDisabled } : g)));
+    nodeGroups.set(
+      get(nodeGroups).map((g) => (g.id === groupId ? { ...g, disabled: nextDisabled } : g))
+    );
     recomputeDisabledNodes();
     opts.requestLoopFramesUpdate();
 
@@ -490,7 +532,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     if (!group) return;
 
     const nextMinimized = !group.minimized;
-    nodeGroups.set(get(nodeGroups).map((g) => (String(g.id) === id ? { ...g, minimized: nextMinimized } : g)));
+    nodeGroups.set(
+      get(nodeGroups).map((g) => (String(g.id) === id ? { ...g, minimized: nextMinimized } : g))
+    );
 
     // Exiting edit mode is less surprising when the frame is minimized.
     if (nextMinimized && get(editModeGroupId) === id) {
@@ -650,7 +694,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     // Drop deleted nodes from selection (marquee highlight can otherwise linger after delete).
     const prevSelection = get(groupSelectionNodeIds);
     if (prevSelection.size > 0) {
-      const nextSelection = new Set(Array.from(prevSelection).filter((id) => result.existingNodeIds.has(String(id))));
+      const nextSelection = new Set(
+        Array.from(prevSelection).filter((id) => result.existingNodeIds.has(String(id)))
+      );
       if (nextSelection.size !== prevSelection.size) {
         groupSelectionNodeIds.set(nextSelection);
         if (nextSelection.size === 0) groupSelectionBounds.set(null);
@@ -685,7 +731,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
 
     let changed = false;
     const nextGroups = prevGroups.map((group) => {
-      const desired = activeById.has(String(group.id)) ? Boolean(activeById.get(String(group.id))) : true;
+      const desired = activeById.has(String(group.id))
+        ? Boolean(activeById.get(String(group.id)))
+        : true;
       const current = group.runtimeActive ?? true;
       if (current === desired) return group;
       changed = true;

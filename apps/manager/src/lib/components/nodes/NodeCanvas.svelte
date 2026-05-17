@@ -25,27 +25,43 @@
     readCustomNodeState,
     writeCustomNodeState,
   } from '$lib/nodes/custom-nodes/instance';
-  import { syncCustomNodeInternalGraph, syncNestedCustomNodesToDefinition } from '$lib/nodes/custom-nodes/sync';
+  import {
+    syncCustomNodeInternalGraph,
+    syncNestedCustomNodesToDefinition,
+  } from '$lib/nodes/custom-nodes/sync';
   import { definitionsInCycles, wouldCreateCycle } from '$lib/nodes/custom-nodes/deps';
   import { parameterRegistry } from '$lib/parameters/registry';
   import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
   import { displayTransport, getSDK, sensorData, state as managerState } from '$lib/stores/manager';
-  import { displayBridgeState, ensureDisplayLocalFilesRegisteredFromValue } from '$lib/display/display-bridge';
+  import {
+    displayBridgeState,
+    ensureDisplayLocalFilesRegisteredFromValue,
+  } from '$lib/display/display-bridge';
   import type { NodeInstance, Connection as EngineConnection, GraphState } from '$lib/nodes/types';
   import type { LocalLoop } from '$lib/nodes';
   import { createNodeCanvasFileActionBundle } from './node-canvas/io/node-canvas-file-actions';
+  import { createImportedGraphReplaceCommand } from './node-canvas/io/server-semantic-import-sync';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
   import { createNodeCanvasSemanticCommands } from './node-canvas/adapters/semantic-command-adapter';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
-  import { createGroupController, type GroupFrame } from './node-canvas/controllers/group-controller';
+  import {
+    createGroupController,
+    type NodeGroup,
+  } from './node-canvas/controllers/group-controller';
   import { createFocusController } from './node-canvas/controllers/focus-controller';
   import { createGroupPortNodesController } from './node-canvas/controllers/group-port-nodes-controller';
   import { createClipboardController } from './node-canvas/controllers/clipboard-controller';
   import { createFrameDragController } from './node-canvas/controllers/frame-drag-controller';
   import { createSelectionController } from './node-canvas/controllers/selection-controller';
-  import { createLoopController, type LoopController } from './node-canvas/controllers/loop-controller';
+  import {
+    createLoopController,
+    type LoopController,
+  } from './node-canvas/controllers/loop-controller';
   import { createMidiHighlightController } from './node-canvas/controllers/midi-highlight-controller';
-  import { createPickerController, type SocketData } from './node-canvas/controllers/picker-controller';
+  import {
+    createPickerController,
+    type SocketData,
+  } from './node-canvas/controllers/picker-controller';
   import { createReteBuilder } from './node-canvas/rete/rete-builder';
   import { createReteSockets } from './node-canvas/rete/rete-sockets';
   import { readAreaTransform } from './node-canvas/utils/view-utils';
@@ -131,6 +147,23 @@
     },
   });
 
+  const syncImportedGraphToServerSemantic = async (snapshot: {
+    graph: GraphState;
+    groups: NodeGroup[];
+  }) => {
+    const sdk = getSDK();
+    if (!sdk) {
+      lastErrorStore.set(
+        'Manager SDK is not connected; imported graph was not synced to server semantic graph.'
+      );
+      return;
+    }
+    sdk.sendSemanticCommand({
+      requestId: `import-graph-sync:${Date.now()}`,
+      command: createImportedGraphReplaceCommand(snapshot),
+    });
+  };
+
   const nodeVisualState = createNodeVisualState({
     viewAdapter,
     nodeMap,
@@ -189,13 +222,8 @@
     },
   });
 
-  const {
-    loopFrames,
-    deployedLoopIds,
-    executorStatusByClient,
-    showExecutorLogs,
-    logsClientId,
-  } = loopController;
+  const { loopFrames, deployedLoopIds, executorStatusByClient, showExecutorLogs, logsClientId } =
+    loopController;
 
   const {
     nodeGroups,
@@ -271,7 +299,8 @@
   const stopAllDeployedPatches = () => patchRuntime.stopAllDeployedPatches();
   const applyStoppedHighlights = (running: boolean) => patchRuntime.applyStoppedHighlights(running);
   const toggleExecutorLogs = () => patchRuntime.toggleExecutorLogs();
-  const toggleModelDistributionPanel = () => (isModelDistributionPanelOpen = !isModelDistributionPanelOpen);
+  const toggleModelDistributionPanel = () =>
+    (isModelDistributionPanelOpen = !isModelDistributionPanelOpen);
   const syncPatchVisualState = () => patchRuntime.syncPatchVisualState();
   const sendNodeOverride = patchRuntime.sendNodeOverride;
 
@@ -347,6 +376,14 @@
     handlePick: handlePickerPick,
   } = pickerController;
 
+  const handlePickerQueryChange = (value: string) => {
+    pickerQuery.set(value);
+  };
+
+  const handlePickerSelectedCategoryChange = (value: string) => {
+    pickerSelectedCategory.set(value);
+  };
+
   $: setPickerElement(pickerElement);
 
   const { toMiniX, toMiniY } = createMinimapProjection(minimap);
@@ -382,6 +419,7 @@
     getSelectedNodeId: () => selectedNodeId,
     setSelectedNode,
     confirm,
+    removeNodeCommand: (nodeId) => canvasCommands.removeNode(nodeId),
   });
 
   const expandedCustomByGroupId = new Map<string, ExpandedCustomNodeFrame>();
@@ -402,9 +440,9 @@
     handleToggleGroupDisabled,
     handleRenameGroup,
     syncCustomGateInputs,
-    handleNodalizeGroup,
+    handleNodelizeGroup,
     handleUncoupleCustomNode,
-    handleDenodalizeGroup,
+    handleDenodelizeGroup,
     rehydrateExpandedCustomFrames,
     handleExpandCustomNode,
     handleCollapseCustomNodeFrame,
@@ -420,7 +458,20 @@
     isGroupPortNodeType,
     customNodeType,
     addCustomNodeDefinition,
+    upsertCustomNodeDefinitionCommand: (definition) =>
+      canvasCommands.dispatch({
+        type: 'definition.custom.upsert',
+        definition,
+      }),
+    replaceSemanticGraphCommand: (snapshot) => {
+      void syncImportedGraphToServerSemantic(snapshot);
+    },
     removeCustomNodeDefinition,
+    removeCustomNodeDefinitionCommand: (definitionId) =>
+      canvasCommands.dispatch({
+        type: 'definition.custom.remove',
+        definitionId,
+      }),
     getCustomNodeDefinition,
     upsertCustomNodeDefinition,
     customNodeDefinitions,
@@ -544,28 +595,26 @@
     importCustomNodeInputEl?.click?.();
   };
 
-  const {
-    fileActions,
-    exportCustomNode,
-    handleImportCustomNodeChange,
-  } = createNodeCanvasFileActionBundle({
-    nodeEngine,
-    viewAdapter,
-    getNodeCollapsed,
-    setNodeCollapsed,
-    getImportGraphInput: () => importGraphInputEl,
-    getImportTemplatesInput: () => importTemplatesInputEl,
-    getSelectedNodeId: () => selectedNodeId,
-    getViewportCenterGraphPos: viewportCenterGraphPos,
-    generateId,
-    addCustomNodeDefinition,
-    addNodeCommand: (node) => canvasCommands.addNode(node),
-    groupController,
-    requestFramesUpdate,
-    requestMinimapUpdate: () => minimapController?.requestUpdate(),
-    setSelectedNode,
-    focusController,
-  });
+  const { fileActions, exportCustomNode, handleImportCustomNodeChange } =
+    createNodeCanvasFileActionBundle({
+      nodeEngine,
+      viewAdapter,
+      getNodeCollapsed,
+      setNodeCollapsed,
+      getImportGraphInput: () => importGraphInputEl,
+      getImportTemplatesInput: () => importTemplatesInputEl,
+      getSelectedNodeId: () => selectedNodeId,
+      getViewportCenterGraphPos: viewportCenterGraphPos,
+      generateId,
+      addCustomNodeDefinition,
+      addNodeCommand: (node) => canvasCommands.addNode(node),
+      groupController,
+      requestFramesUpdate,
+      requestMinimapUpdate: () => minimapController?.requestUpdate(),
+      setSelectedNode,
+      focusController,
+      onGraphImported: syncImportedGraphToServerSemantic,
+    });
 
   const closeToolbarMenu = () => {
     isToolbarMenuOpen = false;
@@ -734,6 +783,8 @@
     query: $pickerQuery,
     categories: $pickerCategories,
     selectedCategory: $pickerSelectedCategory,
+    onQueryChange: handlePickerQueryChange,
+    onSelectedCategoryChange: handlePickerSelectedCategoryChange,
     items: $pickerItems,
     onClose: closePicker,
     onPick: handlePickerPick,
@@ -751,8 +802,8 @@
     onToggleDisabled: handleToggleGroupDisabled,
     onToggleMinimized: groupController.toggleGroupMinimized,
     onToggleEditMode: groupController.toggleGroupEditMode,
-    onNodalize: handleNodalizeGroup,
-    onDenodalize: handleDenodalizeGroup,
+    onNodelize: handleNodelizeGroup,
+    onDenodelize: handleDenodelizeGroup,
     onCollapseCustomNode: handleCollapseCustomNodeFrame,
     onDisassemble: groupPortNodesController.disassembleGroupAndPorts,
     onRename: handleRenameGroup,
@@ -766,6 +817,7 @@
   groupSelectionBounds={$groupSelectionBounds}
   groupSelectionCount={$groupSelectionNodeIds.size}
   createGroupFromSelection={groupController.createGroupFromSelection}
+  createAiSpaceFromSelection={() => groupController.createGroupFromSelection('ai-space')}
   minimapUi={$minimapUi}
   minimap={$minimap}
   {toMiniX}

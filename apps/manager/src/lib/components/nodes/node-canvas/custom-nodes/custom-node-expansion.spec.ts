@@ -113,7 +113,7 @@ test('handleExpandCustomNode skips non-object internal entries', () => {
   assert.equal(addedConnections.length, 0);
 });
 
-test('handleDenodalizeGroup ignores non-object graph nodes', () => {
+test('handleDenodelizeGroup ignores non-object graph nodes', () => {
   const motherNode: NodeInstance = {
     id: 'mother-1',
     type: 'custom-node',
@@ -190,7 +190,121 @@ test('handleDenodalizeGroup ignores non-object graph nodes', () => {
     setSelectedNode: () => {},
   });
 
-  assert.doesNotThrow(() => actions.handleDenodalizeGroup('group-1'));
+  assert.doesNotThrow(() => actions.handleDenodelizeGroup('group-1'));
+
+  if (originalConfirm) {
+    globalThis.confirm = originalConfirm;
+  } else {
+    delete (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm;
+  }
+});
+
+test('handleNodelizeGroup publishes the post-nodelization graph to server authority', () => {
+  const nodes = new Map<string, NodeInstance>([
+    [
+      'inner-number',
+      {
+        id: 'inner-number',
+        type: 'number',
+        position: { x: 40, y: 60 },
+        config: { value: 1 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+  ]);
+  const connections: Connection[] = [];
+  const groupStore = writable([
+    {
+      id: 'group-1',
+      parentId: null,
+      name: 'Pulse Group',
+      nodeIds: ['inner-number'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+  const semanticReplacements: Array<{ graph: GraphState; groups: unknown[] }> = [];
+
+  const originalConfirm = globalThis.confirm;
+  (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm = () => true;
+
+  const actions = createCustomNodeActions({
+    nodeEngine: {
+      getNode: (nodeId) => nodes.get(nodeId) ?? null,
+      exportGraph: () => ({
+        nodes: Array.from(nodes.values()).map((node) => ({ ...node })),
+        connections: [...connections],
+      }),
+      updateNodeType: () => {},
+      updateNodeConfig: () => {},
+      updateNodeInputValue: () => {},
+      updateNodePosition: (nodeId, pos) => {
+        const node = nodes.get(nodeId);
+        if (node) nodes.set(nodeId, { ...node, position: pos });
+      },
+      addNode: (node) => {
+        nodes.set(node.id, node);
+      },
+      removeNode: (nodeId) => {
+        nodes.delete(nodeId);
+      },
+      addConnection: (connection) => {
+        connections.push(connection);
+      },
+      removeConnection: (connectionId) => {
+        const index = connections.findIndex((connection) => connection.id === connectionId);
+        if (index >= 0) connections.splice(index, 1);
+      },
+    },
+    nodeRegistry: {
+      get: (type: string) =>
+        type === 'number'
+          ? {
+              inputs: [{ id: 'value', label: 'Value', type: 'number' }],
+              outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+            }
+          : null,
+    } as NodeRegistry,
+    groupController: {
+      nodeGroups: groupStore,
+      setGroups: (groups) => groupStore.set(groups),
+      disassembleGroup: (groupId) =>
+        groupStore.update((groups) => groups.filter((group) => group.id !== groupId)),
+      scheduleHighlight: () => {},
+    },
+    groupPortNodesController: {
+      ensureGroupPortNodes: () => {},
+      disassembleGroupAndPorts: () => {},
+      scheduleNormalizeProxies: () => {},
+    },
+    groupFrames: writable([{ group: { id: 'group-1' }, left: 20, top: 30 } as never]),
+    viewAdapter: {
+      getNodePosition: (nodeId) => nodes.get(nodeId)?.position ?? null,
+    },
+    buildGroupPortIndex: () => new Map([['group-1', { proxyIds: [], legacyActivateIds: [] }]]),
+    groupIdFromNode: () => null,
+    customNodeType: (definitionId) => `custom:${definitionId}`,
+    addCustomNodeDefinition: () => {},
+    upsertCustomNodeDefinitionCommand: () => {},
+    replaceSemanticGraphCommand: (state) => semanticReplacements.push(state),
+    removeCustomNodeDefinition: () => {},
+    getCustomNodeDefinition: () => null,
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config, state) => ({ ...config, __customNode: state }),
+    expandedCustomByGroupId: new Map(),
+    forcedHiddenNodeIds: new Set(),
+    refreshExpandedCustomGroupIds: () => {},
+    requestFramesUpdate: () => {},
+    setSelectedNode: () => {},
+  });
+
+  actions.handleNodelizeGroup('group-1');
+
+  assert.equal(semanticReplacements.length, 1);
+  assert.equal(semanticReplacements[0]?.graph.nodes.length, 1);
+  assert.match(String(semanticReplacements[0]?.graph.nodes[0]?.type), /^custom:/);
+  assert.deepEqual(semanticReplacements[0]?.groups, []);
 
   if (originalConfirm) {
     globalThis.confirm = originalConfirm;

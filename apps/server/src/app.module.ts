@@ -7,6 +7,7 @@ import { GeoModule } from './geo/geo.module.js';
 import { AssetsModule } from './assets/assets.module.js';
 import { LocalMediaModule } from './local-media/local-media.module.js';
 import { SemanticModule } from './semantic/semantic.module.js';
+import { AiModule } from './ai/ai.module.js';
 
 @Module({
     imports: [
@@ -17,6 +18,7 @@ import { SemanticModule } from './semantic/semantic.module.js';
         AssetsModule,
         LocalMediaModule,
         SemanticModule,
+        AiModule,
     ],
     controllers: [AppController],
 })

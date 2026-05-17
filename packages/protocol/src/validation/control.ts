@@ -66,6 +66,10 @@ function validateControlPayload(action: unknown, payload: unknown, ctx: MutableV
     case 'showImage':
       validateMediaControlPayload(payload, ctx, path);
       break;
+    case 'showText':
+      requireNonEmptyString(payload, ctx, 'text', 'message.control.payload.text', `${path}.text`);
+      optionalNumber(payload, ctx, 'duration', `${path}.duration`, 'message.control.payload.duration');
+      break;
     case 'visualScenes':
       validateVisualScenes(payload, ctx, path);
       break;

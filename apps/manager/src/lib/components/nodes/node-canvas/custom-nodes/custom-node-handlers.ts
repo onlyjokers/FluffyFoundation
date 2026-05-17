@@ -21,8 +21,8 @@ type NodeEngine = {
 
 type CustomNodeActions = {
   handleUncoupleCustomNode: (nodeId: string) => void;
-  handleDenodalizeGroup: (groupId: string) => void;
-  handleNodalizeGroup: (groupId: string) => void;
+  handleDenodelizeGroup: (groupId: string) => void;
+  handleNodelizeGroup: (groupId: string) => void;
 };
 
 type CustomNodeHandlersOptions = {
@@ -102,24 +102,24 @@ export const createCustomNodeHandlers = (opts: CustomNodeHandlersOptions) => {
     }
   };
 
-  const handleNodalizeGroup = (groupId: string) => {
-    opts.getCustomNodeActions()?.handleNodalizeGroup(groupId);
+  const handleNodelizeGroup = (groupId: string) => {
+    opts.getCustomNodeActions()?.handleNodelizeGroup(groupId);
   };
 
   const handleUncoupleCustomNode = (nodeId: string) => {
     opts.getCustomNodeActions()?.handleUncoupleCustomNode(nodeId);
   };
 
-  const handleDenodalizeGroup = (groupId: string) => {
-    opts.getCustomNodeActions()?.handleDenodalizeGroup(groupId);
+  const handleDenodelizeGroup = (groupId: string) => {
+    opts.getCustomNodeActions()?.handleDenodelizeGroup(groupId);
   };
 
   return {
     handleToggleGroupDisabled,
     handleRenameGroup,
     syncCustomGateInputs,
-    handleNodalizeGroup,
+    handleNodelizeGroup,
     handleUncoupleCustomNode,
-    handleDenodalizeGroup,
+    handleDenodelizeGroup,
   };
 };

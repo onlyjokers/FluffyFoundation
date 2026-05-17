@@ -1,5 +1,5 @@
 /**
- * Purpose: Data-only types for Phase 2.5 "Nodalization / Custom Nodes".
+ * Purpose: Data-only types for Phase 2.5 "Nodelization / Custom Nodes".
  *
  * These types are persisted in the project snapshot (localStorage) and can be
  * exported/imported cross-project as `*.shugu-node.json`.
@@ -42,4 +42,3 @@ export type CustomNodeDefinition = {
   template: GraphState;
   ports: CustomNodePort[];
 };
-

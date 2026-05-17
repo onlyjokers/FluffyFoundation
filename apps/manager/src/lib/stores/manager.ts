@@ -3,6 +3,7 @@
  */
 import { writable, derived, get } from 'svelte/store';
 import { ManagerSDK, type ManagerState, type ManagerSDKConfig } from '@shugu/sdk-manager';
+import type { SemanticGraphSnapshot } from '@shugu/node-core';
 import type {
     SensorDataMessage,
     ScreenColorPayload,
@@ -17,6 +18,8 @@ import { nodeEngine } from '$lib/nodes/engine';
 import { parameterRegistry } from '../parameters/registry';
 import { registerDefaultControlParameters } from '../parameters/presets';
 import { readLocalProjectForServerMigration } from '$lib/project/projectManager';
+import { replaceCustomNodeDefinitions } from '$lib/nodes/custom-nodes/store';
+import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
 import {
     bindServerSemanticSync,
     createServerSemanticMigrationCoordinator,
@@ -96,6 +99,8 @@ export const clientReadiness = writable<Map<string, ClientReadiness>>(new Map())
 export const clientToneReadiness = writable<Map<string, ClientToneReadiness>>(new Map());
 
 export const clientAiReadiness = writable<Map<string, ClientAiReadiness>>(new Map());
+
+export const semanticSnapshot = writable<SemanticGraphSnapshot | null>(null);
 
 // Per-client uploaded screenshots (drives `client-object.imageOut`).
 export const clientScreenshotUploads = writable<Map<string, ClientScreenshotUpload>>(new Map());
@@ -233,6 +238,9 @@ export function connect(config: ManagerSDKConfig): void {
         sdk,
         nodeEngine,
         migrationCoordinator,
+        setNodeGroups: (groups) => nodeGroupsState.set(groups),
+        setCustomNodeDefinitions: replaceCustomNodeDefinitions,
+        onSnapshot: (snapshot) => semanticSnapshot.set(snapshot),
     });
 
     // Subscribe to state changes
@@ -422,7 +430,7 @@ function resolveAudienceTarget(toAll: boolean): TargetSelector | null {
 }
 
 function shouldMirrorToDisplay(action: ControlAction): boolean {
-    return action === 'showImage' || action === 'hideImage' || action === 'playMedia' || action === 'stopMedia' || action === 'screenColor';
+    return action === 'showImage' || action === 'hideImage' || action === 'showText' || action === 'hideText' || action === 'playMedia' || action === 'stopMedia' || action === 'screenColor';
 }
 
 function maybeMirrorToDisplay(action: ControlAction, payload: ControlPayload, executeAt?: number): void {

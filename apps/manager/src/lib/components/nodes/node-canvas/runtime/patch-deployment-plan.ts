@@ -11,6 +11,7 @@ type PatchRoot = { id: string; type: string };
 export type PatchDeploymentPlan = {
   selectedRoots: PatchRoot[];
   rootIdsByClientId: Map<string, string[]>;
+  targetRevisionByClientId: Map<string, string>;
   targetClientIds: string[];
   planKey: string;
 };
@@ -22,7 +23,11 @@ export type PatchDeploymentPlanOptions = {
   audienceClientIdsInOrder: () => string[];
   getManagerClients: () => unknown[];
   localDisplayTargetId: string;
-  getDisplayAvailability: () => { hasLocalSession: boolean };
+  getDisplayAvailability: () => {
+    hasLocalSession: boolean;
+    hasLocalReady?: boolean;
+    localSessionKey?: string;
+  };
   getNodeDefinition: (type: string) => NodeDefinition | undefined;
   getRuntimeNode: (nodeId: string) => NodeInstance | undefined;
   getLastComputedInputs: (nodeId: string) => Record<string, unknown> | null;
@@ -30,12 +35,20 @@ export type PatchDeploymentPlanOptions = {
   setLastError: (message: string | null) => void;
 };
 
-const PATCH_ROOT_TYPES = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out']);
+const PATCH_ROOT_TYPES = new Set([
+  'audio-out',
+  'image-out',
+  'video-out',
+  'effect-out',
+  'scene-out',
+]);
 
 const asRecord = (value: unknown): AnyRecord | null =>
   value && typeof value === 'object' ? (value as AnyRecord) : null;
 
-export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): PatchDeploymentPlan | null {
+export function resolvePatchDeploymentPlan(
+  opts: PatchDeploymentPlanOptions
+): PatchDeploymentPlan | null {
   const {
     graph,
     disabledNodeIds,
@@ -113,7 +126,8 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
   const resolveClientId = (nodeId: string, outputPortId: string) => {
     const runtimeNode = getRuntimeNode(nodeId);
     const runtimeOut = asRecord(runtimeNode?.outputValues?.[outputPortId]);
-    const fromOut = typeof runtimeOut?.clientId === 'string' ? String(runtimeOut.clientId).trim() : '';
+    const fromOut =
+      typeof runtimeOut?.clientId === 'string' ? String(runtimeOut.clientId).trim() : '';
     const config = asRecord(runtimeNode?.config);
     const fromConfig = typeof config?.clientId === 'string' ? String(config.clientId).trim() : '';
     return fromOut || fromConfig;
@@ -125,7 +139,8 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
     const computed = getLastComputedInputs(nodeId);
     const isPortConnected = (portId: string) =>
       connections.some(
-        (c) => String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
+        (c) =>
+          String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
       );
     const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
       const connected = isPortConnected(portId);
@@ -147,7 +162,9 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
     const primaryId = resolveClientId(nodeId, 'out');
     const indexRaw = getEffectiveInput('index');
     const indexCandidate = toFiniteNumber(indexRaw, Number.NaN);
-    const indexFromInput = Number.isFinite(indexCandidate) ? clampInt(indexCandidate, 1, total) : null;
+    const indexFromInput = Number.isFinite(indexCandidate)
+      ? clampInt(indexCandidate, 1, total)
+      : null;
     const indexFromPrimary = primaryId ? ordered.indexOf(primaryId) + 1 : 0;
     const index = indexFromInput ?? (indexFromPrimary > 0 ? indexFromPrimary : 1);
 
@@ -163,10 +180,94 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
     return ids;
   };
 
+  const displayClientIdsInOrder = (): string[] =>
+    (getManagerClients() ?? [])
+      .filter((client) => {
+        const record = asRecord(client);
+        return String(record?.group ?? '') === 'display' && record?.connected !== false;
+      })
+      .map((client) => {
+        const record = asRecord(client);
+        return record ? String(record.clientId ?? '') : '';
+      })
+      .filter((id) => Boolean(id) && connectedAll.has(id));
+
+  const getTargetRevision = (
+    clientId: string,
+    availability?: ReturnType<typeof getDisplayAvailability>
+  ): string => {
+    if (clientId === localDisplayTargetId) {
+      return typeof availability?.localSessionKey === 'string' ? availability.localSessionKey : '';
+    }
+
+    const client = (getManagerClients() ?? []).find((candidate) => {
+      const record = asRecord(candidate);
+      return String(record?.clientId ?? '') === clientId;
+    });
+    const record = asRecord(client);
+    const connectedAt = record?.connectedAt;
+    return typeof connectedAt === 'number' && Number.isFinite(connectedAt)
+      ? String(connectedAt)
+      : '';
+  };
+
+  const resolveDisplayNodeTargets = (nodeId: string): { explicit: boolean; ids: string[] } => {
+    const displayIds = displayClientIdsInOrder();
+    if (displayIds.length === 0) return { explicit: false, ids: [] };
+
+    const runtimeNode = getRuntimeNode(nodeId);
+    if (!runtimeNode) return { explicit: false, ids: displayIds };
+
+    const config = asRecord(runtimeNode.config);
+    const configDisplayId =
+      typeof config?.displayId === 'string' ? String(config.displayId).trim() : '';
+    if (configDisplayId) {
+      return {
+        explicit: true,
+        ids: displayIds.includes(configDisplayId) ? [configDisplayId] : [],
+      };
+    }
+
+    const computed = getLastComputedInputs(nodeId);
+    const isPortConnected = (portId: string) =>
+      connections.some(
+        (c) =>
+          String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
+      );
+    const inputValues = (runtimeNode.inputValues ?? {}) as Record<string, unknown>;
+    const hasInputValue = (portId: 'index' | 'range' | 'random') =>
+      Object.prototype.hasOwnProperty.call(inputValues, portId);
+    const hasExplicitRoutingInput = (['index', 'range', 'random'] as const).some(
+      (portId) => isPortConnected(portId) || hasInputValue(portId)
+    );
+    if (!hasExplicitRoutingInput) return { explicit: false, ids: displayIds };
+
+    const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
+      const connected = isPortConnected(portId);
+      if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
+        return computed[portId];
+      }
+      return inputValues[portId];
+    };
+
+    const total = displayIds.length;
+    const random = coerceBoolean(getEffectiveInput('random'), false);
+    const ordered = random ? buildStableRandomOrder(nodeId, displayIds) : displayIds;
+    const index = clampInt(toFiniteNumber(getEffectiveInput('index'), 1), 1, total);
+    const range = clampInt(toFiniteNumber(getEffectiveInput('range'), 1), 1, total);
+    const ids: string[] = [];
+    const start = index - 1;
+    for (let i = 0; i < range; i += 1) {
+      ids.push(ordered[(start + i) % total]);
+    }
+    return { explicit: true, ids };
+  };
+
   const resolveTargetsForRoot = (rootId: string): string[] => {
     const routedClientNodeIds: string[] = [];
     const routedClientNodeIdSet = new Set<string>();
-    let hasDisplayTarget = false;
+    const routedDisplayNodeIds: string[] = [];
+    const routedDisplayNodeIdSet = new Set<string>();
 
     const queue: { nodeId: string; portId: string }[] = [{ nodeId: rootId, portId: 'cmd' }];
     const visited = new Set<string>();
@@ -188,7 +289,10 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
         if (!isCommandInputPort(targetType, targetPortId)) continue;
 
         if (targetType === 'display-object') {
-          hasDisplayTarget = true;
+          if (!routedDisplayNodeIdSet.has(targetNodeId)) {
+            routedDisplayNodeIdSet.add(targetNodeId);
+            routedDisplayNodeIds.push(targetNodeId);
+          }
           continue;
         }
 
@@ -218,28 +322,25 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
       }
     }
 
-    if (hasDisplayTarget) {
+    if (routedDisplayNodeIds.length > 0) {
       const availability = getDisplayAvailability();
-      if (availability.hasLocalSession && !seen.has(localDisplayTargetId)) {
-        seen.add(localDisplayTargetId);
-        out.push(localDisplayTargetId);
-      }
+      for (const nodeId of routedDisplayNodeIds) {
+        const resolved = resolveDisplayNodeTargets(nodeId);
 
-      const displayIds = (getManagerClients() ?? [])
-        .filter((client) => {
-          const record = asRecord(client);
-          return String(record?.group ?? '') === 'display';
-        })
-        .map((client) => {
-          const record = asRecord(client);
-          return record ? String(record.clientId ?? '') : '';
-        })
-        .filter((id) => Boolean(id) && connectedAll.has(id));
+        if (
+          !resolved.explicit &&
+          availability.hasLocalReady === true &&
+          !seen.has(localDisplayTargetId)
+        ) {
+          seen.add(localDisplayTargetId);
+          out.push(localDisplayTargetId);
+        }
 
-      for (const id of displayIds) {
-        if (seen.has(id)) continue;
-        seen.add(id);
-        out.push(id);
+        for (const id of resolved.ids) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          out.push(id);
+        }
       }
     }
 
@@ -247,6 +348,7 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
   };
 
   const rootIdSetByClientId = new Map<string, Set<string>>();
+  const targetRevisionByClientId = new Map<string, string>();
   for (const root of selectedRoots) {
     const targets = resolveTargetsForRoot(root.id);
     for (const targetId of targets) {
@@ -265,6 +367,7 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
 
   const targetClientIds: string[] = [];
   const seenTargets = new Set<string>();
+  const availability = getDisplayAvailability();
 
   if (rootIdsByClientId.has(localDisplayTargetId)) {
     targetClientIds.push(localDisplayTargetId);
@@ -285,6 +388,10 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
     targetClientIds.push(id);
   }
 
+  for (const id of rootIdsByClientId.keys()) {
+    targetRevisionByClientId.set(id, getTargetRevision(id, availability));
+  }
+
   const prevError = getLastError();
   if (
     typeof prevError === 'string' &&
@@ -300,5 +407,5 @@ export function resolvePatchDeploymentPlan(opts: PatchDeploymentPlanOptions): Pa
     .map(([clientId, rootIds]) => `${clientId}=${rootIds.join(',')}`)
     .join('|');
 
-  return { selectedRoots, rootIdsByClientId, targetClientIds, planKey };
+  return { selectedRoots, rootIdsByClientId, targetRevisionByClientId, targetClientIds, planKey };
 }

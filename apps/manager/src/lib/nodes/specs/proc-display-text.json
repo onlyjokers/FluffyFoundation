@@ -1,0 +1,43 @@
+{
+  "__purpose": "Manager-only processor that converts text into a Display showText control command.",
+  "type": "proc-display-text",
+  "label": "Display Text",
+  "category": "Processors",
+  "inputs": [
+    { "id": "text", "label": "Text", "type": "string" },
+    { "id": "color", "label": "Color", "type": "color" },
+    { "id": "backgroundColor", "label": "Bg", "type": "color" },
+    { "id": "durationMs", "label": "Duration", "type": "number", "min": 0, "step": 100 }
+  ],
+  "outputs": [{ "id": "cmd", "label": "Cmd", "type": "command" }],
+  "configSchema": [
+    { "key": "text", "label": "Text", "type": "string", "defaultValue": "你好" },
+    { "key": "color", "label": "Color", "type": "string", "defaultValue": "#ffffff" },
+    { "key": "backgroundColor", "label": "Background", "type": "string", "defaultValue": "rgba(0, 0, 0, 0.72)" },
+    { "key": "durationMs", "label": "Duration (ms, 0 = sticky)", "type": "number", "defaultValue": 0, "min": 0, "step": 100 }
+  ],
+  "runtime": {
+    "kind": "command",
+    "command": {
+      "action": "showText",
+      "payload": {
+        "text": { "kind": "string", "inputKey": "text", "configKey": "text", "default": "你好" },
+        "color": { "kind": "string", "inputKey": "color", "configKey": "color", "default": "#ffffff" },
+        "backgroundColor": {
+          "kind": "string",
+          "inputKey": "backgroundColor",
+          "configKey": "backgroundColor",
+          "default": "rgba(0, 0, 0, 0.72)"
+        },
+        "duration": {
+          "kind": "number",
+          "inputKey": "durationMs",
+          "configKey": "durationMs",
+          "default": 0,
+          "clamp": { "min": 0 },
+          "omitIfZero": true
+        }
+      }
+    }
+  }
+}

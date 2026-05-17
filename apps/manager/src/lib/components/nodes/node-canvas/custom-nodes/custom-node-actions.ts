@@ -1,4 +1,4 @@
-// Purpose: Custom Node conversion actions (uncouple, nodalize, denodalize).
+// Purpose: Custom Node conversion actions (uncouple, nodelize, denodelize).
 import { get, type Readable } from 'svelte/store';
 import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
 import type { CustomNodeDefinition, CustomNodePort } from '$lib/nodes/custom-nodes/types';
@@ -10,8 +10,8 @@ import { cloneGraphState } from './custom-node-graph';
 
 export type CustomNodeActions = {
   handleUncoupleCustomNode: (nodeId: string) => void;
-  handleDenodalizeGroup: (groupId: string) => void;
-  handleNodalizeGroup: (groupId: string) => void;
+  handleDenodelizeGroup: (groupId: string) => void;
+  handleNodelizeGroup: (groupId: string) => void;
 };
 
 type GroupController = {
@@ -71,7 +71,10 @@ type CustomNodeActionsOptions = {
   groupIdFromNode: (node: NodeInstance) => string | null;
   customNodeType: (definitionId: string) => string;
   addCustomNodeDefinition: (def: CustomNodeDefinition) => void;
+  upsertCustomNodeDefinitionCommand?: (definition: CustomNodeDefinition) => void;
+  replaceSemanticGraphCommand?: (state: { graph: GraphState; groups: NodeGroup[] }) => void;
   removeCustomNodeDefinition: (definitionId: string) => void;
+  removeCustomNodeDefinitionCommand?: (definitionId: string) => void;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
   readCustomNodeState: (config: Record<string, unknown>) => CustomNodeInstanceState | null;
   writeCustomNodeState: (
@@ -116,12 +119,14 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
       binding: { ...p.binding },
     }));
 
-    opts.addCustomNodeDefinition({
+    const definition: CustomNodeDefinition = {
       definitionId,
       name,
       template,
       ports,
-    });
+    };
+    opts.addCustomNodeDefinition(definition);
+    opts.upsertCustomNodeDefinitionCommand?.(definition);
 
     opts.nodeEngine.updateNodeType(id, opts.customNodeType(definitionId));
     opts.nodeEngine.updateNodeConfig(
@@ -135,7 +140,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     opts.nodeEngine.updateNodeInputValue(id, 'gate', state.manualGate);
   };
 
-  const handleDenodalizeGroup = (groupId: string) => {
+  const handleDenodelizeGroup = (groupId: string) => {
     const id = String(groupId ?? '');
     if (!id) return;
 
@@ -197,7 +202,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     });
 
     const ok = confirm(
-      `Denodalize "${name}"?\n\nThis will remove the Custom Node (all instances) and restore a normal Group frame. Internal nodes will remain as regular nodes.`
+      `Denodelize "${name}"?\n\nThis will remove the Custom Node (all instances) and restore a normal Group frame. Internal nodes will remain as regular nodes.`
     );
     if (!ok) return;
 
@@ -280,6 +285,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     }
 
     opts.removeCustomNodeDefinition(state.definitionId);
+    opts.removeCustomNodeDefinitionCommand?.(state.definitionId);
 
     opts.expandedCustomByGroupId.delete(id);
     opts.forcedHiddenNodeIds.delete(motherNodeId);
@@ -290,7 +296,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     opts.groupPortNodesController.scheduleNormalizeProxies();
   };
 
-  const handleNodalizeGroup = (groupId: string) => {
+  const handleNodelizeGroup = (groupId: string) => {
     const rootId = String(groupId ?? '');
     if (!rootId) return;
 
@@ -299,7 +305,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     if (!group) return;
 
     const ok = confirm(
-      `Nodalize "${String(group.name ?? 'Group')}"?\n\nThis will replace the Group with a real Custom Node (mother instance).`
+      `Nodelize "${String(group.name ?? 'Group')}"?\n\nThis will replace the Group with a real Custom Node (mother instance).`
     );
     if (!ok) return;
 
@@ -518,12 +524,14 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     })();
 
     const definitionId = crypto.randomUUID?.() ?? `${Date.now()}`;
-    opts.addCustomNodeDefinition({
+    const customDefinition: CustomNodeDefinition = {
       definitionId,
       name: String(group.name ?? 'Group'),
       template: { nodes: templateNodes, connections: templateConnections },
       ports,
-    });
+    };
+    opts.addCustomNodeDefinition(customDefinition);
+    opts.upsertCustomNodeDefinitionCommand?.(customDefinition);
 
     // Remove group metadata first so the frame disappears immediately.
     opts.groupController.disassembleGroup(rootId);
@@ -592,7 +600,11 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     }
 
     opts.setSelectedNode(motherNodeId);
+    opts.replaceSemanticGraphCommand?.({
+      graph: opts.nodeEngine.exportGraph(),
+      groups: get(opts.groupController.nodeGroups) ?? [],
+    });
   };
 
-  return { handleUncoupleCustomNode, handleDenodalizeGroup, handleNodalizeGroup };
+  return { handleUncoupleCustomNode, handleDenodelizeGroup, handleNodelizeGroup };
 };

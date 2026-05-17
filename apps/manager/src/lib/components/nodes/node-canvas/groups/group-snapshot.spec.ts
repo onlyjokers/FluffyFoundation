@@ -45,7 +45,7 @@ test('groupSnapshotKey is stable across group and node id ordering', () => {
   ]);
 
   assert.equal(first, second);
-  assert.equal(first, 'a:root:Alpha:1:0::n3,n4|b::Beta:0:1:1:n1,n2');
+  assert.equal(first, 'a:root:Alpha::::1:0::n3,n4|b::Beta::::0:1:1:n1,n2');
 });
 
 test('normalizeGroupsForSnapshot sanitizes loose persisted records', () => {
@@ -68,8 +68,63 @@ test('normalizeGroupsForSnapshot sanitizes loose persisted records', () => {
       name: 'Loose',
       nodeIds: ['n1', '2'],
       disabled: true,
+      kind: undefined,
+      agentInterface: undefined,
+      agentPolicy: undefined,
       minimized: true,
       runtimeActive: false,
     },
   ]);
+});
+
+test('normalizeGroupsForSnapshot preserves AI Space agent metadata', () => {
+  const agentInterface = {
+    eventBindings: ['client.text.final'],
+    callableCommands: ['node.params.update', 'node.remove'],
+  };
+  const agentPolicy = {
+    enabled: true,
+    allowedCommands: ['node.params.update'],
+  };
+
+  const normalized = normalizeGroupsForSnapshot([
+    {
+      id: 'ai-space:travel',
+      parentId: null,
+      name: 'Traveler AI',
+      nodeIds: ['n-input', 'n-display'],
+      kind: 'ai-space',
+      agentInterface,
+      agentPolicy,
+    },
+  ]);
+
+  assert.equal(normalized[0].kind, 'ai-space');
+  assert.deepEqual(normalized[0].agentInterface, agentInterface);
+  assert.deepEqual(normalized[0].agentPolicy, agentPolicy);
+});
+
+test('groupSnapshotKey changes when AI Space agent metadata changes', () => {
+  const base = {
+    id: 'ai-space:travel',
+    parentId: null,
+    name: 'Traveler AI',
+    nodeIds: ['n-input'],
+    kind: 'ai-space' as const,
+  };
+
+  const first = groupSnapshotKey([
+    {
+      ...base,
+      agentPolicy: { enabled: true, allowedCommands: ['node.params.update'] },
+    },
+  ]);
+  const second = groupSnapshotKey([
+    {
+      ...base,
+      agentPolicy: { enabled: true, allowedCommands: ['node.params.update', 'node.remove'] },
+    },
+  ]);
+
+  assert.notEqual(first, second);
 });

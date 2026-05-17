@@ -8,7 +8,11 @@
  */
 import { get, writable, type Writable } from 'svelte/store';
 import { PROTOCOL_VERSION } from '@shugu/protocol';
-import { applyGraphChanges, NodeRuntime } from '@shugu/node-core';
+import {
+  applyGraphChanges,
+  NodeRuntime,
+  normalizeNodeConfigForDefinition,
+} from '@shugu/node-core';
 
 import type { Connection, GraphChange, GraphState, NodeInstance } from './types';
 import { nodeRegistry } from './registry';
@@ -202,7 +206,10 @@ class NodeEngineClass {
   updateNodeConfig(nodeId: string, config: Record<string, unknown>): void {
     const node = this.runtime.getNode(nodeId);
     if (!node) return;
-    const nextConfig = { ...node.config, ...config };
+    const definition = nodeRegistry.get(String(node.type));
+    const nextConfig = definition
+      ? normalizeNodeConfigForDefinition(String(node.type), { ...node.config, ...config }, [definition]).config
+      : { ...node.config, ...config };
     node.config = nextConfig;
     this.syncGraphState();
     this.graphChanges.set([{ type: 'update-node-config', nodeId, config: nextConfig }]);
@@ -463,9 +470,13 @@ class NodeEngineClass {
       const config = { ...(node.config ?? {}) };
       const inputValues = { ...(node.inputValues ?? {}) };
       stripLegacyToneFields(type, config, inputValues);
+      const definition = nodeRegistry.get(type);
+      const normalizedConfig = definition
+        ? normalizeNodeConfigForDefinition(type, config, [definition]).config
+        : config;
       nodes.push({
         ...node,
-        config,
+        config: normalizedConfig,
         inputValues,
         outputValues: {}, // reset runtime outputs
       });

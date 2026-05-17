@@ -2,6 +2,8 @@
 import { get } from 'svelte/store';
 import { createFileActions } from './file-actions';
 import { createCustomNodeFileActions } from '../custom-nodes/custom-node-file-actions';
+import type { GraphState } from '$lib/nodes/types';
+import type { NodeGroup } from '../controllers/group-controller';
 
 export function createNodeCanvasFileActionBundle(opts: {
   nodeEngine: any;
@@ -20,6 +22,7 @@ export function createNodeCanvasFileActionBundle(opts: {
   requestMinimapUpdate: () => void;
   setSelectedNode: (id: string) => void;
   focusController: any;
+  onGraphImported?: (snapshot: { graph: GraphState; groups: NodeGroup[] }) => void | Promise<void>;
 }) {
   const fileActions = createFileActions({
     nodeEngine: opts.nodeEngine,
@@ -41,6 +44,7 @@ export function createNodeCanvasFileActionBundle(opts: {
       opts.requestMinimapUpdate();
       opts.focusController.setPendingFocusNodeIds(ids);
     },
+    onGraphImported: opts.onGraphImported,
     getViewportCenterGraphPos: opts.getViewportCenterGraphPos,
   });
 

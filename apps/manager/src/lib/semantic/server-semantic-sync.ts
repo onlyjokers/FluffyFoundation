@@ -2,11 +2,15 @@
 import type { SemanticGraphSnapshot, SemanticGroup, SemanticPartition } from '@shugu/node-core';
 import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/protocol';
 import type { GraphState } from '$lib/nodes/types';
+import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
+import type { NodeGroup } from '$lib/components/nodes/node-canvas/controllers/group-controller';
 
 export const SERVER_SEMANTIC_MIGRATION_KEY = 'shugu-server-semantic-migrated-v1';
 
 export type ServerSemanticNodeEngine = {
+  exportGraph?: () => GraphState;
   loadGraph: (graph: GraphState) => void;
+  updateNodeConfig?: (nodeId: string, config: Record<string, unknown>) => void;
 };
 
 export type LocalProjectForServerMigration = {
@@ -28,18 +32,52 @@ export type ServerSemanticSyncSdk = {
   requestSemanticSnapshot: (requestId?: string) => void;
 };
 
+export type ServerSemanticNodeGroupsSync = (groups: NodeGroup[]) => void;
+export type ServerSemanticCustomDefinitionsSync = (definitions: CustomNodeDefinition[]) => void;
+
 function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGraphSnapshot | null {
   if (!message.ok) return null;
   const result = message.result as { snapshot?: SemanticGraphSnapshot } | undefined;
   return result?.snapshot ?? null;
 }
 
-export function graphFromServerSemanticSnapshot(snapshot: SemanticGraphSnapshot): GraphState {
+const defaultSemanticNodePosition = { x: 0, y: 0 };
+
+const positionFromGraph = (
+  graph: GraphState | undefined
+): Map<string, { x: number; y: number }> => {
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const node of graph?.nodes ?? []) {
+    const x = Number(node.position?.x);
+    const y = Number(node.position?.y);
+    positions.set(String(node.id), {
+      x: Number.isFinite(x) ? x : defaultSemanticNodePosition.x,
+      y: Number.isFinite(y) ? y : defaultSemanticNodePosition.y,
+    });
+  }
+  return positions;
+};
+
+export function graphFromServerSemanticSnapshot(
+  snapshot: SemanticGraphSnapshot,
+  currentGraph?: GraphState
+): GraphState {
+  const currentPositions = positionFromGraph(currentGraph);
+  const existingPositions = [...currentPositions.values()];
+  const defaultY = existingPositions[0]?.y ?? defaultSemanticNodePosition.y;
+  const nextPositionX =
+    existingPositions.length > 0
+      ? Math.max(...existingPositions.map((position) => position.x)) + 240
+      : defaultSemanticNodePosition.x;
+  let missingNodeIndex = 0;
   return {
     nodes: (snapshot.nodes ?? []).map((node) => ({
       id: String(node.id),
       type: String(node.type),
-      position: { x: 0, y: 0 },
+      position: currentPositions.get(String(node.id)) ?? {
+        x: nextPositionX + missingNodeIndex++ * 240,
+        y: defaultY,
+      },
       config: { ...(node.params ?? {}) },
       inputValues: { ...(node.inputValues ?? {}) },
       outputValues: { ...(node.outputValues ?? {}) },
@@ -48,11 +86,96 @@ export function graphFromServerSemanticSnapshot(snapshot: SemanticGraphSnapshot)
   };
 }
 
+const cloneJsonValue = <T>(value: T): T =>
+  value == null ? value : (JSON.parse(JSON.stringify(value)) as T);
+
+export function groupsFromServerSemanticSnapshot(snapshot: SemanticGraphSnapshot): NodeGroup[] {
+  return (snapshot.groups ?? [])
+    .map((group) => {
+      const record = group as SemanticGroup & { minimized?: unknown };
+      const id = String(record.id ?? '');
+      if (!id) return null;
+      return {
+        id,
+        parentId: record.parentId ? String(record.parentId) : null,
+        name: String(record.name ?? ''),
+        nodeIds: Array.from(
+          new Set((record.nodeIds ?? []).map((nodeId) => String(nodeId)).filter(Boolean))
+        ),
+        disabled: Boolean(record.disabled),
+        minimized: Boolean(record.minimized),
+        kind:
+          record.kind === 'ai-space' ? 'ai-space' : record.kind === 'group' ? 'group' : undefined,
+        runtimeActive: typeof record.runtimeActive === 'boolean' ? record.runtimeActive : undefined,
+        agentInterface:
+          record.agentInterface !== undefined ? cloneJsonValue(record.agentInterface) : undefined,
+        agentPolicy:
+          record.agentPolicy !== undefined ? cloneJsonValue(record.agentPolicy) : undefined,
+      } satisfies NodeGroup;
+    })
+    .filter(Boolean) as NodeGroup[];
+}
+
+const nodeShapeKey = (graph: GraphState): string =>
+  JSON.stringify({
+    nodes: (graph.nodes ?? [])
+      .map((node) => ({ id: String(node.id), type: String(node.type) }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    connections: (graph.connections ?? [])
+      .map((connection) => ({
+        id: String(connection.id),
+        sourceNodeId: String(connection.sourceNodeId),
+        sourcePortId: String(connection.sourcePortId),
+        targetNodeId: String(connection.targetNodeId),
+        targetPortId: String(connection.targetPortId),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+  });
+
+const canPatchExistingNodeParams = (currentGraph: GraphState, nextGraph: GraphState): boolean =>
+  nodeShapeKey(currentGraph) === nodeShapeKey(nextGraph);
+
+const shallowRecordEqual = (
+  left: Record<string, unknown>,
+  right: Record<string, unknown>
+): boolean => {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => Object.is(left[key], right[key]));
+};
+
 export function applyServerSemanticSnapshot(input: {
   snapshot: SemanticGraphSnapshot;
   nodeEngine: ServerSemanticNodeEngine;
+  setNodeGroups?: ServerSemanticNodeGroupsSync;
+  setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
 }): void {
-  input.nodeEngine.loadGraph(graphFromServerSemanticSnapshot(input.snapshot));
+  const currentGraph = input.nodeEngine.exportGraph?.();
+  const nextGraph = graphFromServerSemanticSnapshot(input.snapshot, currentGraph);
+  input.setNodeGroups?.(groupsFromServerSemanticSnapshot(input.snapshot));
+  input.setCustomNodeDefinitions?.(
+    cloneJsonValue((input.snapshot.customDefinitions ?? []) as CustomNodeDefinition[])
+  );
+
+  if (
+    currentGraph &&
+    input.nodeEngine.updateNodeConfig &&
+    canPatchExistingNodeParams(currentGraph, nextGraph)
+  ) {
+    const currentById = new Map((currentGraph.nodes ?? []).map((node) => [String(node.id), node]));
+    for (const nextNode of nextGraph.nodes ?? []) {
+      const currentNode = currentById.get(String(nextNode.id));
+      if (!currentNode) continue;
+      const nextConfig = nextNode.config ?? {};
+      if (!shallowRecordEqual(currentNode.config ?? {}, nextConfig)) {
+        input.nodeEngine.updateNodeConfig(String(nextNode.id), nextConfig);
+      }
+    }
+    return;
+  }
+
+  input.nodeEngine.loadGraph(nextGraph);
 }
 
 export function createServerSemanticMigrationCoordinator(input: {
@@ -91,19 +214,29 @@ export function bindServerSemanticSync(input: {
   sdk: ServerSemanticSyncSdk;
   nodeEngine: ServerSemanticNodeEngine;
   migrationCoordinator: ServerSemanticMigrationCoordinator;
+  setNodeGroups?: ServerSemanticNodeGroupsSync;
+  setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
+  onSnapshot?: (snapshot: SemanticGraphSnapshot) => void;
 }): () => void {
   let requestedInitialSnapshot = false;
   const handleSnapshot = (snapshot: SemanticGraphSnapshot) => {
-    applyServerSemanticSnapshot({ snapshot, nodeEngine: input.nodeEngine });
+    input.onSnapshot?.(snapshot);
+    applyServerSemanticSnapshot({
+      snapshot,
+      nodeEngine: input.nodeEngine,
+      setNodeGroups: input.setNodeGroups,
+      setCustomNodeDefinitions: input.setCustomNodeDefinitions,
+    });
     input.migrationCoordinator.maybeImport(snapshot);
   };
   const unsubscribeSnapshot = input.sdk.onSemanticSnapshot((snapshot) => {
     handleSnapshot(snapshot);
   });
-  const unsubscribeResult = input.sdk.onSemanticResult?.((message) => {
-    const snapshot = snapshotFromSemanticResult(message);
-    if (snapshot) handleSnapshot(snapshot);
-  }) ?? (() => undefined);
+  const unsubscribeResult =
+    input.sdk.onSemanticResult?.((message) => {
+      const snapshot = snapshotFromSemanticResult(message);
+      if (snapshot) handleSnapshot(snapshot);
+    }) ?? (() => undefined);
   const unsubscribeState = input.sdk.onStateChange((state) => {
     if (requestedInitialSnapshot) return;
     if (state.status !== 'connected') return;

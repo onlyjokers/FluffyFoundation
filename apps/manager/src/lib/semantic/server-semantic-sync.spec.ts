@@ -11,7 +11,10 @@ import {
 } from './server-semantic-sync';
 import type { GraphState } from '$lib/nodes/types';
 
-const snapshot = (nodes: SemanticGraphSnapshot['nodes'], connections: SemanticGraphSnapshot['connections'] = []): SemanticGraphSnapshot => ({
+const snapshot = (
+  nodes: SemanticGraphSnapshot['nodes'],
+  connections: SemanticGraphSnapshot['connections'] = []
+): SemanticGraphSnapshot => ({
   revision: 7,
   nodes,
   definitions: [],
@@ -78,6 +81,272 @@ test('applyServerSemanticSnapshot mirrors server graph into the Manager NodeEngi
   });
 });
 
+test('applyServerSemanticSnapshot preserves local positions while applying semantic node updates', () => {
+  let loaded: GraphState | null = null;
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'client-a',
+        type: 'client-object',
+        position: { x: 321, y: 654 },
+        config: { label: 'Old label' },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'client-a',
+        type: 'client-object',
+        params: { label: 'Client A' },
+        inputValues: { active: true },
+        outputValues: { ready: false },
+      },
+      {
+        id: 'display-a',
+        type: 'display-object',
+        params: { label: 'Display A' },
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(loaded.nodes, [
+    {
+      id: 'client-a',
+      type: 'client-object',
+      position: { x: 321, y: 654 },
+      config: { label: 'Client A' },
+      inputValues: { active: true },
+      outputValues: { ready: false },
+    },
+    {
+      id: 'display-a',
+      type: 'display-object',
+      position: { x: 561, y: 654 },
+      config: { label: 'Display A' },
+      inputValues: {},
+      outputValues: {},
+    },
+  ]);
+});
+
+test('applyServerSemanticSnapshot places newly added server nodes away from existing local nodes', () => {
+  let loaded: GraphState | null = null;
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'client-a',
+        type: 'client-object',
+        position: { x: 321, y: 654 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'client-a',
+        type: 'client-object',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'client-b',
+        type: 'client-object',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(
+    loaded.nodes.map((node) => node.position),
+    [
+      { x: 321, y: 654 },
+      { x: 561, y: 654 },
+    ]
+  );
+});
+
+test('applyServerSemanticSnapshot patches existing node params without reloading the runtime graph', () => {
+  const loaded: GraphState[] = [];
+  const updates: Array<{ nodeId: string; config: Record<string, unknown> }> = [];
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'flash-rate',
+        type: 'number',
+        position: { x: 42, y: 64 },
+        config: { value: 3 },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'flashlight',
+        type: 'proc-flashlight',
+        position: { x: 120, y: 64 },
+        config: { frequencyHz: 3, dutyCycle: 0.5 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'rate-to-flash',
+        sourceNodeId: 'flash-rate',
+        sourcePortId: 'value',
+        targetNodeId: 'flashlight',
+        targetPortId: 'frequencyHz',
+      },
+    ],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot(
+      [
+        {
+          id: 'flash-rate',
+          type: 'number',
+          params: { value: 100 },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'flashlight',
+          type: 'proc-flashlight',
+          params: { frequencyHz: 3, dutyCycle: 0.5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      localGraph.connections
+    ),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded.push(graph);
+      },
+      updateNodeConfig: (nodeId, config) => {
+        updates.push({ nodeId, config });
+      },
+    },
+  });
+
+  assert.deepEqual(loaded, []);
+  assert.deepEqual(updates, [{ nodeId: 'flash-rate', config: { value: 100 } }]);
+});
+
+test('applyServerSemanticSnapshot mirrors server groups into Node Graph UI groups', () => {
+  let syncedGroups: unknown[] = [];
+
+  applyServerSemanticSnapshot({
+    snapshot: {
+      ...snapshot([
+        {
+          id: 'new-ai-node',
+          type: 'display-text',
+          params: { text: 'Hello' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ]),
+      groups: [
+        {
+          id: 'ai-space-1',
+          parentId: null,
+          name: 'AI Space',
+          nodeIds: ['existing-node', 'new-ai-node'],
+          disabled: false,
+          kind: 'ai-space',
+          runtimeActive: true,
+          agentInterface: { exposedNodeIds: ['new-ai-node'] },
+          agentPolicy: { enabled: true },
+        },
+      ],
+    },
+    nodeEngine: {
+      loadGraph: () => undefined,
+    },
+    setNodeGroups: (groups) => {
+      syncedGroups = groups;
+    },
+  });
+
+  assert.deepEqual(syncedGroups, [
+    {
+      id: 'ai-space-1',
+      parentId: null,
+      name: 'AI Space',
+      nodeIds: ['existing-node', 'new-ai-node'],
+      disabled: false,
+      minimized: false,
+      kind: 'ai-space',
+      runtimeActive: true,
+      agentInterface: { exposedNodeIds: ['new-ai-node'] },
+      agentPolicy: { enabled: true },
+    },
+  ]);
+});
+
+test('applyServerSemanticSnapshot mirrors server custom node definitions into Manager custom-node store', () => {
+  let syncedDefinitions: unknown[] = [];
+
+  applyServerSemanticSnapshot({
+    snapshot: {
+      ...snapshot([]),
+      customDefinitions: [
+        {
+          definitionId: 'def-server',
+          name: 'Server Custom',
+          template: { nodes: [], connections: [] },
+          ports: [],
+        },
+      ],
+    },
+    nodeEngine: {
+      loadGraph: () => undefined,
+    },
+    setCustomNodeDefinitions: (definitions) => {
+      syncedDefinitions = definitions;
+    },
+  });
+
+  assert.deepEqual(syncedDefinitions, [
+    {
+      definitionId: 'def-server',
+      name: 'Server Custom',
+      template: { nodes: [], connections: [] },
+      ports: [],
+    },
+  ]);
+});
+
 test('migration coordinator imports old local project only once when server graph is empty', () => {
   const sent: unknown[] = [];
   const storage = new Map<string, string>();
@@ -100,7 +369,16 @@ test('migration coordinator imports old local project only once when server grap
         ],
         connections: [],
       },
-      groups: [{ id: 'g1', parentId: null, name: 'Group', nodeIds: ['local-node'], disabled: false, minimized: false }],
+      groups: [
+        {
+          id: 'g1',
+          parentId: null,
+          name: 'Group',
+          nodeIds: ['local-node'],
+          disabled: false,
+          minimized: false,
+        },
+      ],
       partitions: [],
     }),
     sendSemanticCommand: (input) => sent.push(input),
@@ -127,7 +405,16 @@ test('migration coordinator imports old local project only once when server grap
         ],
         connections: [],
       },
-      groups: [{ id: 'g1', parentId: null, name: 'Group', nodeIds: ['local-node'], disabled: false, minimized: false }],
+      groups: [
+        {
+          id: 'g1',
+          parentId: null,
+          name: 'Group',
+          nodeIds: ['local-node'],
+          disabled: false,
+          minimized: false,
+        },
+      ],
       partitions: [],
     },
   });
@@ -159,7 +446,9 @@ test('bindServerSemanticSync requests server snapshot when Manager SDK reaches c
 });
 
 test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot requests', () => {
-  let resultHandler: ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void) | null = null;
+  let resultHandler:
+    | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
+    | null = null;
   let loaded: GraphState | null = null;
 
   bindServerSemanticSync({
@@ -208,6 +497,29 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
     ],
     connections: [],
   });
+});
+
+test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
+  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  const published: number[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: (handler) => {
+        snapshotHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: { loadGraph: () => undefined },
+    migrationCoordinator: { maybeImport: () => undefined },
+    onSnapshot: (nextSnapshot) => published.push(nextSnapshot.revision),
+  });
+
+  snapshotHandler?.(snapshot([]));
+
+  assert.deepEqual(published, [7]);
 });
 
 test('migration coordinator never overwrites non-empty server graph with old local project', () => {

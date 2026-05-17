@@ -6,6 +6,7 @@ export * from './deterministic-planner.js';
 export * from './proposal-execution.js';
 export * from './safety-contract.js';
 export * from './observation-repair.js';
+export * from './skill-registry.js';
 export * from './golden-scenario-fixtures.js';
 export * from './semantic-command-bus-parity.js';
 export * from './operator-acceptance-fixtures.js';

@@ -12,6 +12,8 @@ import type {
   VibrationController,
 } from '@shugu/sdk-client';
 import type { MultimediaCore } from '@shugu/multimedia-core';
+import type { Writable } from 'svelte/store';
+import type { ClientTextOverlayState } from '../client-text-overlay';
 
 export type ClientControlDeps = {
   getSDK: () => ClientSDK | null;
@@ -23,6 +25,7 @@ export type ClientControlDeps = {
   getToneModulatedSoundPlayer: () => ToneModulatedSoundPlayer | null;
   getNodeExecutor: () => NodeExecutor | null;
   getMultimediaCore: () => MultimediaCore | null;
+  textOverlay?: Writable<ClientTextOverlayState>;
   stopAllCleanup?: () => void;
 };
 

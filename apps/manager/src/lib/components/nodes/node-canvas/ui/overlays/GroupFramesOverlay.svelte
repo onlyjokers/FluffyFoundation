@@ -10,6 +10,7 @@
       id: string;
       name?: string;
       disabled?: boolean;
+      kind?: 'group' | 'ai-space';
       minimized?: boolean;
       runtimeActive?: boolean;
     };
@@ -32,8 +33,8 @@
   export let onToggleDisabled: (groupId: string) => void = () => undefined;
   export let onToggleMinimized: (groupId: string) => void = () => undefined;
   export let onToggleEditMode: (groupId: string) => void = () => undefined;
-  export let onNodalize: (groupId: string) => void = () => undefined;
-  export let onDenodalize: (groupId: string) => void = () => undefined;
+  export let onNodelize: (groupId: string) => void = () => undefined;
+  export let onDenodelize: (groupId: string) => void = () => undefined;
   export let onCollapseCustomNode: (groupId: string) => void = () => undefined;
   export let onDisassemble: (groupId: string) => void = () => undefined;
   export let onRename: (groupId: string, name: string) => void = () => undefined;
@@ -100,7 +101,10 @@
 </script>
 
 {#if frames.length > 0}
-  <div class="group-frame-layer" style="transform: translate({tx}px, {ty}px) scale({k}); transform-origin: 0 0;">
+  <div
+    class="group-frame-layer"
+    style="transform: translate({tx}px, {ty}px) scale({k}); transform-origin: 0 0;"
+  >
     {#each frames as frame (frame.group.id)}
       {@const group = frame.group}
       {@const isEditing = editModeGroupId === group.id}
@@ -108,6 +112,7 @@
       {@const runtimeGateClosed = group.runtimeActive === false}
       {@const gateClosed = !isRunning || frame.effectiveDisabled}
       {@const isMinimized = Boolean(group.minimized)}
+      {@const isAiSpace = group.kind === 'ai-space'}
       {@const isCustomNodeGroup = Boolean(customNodeGroupIds?.has?.(group.id))}
       {@const isActionsCompact = Boolean(actionCompactByGroupId[String(group.id)])}
       {@const highlightSide = edgeHighlight?.groupId === group.id ? edgeHighlight.side : null}
@@ -121,57 +126,61 @@
               ? 'Input gate closed'
               : 'Parent gate closed'
           : 'Gate open'}
-        {#if !isMinimized}
-          <div
-            class="group-frame {gateClosed ? 'disabled' : ''} {isEditing ? 'editing' : ''} {isSelected ? 'selected' : ''} {highlightSide === 'input' ? 'edge-highlight-input' : ''} {highlightSide === 'output' ? 'edge-highlight-output' : ''}"
-            style="left: {frame.left}px; top: {frame.top}px; width: {frame.width}px; height: {frame.height}px;"
-          >
-            <div
-              class="group-frame-header"
-            >
-              <div class="group-frame-title-row">
-                <div
-                  class="group-frame-gate-sockets"
-                  aria-hidden="true"
-                  use:mountGateSockets={groupGateNodeIdByGroupId?.get(String(group.id)) ?? null}
-                />
-                <button
-                  type="button"
-                  class="group-frame-drag-handle"
-                  title="Drag frame"
-                  aria-label="Drag frame"
-                  on:pointerdown|stopPropagation={(event) => onHeaderPointerDown(String(group.id), event)}
-                >
-                  ::
-                </button>
-            {#if editingGroupId === group.id}
-              <div class="group-frame-title editing">
-                <input
-                  class="group-frame-title-input"
-                  bind:this={nameInputEl}
-                  bind:value={draftName}
-                  on:pointerdown|stopPropagation
-                  on:keydown={(e) => {
-                    if (e.key === 'Enter') commitEdit();
-                    if (e.key === 'Escape') cancelEdit();
-                  }}
-                  on:blur={commitEdit}
-                />
-              </div>
+      {#if !isMinimized}
+        <div
+          class="group-frame {isAiSpace ? 'ai-space' : ''} {gateClosed ? 'disabled' : ''} {isEditing
+            ? 'editing'
+            : ''} {isSelected ? 'selected' : ''} {highlightSide === 'input'
+            ? 'edge-highlight-input'
+            : ''} {highlightSide === 'output' ? 'edge-highlight-output' : ''}"
+          style="left: {frame.left}px; top: {frame.top}px; width: {frame.width}px; height: {frame.height}px;"
+        >
+          <div class="group-frame-header">
+            <div class="group-frame-title-row">
+              <div
+                class="group-frame-gate-sockets"
+                aria-hidden="true"
+                use:mountGateSockets={groupGateNodeIdByGroupId?.get(String(group.id)) ?? null}
+              />
+              <button
+                type="button"
+                class="group-frame-drag-handle"
+                title="Drag frame"
+                aria-label="Drag frame"
+                on:pointerdown|stopPropagation={(event) =>
+                  onHeaderPointerDown(String(group.id), event)}
+              >
+                ::
+              </button>
+              {#if editingGroupId === group.id}
+                <div class="group-frame-title editing">
+                  <input
+                    class="group-frame-title-input"
+                    bind:this={nameInputEl}
+                    bind:value={draftName}
+                    on:pointerdown|stopPropagation
+                    on:keydown={(e) => {
+                      if (e.key === 'Enter') commitEdit();
+                      if (e.key === 'Escape') cancelEdit();
+                    }}
+                    on:blur={commitEdit}
+                  />
+                </div>
               {:else}
                 <button
                   type="button"
                   class="group-frame-title"
-                  on:pointerdown|stopPropagation={(event) => onHeaderPointerDown(String(group.id), event)}
+                  on:pointerdown|stopPropagation={(event) =>
+                    onHeaderPointerDown(String(group.id), event)}
                   on:click={() => startEdit(group)}
                   on:keydown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') startEdit(group);
                   }}
-                title={gateReason}
-              >
-                <span class="group-frame-title-name">{group.name ?? 'Group'}</span>
-              </button>
-            {/if}
+                  title={gateReason}
+                >
+                  <span class="group-frame-title-name">{group.name ?? 'Group'}</span>
+                </button>
+              {/if}
             </div>
             <div
               class="group-frame-actions"
@@ -191,31 +200,33 @@
                 <Button
                   variant="ghost"
                   size="sm"
-                  ariaLabel="Denodalize"
-                  title="Denodalize"
-                  on:click={() => onDenodalize(group.id)}
+                  ariaLabel="Denodelize"
+                  title="Denodelize"
+                  on:click={() => onDenodelize(group.id)}
                 >
-                  {#if isActionsCompact}↩{:else}Denodalize{/if}
+                  {#if isActionsCompact}↩{:else}Denodelize{/if}
                 </Button>
               {:else}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  ariaLabel="Nodalization"
-                  title="Nodalization"
-                  on:click={() => onNodalize(group.id)}
-                >
-                  {#if isActionsCompact}⧉{:else}Nodalization{/if}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  ariaLabel="Minimize"
-                  title="Minimize"
-                  on:click={() => onToggleMinimized(group.id)}
-                >
-                  {#if isActionsCompact}▁{:else}Minimize{/if}
-                </Button>
+                {#if !isAiSpace}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    ariaLabel="Nodelization"
+                    title="Nodelization"
+                    on:click={() => onNodelize(group.id)}
+                  >
+                    {#if isActionsCompact}⧉{:else}Nodelization{/if}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    ariaLabel="Minimize"
+                    title="Minimize"
+                    on:click={() => onToggleMinimized(group.id)}
+                  >
+                    {#if isActionsCompact}▁{:else}Minimize{/if}
+                  </Button>
+                {/if}
                 <Button
                   variant={isEditing ? 'primary' : 'ghost'}
                   size="sm"
@@ -242,17 +253,19 @@
                 title={group.disabled ? 'Activate group' : 'Deactivate group'}
                 on:click={() => onToggleDisabled(group.id)}
               >
-                {#if isActionsCompact}⏻{:else}{group.disabled ? 'Activate group' : 'Deactivate group'}{/if}
+                {#if isActionsCompact}⏻{:else}{group.disabled
+                    ? 'Activate group'
+                    : 'Deactivate group'}{/if}
               </Button>
             </div>
           </div>
 
-        {#if toastMessage}
-          <div class="group-frame-toast" aria-live="polite">
-            {toastMessage}
-          </div>
-        {/if}
-      </div>
+          {#if toastMessage}
+            <div class="group-frame-toast" aria-live="polite">
+              {toastMessage}
+            </div>
+          {/if}
+        </div>
       {/if}
     {/each}
   </div>
@@ -292,6 +305,21 @@
       0 18px 64px rgba(99, 102, 241, 0.1);
   }
 
+  .group-frame.ai-space {
+    border-color: rgba(34, 197, 94, 0.72);
+    background: rgba(34, 197, 94, 0.035);
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.18),
+      0 18px 64px rgba(34, 197, 94, 0.08);
+  }
+
+  .group-frame.ai-space.selected {
+    border-color: rgba(22, 163, 74, 0.98);
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.26),
+      0 18px 64px rgba(34, 197, 94, 0.12);
+  }
+
   .group-frame.disabled.selected {
     border-color: rgba(148, 163, 184, 0.7);
     box-shadow:
@@ -320,6 +348,14 @@
   }
 
   .group-frame.disabled.editing {
+    animation-name: group-frame-pulse-disabled;
+  }
+
+  .group-frame.ai-space.editing {
+    animation-name: ai-space-frame-pulse;
+  }
+
+  .group-frame.ai-space.disabled.editing {
     animation-name: group-frame-pulse-disabled;
   }
 
@@ -576,6 +612,24 @@
       box-shadow:
         0 0 0 1px rgba(148, 163, 184, 0.08),
         0 18px 64px rgba(148, 163, 184, 0.03);
+    }
+  }
+
+  @keyframes ai-space-frame-pulse {
+    0%,
+    100% {
+      border-color: rgba(34, 197, 94, 0.72);
+      background: rgba(34, 197, 94, 0.035);
+      box-shadow:
+        0 0 0 1px rgba(34, 197, 94, 0.18),
+        0 18px 64px rgba(34, 197, 94, 0.08);
+    }
+    50% {
+      border-color: rgba(34, 197, 94, 0.24);
+      background: rgba(34, 197, 94, 0.012);
+      box-shadow:
+        0 0 0 1px rgba(34, 197, 94, 0.09),
+        0 18px 64px rgba(34, 197, 94, 0.04);
     }
   }
 </style>

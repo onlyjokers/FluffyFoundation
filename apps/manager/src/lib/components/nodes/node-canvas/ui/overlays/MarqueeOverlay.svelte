@@ -10,6 +10,7 @@
   export let selectionCount = 0;
 
   export let onCreateGroup: () => void = () => undefined;
+  export let onCreateAiSpace: () => void = () => undefined;
 </script>
 
 {#if marqueeRect || selectionBounds}
@@ -28,11 +29,13 @@
       />
       <div
         class="marquee-actions"
-        style="left: {selectionBounds.left + selectionBounds.width - 12}px; top: {selectionBounds.top +
-          10}px; transform: translateX(-100%);"
+        style="left: {selectionBounds.left +
+          selectionBounds.width -
+          12}px; top: {selectionBounds.top + 10}px; transform: translateX(-100%);"
         on:pointerdown|stopPropagation
       >
-        <Button variant="primary" size="sm" on:click={onCreateGroup}>Create node group</Button>
+        <Button variant="secondary" size="sm" on:click={onCreateGroup}>Create node group</Button>
+        <Button variant="primary" size="sm" on:click={onCreateAiSpace}>Create AI Space</Button>
       </div>
     {/if}
   </div>
@@ -65,6 +68,8 @@
 
   .marquee-actions {
     position: absolute;
+    display: flex;
+    gap: 8px;
     pointer-events: auto;
   }
 </style>

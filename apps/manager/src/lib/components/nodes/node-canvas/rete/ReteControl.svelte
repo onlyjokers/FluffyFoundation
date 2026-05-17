@@ -5,6 +5,7 @@
   import {
     audienceClients,
     clientReadiness,
+    displayClients,
     sensorData,
   } from '$lib/stores/manager';
   import { assetsStore } from '$lib/stores/assets';
@@ -230,11 +231,15 @@
     if (data?.controlType !== 'client-picker') return [];
     const _tick = $tickTimeStore;
     void _tick;
+    const pickerClients =
+      data?.nodeType === 'display-object'
+        ? (($displayClients ?? []) as unknown as AnyRecord[])
+        : (($audienceClients ?? []) as unknown as AnyRecord[]);
 
     return buildClientPickerView({
       data,
       graphState: $graphStateStore,
-      audienceClients: ($audienceClients ?? []) as AnyRecord[],
+      audienceClients: pickerClients,
       getNode: (nodeId) => nodeEngine.getNode(nodeId),
       getLastComputedInputs: (nodeId) => nodeEngine.getLastComputedInputs(nodeId),
     });
@@ -255,7 +260,9 @@
       ? ($graphStateStore.nodes ?? []).find((n: NodeInstance) => n.id === conn.sourceNodeId)
       : null;
     sensorsClientId = srcNode?.config?.clientId ? String(srcNode.config.clientId) : '';
-    sensorsData = sensorsClientId ? (($sensorData.get(sensorsClientId) as AnyRecord) ?? null) : null;
+    sensorsData = sensorsClientId
+      ? (($sensorData.get(sensorsClientId) as AnyRecord) ?? null)
+      : null;
     const nextPayload =
       sensorsData && typeof sensorsData.payload === 'object'
         ? (sensorsData.payload as AnyRecord)
@@ -533,10 +540,15 @@
     {handleFileChange}
   />
 {:else if data?.controlType === 'client-picker'}
+  {@const pickerClients =
+    data?.nodeType === 'display-object' ? ($displayClients ?? []) : ($audienceClients ?? [])}
   <ReteClientPickerControl
     {data}
     {hasLabel}
-    audienceClients={$audienceClients ?? []}
+    audienceClients={pickerClients}
+    emptyLabel={data?.nodeType === 'display-object'
+      ? 'No displays connected'
+      : 'No clients connected'}
     {clientPickerInputLocked}
     {clientPickerView}
     {clientLabel}
@@ -769,5 +781,4 @@
     min-width: 56px;
     white-space: nowrap;
   }
-
 </style>

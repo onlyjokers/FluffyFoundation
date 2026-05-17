@@ -38,6 +38,7 @@ export type DisplayTransportAvailabilityLike = {
   hasLocalSession: boolean;
   hasLocalReady: boolean;
   hasRemoteDisplay: boolean;
+  localSessionKey?: string;
 };
 
 export type DisplayTransportSendOptionsLike = { forceServer?: boolean; localOnly?: boolean };
@@ -70,7 +71,10 @@ export type LoopControllerLike = {
   };
 };
 
-export type WritableLike<T> = { set(value: T): void; subscribe: (run: (v: T) => void) => () => void };
+export type WritableLike<T> = {
+  set(value: T): void;
+  subscribe: (run: (v: T) => void) => () => void;
+};
 
 export type SendNodeOverrideFn = (
   nodeId: string,
@@ -91,6 +95,7 @@ export type DeployedPatch = {
   patchId: string;
   nodeIds: Set<string>;
   topologySignature: string;
+  targetRevision: string;
   deployedAt: number;
 };
 

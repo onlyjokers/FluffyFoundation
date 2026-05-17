@@ -4,6 +4,7 @@
 import type { Writable } from 'svelte/store';
 import type { LocalLoop } from '$lib/nodes';
 import type { GraphState } from '$lib/nodes/types';
+import type { AgentGroupInterface, AgentGroupPolicy } from '@shugu/node-core';
 import type { GraphViewAdapter, NodeBounds } from '../adapters';
 
 export type NodeGroup = {
@@ -12,10 +13,16 @@ export type NodeGroup = {
   name: string;
   nodeIds: string[];
   disabled: boolean;
+  /** Group-like visual kind; AI Spaces use the same frame renderer with separate AI semantics. */
+  kind?: 'group' | 'ai-space';
   /** When true, the group frame collapses into a node-like form and hides its subtree nodes/connections. */
   minimized: boolean;
   /** Runtime gate from Group Gate port; defaults to true when unset. */
   runtimeActive?: boolean;
+  /** AI Space interface metadata; only meaningful when kind is `ai-space`. */
+  agentInterface?: AgentGroupInterface;
+  /** AI Space policy metadata; only meaningful when kind is `ai-space`. */
+  agentPolicy?: AgentGroupPolicy;
 };
 
 export type GroupFrame = {
@@ -63,7 +70,12 @@ export type GroupController = {
   nodeGroups: Writable<NodeGroup[]>;
   groupFrames: Writable<GroupFrame[]>;
   groupSelectionNodeIds: Writable<Set<string>>;
-  groupSelectionBounds: Writable<{ left: number; top: number; width: number; height: number } | null>;
+  groupSelectionBounds: Writable<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>;
   selectedGroupId: Writable<string | null>;
   editModeGroupId: Writable<string | null>;
   canvasToast: Writable<string | null>;
@@ -79,7 +91,7 @@ export type GroupController = {
   applyHighlights: () => Promise<void>;
   scheduleHighlight: () => void;
   clearSelection: () => void;
-  createGroupFromSelection: () => void;
+  createGroupFromSelection: (kind?: 'group' | 'ai-space') => void;
   toggleGroupDisabled: (groupId: string) => void;
   toggleGroupMinimized: (groupId: string) => void;
   disassembleGroup: (groupId: string) => void;
@@ -98,5 +110,9 @@ export type GroupController = {
   beginProgrammaticTranslate: () => void;
   endProgrammaticTranslate: () => void;
   computeLoopFrameBounds: (loop: LocalLoop) => NodeBounds | null;
-  pushNodesOutOfBounds: (bounds: NodeBounds, excludeNodeIds: Set<string>, frameMoves?: FrameMoveContext) => void;
+  pushNodesOutOfBounds: (
+    bounds: NodeBounds,
+    excludeNodeIds: Set<string>,
+    frameMoves?: FrameMoveContext
+  ) => void;
 };

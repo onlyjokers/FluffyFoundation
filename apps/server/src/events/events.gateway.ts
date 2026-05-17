@@ -8,6 +8,7 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
+import { Optional } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient, type RedisClientType } from 'redis';
@@ -37,6 +38,7 @@ import {
   validateServerStateStrategyConfig,
 } from '../bootstrap/state-strategy.js';
 import { handleDisplayRouterCommand } from './display-routing.js';
+import { AiDebugLogger } from '../ai/ai-debug-logger.js';
 
 function sanitizeGroup(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -73,7 +75,8 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   constructor(
     private readonly clientRegistry: ClientRegistryService,
-    private readonly messageRouter: MessageRouterService
+    private readonly messageRouter: MessageRouterService,
+    @Optional() private readonly aiDebugLogger?: AiDebugLogger
   ) {
     this.clientRegistry.onClientExpired((clientId) => {
       this.messageRouter.notifyClientLeft(clientId);
@@ -219,7 +222,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // Validate the full runtime protocol schema before routing.
     const validation = validateMessage(message);
     if (!validation.ok) {
-      this.logRejectedMessage(client.id, validation.reasons);
+      this.logRejectedMessage(client.id, validation.reasons, message);
       return;
     }
 
@@ -234,7 +237,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     ) {
       if (validatedMessage.type !== 'semantic') {
         const partitionRejectReason = validatePartitionLifecycleIngress(validatedMessage);
-        if (partitionRejectReason) return this.logRejectedMessage(client.id, [partitionRejectReason]);
+        if (partitionRejectReason) {
+          return this.logRejectedMessage(client.id, [partitionRejectReason], validatedMessage);
+        }
       }
       if (
         isNonSystemMutatingCommandMessage(validatedMessage) &&
@@ -249,7 +254,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
             code: 'server.policy.manager_required',
             message: `manager role is required for ${validatedMessage.type} messages`,
           }),
-        ]);
+        ], validatedMessage);
         return;
       }
       if (
@@ -265,7 +270,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
             code: 'server.policy.root_retired',
             message: 'Root control authority is retired; use a Manager-scoped command',
           }),
-        ]);
+        ], validatedMessage);
         return;
       }
       if (!this.clientRegistry.isManager(client.id)) {
@@ -278,7 +283,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
             code: 'server.policy.manager_required',
             message: `manager role is required for ${validatedMessage.type} messages`,
           }),
-        ]);
+        ], validatedMessage);
         return;
       }
 
@@ -294,21 +299,25 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
           isManager: this.clientRegistry.isManager(client.id),
           displays: this.clientRegistry.getDisplayDescriptors(),
           routeMessage: (routed) => this.messageRouter.routeMessage(routed, client.id),
-          logRejected: (reasons) => this.logRejectedMessage(client.id, reasons),
+          logRejected: (reasons) => this.logRejectedMessage(client.id, reasons, validatedMessage),
           audit: () => this.auditMutatingCommand(validatedMessage),
         })
       )
         return;
 
       const scopeRejectReason = this.validateCommandScope(validatedMessage);
-      if (scopeRejectReason) return this.logRejectedMessage(client.id, [scopeRejectReason]);
+      if (scopeRejectReason) {
+        return this.logRejectedMessage(client.id, [scopeRejectReason], validatedMessage);
+      }
 
       const ownershipRejectReason = enforceGroupOwnership({
         message: validatedMessage,
         registry: this.clientRegistry,
         commandName: (msg) => this.commandName(msg),
       });
-      if (ownershipRejectReason) return this.logRejectedMessage(client.id, [ownershipRejectReason]);
+      if (ownershipRejectReason) {
+        return this.logRejectedMessage(client.id, [ownershipRejectReason], validatedMessage);
+      }
     }
 
     this.auditMutatingCommand(validatedMessage);
@@ -378,9 +387,16 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       decision: string;
       code: string;
       message: string;
-    }>
+    }>,
+    rejectedMessage?: unknown
   ): void {
     for (const reason of reasons) {
+      this.aiDebugLogger?.write({
+        kind: 'gateway.message.rejected',
+        socketId,
+        reason,
+        message: rejectedMessage,
+      });
       console.warn('[Gateway] Message rejected', {
         socketId,
         actor: reason.actor,

@@ -1,0 +1,319 @@
+{
+  "__purpose": "Importable Node Graph template for AI Agent demos. Runtime model configuration lives on the server; this file declares an AI Space sandbox the orchestrator can target.",
+  "version": 2,
+  "kind": "node-graph",
+  "aiSpaceGuide": {
+    "spaceId": "ai-space:traveler-greeting",
+    "intent": "Persistent AI operator sandbox for greeting, client signaling, display pulses, and follow-up reactions.",
+    "runtimeConfig": "gpt-5.5 is configured by server env variables, not by a canvas node.",
+    "eventBindings": ["client.joined", "client.text.final", "display.ready"],
+    "expectedCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect", "node.remove"]
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "n-note",
+        "type": "note",
+        "position": { "x": 80, "y": 80 },
+        "config": {
+          "text": "AI Space demo. The server-side AI Orchestrator listens for client.joined and client.text.final, then mutates nodes inside this green AI Space."
+        },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-agent-message",
+        "type": "string",
+        "position": { "x": 80, "y": 240 },
+        "config": { "value": "你好，旅行者" },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-message-preview",
+        "type": "show-anything",
+        "position": { "x": 360, "y": 240 },
+        "config": {},
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-display-text",
+        "type": "proc-display-text",
+        "position": { "x": 680, "y": 240 },
+        "config": {
+          "text": "你好，旅行者",
+          "color": "#ffffff",
+          "backgroundColor": "rgba(0, 0, 0, 0.72)",
+          "durationMs": 0
+        },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-client-count",
+        "type": "client-count",
+        "position": { "x": 80, "y": 420 },
+        "config": {},
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-client-range",
+        "type": "number",
+        "position": { "x": 360, "y": 420 },
+        "config": { "value": 1 },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-client",
+        "type": "client-object",
+        "position": { "x": 640, "y": 380 },
+        "config": { "clientId": "" },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-flashlight",
+        "type": "proc-flashlight",
+        "position": { "x": 640, "y": 120 },
+        "config": {
+          "active": true,
+          "mode": "blink",
+          "frequencyHz": 2,
+          "dutyCycle": 0.4
+        },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-rate",
+        "type": "number",
+        "position": { "x": 360, "y": 120 },
+        "config": { "value": 2 },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-duty",
+        "type": "number",
+        "position": { "x": 360, "y": 180 },
+        "config": { "value": 0.4 },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-screen-color",
+        "type": "proc-screen-color",
+        "position": { "x": 980, "y": 180 },
+        "config": {
+          "active": true,
+          "primary": "#22c55e",
+          "secondary": "#ffffff",
+          "maxOpacity": 0.88,
+          "minOpacity": 0.16,
+          "waveform": "sine",
+          "frequencyHz": 1.25
+        },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-display",
+        "type": "display-object",
+        "position": { "x": 1280, "y": 180 },
+        "config": { "displayId": "" },
+        "inputValues": { "index": 1, "range": 1, "random": false },
+        "outputValues": {}
+      },
+      {
+        "id": "n-cmd-aggregator",
+        "type": "cmd-aggregator",
+        "position": { "x": 1120, "y": 260 },
+        "config": {},
+        "inputValues": {},
+        "outputValues": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c-message-preview",
+        "sourceNodeId": "n-agent-message",
+        "sourcePortId": "value",
+        "targetNodeId": "n-message-preview",
+        "targetPortId": "in"
+      },
+      {
+        "id": "c-message-display-text",
+        "sourceNodeId": "n-agent-message",
+        "sourcePortId": "value",
+        "targetNodeId": "n-display-text",
+        "targetPortId": "text"
+      },
+      {
+        "id": "c-client-count-array",
+        "sourceNodeId": "n-client-count",
+        "sourcePortId": "allIndexs",
+        "targetNodeId": "n-client",
+        "targetPortId": "loadIndexs"
+      },
+      {
+        "id": "c-client-count-index",
+        "sourceNodeId": "n-client-count",
+        "sourcePortId": "number",
+        "targetNodeId": "n-client",
+        "targetPortId": "index"
+      },
+      {
+        "id": "c-client-range",
+        "sourceNodeId": "n-client-range",
+        "sourcePortId": "value",
+        "targetNodeId": "n-client",
+        "targetPortId": "range"
+      },
+      {
+        "id": "c-flash-rate",
+        "sourceNodeId": "n-rate",
+        "sourcePortId": "value",
+        "targetNodeId": "n-flashlight",
+        "targetPortId": "frequencyHz"
+      },
+      {
+        "id": "c-flash-duty",
+        "sourceNodeId": "n-duty",
+        "sourcePortId": "value",
+        "targetNodeId": "n-flashlight",
+        "targetPortId": "dutyCycle"
+      },
+      {
+        "id": "c-flash-cmd",
+        "sourceNodeId": "n-flashlight",
+        "sourcePortId": "cmd",
+        "targetNodeId": "n-client",
+        "targetPortId": "in"
+      },
+      {
+        "id": "c-screen-cmd",
+        "sourceNodeId": "n-screen-color",
+        "sourcePortId": "cmd",
+        "targetNodeId": "n-cmd-aggregator",
+        "targetPortId": "in1"
+      },
+      {
+        "id": "c-display-text-cmd",
+        "sourceNodeId": "n-display-text",
+        "sourcePortId": "cmd",
+        "targetNodeId": "n-cmd-aggregator",
+        "targetPortId": "in2"
+      },
+      {
+        "id": "c-display-cmd",
+        "sourceNodeId": "n-cmd-aggregator",
+        "sourcePortId": "cmd",
+        "targetNodeId": "n-display",
+        "targetPortId": "in"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "ai-space:traveler-greeting",
+      "parentId": null,
+      "kind": "ai-space",
+      "name": "AI Space - Traveler Greeting",
+      "nodeIds": [
+        "n-note",
+        "n-agent-message",
+        "n-message-preview",
+        "n-display-text",
+        "n-client-count",
+        "n-client-range",
+        "n-client",
+        "n-flashlight",
+        "n-rate",
+        "n-duty",
+        "n-screen-color",
+        "n-cmd-aggregator",
+        "n-display"
+      ],
+      "disabled": false,
+      "minimized": false,
+      "agentInterface": {
+        "publicInputs": [
+          { "id": "client_joined", "type": "event", "label": "Client Joined" },
+          { "id": "client_text", "type": "string", "label": "Client Text" },
+          { "id": "display_ready", "type": "event", "label": "Display Ready" }
+        ],
+        "publicOutputs": [
+          { "id": "message_preview", "type": "string", "label": "Agent Message" },
+          { "id": "client_reaction", "type": "command", "label": "Client Pulse" },
+          { "id": "display_reaction", "type": "command", "label": "Display Pulse" }
+        ],
+        "exposedNodeIds": [
+          "n-agent-message",
+          "n-message-preview",
+          "n-display-text",
+          "n-client-count",
+          "n-client-range",
+          "n-client",
+          "n-flashlight",
+          "n-rate",
+          "n-duty",
+          "n-screen-color",
+          "n-cmd-aggregator",
+          "n-display"
+        ],
+        "callableCommands": [
+          "node.params.update",
+          "node.add",
+          "node.connect",
+          "node.disconnect",
+          "node.remove"
+        ],
+        "eventBindings": ["client.joined", "client.text.final", "display.ready"]
+      },
+      "agentPolicy": {
+        "enabled": true,
+        "allowedActorIds": ["ai-orchestrator"],
+        "allowedCommands": [
+          "node.params.update",
+          "node.add",
+          "node.connect",
+          "node.disconnect",
+          "node.remove"
+        ],
+        "deniedSurfaces": ["network", "secrets", "storage"],
+        "targetScope": {
+          "nodeIds": [
+            "n-agent-message",
+            "n-message-preview",
+            "n-display-text",
+            "n-client-count",
+            "n-client-range",
+            "n-client",
+            "n-flashlight",
+            "n-rate",
+            "n-duty",
+            "n-screen-color",
+            "n-cmd-aggregator",
+            "n-display"
+          ],
+          "allowNewNodes": true
+        },
+        "budgets": {
+          "maxNodes": 16,
+          "maxConnections": 20,
+          "maxParamsPerCommand": 8,
+          "maxCommandsPerTurn": 12,
+          "maxRetries": 2
+        },
+        "approvalRequired": false,
+        "rollbackOnReject": true
+      }
+    }
+  ],
+  "ui": {
+    "collapsedNodeIds": []
+  }
+}
