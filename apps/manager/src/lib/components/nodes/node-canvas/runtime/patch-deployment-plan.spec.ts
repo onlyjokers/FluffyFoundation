@@ -96,6 +96,57 @@ test('resolvePatchDeploymentPlan routes display-object to local display before r
   assert.equal(result.planKey, 'display-1=root|display-2=root|local:display=root');
 });
 
+test('resolvePatchDeploymentPlan ignores disconnected remote displays', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph, {
+    getDisplayAvailability: () => ({
+      hasLocalSession: false,
+      hasLocalReady: false,
+    }),
+    getManagerClients: () => [
+      { clientId: 'client-a', group: 'audience', connected: true },
+      { clientId: 'display-1', group: 'display', connected: false },
+      { clientId: 'display-2', group: 'display', connected: true },
+    ],
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['display-2']);
+  assert.equal(result.rootIdsByClientId.has('display-1'), false);
+  assert.deepEqual(result.rootIdsByClientId.get('display-2'), ['root']);
+});
+
+test('resolvePatchDeploymentPlan records target revisions for reconnect redeploys', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph, {
+    getDisplayAvailability: () => ({
+      hasLocalSession: true,
+      hasLocalReady: true,
+      localSessionKey: 'local-ready-2',
+    }),
+    getManagerClients: () => [
+      { clientId: 'client-a', group: 'audience', connectedAt: 100 },
+      { clientId: 'display-1', group: 'display', connectedAt: 200 },
+      { clientId: 'display-2', group: 'display', connectedAt: 300 },
+    ],
+  });
+
+  assert.ok(result);
+  assert.equal(result.targetRevisionByClientId.get('local:display'), 'local-ready-2');
+  assert.equal(result.targetRevisionByClientId.get('display-1'), '200');
+  assert.equal(result.targetRevisionByClientId.get('display-2'), '300');
+});
+
 test('resolvePatchDeploymentPlan avoids local display when the paired session is not ready', () => {
   errors.length = 0;
   const graph: GraphState = {

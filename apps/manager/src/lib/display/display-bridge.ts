@@ -92,7 +92,8 @@ type DisplayPluginMessage = {
 export type AssetManifestSnapshot = {
   manifestId: string;
   assets: string[];
-  updatedAt?: number; entries?: unknown[];
+  updatedAt?: number;
+  entries?: unknown[];
 };
 
 type DisplayReadyMessage = {
@@ -191,10 +192,12 @@ function createRandomToken(prefix: string): string {
   return `${prefix}${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
 }
 
-export function buildDefaultDisplayUrl(opts: {
-  origin: string;
-  dev?: boolean;
-} = { origin: window.location.origin, dev: import.meta.env.DEV }): URL {
+export function buildDefaultDisplayUrl(
+  opts: {
+    origin: string;
+    dev?: boolean;
+  } = { origin: window.location.origin, dev: import.meta.env.DEV }
+): URL {
   const base = new URL(opts.origin);
   // In dev, Display runs on a dedicated Vite port. In production, it is served under `DISPLAY_BASE_PATH` on the same origin.
   if (opts.dev ?? import.meta.env.DEV) {
@@ -228,9 +231,12 @@ function stopCloseWatch(): void {
   }
 }
 
-function teardownPort(): void {
-  // Best-effort: clear any long-lived effects so an unpaired Display doesn't stay "stuck" showing old content.
-  if (controlPort) {
+function teardownPort(options: { cleanup?: boolean } = {}): void {
+  const cleanup = options.cleanup !== false;
+
+  // Best-effort: clear any long-lived effects when explicitly closing a Display.
+  // When opening another Display, keep the previous Display alive as a server-routed remote target.
+  if (controlPort && cleanup) {
     try {
       const cleanup: DisplayControlMessage[] = [
         {
@@ -391,16 +397,9 @@ export function openDisplay(options?: {
 }): void {
   if (typeof window === 'undefined') return;
 
-  if (displayWindow && !displayWindow.closed) {
-    try {
-      displayWindow.close();
-    } catch {
-      // ignore
-    }
-  }
   stopCloseWatch();
   displayWindow = null;
-  teardownPort();
+  teardownPort({ cleanup: false });
 
   const serverUrl = options?.serverUrl?.trim() ? options.serverUrl.trim() : getDefaultServerUrl();
   const assetReadToken =
@@ -470,7 +469,7 @@ export function pairDisplay(options?: {
     return;
   }
 
-  teardownPort();
+  teardownPort({ cleanup: false });
 
   const stateSnapshot = get(displayBridgeState);
   const displayUrl = stateSnapshot.displayUrl ? new URL(stateSnapshot.displayUrl) : null;

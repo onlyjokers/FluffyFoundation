@@ -11,6 +11,7 @@ type PatchRoot = { id: string; type: string };
 export type PatchDeploymentPlan = {
   selectedRoots: PatchRoot[];
   rootIdsByClientId: Map<string, string[]>;
+  targetRevisionByClientId: Map<string, string>;
   targetClientIds: string[];
   planKey: string;
 };
@@ -22,7 +23,11 @@ export type PatchDeploymentPlanOptions = {
   audienceClientIdsInOrder: () => string[];
   getManagerClients: () => unknown[];
   localDisplayTargetId: string;
-  getDisplayAvailability: () => { hasLocalSession: boolean; hasLocalReady?: boolean };
+  getDisplayAvailability: () => {
+    hasLocalSession: boolean;
+    hasLocalReady?: boolean;
+    localSessionKey?: string;
+  };
   getNodeDefinition: (type: string) => NodeDefinition | undefined;
   getRuntimeNode: (nodeId: string) => NodeInstance | undefined;
   getLastComputedInputs: (nodeId: string) => Record<string, unknown> | null;
@@ -179,13 +184,32 @@ export function resolvePatchDeploymentPlan(
     (getManagerClients() ?? [])
       .filter((client) => {
         const record = asRecord(client);
-        return String(record?.group ?? '') === 'display';
+        return String(record?.group ?? '') === 'display' && record?.connected !== false;
       })
       .map((client) => {
         const record = asRecord(client);
         return record ? String(record.clientId ?? '') : '';
       })
       .filter((id) => Boolean(id) && connectedAll.has(id));
+
+  const getTargetRevision = (
+    clientId: string,
+    availability?: ReturnType<typeof getDisplayAvailability>
+  ): string => {
+    if (clientId === localDisplayTargetId) {
+      return typeof availability?.localSessionKey === 'string' ? availability.localSessionKey : '';
+    }
+
+    const client = (getManagerClients() ?? []).find((candidate) => {
+      const record = asRecord(candidate);
+      return String(record?.clientId ?? '') === clientId;
+    });
+    const record = asRecord(client);
+    const connectedAt = record?.connectedAt;
+    return typeof connectedAt === 'number' && Number.isFinite(connectedAt)
+      ? String(connectedAt)
+      : '';
+  };
 
   const resolveDisplayNodeTargets = (nodeId: string): { explicit: boolean; ids: string[] } => {
     const displayIds = displayClientIdsInOrder();
@@ -324,6 +348,7 @@ export function resolvePatchDeploymentPlan(
   };
 
   const rootIdSetByClientId = new Map<string, Set<string>>();
+  const targetRevisionByClientId = new Map<string, string>();
   for (const root of selectedRoots) {
     const targets = resolveTargetsForRoot(root.id);
     for (const targetId of targets) {
@@ -342,6 +367,7 @@ export function resolvePatchDeploymentPlan(
 
   const targetClientIds: string[] = [];
   const seenTargets = new Set<string>();
+  const availability = getDisplayAvailability();
 
   if (rootIdsByClientId.has(localDisplayTargetId)) {
     targetClientIds.push(localDisplayTargetId);
@@ -362,6 +388,10 @@ export function resolvePatchDeploymentPlan(
     targetClientIds.push(id);
   }
 
+  for (const id of rootIdsByClientId.keys()) {
+    targetRevisionByClientId.set(id, getTargetRevision(id, availability));
+  }
+
   const prevError = getLastError();
   if (
     typeof prevError === 'string' &&
@@ -377,5 +407,5 @@ export function resolvePatchDeploymentPlan(
     .map(([clientId, rootIds]) => `${clientId}=${rootIds.join(',')}`)
     .join('|');
 
-  return { selectedRoots, rootIdsByClientId, targetClientIds, planKey };
+  return { selectedRoots, rootIdsByClientId, targetRevisionByClientId, targetClientIds, planKey };
 }

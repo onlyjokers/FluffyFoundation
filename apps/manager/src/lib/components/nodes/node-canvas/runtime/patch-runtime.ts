@@ -3,7 +3,6 @@
  */
 
 import { get } from 'svelte/store';
-import type { GraphState } from '$lib/nodes/types';
 import {
   resolvePatchDeploymentPlan as resolvePatchDeploymentPlanCore,
   type PatchDeploymentPlan,
@@ -13,10 +12,7 @@ import {
   computeTopologySignature,
   isDefinitionBypassableWhenDisabled,
 } from './patch-runtime-helpers';
-import {
-  resolveDeployedLoopClientId,
-  selectExecutorLogsTargetId,
-} from './patch-override-routing';
+import { resolveDeployedLoopClientId, selectExecutorLogsTargetId } from './patch-override-routing';
 import { createPatchMidiBridge } from './patch-midi-bridge';
 import type {
   CreatePatchRuntimeOptions,
@@ -30,7 +26,11 @@ type AnyRecord = Record<string, unknown>;
 
 const asRecord = (value: unknown): AnyRecord | null =>
   value && typeof value === 'object' ? (value as AnyRecord) : null;
-export type { CreatePatchRuntimeOptions, PatchRuntime, SendNodeOverrideFn } from './patch-runtime-types';
+export type {
+  CreatePatchRuntimeOptions,
+  PatchRuntime,
+  SendNodeOverrideFn,
+} from './patch-runtime-types';
 
 export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntime {
   const {
@@ -56,6 +56,10 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
   const clientIdsInOrder = () =>
     (get(managerState).clients ?? [])
+      .filter((client) => {
+        const record = asRecord(client);
+        return record?.connected !== false;
+      })
       .map((client) => {
         const record = asRecord(client);
         return record ? String(record.clientId ?? '') : '';
@@ -66,7 +70,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     (get(managerState).clients ?? [])
       .filter((client) => {
         const record = asRecord(client);
-        return String(record?.group ?? '') !== 'display';
+        return record?.connected !== false && String(record?.group ?? '') !== 'display';
       })
       .map((client) => {
         const record = asRecord(client);
@@ -205,7 +209,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     });
   };
 
-  const resolvePatchTargetClientIds = (): string[] => resolvePatchDeploymentPlan()?.targetClientIds ?? [];
+  const resolvePatchTargetClientIds = (): string[] =>
+    resolvePatchDeploymentPlan()?.targetClientIds ?? [];
 
   const stopAndRemovePatchOnClient = (clientId: string, patchId: string) => {
     const id = String(clientId ?? '');
@@ -241,7 +246,11 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       return;
     }
 
-    const localOnlyNodeTypes = new Set(['load-audio-from-local', 'load-image-from-local', 'load-video-from-local']);
+    const localOnlyNodeTypes = new Set([
+      'load-audio-from-local',
+      'load-image-from-local',
+      'load-video-from-local',
+    ]);
     const disabled = get(groupDisabledNodeIds);
     const statusMap = get(executorStatusByClient);
 
@@ -251,6 +260,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         patchId: string;
         nodeIds: Set<string>;
         topologySignature: string;
+        targetRevision: string;
         payload: PatchPayload;
       }
     >();
@@ -284,7 +294,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
         const displayTargets = targets.filter((id) => isDisplayTarget(id));
         if (displayTargets.length === 0) {
-          nodeEngine.lastError.set('Load * From Local(Display only) requires a Display target (connect Deploy to Display).');
+          nodeEngine.lastError.set(
+            'Load * From Local(Display only) requires a Display target (connect Deploy to Display).'
+          );
           return false;
         }
         targets = displayTargets;
@@ -303,7 +315,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         for (const rootId of group.rootIds) {
           try {
             const rootPayload = nodeEngine.exportGraphForPatchFromRootNodeIds([rootId]);
-            const rootNodeIds = new Set((rootPayload?.graph?.nodes ?? []).map((node) => String(node.id)));
+            const rootNodeIds = new Set(
+              (rootPayload?.graph?.nodes ?? []).map((node) => String(node.id))
+            );
             const rootHasDisabled = Array.from(rootNodeIds).some((id) => disabled.has(id));
             if (!rootHasDisabled) enabledRoots.push(rootId);
           } catch {
@@ -312,7 +326,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         }
 
         if (enabledRoots.length === 0) {
-          nodeEngine.lastError.set('Patch contains disabled nodes; enable them or remove from deploy.');
+          nodeEngine.lastError.set(
+            'Patch contains disabled nodes; enable them or remove from deploy.'
+          );
           continue;
         }
 
@@ -331,18 +347,29 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       }
 
       if (hasDisabledNodes) {
-        nodeEngine.lastError.set('Patch contains disabled nodes; enable them or remove from deploy.');
+        nodeEngine.lastError.set(
+          'Patch contains disabled nodes; enable them or remove from deploy.'
+        );
         continue;
       }
 
       const topologySignature = computeTopologySignature(payload.graph);
       const patchId = String(payload?.meta?.loopId ?? '');
 
-      applyTimeRangePlayheadsToPatchPayload(payload, (nodeId) => nodeEngine.getTimeRangePlayheadSec(nodeId));
+      applyTimeRangePlayheadsToPatchPayload(payload, (nodeId) =>
+        nodeEngine.getTimeRangePlayheadSec(nodeId)
+      );
 
       for (const nodeId of nodeIds) desiredNodeIds.add(nodeId);
       for (const clientId of targets) {
-        desiredByClientId.set(String(clientId), { patchId, nodeIds, topologySignature, payload });
+        const targetKey = String(clientId);
+        desiredByClientId.set(targetKey, {
+          patchId,
+          nodeIds,
+          topologySignature,
+          targetRevision: plan.targetRevisionByClientId.get(targetKey) ?? '',
+          payload,
+        });
       }
     }
 
@@ -382,6 +409,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         !deployed ||
         deployed.patchId !== desired.patchId ||
         deployed.topologySignature !== desired.topologySignature ||
+        deployed.targetRevision !== desired.targetRevision ||
         (statusLoopId && statusLoopId !== desired.patchId);
 
       if (!needDeploy) {
@@ -395,6 +423,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
           patchId: desired.patchId,
           nodeIds: desired.nodeIds,
           topologySignature: desired.topologySignature,
+          targetRevision: desired.targetRevision,
           deployedAt: deployed?.deployedAt ?? Date.now(),
         });
         continue;
@@ -413,6 +442,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         patchId: desired.patchId,
         nodeIds: desired.nodeIds,
         topologySignature: desired.topologySignature,
+        targetRevision: desired.targetRevision,
         deployedAt: Date.now(),
       });
     }
@@ -422,7 +452,10 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     syncPatchOffloadState(desiredNodeIds);
     void applyPatchHighlights(desiredNodeIds);
     if (first) midiBridge.syncPatchRoutes(first.patchId, desiredNodeIds);
-    console.log('[patch] reconciled', { reason, targets: Array.from(desiredByClientId.keys()).sort() });
+    console.log('[patch] reconciled', {
+      reason,
+      targets: Array.from(desiredByClientId.keys()).sort(),
+    });
   };
 
   const scheduleReconcile = (reason: string) => {
@@ -442,7 +475,12 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     const state = getGraphState();
     const node = (state.nodes ?? []).find((n) => String(n.id) === String(nodeId));
-    if (node && String(node.type ?? '') === 'client-object' && kind === 'config' && portId === 'clientId')
+    if (
+      node &&
+      String(node.type ?? '') === 'client-object' &&
+      kind === 'config' &&
+      portId === 'clientId'
+    )
       return;
 
     const loop = loopController?.loopActions.getDeployedLoopForNode(nodeId);
@@ -561,7 +599,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       const disabledInPatch = Array.from(patch.nodeIds).filter((id) => disabled.has(id));
       // Avoid hard-stopping patches when the disabled nodes can be bypassed on the next reconcile.
       // This prevents audible restarts when toggling audio FX groups (e.g. Tone Delay).
-      const shouldStop = disabledInPatch.length > 0 && !disabledInPatch.every((id) => isBypassableWhenDisabled(id));
+      const shouldStop =
+        disabledInPatch.length > 0 && !disabledInPatch.every((id) => isBypassableWhenDisabled(id));
       if (!shouldStop) continue;
 
       stopAndRemovePatchOnClient(clientId, patch.patchId);
