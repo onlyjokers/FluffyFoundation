@@ -60,6 +60,8 @@ const snapshot: SemanticGraphSnapshot = {
       params: [],
     },
   ],
+  customDefinitions: [],
+  agentCapabilities: { version: 1, nodes: [] },
   connections: [],
   groups: [targetSpace],
   partitions: [],

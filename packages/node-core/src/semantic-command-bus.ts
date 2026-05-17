@@ -15,6 +15,8 @@ import type {
 } from './semantic-graph-types.js';
 import {
   cloneGraph,
+  cloneAgentCapabilities,
+  cloneCustomDefinitions,
   cloneGroups,
   clonePartitions,
   cloneProposals,
@@ -62,6 +64,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
     graph: cloneGraph(input.graph ?? { nodes: [], connections: [] }),
     groups: normalizeGroups(input.groups),
     partitions: clonePartitions(input.partitions ?? []),
+    customDefinitions: cloneCustomDefinitions(input.customDefinitions),
+    agentCapabilities: cloneAgentCapabilities(input.agentCapabilities),
     proposals: cloneProposals(input.proposals ?? []),
     runtimeStatus: cloneRuntimeStatus(input.runtimeStatus),
     revision: Number.isFinite(input.revision) ? Number(input.revision) : 0,
@@ -78,6 +82,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       ...input,
       graph: state.graph,
       definitions,
+      customDefinitions: state.customDefinitions,
+      agentCapabilities: state.agentCapabilities,
       groups: state.groups,
       partitions: state.partitions,
       proposals: state.proposals,
@@ -178,6 +184,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
         graph: state.graph,
         groups: state.groups,
         partitions: state.partitions,
+        customDefinitions: state.customDefinitions,
+        agentCapabilities: state.agentCapabilities,
         revision: state.revision,
       });
       history.push(audit);
@@ -204,6 +212,8 @@ export function createSemanticCommandBus(input: SemanticCommandBusInput): Semant
       graph: cloneGraph(previous.graph),
       groups: cloneGroups(previous.groups),
       partitions: clonePartitions(previous.partitions),
+      customDefinitions: cloneCustomDefinitions(previous.customDefinitions),
+      agentCapabilities: cloneAgentCapabilities(previous.agentCapabilities),
       proposals: cloneProposals(previous.proposals),
       runtimeStatus: cloneRuntimeStatus(previous.runtimeStatus),
       revision: state.revision + 1,

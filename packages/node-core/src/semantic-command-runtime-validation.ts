@@ -27,6 +27,9 @@ export const validateRuntimeCommand = (
     | { type: 'node.disconnect' }
     | { type: 'graph.snapshot' }
     | { type: 'graph.replace' }
+    | { type: 'definition.custom.upsert' }
+    | { type: 'definition.custom.remove' }
+    | { type: 'agent.capability.set' }
   >
 ): SemanticValidationError[] => {
   const nodeIds = new Set(state.graph.nodes.map((node) => String(node.id)));

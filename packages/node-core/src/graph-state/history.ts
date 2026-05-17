@@ -3,13 +3,26 @@
  */
 
 import type { GraphState } from '../types.js';
-import type { SemanticGroup, SemanticPartition } from '../semantic-graph-types.js';
-import { cloneGraph, cloneGroups, clonePartitions } from '../semantic-graph-snapshot.js';
+import type {
+  AgentCapabilitySettings,
+  CustomNodeDefinition,
+  SemanticGroup,
+  SemanticPartition,
+} from '../semantic-graph-types.js';
+import {
+  cloneAgentCapabilities,
+  cloneCustomDefinitions,
+  cloneGraph,
+  cloneGroups,
+  clonePartitions,
+} from '../semantic-graph-snapshot.js';
 
 export type SemanticHistoryInput = {
   graph: GraphState;
   groups?: SemanticGroup[];
   partitions?: SemanticPartition[];
+  customDefinitions?: CustomNodeDefinition[];
+  agentCapabilities?: AgentCapabilitySettings;
   revision: number;
 };
 
@@ -74,6 +87,15 @@ const semanticProjection = (input: SemanticHistoryInput): Record<string, unknown
       error: partition.error,
     }))
     .sort((a, b) => a.id.localeCompare(b.id)),
+  customDefinitions: cloneCustomDefinitions(input.customDefinitions ?? [])
+    .map((definition) => ({
+      definitionId: definition.definitionId,
+      name: definition.name,
+      template: definition.template,
+      ports: definition.ports,
+    }))
+    .sort((a, b) => a.definitionId.localeCompare(b.definitionId)),
+  agentCapabilities: cloneAgentCapabilities(input.agentCapabilities),
 });
 
 export function createSemanticHash(input: SemanticHistoryInput): string {
@@ -84,6 +106,8 @@ const makeEntry = (input: SemanticHistoryInput): SemanticHistoryEntry => ({
   graph: cloneGraph(input.graph),
   groups: cloneGroups(input.groups ?? []),
   partitions: clonePartitions(input.partitions ?? []),
+  customDefinitions: cloneCustomDefinitions(input.customDefinitions ?? []),
+  agentCapabilities: cloneAgentCapabilities(input.agentCapabilities),
   revision: Number(input.revision),
   semanticHash: createSemanticHash(input),
 });

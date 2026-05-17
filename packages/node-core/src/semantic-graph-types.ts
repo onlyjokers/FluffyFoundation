@@ -132,6 +132,46 @@ export type DeviceCapability = { deviceId: string; capabilities: string[]; statu
 export type SemanticError = { code: string; message: string; targetId?: string };
 export type SemanticPermission = { actorId: string; operations: string[] };
 
+export type CustomNodePortSide = 'input' | 'output';
+
+export type CustomNodePortBinding = {
+  nodeId: string;
+  portId: string;
+};
+
+export type CustomNodePort = {
+  portKey: string;
+  side: CustomNodePortSide;
+  label: string;
+  type: string;
+  pinned: boolean;
+  y: number;
+  binding: CustomNodePortBinding;
+};
+
+export type CustomNodeDefinition = {
+  definitionId: string;
+  name: string;
+  template: GraphState;
+  ports: CustomNodePort[];
+};
+
+export type AgentCapabilityNodeSource = 'builtin' | 'custom' | 'plugin';
+
+export type AgentCapabilityNodeSetting = {
+  nodeType: string;
+  enabled: boolean;
+  source?: AgentCapabilityNodeSource;
+  aiNotes?: string;
+  disabledReason?: string;
+  updatedAt?: string;
+};
+
+export type AgentCapabilitySettings = {
+  version: 1;
+  nodes: AgentCapabilityNodeSetting[];
+};
+
 export type SemanticValidationError = {
   code: string;
   path: string;
@@ -158,6 +198,8 @@ export type SemanticGraphSnapshot = {
   revision: number;
   nodes: SemanticNode[];
   definitions: SemanticDefinition[];
+  customDefinitions: CustomNodeDefinition[];
+  agentCapabilities: AgentCapabilitySettings;
   connections: Connection[];
   groups: SemanticGroup[];
   partitions: SemanticPartition[];
@@ -171,6 +213,8 @@ export type SemanticGraphSnapshot = {
 export type SemanticSnapshotInput = {
   graph: GraphState;
   definitions?: Array<Partial<NodeDefinition> & Pick<NodeDefinition, 'type'>>;
+  customDefinitions?: CustomNodeDefinition[];
+  agentCapabilities?: AgentCapabilitySettings;
   groups?: Array<Record<string, unknown>>;
   partitions?: SemanticPartition[];
   runtimeStatus?: RuntimeStatus;
@@ -183,6 +227,16 @@ export type SemanticSnapshotInput = {
 
 export type SemanticCommand =
   | { type: 'graph.snapshot' }
+  | { type: 'definition.custom.upsert'; definition: CustomNodeDefinition }
+  | { type: 'definition.custom.remove'; definitionId: string }
+  | {
+      type: 'agent.capability.set';
+      nodeType: string;
+      enabled: boolean;
+      source?: AgentCapabilityNodeSource;
+      aiNotes?: string;
+      disabledReason?: string;
+    }
   | {
       type: 'graph.replace';
       graph: GraphState;
@@ -324,6 +378,8 @@ export type CommandState = {
   graph: GraphState;
   groups: SemanticGroup[];
   partitions: SemanticPartition[];
+  customDefinitions: CustomNodeDefinition[];
+  agentCapabilities: AgentCapabilitySettings;
   proposals: SemanticProposal[];
   runtimeStatus: RuntimeStatus;
   revision: number;

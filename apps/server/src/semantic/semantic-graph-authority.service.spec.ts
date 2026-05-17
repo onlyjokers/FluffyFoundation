@@ -95,6 +95,82 @@ test('SemanticGraphAuthorityService returns snapshot commands without mutating r
   assert.equal(service.getHistory().length, 0);
 });
 
+test('SemanticGraphAuthorityService persists custom node definitions and AI capability settings', () => {
+  const { path, service } = createService();
+  const customDefinition = {
+    definitionId: 'triplet-pulse',
+    name: 'Triplet Pulse',
+    template: {
+      nodes: [
+        {
+          id: 'inner-number',
+          type: 'number',
+          position: { x: 0, y: 0 },
+          config: { value: 3 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    ports: [
+      {
+        portKey: 'value',
+        side: 'output',
+        label: 'Value',
+        type: 'number',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'inner-number', portId: 'value' },
+      },
+    ],
+  };
+
+  const upserted = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'definition.custom.upsert',
+      definition: customDefinition,
+    } as never,
+  });
+  assert.equal(upserted.ok, true);
+
+  const capabilityUpdated = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'agent.capability.set',
+      nodeType: 'custom:triplet-pulse',
+      enabled: false,
+      source: 'custom',
+      aiNotes: 'Keep this disabled until the show operator approves it.',
+    } as never,
+  });
+  assert.equal(capabilityUpdated.ok, true);
+
+  const snapshot = service.getSnapshot() as never as {
+    customDefinitions?: unknown[];
+    agentCapabilities?: { nodes?: Array<{ nodeType: string; enabled: boolean; aiNotes?: string }> };
+  };
+  assert.equal(snapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
+  assert.deepEqual(snapshot.agentCapabilities?.nodes, [
+    {
+      nodeType: 'custom:triplet-pulse',
+      enabled: false,
+      source: 'custom',
+      aiNotes: 'Keep this disabled until the show operator approves it.',
+    },
+  ]);
+
+  const persisted = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(persisted.customDefinitions[0].definitionId, 'triplet-pulse');
+  assert.equal(persisted.agentCapabilities.nodes[0].enabled, false);
+
+  const restarted = SemanticGraphAuthorityService.withStoragePath(path);
+  const restartedSnapshot = restarted.getSnapshot() as never as typeof snapshot;
+  assert.equal(restartedSnapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
+  assert.equal(restartedSnapshot.agentCapabilities?.nodes?.[0]?.nodeType, 'custom:triplet-pulse');
+});
+
 test('SemanticGraphAuthorityService defaults persistence to apps/server/data/semantic-graph.json', () => {
   assert.equal(
     normalize(SemanticGraphAuthorityService.defaultStoragePath).endsWith(

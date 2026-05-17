@@ -5,6 +5,8 @@
 import type { CommandState, RollbackRecoveryStatus, SemanticHistoryState } from './semantic-graph-types.js';
 import {
   cloneGraph,
+  cloneAgentCapabilities,
+  cloneCustomDefinitions,
   cloneGroups,
   clonePartitions,
   cloneProposals,
@@ -16,6 +18,8 @@ export const cloneCommandState = (state: CommandState): CommandState => ({
   graph: cloneGraph(state.graph),
   groups: cloneGroups(state.groups),
   partitions: clonePartitions(state.partitions),
+  customDefinitions: cloneCustomDefinitions(state.customDefinitions),
+  agentCapabilities: cloneAgentCapabilities(state.agentCapabilities),
   proposals: cloneProposals(state.proposals),
   runtimeStatus: cloneRuntimeStatus(state.runtimeStatus),
   revision: state.revision,
@@ -50,6 +54,8 @@ export const stateFromHistoryEntry = (
   graph: cloneGraph(entry.graph),
   groups: cloneGroups(entry.groups ?? []),
   partitions: clonePartitions(entry.partitions ?? []),
+  customDefinitions: cloneCustomDefinitions(entry.customDefinitions ?? []),
+  agentCapabilities: cloneAgentCapabilities(entry.agentCapabilities),
   proposals: cloneProposals(proposals),
   runtimeStatus: defaultHistoryRuntimeStatus(entry),
   revision: nextRevision,

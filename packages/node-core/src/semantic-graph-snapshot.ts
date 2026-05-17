@@ -6,6 +6,8 @@ import type { GraphState } from './types.js';
 import type {
   AgentGroupInterface,
   AgentGroupPolicy,
+  AgentCapabilitySettings,
+  CustomNodeDefinition,
   RuntimeStatus,
   SemanticDefinition,
   SemanticGraphSnapshot,
@@ -195,6 +197,41 @@ export const cloneRuntimeStatus = (
 
 const defaultRuntimeStatus: RuntimeStatus = { running: false, deployedPartitionIds: [] };
 
+export const cloneCustomDefinitions = (
+  definitions: CustomNodeDefinition[] = []
+): CustomNodeDefinition[] =>
+  definitions.map((definition) => ({
+    definitionId: String(definition.definitionId ?? ''),
+    name: String(definition.name ?? ''),
+    template: cloneGraph(definition.template ?? { nodes: [], connections: [] }),
+    ports: (definition.ports ?? []).map((port) => ({
+      portKey: String(port.portKey ?? ''),
+      side: port.side === 'input' ? 'input' : 'output',
+      label: String(port.label ?? ''),
+      type: String(port.type ?? 'any'),
+      pinned: Boolean(port.pinned),
+      y: Number.isFinite(port.y) ? Number(port.y) : 0,
+      binding: {
+        nodeId: String(port.binding?.nodeId ?? ''),
+        portId: String(port.binding?.portId ?? ''),
+      },
+    })),
+  }));
+
+export const cloneAgentCapabilities = (
+  settings: AgentCapabilitySettings | undefined
+): AgentCapabilitySettings => ({
+  version: 1,
+  nodes: (settings?.nodes ?? []).map((node) => ({
+    nodeType: String(node.nodeType ?? ''),
+    enabled: Boolean(node.enabled),
+    ...(node.source ? { source: node.source } : {}),
+    ...(node.aiNotes ? { aiNotes: String(node.aiNotes) } : {}),
+    ...(node.disabledReason ? { disabledReason: String(node.disabledReason) } : {}),
+    ...(node.updatedAt ? { updatedAt: String(node.updatedAt) } : {}),
+  })).filter((node) => node.nodeType.length > 0),
+});
+
 export const normalizeDefinitions = (
   definitions: SemanticSnapshotInput['definitions'] = []
 ): SemanticDefinition[] =>
@@ -309,6 +346,8 @@ export function createSemanticGraphSnapshot(input: SemanticSnapshotInput): Seman
       return semanticNode;
     }),
     definitions: normalizeDefinitions(input.definitions),
+    customDefinitions: cloneCustomDefinitions(input.customDefinitions),
+    agentCapabilities: cloneAgentCapabilities(input.agentCapabilities),
     connections: graph.connections,
     groups: normalizeGroups(input.groups),
     partitions: clonePartitions(input.partitions ?? []),

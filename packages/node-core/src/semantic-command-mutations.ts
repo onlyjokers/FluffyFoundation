@@ -6,6 +6,8 @@ import { applyGraphChanges, type GraphChange } from './graph-state/changes.js';
 import type { CommandState, SemanticCommand } from './semantic-graph-types.js';
 import {
   cloneGraph,
+  cloneAgentCapabilities,
+  cloneCustomDefinitions,
   cloneGroups,
   clonePartitions,
   cloneProposals,
@@ -36,6 +38,8 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
     graph: cloneGraph(state.graph),
     groups: cloneGroups(state.groups),
     partitions: clonePartitions(state.partitions),
+    customDefinitions: cloneCustomDefinitions(state.customDefinitions),
+    agentCapabilities: cloneAgentCapabilities(state.agentCapabilities),
     proposals: cloneProposals(state.proposals),
     runtimeStatus: cloneRuntimeStatus(state.runtimeStatus),
     revision: state.revision,
@@ -47,6 +51,8 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
       graph: cloneGraph(command.graph),
       groups: cloneGroups(command.groups ?? []),
       partitions: clonePartitions(command.partitions ?? []),
+      customDefinitions: cloneCustomDefinitions(state.customDefinitions),
+      agentCapabilities: cloneAgentCapabilities(state.agentCapabilities),
       proposals: [],
       runtimeStatus: cloneRuntimeStatus({ running: false, deployedPartitionIds: [] }),
       revision: state.revision + 1,
@@ -57,6 +63,42 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
   if (graphChanges.length > 0) next.graph = applyGraphChanges(next.graph, graphChanges);
 
   switch (command.type) {
+    case 'definition.custom.upsert':
+      next.customDefinitions = [
+        ...next.customDefinitions.filter(
+          (definition) => definition.definitionId !== command.definition.definitionId
+        ),
+        ...cloneCustomDefinitions([command.definition]),
+      ];
+      break;
+    case 'definition.custom.remove':
+      next.customDefinitions = next.customDefinitions.filter(
+        (definition) => definition.definitionId !== command.definitionId
+      );
+      next.agentCapabilities = {
+        version: 1,
+        nodes: next.agentCapabilities.nodes.filter(
+          (setting) => setting.nodeType !== `custom:${command.definitionId}`
+        ),
+      };
+      break;
+    case 'agent.capability.set':
+      next.agentCapabilities = {
+        version: 1,
+        nodes: [
+          ...next.agentCapabilities.nodes.filter(
+            (setting) => setting.nodeType !== command.nodeType
+          ),
+          {
+            nodeType: command.nodeType,
+            enabled: command.enabled,
+            ...(command.source ? { source: command.source } : {}),
+            ...(command.aiNotes ? { aiNotes: command.aiNotes } : {}),
+            ...(command.disabledReason ? { disabledReason: command.disabledReason } : {}),
+          },
+        ],
+      };
+      break;
     case 'node.add':
       if (command.scopeGroupId) {
         next.groups = next.groups.map((group) =>

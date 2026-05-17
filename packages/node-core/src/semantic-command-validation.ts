@@ -19,6 +19,9 @@ export function validateSemanticCommandDetailed(
 ): SemanticValidationError[] {
   switch (command.type) {
     case 'graph.snapshot':
+    case 'definition.custom.upsert':
+    case 'definition.custom.remove':
+    case 'agent.capability.set':
       return [];
     case 'graph.replace':
       return [];
