@@ -3,6 +3,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import type { AgentSkillRef, AgentSkillRegistry, OpenAiCompatibleClient } from '@shugu/ai-core';
 import type {
@@ -157,6 +158,92 @@ const dispatchResultForLog = (result: SemanticCommandResult): Record<string, unk
   snapshot: result.snapshot ? snapshotSummary(result.snapshot) : undefined,
 });
 
+type PromptMessage = {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
+type BasePromptMessage = PromptMessage & { role: 'system' | 'user' };
+
+const stableJson = (value: unknown): string => JSON.stringify(value);
+
+const promptMessage = (
+  id: string,
+  role: 'system' | 'user',
+  value: string | Record<string, unknown>
+): BasePromptMessage => ({
+  id,
+  role,
+  content: typeof value === 'string' ? value : stableJson(value),
+});
+
+const promptMessageMetrics = (
+  messages: PromptMessage[]
+): Array<{ id: string; role: PromptMessage['role']; chars: number; sha256: string }> =>
+  messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    chars: message.content.length,
+    sha256: createHash('sha256').update(message.content).digest('hex'),
+  }));
+
+const chatMessagesFrom = (
+  messages: BasePromptMessage[]
+): Array<{ role: 'system' | 'user'; content: string }> =>
+  messages.map(({ role, content }) => ({ role, content }));
+
+const buildPromptMessages = (input: {
+  systemPrompt: string;
+  event: AgentEnvironmentEvent;
+  targetSpace: SemanticGroup;
+  snapshot: Record<string, unknown>;
+  capabilityManifest: Record<string, unknown>;
+  memory: unknown;
+  skills: AgentSkillRef[];
+}): BasePromptMessage[] => {
+  const targetSpace = compactGroup(input.targetSpace);
+  return [
+    promptMessage('system', 'system', input.systemPrompt),
+    promptMessage(
+      'protocol',
+      'user',
+      [
+        'AI_ORCHESTRATOR_PROTOCOL_V1',
+        'Return only a valid AgentActionPlan JSON object.',
+        'Prefer actions over raw commands.',
+        'Allowed actions: setParam, addNode, connect, disconnect, removeNode.',
+        'Use only IDs, node types, ports, params, and bounds present in later context messages.',
+        'Do not use canvas layout or node positions.',
+      ].join('\n')
+    ),
+    promptMessage('capabilityManifest', 'user', {
+      kind: 'capabilityManifest',
+      capabilityManifest: input.capabilityManifest,
+    }),
+    promptMessage('targetSpace', 'user', {
+      kind: 'targetSpace',
+      targetSpaceId: input.targetSpace.id,
+      targetSpace,
+    }),
+    promptMessage('snapshot', 'user', {
+      kind: 'semanticSnapshot',
+      snapshot: input.snapshot,
+    }),
+    promptMessage('memory', 'user', {
+      kind: 'conversationMemory',
+      memory: input.memory,
+    }),
+    promptMessage('skills', 'user', {
+      kind: 'skills',
+      skills: input.skills,
+    }),
+    promptMessage('event', 'user', {
+      kind: 'event',
+      event: input.event,
+    }),
+  ];
+};
+
 @Injectable()
 export class AiOrchestratorService {
   private readonly promptConfig: AiPromptConfig;
@@ -204,16 +291,17 @@ export class AiOrchestratorService {
         memory: this.memory.snapshot(targetSpace.id),
         skills,
       };
-      const messages = [
-        {
-          role: 'system' as const,
-          content: this.promptConfig.systemPrompt,
-        },
-        {
-          role: 'user' as const,
-          content: JSON.stringify(promptPayload),
-        },
-      ];
+      const promptMessages = buildPromptMessages({
+        systemPrompt: this.promptConfig.systemPrompt,
+        event,
+        targetSpace,
+        snapshot: promptPayload.snapshot,
+        capabilityManifest: promptPayload.capabilityManifest,
+        memory: promptPayload.memory,
+        skills,
+      });
+      const promptMetrics = promptMessageMetrics(promptMessages);
+      const messages = chatMessagesFrom(promptMessages);
 
       this.aiDebugLogger?.write({
         kind: 'ai.turn.request',
@@ -225,6 +313,7 @@ export class AiOrchestratorService {
         skills,
         chatClient: this.chatClient.describeConfig(),
         promptSource: this.promptConfig.source,
+        promptMessages: promptMetrics,
         messages,
       });
 

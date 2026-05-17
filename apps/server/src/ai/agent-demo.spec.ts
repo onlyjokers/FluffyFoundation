@@ -206,8 +206,8 @@ test('AI demo loop routes client join and text through the shared semantic layer
     dispatches.map((entry) => [entry.command.type, entry.command.nodeId, entry.dryRun]),
     [
       ['node.params.update', 'display:greeting', true],
-      ['node.params.update', 'display:greeting', false],
       ['node.params.update', 'client:pulse', true],
+      ['node.params.update', 'display:greeting', false],
       ['node.params.update', 'client:pulse', false],
     ]
   );

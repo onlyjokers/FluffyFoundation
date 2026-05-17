@@ -124,28 +124,6 @@ export const buildCapabilityManifest = (
       aiSummary: definition.aiSummary,
     })),
     disabledNodeTypes,
-    nodes: scopedNodes.map((node) => {
-      const incoming = snapshot.connections
-        .filter((connection) => String(connection.targetNodeId) === String(node.id))
-        .map((connection) => ({
-          targetPortId: connection.targetPortId,
-          sourceNodeId: connection.sourceNodeId,
-          sourcePortId: connection.sourcePortId,
-        }));
-      return {
-        id: node.id,
-        type: node.type,
-        params: node.params,
-        inputValues: node.inputValues,
-        outputValues: node.outputValues,
-        incoming,
-      };
-    }),
-    connections: snapshot.connections.filter(
-      (connection) =>
-        scopedNodeIds.has(String(connection.sourceNodeId)) &&
-        scopedNodeIds.has(String(connection.targetNodeId))
-    ),
   };
 };
 

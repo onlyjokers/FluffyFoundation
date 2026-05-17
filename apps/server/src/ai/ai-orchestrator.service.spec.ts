@@ -254,6 +254,157 @@ test('orchestrator emits semantic commands for joined and text events through th
   );
 });
 
+test('orchestrator orders prompt messages for provider prefix caching and logs prompt fingerprints', async () => {
+  const authority = {
+    getSnapshot: () => ({
+      revision: 21,
+      nodes: [
+        {
+          id: 'display:text',
+          type: 'display-text',
+          params: { value: 'hello' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [
+        {
+          type: 'display-text',
+          label: 'Display Text',
+          category: 'Display',
+          ports: { inputs: [], outputs: [] },
+          params: [{ id: 'value', type: 'string', defaultValue: '' }],
+          aiSummary: {
+            type: 'display-text',
+            label: 'Display Text',
+            version: '1.0.0',
+            category: 'Display',
+            description: 'Writes text to display endpoints.',
+            platforms: ['display', 'client'],
+            sideEffects: 'remote-control',
+            permissions: ['control:send'],
+            ports: { inputs: [], outputs: [] },
+            params: [{ id: 'value', type: 'string', defaultValue: '' }],
+            compatibility: [],
+            examples: [],
+            risks: [],
+            repairHints: [],
+          },
+        },
+      ],
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:cache',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Cache Space',
+          nodeIds: ['display:text'],
+          disabled: false,
+          surface: 'internal',
+          visibility: { defaultAccess: 'visible-readonly' },
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update'],
+            targetScope: { nodeIds: ['display:text'], allowNewNodes: false },
+            budgets: { maxNodes: 2, maxConnections: 1, maxParamsPerCommand: 2 },
+          },
+          agentInterface: {
+            publicInputs: [{ id: 'speech', type: 'string', label: 'Speech text' }],
+            publicOutputs: [{ id: 'display', type: 'string', label: 'Display response' }],
+            exposedNodeIds: ['display:text'],
+            callableCommands: ['node.params.update'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: { command: Record<string, unknown>; dryRun?: boolean }) => ({
+      ok: true,
+      command: input.command,
+      dryRun: Boolean(input.dryRun),
+      previousRevision: 21,
+      appliedRevision: 22,
+      rollbackToken: 'rollback:21',
+      audit: { id: 'audit:21', command: input.command, dryRun: Boolean(input.dryRun) },
+      snapshot: authority.getSnapshot(),
+    }),
+  };
+
+  const capturedMessages: Array<{ role: string; content: string }> = [];
+  const debugRecords: Array<Record<string, unknown>> = [];
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ role: string; content: string }> }) => {
+      capturedMessages.push(...input.messages);
+      return {
+        raw: { ok: true },
+        content:
+          '{"id":"turn:cache","summary":"reply","commands":[{"type":"node.params.update","scopeGroupId":"ai-space:cache","nodeId":"display:text","params":{"value":"你好"}}]}',
+        parsed: {
+          id: 'turn:cache',
+          summary: 'reply',
+          commands: [
+            {
+              type: 'node.params.update',
+              scopeGroupId: 'ai-space:cache',
+              nodeId: 'display:text',
+              params: { value: '你好' },
+            },
+          ],
+        },
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry,
+    { write: (record: Record<string, unknown>) => debugRecords.push(record) },
+  );
+
+  await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    groupId: 'ai-space:cache',
+    text: '你好',
+  });
+
+  assert.equal(capturedMessages[0]?.role, 'system');
+  assert.ok(capturedMessages.length >= 6);
+  assert.match(capturedMessages[1]?.content ?? '', /AI_ORCHESTRATOR_PROTOCOL_V1/);
+  assert.match(capturedMessages[2]?.content ?? '', /"kind":"capabilityManifest"/);
+  assert.match(capturedMessages.at(-1)?.content ?? '', /"kind":"event"/);
+  assert.match(capturedMessages.at(-1)?.content ?? '', /"text":"你好"/);
+  assert.equal(
+    capturedMessages.slice(0, -1).some((message) => message.content.includes('"text":"你好"')),
+    false
+  );
+
+  const requestLog = debugRecords.find((record) => record.kind === 'ai.turn.request') as
+    | { promptMessages?: Array<{ id?: string; sha256?: string; chars?: number }> }
+    | undefined;
+  assert.ok(requestLog);
+  assert.equal(requestLog.promptMessages?.at(-1)?.id, 'event');
+  assert.match(requestLog.promptMessages?.at(-1)?.sha256 ?? '', /^[a-f0-9]{64}$/);
+  assert.equal(typeof requestLog.promptMessages?.at(-1)?.chars, 'number');
+});
+
 test('orchestrator targets only enabled AI spaces whose interface binds the incoming event', async () => {
   const dispatches: Array<{
     actor: { id: string; role: string };
