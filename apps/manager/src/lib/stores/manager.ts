@@ -3,6 +3,7 @@
  */
 import { writable, derived, get } from 'svelte/store';
 import { ManagerSDK, type ManagerState, type ManagerSDKConfig } from '@shugu/sdk-manager';
+import type { SemanticGraphSnapshot } from '@shugu/node-core';
 import type {
     SensorDataMessage,
     ScreenColorPayload,
@@ -97,6 +98,8 @@ export const clientReadiness = writable<Map<string, ClientReadiness>>(new Map())
 export const clientToneReadiness = writable<Map<string, ClientToneReadiness>>(new Map());
 
 export const clientAiReadiness = writable<Map<string, ClientAiReadiness>>(new Map());
+
+export const semanticSnapshot = writable<SemanticGraphSnapshot | null>(null);
 
 // Per-client uploaded screenshots (drives `client-object.imageOut`).
 export const clientScreenshotUploads = writable<Map<string, ClientScreenshotUpload>>(new Map());
@@ -235,6 +238,7 @@ export function connect(config: ManagerSDKConfig): void {
         nodeEngine,
         migrationCoordinator,
         setNodeGroups: (groups) => nodeGroupsState.set(groups),
+        onSnapshot: (snapshot) => semanticSnapshot.set(snapshot),
     });
 
     // Subscribe to state changes

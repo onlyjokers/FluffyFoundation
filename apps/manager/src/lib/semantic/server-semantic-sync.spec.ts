@@ -466,6 +466,29 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
   });
 });
 
+test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
+  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  const published: number[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: (handler) => {
+        snapshotHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: { loadGraph: () => undefined },
+    migrationCoordinator: { maybeImport: () => undefined },
+    onSnapshot: (nextSnapshot) => published.push(nextSnapshot.revision),
+  });
+
+  snapshotHandler?.(snapshot([]));
+
+  assert.deepEqual(published, [7]);
+});
+
 test('migration coordinator never overwrites non-empty server graph with old local project', () => {
   const sent: unknown[] = [];
   const coordinator = createServerSemanticMigrationCoordinator({

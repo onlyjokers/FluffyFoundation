@@ -209,9 +209,11 @@ export function bindServerSemanticSync(input: {
   nodeEngine: ServerSemanticNodeEngine;
   migrationCoordinator: ServerSemanticMigrationCoordinator;
   setNodeGroups?: ServerSemanticNodeGroupsSync;
+  onSnapshot?: (snapshot: SemanticGraphSnapshot) => void;
 }): () => void {
   let requestedInitialSnapshot = false;
   const handleSnapshot = (snapshot: SemanticGraphSnapshot) => {
+    input.onSnapshot?.(snapshot);
     applyServerSemanticSnapshot({
       snapshot,
       nodeEngine: input.nodeEngine,

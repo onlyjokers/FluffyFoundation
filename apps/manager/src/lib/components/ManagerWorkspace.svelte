@@ -18,17 +18,26 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   import AssetsManager from '$lib/components/AssetsManager.svelte';
   import OperatorConsole from '$lib/components/OperatorConsole.svelte';
   import PluginsPanel from '$lib/components/PluginsPanel.svelte';
+  import NodeManagerPanel from '$lib/components/NodeManagerPanel.svelte';
 
   export let serverUrl = 'https://localhost:3001';
   export let performanceMode = false;
 
-  type WorkspaceTab = 'dashboard' | 'assets' | 'registry-midi' | 'nodes' | 'operator' | 'plugins';
+  type WorkspaceTab =
+    | 'dashboard'
+    | 'assets'
+    | 'registry-midi'
+    | 'nodes'
+    | 'node-manager'
+    | 'operator'
+    | 'plugins';
   let activePage: WorkspaceTab = 'dashboard';
   let tabsEl: HTMLDivElement | null = null;
   let tabDashboardEl: HTMLButtonElement | null = null;
   let tabAssetsEl: HTMLButtonElement | null = null;
   let tabRegistryMidiEl: HTMLButtonElement | null = null;
   let tabPluginsEl: HTMLButtonElement | null = null;
+  let tabNodeManagerEl: HTMLButtonElement | null = null;
   let tabNodesEl: HTMLButtonElement | null = null;
   let tabOperatorEl: HTMLButtonElement | null = null;
   const tabSlider = spring(
@@ -44,6 +53,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
     if (activePage === 'assets') return tabAssetsEl;
     if (activePage === 'registry-midi') return tabRegistryMidiEl;
     if (activePage === 'plugins') return tabPluginsEl;
+    if (activePage === 'node-manager') return tabNodeManagerEl;
     if (activePage === 'nodes') return tabNodesEl;
     if (activePage === 'operator') return tabOperatorEl;
     return null;
@@ -112,6 +122,13 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
       on:click={() => (activePage = 'plugins')}
     >
       Plugins
+    </button>
+    <button
+      bind:this={tabNodeManagerEl}
+      class:active={activePage === 'node-manager'}
+      on:click={() => (activePage = 'node-manager')}
+    >
+      Node Manager
     </button>
     <button
       bind:this={tabNodesEl}
@@ -186,6 +203,12 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
     </div>
   </div>
 
+  <div class:hide={activePage !== 'node-manager'}>
+    <div class="node-manager-pane">
+      <NodeManagerPanel />
+    </div>
+  </div>
+
   <div class="nodes-page" class:hide={activePage !== 'nodes'}>
     <div class="nodes-pane">
       <NodeCanvasRenderer />
@@ -242,7 +265,8 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   }
 
   .midi-pane,
-  .plugins-pane {
+  .plugins-pane,
+  .node-manager-pane {
     margin-top: var(--space-sm);
   }
 
