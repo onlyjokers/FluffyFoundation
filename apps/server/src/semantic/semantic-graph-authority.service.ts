@@ -181,7 +181,7 @@ export class SemanticGraphAuthorityService {
     }
     for (const definition of this.persisted.customDefinitions) {
       if (!definition.definitionId) continue;
-      this.registry.register(createCustomNodeDefinitionNode(definition));
+      this.registry.register(createCustomNodeDefinitionNode(definition, this.registry.list()));
     }
   }
 

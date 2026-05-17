@@ -150,12 +150,21 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
   const snapshot = service.getSnapshot() as never as {
     customDefinitions?: unknown[];
     agentCapabilities?: { nodes?: Array<{ nodeType: string; enabled: boolean; aiNotes?: string }> };
-    definitions?: Array<{ type: string; ports: { outputs: Array<{ id: string; type: string }> } }>;
+    definitions?: Array<{
+      type: string;
+      ports: { outputs: Array<{ id: string; type: string; defaultValue?: unknown }> };
+      aiSummary?: { description?: string };
+    }>;
   };
   assert.equal(snapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
   assert.deepEqual(
     snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.ports.outputs,
-    [{ id: 'value', label: 'Value', type: 'number' }]
+    [{ id: 'value', label: 'Value', type: 'number', defaultValue: 0 }]
+  );
+  assert.match(
+    snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.aiSummary
+      ?.description ?? '',
+    /wraps 1 internal nodes/
   );
   assert.deepEqual(snapshot.agentCapabilities?.nodes, [
     {

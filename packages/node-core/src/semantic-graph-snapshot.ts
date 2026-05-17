@@ -256,6 +256,18 @@ export const normalizeDefinitions = (
       : Array.isArray(record.params)
         ? (record.params as SemanticDefinition['params'])
         : [];
+    const aiSummary = isRecord(record.aiSummary)
+      ? (record.aiSummary as SemanticDefinition['aiSummary'])
+      : createAgentNodeDefinitionSummary({
+          type: String(def.type),
+          label: String(def.label ?? def.type),
+          category: String(def.category ?? 'Other'),
+          inputs: [...inputs],
+          outputs: [...outputs],
+          configSchema: [...params],
+          metadata: def.metadata,
+          process: () => ({}),
+        });
 
     return {
       type: String(def.type),
@@ -263,16 +275,7 @@ export const normalizeDefinitions = (
       category: String(def.category ?? 'Other'),
       ports: { inputs: [...inputs], outputs: [...outputs] },
       params: [...params],
-      aiSummary: createAgentNodeDefinitionSummary({
-        type: String(def.type),
-        label: String(def.label ?? def.type),
-        category: String(def.category ?? 'Other'),
-        inputs: [...inputs],
-        outputs: [...outputs],
-        configSchema: [...params],
-        metadata: def.metadata,
-        process: () => ({}),
-      }),
+      aiSummary,
     };
   });
 
