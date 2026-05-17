@@ -13,6 +13,7 @@
     permissions,
     enableAudio,
     startEarlyPreload,
+    textOverlay,
   } from '$lib/stores/client';
   import StartScreen from '$lib/components/StartScreen.svelte';
   import VisualCanvas from '$lib/components/VisualCanvas.svelte';
@@ -490,6 +491,16 @@
       />
       <button class="agent-text-submit" type="submit" disabled={!agentText.trim()}> 发送 </button>
     </form>
+    {#if $textOverlay.visible}
+      <div class="text-overlay">
+        <div
+          class="text-panel"
+          style={`color:${$textOverlay.color}; background:${$textOverlay.backgroundColor}`}
+        >
+          {$textOverlay.text}
+        </div>
+      </div>
+    {/if}
     {#if $clientControlTransfer}
       <ClientControlTransferStatus
         transfer={$clientControlTransfer}
@@ -553,5 +564,27 @@
   .agent-text-submit:disabled {
     cursor: default;
     opacity: 0.45;
+  }
+
+  .text-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 24;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(24px, 6vw, 96px);
+    pointer-events: none;
+  }
+
+  .text-panel {
+    max-width: min(980px, 92vw);
+    padding: clamp(18px, 3vw, 44px) clamp(22px, 4vw, 56px);
+    border-radius: 8px;
+    font-size: clamp(32px, 6vw, 88px);
+    line-height: 1.16;
+    text-align: center;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 </style>

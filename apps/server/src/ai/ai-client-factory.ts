@@ -67,9 +67,11 @@ const timeoutFromEnv = (): number => {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
 };
 
-const fallbackModelsFromEnv = (primaryModel: string): string[] => {
-  const explicit = process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS?.trim();
-  if (explicit) {
+export const fallbackModelsFromEnv = (primaryModel: string): string[] => {
+  const explicitRaw = process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS;
+  if (explicitRaw !== undefined) {
+    const explicit = explicitRaw.trim();
+    if (!explicit) return [];
     return explicit
       .split(',')
       .map((item) => item.trim())
@@ -109,6 +111,7 @@ const createOpenAiClientFromEnv = (aiDebugLogger?: AiLogger): OpenAiCompatibleCl
   const apiKey = process.env.SHUGU_AI_OPENAI_API_KEY?.trim();
   const model = process.env.SHUGU_AI_OPENAI_MODEL?.trim() || 'gpt-5.5';
   const baseUrl = process.env.SHUGU_AI_OPENAI_BASE_URL?.trim() || 'https://code.b886.top/v1';
+  const chatCompletionsUrl = process.env.SHUGU_AI_OPENAI_CHAT_COMPLETIONS_URL?.trim();
   if (!apiKey) return createNoopAiClient();
   const providerLogger = (event: OpenAiCompatibleLoggerEvent) =>
     aiDebugLogger?.write({ kind: 'ai.provider', providerEvent: event });
@@ -117,6 +120,7 @@ const createOpenAiClientFromEnv = (aiDebugLogger?: AiLogger): OpenAiCompatibleCl
     apiKey,
     model,
     baseUrl,
+    ...(chatCompletionsUrl ? { chatCompletionsUrl } : {}),
     timeoutMs: timeoutFromEnv(),
     logger: providerLogger,
   };

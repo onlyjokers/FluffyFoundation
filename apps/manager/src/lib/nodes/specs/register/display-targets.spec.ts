@@ -4,7 +4,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { resolveDisplayNodeTargets, sendDisplayNodeCommand } from './display-targets';
+import {
+  resetDisplayNodeRouteStateForTests,
+  resolveDisplayNodeTargets,
+  sendDisplayNodeCommand,
+} from './display-targets';
 
 const clients = [
   { clientId: 'phone-a', group: 'audience' },
@@ -112,4 +116,43 @@ test('sendDisplayNodeCommand keeps implicit routing on the local display transpo
       executeAt: undefined,
     },
   ]);
+});
+
+test('sendDisplayNodeCommand clears displays removed from an explicit showText route', () => {
+  resetDisplayNodeRouteStateForTests();
+  const emitted: Array<{ action?: string; target?: { displayId?: string } }> = [];
+
+  sendDisplayNodeCommand({
+    nodeId: 'display-node',
+    action: 'showText',
+    payload: { text: 'first' },
+    clients,
+    node: { inputValues: { index: 1, range: 1, random: false } },
+    graph: { connections: [] },
+    sendLocalControl: () => emitted.push({ action: 'local' }),
+    sendDisplayOperation: (operation) => emitted.push(operation),
+  });
+
+  sendDisplayNodeCommand({
+    nodeId: 'display-node',
+    action: 'showText',
+    payload: { text: 'second' },
+    clients,
+    node: { inputValues: { index: 2, range: 1, random: false } },
+    graph: { connections: [] },
+    sendLocalControl: () => emitted.push({ action: 'local' }),
+    sendDisplayOperation: (operation) => emitted.push(operation),
+  });
+
+  assert.deepEqual(
+    emitted.map((operation) => ({
+      action: operation.action,
+      displayId: operation.target?.displayId,
+    })),
+    [
+      { action: 'showText', displayId: 'display-1' },
+      { action: 'hideText', displayId: 'display-1' },
+      { action: 'showText', displayId: 'display-2' },
+    ]
+  );
 });

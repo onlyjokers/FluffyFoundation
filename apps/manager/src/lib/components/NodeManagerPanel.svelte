@@ -62,6 +62,27 @@
     });
   }
 
+  function deleteCustomDefinition(row: AgentCapabilityRow): void {
+    const definitionId = row.customDefinition?.definitionId;
+    if (!definitionId) return;
+    const sdk = getManagerSDK();
+    if (!sdk) {
+      lastError = 'Manager SDK is not connected.';
+      return;
+    }
+    const label = row.label || row.type;
+    if (!confirm(`Delete custom node "${label}"? This cannot be undone.`)) return;
+    lastError = '';
+    sdk.sendSemanticCommand({
+      requestId: `node-manager:definition.custom.remove:${definitionId}`,
+      command: {
+        kind: 'definition.custom.remove',
+        definitionId,
+      },
+    });
+    if (selectedType === row.type) selectedType = '';
+  }
+
   function sourceLabel(source: AgentCapabilityNodeSource): string {
     if (source === 'builtin') return 'Builtin';
     if (source === 'custom') return 'Custom';
@@ -93,6 +114,12 @@
 
   function selectRow(row: AgentCapabilityRow): void {
     selectedType = row.type;
+  }
+
+  function handleRowKeydown(event: KeyboardEvent, row: AgentCapabilityRow): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    selectRow(row);
   }
 </script>
 
@@ -174,15 +201,18 @@
             <div>Source</div>
             <div>Used</div>
             <div>AI</div>
+            <div>Action</div>
           </div>
           <div class="node-list">
             {#each filteredRows as row (row.type)}
-              <button
+              <div
                 class="node-row"
                 class:selected={selectedRow?.type === row.type}
                 class:disabled={!row.enabled}
-                type="button"
+                role="button"
+                tabindex="0"
                 on:click={() => selectRow(row)}
+                on:keydown={(event) => handleRowKeydown(event, row)}
               >
                 <div class="node-main">
                   <div class="node-title">
@@ -198,7 +228,26 @@
                     {row.manifestVisible ? 'Enabled' : 'Hidden'}
                   </span>
                 </div>
-              </button>
+                <div class="row-actions">
+                  <button
+                    class="row-action"
+                    class:enabled={row.enabled}
+                    type="button"
+                    on:click|stopPropagation={() => setCapability(row, !row.enabled)}
+                  >
+                    {row.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  {#if row.customDefinition}
+                    <button
+                      class="row-action danger"
+                      type="button"
+                      on:click|stopPropagation={() => deleteCustomDefinition(row)}
+                    >
+                      Delete
+                    </button>
+                  {/if}
+                </div>
+              </div>
             {/each}
           </div>
         {/if}
@@ -265,7 +314,12 @@
 
           {#if selectedRow.customDefinition}
             <div class="detail-section">
-              <div class="section-title">Custom Node</div>
+              <div class="section-heading">
+                <div class="section-title">Custom Node</div>
+                <Button size="sm" variant="ghost" on:click={() => deleteCustomDefinition(selectedRow)}>
+                  Delete
+                </Button>
+              </div>
               <div class="kv-grid">
                 <div>
                   <span>Internal Nodes</span>
@@ -299,6 +353,7 @@
     min-height: 0;
     width: 100%;
     height: 100%;
+    max-height: 100%;
     position: relative;
     background:
       radial-gradient(circle at 18% 0%, rgba(20, 184, 166, 0.14), transparent 44%),
@@ -382,7 +437,11 @@
   .node-manager-scroll {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: auto;
+    height: 100%;
+    max-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: calc(var(--ui-pill-toolbar-top) + var(--ui-pill-toolbar-height) + var(--space-xl))
       var(--space-2xl, 32px) var(--space-2xl, 32px);
     display: flex;
@@ -452,7 +511,7 @@
   .list-head,
   .node-row {
     display: grid;
-    grid-template-columns: minmax(260px, 1fr) 120px 80px 110px;
+    grid-template-columns: minmax(260px, 1fr) 120px 80px 110px minmax(150px, auto);
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
@@ -574,6 +633,38 @@
     color: #86efac;
   }
 
+  .row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .row-action {
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.86);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .row-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .row-action.enabled {
+    border-color: rgba(34, 197, 94, 0.34);
+  }
+
+  .row-action.danger {
+    border-color: rgba(239, 68, 68, 0.36);
+    color: #fca5a5;
+  }
+
   .details-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -599,6 +690,13 @@
     gap: 8px;
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
 
   .section-title {

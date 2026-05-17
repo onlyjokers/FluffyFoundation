@@ -36,6 +36,13 @@ export type SendDisplayNodeCommandOptions = ResolveDisplayNodeTargetsOptions & {
   sendDisplayOperation?: (operation: ReturnType<typeof createDisplayOperation>) => void;
 };
 
+type DisplayRouteState = {
+  ids: string[];
+  action: ControlAction;
+};
+
+const displayRouteStateByNode = new Map<string, DisplayRouteState>();
+
 const asRecord = (value: unknown): AnyRecord | null =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as AnyRecord) : null;
 
@@ -132,6 +139,42 @@ export function resolveDisplayNodeTargets(
   return { explicit: true, ids };
 }
 
+function cleanupActionFor(action: ControlAction): { action: ControlAction; payload: ControlPayload } | null {
+  switch (action) {
+    case 'showText':
+      return { action: 'hideText', payload: {} };
+    case 'showImage':
+      return { action: 'hideImage', payload: {} };
+    case 'playMedia':
+      return { action: 'stopMedia', payload: {} };
+    case 'screenColor':
+      return { action: 'screenColor', payload: { color: '#000000', opacity: 0, mode: 'solid' } };
+    default:
+      return null;
+  }
+}
+
+function sendDisplayOperationToId(
+  options: SendDisplayNodeCommandOptions,
+  displayId: string,
+  action: ControlAction,
+  payload: ControlPayload,
+  index: number
+): void {
+  options.sendDisplayOperation?.(
+    createDisplayOperation({
+      operationId: `${options.nodeId}:${action}:${Date.now()}:${index}`,
+      target: { mode: 'displayId', displayId },
+      action,
+      payload,
+    })
+  );
+}
+
+export function resetDisplayNodeRouteStateForTests(): void {
+  displayRouteStateByNode.clear();
+}
+
 export function sendDisplayNodeCommand(options: SendDisplayNodeCommandOptions): {
   route: 'none' | 'local' | 'remote';
   explicit: boolean;
@@ -143,20 +186,26 @@ export function sendDisplayNodeCommand(options: SendDisplayNodeCommandOptions): 
       return { route: 'none', explicit: true, ids: resolved.ids };
     }
 
+    const previous = displayRouteStateByNode.get(options.nodeId);
+    const cleanup = previous ? cleanupActionFor(previous.action) : null;
+    if (previous && cleanup) {
+      const nextIds = new Set(resolved.ids);
+      previous.ids
+        .filter((displayId) => !nextIds.has(displayId))
+        .forEach((displayId, index) =>
+          sendDisplayOperationToId(options, displayId, cleanup.action, cleanup.payload, index)
+        );
+    }
+
     resolved.ids.forEach((displayId, index) => {
-      options.sendDisplayOperation?.(
-        createDisplayOperation({
-          operationId: `${options.nodeId}:${options.action}:${Date.now()}:${index}`,
-          target: { mode: 'displayId', displayId },
-          action: options.action,
-          payload: options.payload,
-        })
-      );
+      sendDisplayOperationToId(options, displayId, options.action, options.payload, index);
     });
+    displayRouteStateByNode.set(options.nodeId, { ids: resolved.ids, action: options.action });
 
     return { route: 'remote', explicit: true, ids: resolved.ids };
   }
 
+  displayRouteStateByNode.delete(options.nodeId);
   options.sendLocalControl(options.action, options.payload, options.executeAt);
   return { route: 'local', explicit: false, ids: resolved.ids };
 }

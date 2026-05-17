@@ -62,6 +62,7 @@ export type OpenAiCompatibleLoggerEvent =
 
 export type OpenAiCompatibleClientConfig = {
   baseUrl: string;
+  chatCompletionsUrl?: string;
   apiKey: string;
   model: string;
   fetchImpl?: (input: string, init?: RequestInit) => Promise<OpenAiCompatibleFetchResponse>;

@@ -96,7 +96,7 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleClientConfi
 
   const timeoutMs = Number.isFinite(config.timeoutMs) && config.timeoutMs! > 0 ? config.timeoutMs! : DEFAULT_TIMEOUT_MS;
   const baseUrl = config.baseUrl.replace(/\/+$/, '');
-  const url = `${baseUrl}/chat/completions`;
+  const url = config.chatCompletionsUrl?.trim() || `${baseUrl}/chat/completions`;
   const supportsJsonSchema = config.supportsJsonSchema ?? true;
 
   return {

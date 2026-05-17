@@ -7,7 +7,7 @@ import test from 'node:test';
 
 import type { OpenAiCompatibleClient } from '@shugu/ai-core';
 
-import { createAiChatClient, createFallbackAwareAiClient } from './ai-client-factory.js';
+import { createAiChatClient, createFallbackAwareAiClient, fallbackModelsFromEnv } from './ai-client-factory.js';
 
 const createStubClient = (label: string): OpenAiCompatibleClient => ({
   describeConfig: () => ({
@@ -81,4 +81,18 @@ test('falls back to a later model when the primary model returns an empty comple
   const completion = await client.completeJson({ messages: [] });
   assert.equal(completion.request.url, 'gpt-5.5-openai-compact');
   assert.equal(completion.content, '{"id":"stub","commands":[]}');
+});
+
+test('empty SHUGU_AI_OPENAI_MODEL_FALLBACKS disables automatic model fallback', () => {
+  const previous = process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS;
+  process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS = '';
+  try {
+    assert.deepEqual(fallbackModelsFromEnv('gpt-5.5'), []);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS;
+    } else {
+      process.env.SHUGU_AI_OPENAI_MODEL_FALLBACKS = previous;
+    }
+  }
 });

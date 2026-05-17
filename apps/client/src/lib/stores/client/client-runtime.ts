@@ -23,6 +23,7 @@ import { permissions, state, latency } from './client-state';
 import { clientControlTransfer } from './client-transfer';
 import { markTransferControlLost } from './client-lifecycle';
 import { audioPlaybackState, audioStream, imageState, videoState } from './client-media';
+import { textOverlay } from './client-text-overlay';
 import { createClientControlHandlers } from './client-control';
 import { enableToneAudio, getLastToneReadyPayload, reportToneReady, type ToneReadyPayload } from './client-tone';
 import { getOrCreateClientIdentity, persistAssignedClientId } from './client-identity';
@@ -54,6 +55,7 @@ const controlHandlers = createClientControlHandlers({
   getToneModulatedSoundPlayer: () => toneModulatedSoundPlayer,
   getNodeExecutor: () => nodeExecutor,
   getMultimediaCore: () => multimediaCore,
+  textOverlay,
   stopAllCleanup: () =>
     stopAllClientSideEffects({ multimediaCore, toneSoundPlayer, toneModulatedSoundPlayer, screenController, nodeExecutor }),
 });
