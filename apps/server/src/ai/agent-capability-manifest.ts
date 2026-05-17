@@ -27,6 +27,20 @@ const nodeTypeAllowedByPolicy = (type: string, targetSpace: SemanticGroup): bool
   return true;
 };
 
+export const agentCapabilityForNodeType = (
+  snapshot: Pick<SemanticGraphSnapshot, 'agentCapabilities'>,
+  type: string
+): { enabled: boolean; reason?: string } => {
+  const setting = (snapshot.agentCapabilities?.nodes ?? []).find(
+    (entry) => String(entry.nodeType) === String(type)
+  );
+  if (!setting) return { enabled: true };
+  return {
+    enabled: setting.enabled !== false,
+    ...(setting.disabledReason ? { reason: setting.disabledReason } : {}),
+  };
+};
+
 export const compactSemanticSnapshot = (
   snapshot: SemanticGraphSnapshot,
   targetSpace?: SemanticGroup
@@ -68,12 +82,26 @@ export const buildCapabilityManifest = (
   const scopedNodes = snapshot.nodes.filter((node) => scopedNodeIds.has(String(node.id)));
   const scopedTypes = new Set(scopedNodes.map((node) => String(node.type)));
   const createableDefinitions = targetSpace.agentPolicy?.targetScope?.allowNewNodes === true
-    ? snapshot.definitions.filter((definition) => nodeTypeAllowedByPolicy(definition.type, targetSpace))
+    ? snapshot.definitions.filter(
+        (definition) =>
+          nodeTypeAllowedByPolicy(definition.type, targetSpace) &&
+          agentCapabilityForNodeType(snapshot, definition.type).enabled
+      )
     : [];
   const visibleDefinitions = snapshot.definitions.filter((definition) => {
+    if (!agentCapabilityForNodeType(snapshot, definition.type).enabled) return false;
     if (scopedTypes.has(definition.type)) return true;
     return createableDefinitions.some((item) => item.type === definition.type);
   });
+  const disabledNodeTypes = snapshot.definitions
+    .filter((definition) => !agentCapabilityForNodeType(snapshot, definition.type).enabled)
+    .map((definition) => {
+      const capability = agentCapabilityForNodeType(snapshot, definition.type);
+      return {
+        type: definition.type,
+        ...(capability.reason ? { reason: capability.reason } : {}),
+      };
+    });
 
   return {
     version: 1,
@@ -95,6 +123,7 @@ export const buildCapabilityManifest = (
       params: definition.params,
       aiSummary: definition.aiSummary,
     })),
+    disabledNodeTypes,
     nodes: scopedNodes.map((node) => {
       const incoming = snapshot.connections
         .filter((connection) => String(connection.targetNodeId) === String(node.id))

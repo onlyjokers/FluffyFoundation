@@ -9,6 +9,7 @@ import type {
   SemanticGraphSnapshot,
   SemanticGroup,
 } from '@shugu/node-core';
+import { agentCapabilityForNodeType } from './agent-capability-manifest.js';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -281,12 +282,26 @@ const commandWithDefaultScope = (
   };
 };
 
+const disabledNodeTypeError = (type: string, path: string): CompileResult => ({
+  ok: false,
+  error: `Node type is disabled for AI Agent: ${type}`,
+  path,
+  repairOptions: ['Choose a nodeType listed in capabilityManifest.createableNodeTypes.'],
+});
+
 export function compileAgentPlan(input: {
   plan: AgentActionPlan | AgentPlan;
   snapshot: SemanticGraphSnapshot;
   targetSpace: SemanticGroup;
 }): CompileResult {
   if ('commands' in input.plan) {
+    for (const [index, command] of input.plan.commands.entries()) {
+      if (command.type !== 'node.add') continue;
+      const nodeType = String(command.node.type ?? '');
+      if (!agentCapabilityForNodeType(input.snapshot, nodeType).enabled) {
+        return disabledNodeTypeError(nodeType, `commands.${index}.node.type`);
+      }
+    }
     return {
       ok: true,
       commands: input.plan.commands.map((command) =>
@@ -341,6 +356,9 @@ export function compileAgentPlan(input: {
           path: `actions.${index}.nodeType`,
           repairOptions: ['Choose a nodeType listed in capabilityManifest.nodeTypes.'],
         };
+      }
+      if (!agentCapabilityForNodeType(input.snapshot, action.nodeType).enabled) {
+        return disabledNodeTypeError(action.nodeType, `actions.${index}.nodeType`);
       }
       const nodeId = action.id ?? `ai:${action.nodeType}:${randomUUID()}`;
       commands.push({

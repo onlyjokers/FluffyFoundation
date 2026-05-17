@@ -138,3 +138,34 @@ test('AI action DSL accepts addNode/connect aliases emitted by models', () => {
     }
   );
 });
+
+test('AI action DSL rejects node types disabled in agent capability settings', () => {
+  const parsed = parseAgentPlan(
+    {
+      version: 1,
+      id: 'turn-create-number',
+      actions: [{ op: 'addNode', nodeId: 'number-new', type: 'number' }],
+    },
+    ''
+  );
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+
+  const compiled = compileAgentPlan({
+    plan: parsed.value,
+    snapshot: {
+      ...snapshot,
+      agentCapabilities: {
+        version: 1,
+        nodes: [{ nodeType: 'number', enabled: false, source: 'builtin' }],
+      },
+    },
+    targetSpace,
+  });
+
+  assert.equal(compiled.ok, false);
+  if (compiled.ok) return;
+  assert.equal(compiled.path, 'actions.0.nodeType');
+  assert.match(compiled.error, /disabled/i);
+});
