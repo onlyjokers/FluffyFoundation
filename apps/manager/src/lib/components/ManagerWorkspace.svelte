@@ -276,9 +276,11 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
 
   .nodes-page,
   .assets-pane,
+  .node-manager-pane,
   .nodes-pane {
     flex: 1;
     min-height: 0;
+    width: 100%;
     display: flex;
   }
 

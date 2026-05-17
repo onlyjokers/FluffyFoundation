@@ -8,16 +8,16 @@
   import {
     buildAgentCapabilityRows,
     createAgentCapabilityCommand,
+    filterAgentCapabilityRows,
     summarizeAgentCapabilityRows,
     type AgentCapabilityRow,
+    type AgentCapabilitySourceFilter,
+    type AgentCapabilityStatusFilter,
   } from '$lib/nodes/agent-capability-manager';
 
-  type SourceFilter = 'all' | AgentCapabilityNodeSource;
-  type StatusFilter = 'all' | 'enabled' | 'disabled';
-
   let query = '';
-  let sourceFilter: SourceFilter = 'all';
-  let statusFilter: StatusFilter = 'all';
+  let sourceFilter: AgentCapabilitySourceFilter = 'all';
+  let statusFilter: AgentCapabilityStatusFilter = 'all';
   let categoryFilter = 'all';
   let selectedType = '';
   let lastError = '';
@@ -26,28 +26,14 @@
   $: summary = summarizeAgentCapabilityRows(rows);
   $: categoryOptions = summary.categories.map((entry) => entry.category);
   $: if (categoryFilter !== 'all' && !categoryOptions.includes(categoryFilter)) categoryFilter = 'all';
-  $: filteredRows = rows.filter(matchesFilters);
+  $: filteredRows = filterAgentCapabilityRows(rows, {
+    query,
+    sourceFilter,
+    statusFilter,
+    categoryFilter,
+  });
   $: selectedRow =
     filteredRows.find((row) => row.type === selectedType) ?? filteredRows[0] ?? null;
-
-  function matchesFilters(row: AgentCapabilityRow): boolean {
-    const term = query.trim().toLowerCase();
-    if (sourceFilter !== 'all' && row.source !== sourceFilter) return false;
-    if (statusFilter === 'enabled' && !row.enabled) return false;
-    if (statusFilter === 'disabled' && row.enabled) return false;
-    if (categoryFilter !== 'all' && row.category !== categoryFilter) return false;
-    if (!term) return true;
-    return [
-      row.type,
-      row.label,
-      row.category,
-      row.aiNotes,
-      row.disabledReason,
-      row.definition.aiSummary?.description,
-    ]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(term));
-  }
 
   function semanticPayloadFromCommand(command: ReturnType<typeof createAgentCapabilityCommand>): SemanticCommandPayload {
     const { type, ...rest } = command;

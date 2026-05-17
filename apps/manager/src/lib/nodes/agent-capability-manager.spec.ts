@@ -6,6 +6,7 @@ import type { SemanticGraphSnapshot } from '@shugu/node-core';
 import {
   buildAgentCapabilityRows,
   createAgentCapabilityCommand,
+  filterAgentCapabilityRows,
   summarizeAgentCapabilityRows,
 } from './agent-capability-manager';
 
@@ -154,4 +155,38 @@ test('summarizeAgentCapabilityRows counts AI availability by source and category
       { category: 'Plugin', count: 1, enabled: 1 },
     ],
   });
+});
+
+test('filterAgentCapabilityRows filters by source, status, category, and query', () => {
+  const rows = buildAgentCapabilityRows(snapshot());
+
+  assert.deepEqual(
+    filterAgentCapabilityRows(rows, {
+      query: '',
+      sourceFilter: 'custom',
+      statusFilter: 'all',
+      categoryFilter: 'all',
+    }).map((row) => row.type),
+    ['custom:triplet-pulse']
+  );
+
+  assert.deepEqual(
+    filterAgentCapabilityRows(rows, {
+      query: '',
+      sourceFilter: 'all',
+      statusFilter: 'disabled',
+      categoryFilter: 'all',
+    }).map((row) => row.type),
+    ['display-text']
+  );
+
+  assert.deepEqual(
+    filterAgentCapabilityRows(rows, {
+      query: 'spark',
+      sourceFilter: 'all',
+      statusFilter: 'enabled',
+      categoryFilter: 'Plugin',
+    }).map((row) => row.type),
+    ['plugin:sparkle']
+  );
 });

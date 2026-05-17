@@ -32,6 +32,15 @@ export type AgentCapabilityManagerSummary = {
   categories: Array<{ category: string; count: number; enabled: number }>;
 };
 
+export type AgentCapabilitySourceFilter = 'all' | AgentCapabilityNodeSource;
+export type AgentCapabilityStatusFilter = 'all' | 'enabled' | 'disabled';
+export type AgentCapabilityFilterInput = {
+  query: string;
+  sourceFilter: AgentCapabilitySourceFilter;
+  statusFilter: AgentCapabilityStatusFilter;
+  categoryFilter: string;
+};
+
 const SOURCE_ORDER: Record<AgentCapabilityNodeSource, number> = {
   custom: 0,
   builtin: 1,
@@ -144,4 +153,28 @@ export function summarizeAgentCapabilityRows(
       return left.category.localeCompare(right.category);
     }),
   };
+}
+
+export function filterAgentCapabilityRows(
+  rows: AgentCapabilityRow[],
+  filters: AgentCapabilityFilterInput
+): AgentCapabilityRow[] {
+  const term = filters.query.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (filters.sourceFilter !== 'all' && row.source !== filters.sourceFilter) return false;
+    if (filters.statusFilter === 'enabled' && !row.enabled) return false;
+    if (filters.statusFilter === 'disabled' && row.enabled) return false;
+    if (filters.categoryFilter !== 'all' && row.category !== filters.categoryFilter) return false;
+    if (!term) return true;
+    return [
+      row.type,
+      row.label,
+      row.category,
+      row.aiNotes,
+      row.disabledReason,
+      row.definition.aiSummary?.description,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(term));
+  });
 }
