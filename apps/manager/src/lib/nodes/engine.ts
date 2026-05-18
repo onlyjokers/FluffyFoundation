@@ -19,6 +19,11 @@ import { nodeRegistry } from './registry';
 import { parameterRegistry } from '../parameters/registry';
 import { exportGraphForPatch } from './patch-export';
 import { customNodeDefinitions } from './custom-nodes/store';
+import {
+  clearNodeGraphLayout,
+  patchNodeGraphLayoutPosition,
+  saveNodeGraphLayoutFromGraph,
+} from '$lib/project/nodeGraphLayout';
 import { compileGraphForPatch } from './custom-nodes/flatten';
 import { diffGraphState } from './graph-changes';
 import { applySelectionMapOptions } from './engine-selection-options';
@@ -245,6 +250,7 @@ class NodeEngineClass {
     const node = this.runtime.getNode(nodeId);
     if (!node) return;
     node.position = position;
+    patchNodeGraphLayoutPosition(nodeId, position);
     this.graphChanges.set([{ type: 'update-node-position', nodeId, position }]);
     // Don't sync graph state for position-only changes (performance)
   }
@@ -434,6 +440,7 @@ class NodeEngineClass {
     this.deployedLoopIds.clear();
     this.disabledNodeIds.clear();
     this.syncGraphState();
+    clearNodeGraphLayout();
     this.emitGraphChanges(prev, this.runtime.exportGraph());
     this.updateLocalLoops();
 
@@ -550,6 +557,7 @@ class NodeEngineClass {
     this.deployedLoopIds.clear();
     this.disabledNodeIds.clear();
     this.syncGraphState();
+    saveNodeGraphLayoutFromGraph(prepared);
     this.emitGraphChanges(prev, prepared);
     this.updateLocalLoops();
 

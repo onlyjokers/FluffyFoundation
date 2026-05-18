@@ -19,6 +19,16 @@ export function resolveLocalServerUrl(input: LocalServerUrlInput): string {
   const isAccessingViaIP = input.hostname !== 'localhost' && input.hostname !== '127.0.0.1';
   const savedIsLocalhost = Boolean(savedUrl && (savedUrl.includes('localhost') || savedUrl.includes('127.0.0.1')));
   const savedIsHttp = Boolean(savedUrl && savedUrl.toLowerCase().startsWith('http:'));
+  const savedLocalServerHttpUrl =
+    savedUrl &&
+    input.allowInsecureHttp &&
+    savedUrl.toLowerCase().startsWith('https:') &&
+    savedIsLocalhost &&
+    safeUrlPort(savedUrl) === '3001'
+      ? savedUrl.replace(/^https:/i, 'http:')
+      : null;
+
+  if (savedLocalServerHttpUrl) return savedLocalServerHttpUrl;
 
   if (savedUrl && (!savedIsHttp || input.allowInsecureHttp) && !(isAccessingViaIP && savedIsLocalhost)) {
     return savedUrl;
@@ -28,10 +38,19 @@ export function resolveLocalServerUrl(input: LocalServerUrlInput): string {
     return input.origin;
   }
 
-  return `https://${input.hostname}:3001`;
+  const protocol = input.allowInsecureHttp ? 'http' : 'https';
+  return `${protocol}://${input.hostname}:3001`;
 }
 
 function normalizeUrl(value: string | null | undefined): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : '';
   return trimmed ? trimmed : null;
+}
+
+function safeUrlPort(value: string): string | null {
+  try {
+    return new URL(value).port;
+  } catch {
+    return null;
+  }
 }

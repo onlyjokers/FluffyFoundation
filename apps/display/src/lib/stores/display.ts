@@ -19,6 +19,7 @@
 import { writable, derived } from 'svelte/store';
 import { MultimediaCore, toneAudioEngine, type MultimediaCoreState, type MediaEngineState } from '@shugu/multimedia-core';
 import type { ControlAction, ControlPayload, PluginCommand } from '@shugu/protocol';
+import type { VisualSceneLayerItem } from '@shugu/protocol';
 import type { GraphChange } from '@shugu/node-core';
 import { ClientSDK, NodeExecutor, type ClientState } from '@shugu/sdk-client';
 import { applyGraphChangesToExecutor } from './graph-change-consumer';
@@ -174,6 +175,7 @@ export const audioPlaybackState = writable<MediaEngineState['audio']>({ url: nul
 
 export const screenOverlay = writable<ScreenOverlayState>(createClearedDisplayScreenOverlayState());
 export const textOverlay = writable<TextOverlayState>(createClearedDisplayTextOverlayState());
+export const visualScenes = writable<VisualSceneLayerItem[]>([]);
 
 export const isReady = derived(coreState, ($coreState) => $coreState.status === 'ready');
 
@@ -593,6 +595,7 @@ const controlExecutor = createDisplayControlExecutor({
   getNodeExecutor: () => nodeExecutor,
   screenOverlay,
   textOverlay,
+  visualScenes,
   isDev: import.meta.env.DEV,
 });
 

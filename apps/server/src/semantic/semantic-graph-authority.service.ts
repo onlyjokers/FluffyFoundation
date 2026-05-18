@@ -26,6 +26,7 @@ import {
   type SemanticGroup,
   type SemanticPartition,
 } from '@shugu/node-core';
+import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
 
 type PersistedSemanticGraph = {
   revision: number;
@@ -65,6 +66,9 @@ export class SemanticGraphAuthorityService {
       executeCommand: () => undefined,
       executeCommandForClientId: () => undefined,
     });
+    for (const definition of createArduinoUnoNodeDefinitions()) {
+      this.registry.register(definition);
+    }
     this.persisted = this.load();
     this.syncCustomNodeRegistry();
   }

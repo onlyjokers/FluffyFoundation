@@ -7,6 +7,7 @@ import {
   createHttpCorsOptions,
   validateServerSecurityConfig,
 } from './bootstrap/security-policy.js';
+import { shouldUseHttps } from './bootstrap/dev-https.js';
 import {
   createStateStrategyConfigFromEnv,
   createStateStrategyStatus,
@@ -19,7 +20,12 @@ async function bootstrap() {
     console.log(`[env] loaded ${env.keys.length} keys from ${env.loadedFrom}`);
   }
 
-  // Check if certificates exist
+  // Local dev defaults to HTTP to avoid browser trust failures from self-signed certs.
+  // Production still auto-enables certificates; set SHUGU_DEV_HTTPS=1 to opt into local HTTPS.
+  const useHttps = shouldUseHttps({
+    nodeEnv: process.env.NODE_ENV,
+    devHttps: process.env.SHUGU_DEV_HTTPS,
+  });
   const keyCandidates = [
     path.join(process.cwd(), 'secrets/privkey.pem'),
     path.join(process.cwd(), 'secrets/key.pem'),
@@ -34,14 +40,16 @@ async function bootstrap() {
   const certPath = certCandidates.find((p) => fs.existsSync(p));
   let httpsOptions: { key: Buffer; cert: Buffer } | undefined = undefined;
 
-  if (keyPath && certPath) {
+  if (useHttps && keyPath && certPath) {
     httpsOptions = {
       key: fs.readFileSync(keyPath),
       cert: fs.readFileSync(certPath),
     };
     console.log('🔒 HTTPS enabled');
+  } else if (useHttps) {
+    console.warn('⚠️ HTTPS requested but no SSL certificates found, falling back to HTTP (local/dev only)');
   } else {
-    console.warn('⚠️ No SSL certificates found, falling back to HTTP (local/dev only)');
+    console.log('ℹ️ Local dev HTTPS disabled; server using HTTP');
   }
 
   const securityConfig = {

@@ -95,6 +95,20 @@ test('SemanticGraphAuthorityService returns snapshot commands without mutating r
   assert.equal(service.getHistory().length, 0);
 });
 
+test('SemanticGraphAuthorityService exposes Arduino UNO plugin node definitions to AI snapshots', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  const arduinoTypes = snapshot.definitions
+    .filter((definition) => definition.type.startsWith('plugin:arduino-uno:'))
+    .map((definition) => definition.type)
+    .sort();
+
+  assert.deepEqual(arduinoTypes, ['plugin:arduino-uno:digital', 'plugin:arduino-uno:pwm']);
+  const pwm = snapshot.definitions.find((definition) => definition.type === 'plugin:arduino-uno:pwm');
+  assert.equal(pwm?.aiSummary?.platforms.includes('manager'), true);
+  assert.equal(pwm?.aiSummary?.permissions.includes('hardware:serial'), true);
+});
+
 test('SemanticGraphAuthorityService persists custom node definitions and AI capability settings', () => {
   const { path, service } = createService();
   const customDefinition = {

@@ -5,7 +5,16 @@
  */
 
 import { writable, get } from 'svelte/store';
-import type { ConvolutionPreset, VisualEffect, VisualSceneLayerItem } from '@shugu/protocol';
+import {
+  FCT_TRACK_PALETTES,
+  FCT_TRACK_VARIANTS,
+  type ConvolutionPreset,
+  type FctTrackBlend,
+  type FctTrackPalette,
+  type FctTrackVariant,
+  type VisualEffect,
+  type VisualSceneLayerItem,
+} from '@shugu/protocol';
 import { clampNumber } from './client-utils';
 
 type AnyRecord = Record<string, unknown>;
@@ -26,6 +35,15 @@ const convolutionPresets: ConvolutionPreset[] = [
 
 const isConvolutionPreset = (value: string): value is ConvolutionPreset =>
   convolutionPresets.includes(value as ConvolutionPreset);
+
+const isFctVariant = (value: unknown): value is FctTrackVariant =>
+  typeof value === 'string' && FCT_TRACK_VARIANTS.includes(value as FctTrackVariant);
+
+const isFctPalette = (value: unknown): value is FctTrackPalette =>
+  typeof value === 'string' && FCT_TRACK_PALETTES.includes(value as FctTrackPalette);
+
+const normalizeFctBlend = (value: unknown): FctTrackBlend =>
+  value === 'over' ? 'over' : 'replace';
 
 // Independent scene enabled states (derived from visualScenes)
 export const boxSceneEnabled = writable<boolean>(false);
@@ -63,6 +81,18 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
     }
     if (type === 'backCamera') {
       out.push({ type: 'backCamera' });
+      continue;
+    }
+    if (type === 'fctTrack') {
+      out.push({
+        type: 'fctTrack',
+        variant: isFctVariant(itemRecord.variant) ? itemRecord.variant : 'shattered-reality',
+        palette: isFctPalette(itemRecord.palette) ? itemRecord.palette : 'red-black',
+        sensitivity: clampNumber(itemRecord.sensitivity, 1, 0, 2),
+        brightness: clampNumber(itemRecord.brightness, 1, 0, 2),
+        contrast: clampNumber(itemRecord.contrast, 1, 0, 2),
+        blend: normalizeFctBlend(itemRecord.blend),
+      });
     }
   }
 

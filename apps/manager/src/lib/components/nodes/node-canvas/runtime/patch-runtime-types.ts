@@ -2,6 +2,7 @@
  * Purpose: Shared type contracts for patch runtime orchestration.
  */
 import type { Readable } from 'svelte/store';
+import type { TargetSelector } from '@shugu/protocol';
 import type { GraphState, NodeDefinition, NodeInstance, PortType } from '$lib/nodes/types';
 import type { GraphViewAdapter } from '../adapters/graph-view-adapter';
 import type { ExecutorStatusLike } from './patch-override-routing';
@@ -55,7 +56,7 @@ export type DisplayTransportLike = {
 
 export type SdkLike = {
   sendPluginControl: (
-    target: { mode: 'clientIds'; ids: string[] },
+    target: TargetSelector,
     pluginName: string,
     command: string,
     payload: unknown

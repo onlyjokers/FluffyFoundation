@@ -11,11 +11,13 @@ import { createDisplayControlExecutor } from './control-executor';
 
 test('Display executor applies showText and hideText controls to the text overlay', () => {
   const textOverlay = writable(createClearedDisplayTextOverlayState());
+  const visualScenes = writable([]);
   const executor = createDisplayControlExecutor({
     getMultimediaCore: () => null,
     getNodeExecutor: () => null,
     screenOverlay: writable(createClearedDisplayScreenOverlayState()),
     textOverlay,
+    visualScenes,
     isDev: false,
   });
 

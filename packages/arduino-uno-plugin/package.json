@@ -1,0 +1,32 @@
+{
+  "name": "@shugu/arduino-uno-plugin",
+  "version": "1.0.0",
+  "description": "Arduino UNO serial hardware plugin and node definitions.",
+  "main": "./dist-arduino-uno-plugin-out/index.js",
+  "module": "./dist-arduino-uno-plugin-out/index.js",
+  "types": "./dist-arduino-uno-plugin-out/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist-arduino-uno-plugin-out/index.d.ts",
+      "import": "./dist-arduino-uno-plugin-out/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc",
+    "dev": "pnpm exec tsc --watch",
+    "clean": "rm -rf dist-arduino-uno-plugin-out",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\"",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "files": [
+    "dist-arduino-uno-plugin-out"
+  ],
+  "dependencies": {
+    "@shugu/node-core": "workspace:*",
+    "@shugu/plugin-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

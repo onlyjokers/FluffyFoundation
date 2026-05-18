@@ -130,6 +130,66 @@ test('validateMessage accepts display operation plugin commands', () => {
   assert.equal(isValidMessage(plugin), true);
 });
 
+test('validateMessage accepts configured FCT visual scenes', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        {
+          type: 'fctTrack',
+          variant: 'acab',
+          palette: 'red-black-invert',
+          sensitivity: 1.25,
+          brightness: 0.85,
+          contrast: 1.1,
+          blend: 'over',
+        },
+      ],
+    }
+  );
+
+  assert.equal(validateMessage(message).ok, true);
+  assert.equal(isValidMessage(message), true);
+});
+
+test('validateMessage rejects invalid FCT visual scene configuration', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        {
+          type: 'fctTrack',
+          variant: 'unknown',
+          palette: 'infrared',
+          sensitivity: -1,
+          brightness: 3,
+          contrast: Number.NaN,
+          blend: 'multiply',
+        },
+      ],
+    }
+  );
+
+  const result = validateMessage(message);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.reasons.map((reason) => reason.path),
+    [
+      'payload.scenes[0].variant',
+      'payload.scenes[0].palette',
+      'payload.scenes[0].sensitivity',
+      'payload.scenes[0].brightness',
+      'payload.scenes[0].contrast',
+      'payload.scenes[0].blend',
+    ]
+  );
+});
+
 test('validateMessage rejects non-system mutating commands without envelope metadata', () => {
   for (const message of [
     {
