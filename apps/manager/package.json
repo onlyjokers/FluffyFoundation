@@ -24,6 +24,7 @@
         "vite": "^5.0.0"
     },
     "dependencies": {
+        "@shugu/arduino-uno-plugin": "workspace:*",
         "@shugu/node-core": "workspace:*",
         "@shugu/protocol": "workspace:*",
         "@shugu/sdk-manager": "workspace:*",

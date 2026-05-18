@@ -12,6 +12,15 @@ import { registerDefaultRuntimeNodes } from './default-runtime';
 
 registerDefaultRuntimeNodes();
 
+test('manager runtime registry includes Arduino UNO plugin nodes', () => {
+  const pwm = nodeRegistry.get('plugin:arduino-uno:pwm');
+  const digital = nodeRegistry.get('plugin:arduino-uno:digital');
+
+  assert.equal(pwm?.label, 'Uno Pwm');
+  assert.equal(digital?.label, 'Uno Number');
+  assert.equal(pwm?.metadata?.permissions.includes('hardware:serial'), true);
+});
+
 type SentControl = {
   target: TargetSelector;
   action: ControlAction;

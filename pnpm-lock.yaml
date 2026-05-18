@@ -169,6 +169,9 @@ importers:
 
   apps/manager:
     dependencies:
+      '@shugu/arduino-uno-plugin':
+        specifier: workspace:*
+        version: link:../../packages/arduino-uno-plugin
       '@shugu/node-core':
         specifier: workspace:*
         version: link:../../packages/node-core
@@ -254,6 +257,9 @@ importers:
       '@shugu/ai-core':
         specifier: workspace:*
         version: link:../../packages/ai-core
+      '@shugu/arduino-uno-plugin':
+        specifier: workspace:*
+        version: link:../../packages/arduino-uno-plugin
       '@shugu/node-core':
         specifier: workspace:*
         version: link:../../packages/node-core
@@ -293,6 +299,19 @@ importers:
         version: 5.9.3
 
   packages/ai-core:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  packages/arduino-uno-plugin:
+    dependencies:
+      '@shugu/node-core':
+        specifier: workspace:*
+        version: link:../node-core
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../plugin-core
     devDependencies:
       typescript:
         specifier: ^5.3.0

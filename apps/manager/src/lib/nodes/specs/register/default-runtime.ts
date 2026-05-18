@@ -2,6 +2,7 @@
  * Purpose: Register node-core default runtime definitions into the manager registry.
  */
 import { get } from 'svelte/store';
+import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
 import { registerDefaultNodeDefinitions, type NodeCommand } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, getSDK, sensorData, state } from '$lib/stores/manager';
@@ -39,4 +40,7 @@ export function registerDefaultRuntimeNodes(): void {
     sdk.sendControl(target, cmd.action, cmd.payload ?? {}, cmd.executeAt);
   },
   });
+  for (const definition of createArduinoUnoNodeDefinitions()) {
+    nodeRegistry.register(definition);
+  }
 }

@@ -19,6 +19,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   import OperatorConsole from '$lib/components/OperatorConsole.svelte';
   import PluginsPanel from '$lib/components/PluginsPanel.svelte';
   import NodeManagerPanel from '$lib/components/NodeManagerPanel.svelte';
+  import ArduinoUnoPanel from '$lib/components/ArduinoUnoPanel.svelte';
 
   export let serverUrl = 'https://localhost:3001';
   export let performanceMode = false;
@@ -179,6 +180,9 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
       </div>
       <div class="grid-item">
         <GeoControl {serverUrl} />
+      </div>
+      <div class="grid-item">
+        <ArduinoUnoPanel />
       </div>
     </div>
   </div>
