@@ -43,7 +43,7 @@ test('scene-box appends {type:\"box\"} to the chain', () => {
 
   const context = { nodeId: 'n1', time: 0, deltaTime: 0 };
   const out = def.process({ in: [] }, {}, context);
-  assert.deepEqual(out, { out: [{ type: 'box' }] });
+  assert.deepEqual(out, { out: [{ type: 'box', showBackground: true }] });
 });
 
 test('scene-fct-track appends configured FCT track scene to the chain', () => {
@@ -76,6 +76,8 @@ test('scene-fct-track appends configured FCT track scene to the chain', () => {
         brightness: 0.85,
         contrast: 1.1,
         blend: 'over',
+        audioSource: 'microphone',
+        showBackground: true,
       },
     ],
   });
@@ -93,6 +95,7 @@ test('scene-fct-track exposes numeric parameters as connectable inputs', () => {
       { id: 'sensitivity', type: 'number' },
       { id: 'brightness', type: 'number' },
       { id: 'contrast', type: 'number' },
+      { id: 'showBackground', type: 'boolean' },
     ]
   );
 });
@@ -109,6 +112,7 @@ test('scene-fct-track numeric inputs override config fallbacks', () => {
       sensitivity: 1.4,
       brightness: 0.65,
       contrast: 1.35,
+      showBackground: false,
     },
     {
       variant: 'shattered-reality',
@@ -117,6 +121,8 @@ test('scene-fct-track numeric inputs override config fallbacks', () => {
       brightness: 0.2,
       contrast: 0.3,
       blend: 'replace',
+      audioSource: 'playback',
+      showBackground: true,
     },
     context
   );
@@ -131,9 +137,47 @@ test('scene-fct-track numeric inputs override config fallbacks', () => {
         brightness: 0.65,
         contrast: 1.35,
         blend: 'replace',
+        audioSource: 'playback',
+        showBackground: false,
       },
     ],
   });
+});
+
+test('scene box and FCT track preserve ordered overlay layers with background flags', () => {
+  const registry = buildRegistry();
+  const box = registry.get('scene-box');
+  const fct = registry.get('scene-fct-track');
+  assert.ok(box, 'expected scene-box definition');
+  assert.ok(fct, 'expected scene-fct-track definition');
+
+  const context = { nodeId: 'n', time: 0, deltaTime: 0 };
+  const boxOut = box.process({ in: [], showBackground: true }, { showBackground: true }, context).out;
+  const fctOut = fct.process(
+    { in: boxOut, showBackground: false },
+    {
+      variant: 'acab',
+      palette: 'red-black',
+      audioSource: 'both',
+      showBackground: true,
+    },
+    context
+  ).out;
+
+  assert.deepEqual(fctOut, [
+    { type: 'box', showBackground: true },
+    {
+      type: 'fctTrack',
+      variant: 'acab',
+      palette: 'red-black',
+      sensitivity: 1,
+      brightness: 1,
+      contrast: 1,
+      blend: 'replace',
+      audioSource: 'both',
+      showBackground: false,
+    },
+  ]);
 });
 
 test('scene-out sends visualScenes and clears on stop', () => {
@@ -174,7 +218,12 @@ test('scene-out sends visualScenes and clears on stop', () => {
   assert.ok(sent.length >= 1);
   assert.deepEqual(sent[0], {
     action: 'visualScenes',
-    payload: { scenes: [{ type: 'box' }, { type: 'frontCamera' }] },
+    payload: {
+      scenes: [
+        { type: 'box', showBackground: true },
+        { type: 'frontCamera', showBackground: false },
+      ],
+    },
   });
 
   runtime.stop();
@@ -203,6 +252,8 @@ test('scene-out sends configured FCT track scenes', () => {
           brightness: 1.2,
           contrast: 0.95,
           blend: 'replace',
+          audioSource: 'microphone',
+          showBackground: true,
         },
       }),
       nodeInstance('out', 'scene-out'),
@@ -235,6 +286,8 @@ test('scene-out sends configured FCT track scenes', () => {
           brightness: 1.2,
           contrast: 0.95,
           blend: 'replace',
+          audioSource: 'microphone',
+          showBackground: true,
         },
       ],
     },

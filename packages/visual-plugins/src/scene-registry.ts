@@ -32,3 +32,25 @@ export function sceneIdsFromLayer(items: VisualSceneLayerItem[] | unknown[]): st
 
   return ids;
 }
+
+export function sceneLayersFromItems(
+  items: VisualSceneLayerItem[] | unknown[]
+): Array<{ key: string; sceneId: string; options: Record<string, unknown> }> {
+  if (!Array.isArray(items)) return [];
+  const layers: Array<{ key: string; sceneId: string; options: Record<string, unknown> }> = [];
+
+  items.forEach((item, index) => {
+    if (!item || typeof item !== 'object') return;
+    const type = (item as { type?: unknown }).type;
+    if (typeof type !== 'string') return;
+    const sceneId = sceneIdForType(type as VisualSceneType);
+    if (!sceneId) return;
+    layers.push({
+      key: `${index}-${type}`,
+      sceneId,
+      options: item as Record<string, unknown>,
+    });
+  });
+
+  return layers;
+}

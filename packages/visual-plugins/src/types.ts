@@ -26,7 +26,23 @@ export interface VisualScene {
      * Resize handler
      */
     resize?(width: number, height: number): void;
+
+    /**
+     * Optional scene-specific configuration hook.
+     */
+    configure?(options: unknown): void;
 }
+
+export type VisualAudioFeatures = {
+    rms?: number;
+    lowEnergy?: number;
+    midEnergy?: number;
+    highEnergy?: number;
+    bpm?: number | null;
+    beatDetected?: boolean;
+    melBands?: number[];
+    spectralCentroid?: number;
+};
 
 /**
  * Context data passed to scene update
@@ -42,16 +58,13 @@ export interface VisualContext {
     };
 
     /** Audio features from plugins */
-    audioFeatures?: {
-        rms?: number;
-        lowEnergy?: number;
-        midEnergy?: number;
-        highEnergy?: number;
-        bpm?: number | null;
-        beatDetected?: boolean;
-        melBands?: number[];
-        spectralCentroid?: number;
-    };
+    audioFeatures?: VisualAudioFeatures;
+
+    /** Audio features from the local microphone input. */
+    microphoneAudioFeatures?: VisualAudioFeatures;
+
+    /** Audio features from local media/audio playback. */
+    playbackAudioFeatures?: VisualAudioFeatures;
 }
 
 /**
@@ -64,6 +77,11 @@ export interface SceneManager {
     register(scene: VisualScene): void;
 
     /**
+     * Register a scene factory for ordered layer rendering.
+     */
+    registerFactory?(sceneId: string, factory: () => VisualScene): void;
+
+    /**
      * Enable or disable a specific scene independently
      */
     setSceneEnabled(sceneId: string, enabled: boolean): void;
@@ -71,7 +89,12 @@ export interface SceneManager {
   /**
    * Get all active scenes
    */
-  getActiveScenes(): VisualScene[];
+    getActiveScenes(): VisualScene[];
+
+    /**
+     * Replace ordered layer scene instances.
+     */
+    setLayerScenes?(layers: Array<{ key: string; sceneId: string; options?: Record<string, unknown> }>): void;
 
     /**
      * Update all active scenes

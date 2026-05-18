@@ -5,7 +5,9 @@ import { definePlugin } from '@shugu/plugin-core';
 import {
   FCT_TRACK_PALETTES,
   FCT_TRACK_VARIANTS,
+  FCT_TRACK_AUDIO_SOURCES,
   PROTOCOL_VERSION,
+  type FctTrackAudioSource,
   type FctTrackPalette,
   type FctTrackSceneLayerItem,
   type FctTrackVariant,
@@ -83,6 +85,9 @@ const isFctVariant = (value: unknown): value is FctTrackVariant =>
 const isFctPalette = (value: unknown): value is FctTrackPalette =>
   typeof value === 'string' && FCT_TRACK_PALETTES.includes(value as FctTrackPalette);
 
+const isFctAudioSource = (value: unknown): value is FctTrackAudioSource =>
+  typeof value === 'string' && FCT_TRACK_AUDIO_SOURCES.includes(value as FctTrackAudioSource);
+
 const normalizeOptions = (options: FctTrackSceneOptions = {}): Required<FctTrackSceneOptions> => ({
   variant: isFctVariant(options.variant) ? options.variant : 'shattered-reality',
   palette: isFctPalette(options.palette) ? options.palette : 'red-black',
@@ -90,6 +95,8 @@ const normalizeOptions = (options: FctTrackSceneOptions = {}): Required<FctTrack
   brightness: clampRange(options.brightness, 1, 0, 2),
   contrast: clampRange(options.contrast, 1, 0, 2),
   blend: options.blend === 'over' ? 'over' : 'replace',
+  audioSource: isFctAudioSource(options.audioSource) ? options.audioSource : 'microphone',
+  showBackground: options.showBackground !== false,
 });
 
 const clamp01 = (value: unknown): number => {
@@ -104,6 +111,40 @@ const normalizeMelBandForFft = (value: unknown): number => {
   // FCT's FFT texture expects byte-analyser style 0..1 values. ShuGu mel bands
   // are log-power values, using the same default -8..0 normalization as MelScene.
   return Math.max(0, Math.min(1, (n + 8) / 8));
+};
+
+const mergeAudioFeatures = (
+  first: FctAudioFeaturesInput | undefined,
+  second: FctAudioFeaturesInput | undefined
+): FctAudioFeaturesInput | undefined => {
+  if (!first) return second;
+  if (!second) return first;
+  const avg = (a: unknown, b: unknown): number | undefined => {
+    const na = Number(a);
+    const nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return (na + nb) / 2;
+    if (Number.isFinite(na)) return na;
+    if (Number.isFinite(nb)) return nb;
+    return undefined;
+  };
+  const melA = Array.isArray(first.melBands) ? first.melBands : [];
+  const melB = Array.isArray(second.melBands) ? second.melBands : [];
+  const melBands = (() => {
+    const length = Math.max(melA.length, melB.length);
+    if (length === 0) return undefined;
+    return Array.from({ length }, (_, index) => avg(melA[index], melB[index]) ?? -8);
+  })();
+
+  return {
+    rms: avg(first.rms, second.rms),
+    lowEnergy: avg(first.lowEnergy, second.lowEnergy),
+    midEnergy: avg(first.midEnergy, second.midEnergy),
+    highEnergy: avg(first.highEnergy, second.highEnergy),
+    bpm: first.bpm ?? second.bpm ?? null,
+    beatDetected: Boolean(first.beatDetected || second.beatDetected),
+    melBands,
+    spectralCentroid: avg(first.spectralCentroid, second.spectralCentroid),
+  };
 };
 
 export function buildStageAudioFeaturesForFct(
@@ -217,16 +258,24 @@ export class FctTrackScene implements VisualScene {
   }
 
   private readAudioFeatures(context: VisualContext): StageAudioFeatures {
-    return buildStageAudioFeaturesForFct(context.audioFeatures, this.config.sensitivity);
+    const source = (() => {
+      if (this.config.audioSource === 'playback') return context.playbackAudioFeatures ?? context.audioFeatures;
+      if (this.config.audioSource === 'both') {
+        return mergeAudioFeatures(context.microphoneAudioFeatures ?? context.audioFeatures, context.playbackAudioFeatures);
+      }
+      return context.microphoneAudioFeatures ?? context.audioFeatures;
+    })();
+    return buildStageAudioFeaturesForFct(source, this.config.sensitivity);
   }
 
   private applyVisibleThemeSurface(): void {
     const style = FCT_VISIBLE_THEME_STYLES[this.config.palette];
+    const background = this.config.showBackground ? style.background : 'transparent';
     if (this.container) {
-      this.container.style.background = style.background;
+      this.container.style.background = background;
     }
     if (this.canvas) {
-      this.canvas.style.background = style.background;
+      this.canvas.style.background = background;
     }
   }
 

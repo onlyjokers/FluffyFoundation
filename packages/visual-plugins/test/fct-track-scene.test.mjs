@@ -73,6 +73,36 @@ test('FctTrackScene mount and unmount own a single canvas element', () => {
   assert.equal(children.length, 0);
 });
 
+test('FctTrackScene can hide its theme background for overlay composition', () => {
+  const children = [];
+  const container = {
+    style: {},
+    clientWidth: 320,
+    clientHeight: 240,
+    appendChild(node) {
+      children.push(node);
+      node.parentNode = this;
+    },
+    removeChild(node) {
+      const index = children.indexOf(node);
+      if (index >= 0) children.splice(index, 1);
+      node.parentNode = null;
+    },
+  };
+
+  const scene = new FctTrackScene({ palette: 'red-black', showBackground: false });
+  scene.mount(container);
+  assert.equal(container.style.background, 'transparent');
+  assert.equal(children[0].style.background, 'transparent');
+  assert.equal(scene.getConfig().audioSource, 'microphone');
+
+  scene.configure({ showBackground: true, audioSource: 'both' });
+  assert.equal(container.style.background, '#000');
+  assert.equal(children[0].style.background, '#000');
+  assert.equal(scene.getConfig().audioSource, 'both');
+  scene.unmount();
+});
+
 test('FctTrackScene normalizes log-power mel bands into FFT texture values', () => {
   const features = buildStageAudioFeaturesForFct(
     {

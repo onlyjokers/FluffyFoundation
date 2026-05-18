@@ -145,6 +145,8 @@ test('validateMessage accepts configured FCT visual scenes', () => {
           brightness: 0.85,
           contrast: 1.1,
           blend: 'over',
+          audioSource: 'both',
+          showBackground: false,
         },
       ],
     }
@@ -169,6 +171,8 @@ test('validateMessage rejects invalid FCT visual scene configuration', () => {
           brightness: 3,
           contrast: Number.NaN,
           blend: 'multiply',
+          audioSource: 'airplay',
+          showBackground: 'yes',
         },
       ],
     }
@@ -186,6 +190,8 @@ test('validateMessage rejects invalid FCT visual scene configuration', () => {
       'payload.scenes[0].brightness',
       'payload.scenes[0].contrast',
       'payload.scenes[0].blend',
+      'payload.scenes[0].audioSource',
+      'payload.scenes[0].showBackground',
     ]
   );
 });
