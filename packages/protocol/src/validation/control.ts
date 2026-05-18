@@ -1,7 +1,7 @@
 /**
  * Purpose: Runtime schema validation for control protocol messages and payloads.
  */
-import type { ControlPayload } from '../types.js';
+import { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS, type ControlPayload } from '../types.js';
 import { CONTROL_ACTIONS, MEDIA_TYPES } from './constants.js';
 import {
   addReason,
@@ -122,10 +122,49 @@ function validateVisualScenes(payload: ObjectRecord, ctx: MutableValidationConte
     return;
   }
   payload.scenes.forEach((scene, index) => {
-    if (!isRecord(scene) || !isOneOf(scene.type, ['box', 'mel', 'frontCamera', 'backCamera'] as const)) {
+    if (!isRecord(scene)) {
       addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes', `${path}.scenes[${index}].type`, `${path}.scenes[${index}].type is unsupported`);
+      return;
     }
+    if (isOneOf(scene.type, ['box', 'mel', 'frontCamera', 'backCamera'] as const)) {
+      return;
+    }
+    if (scene.type === 'fctTrack') {
+      validateFctTrackScene(scene, ctx, `${path}.scenes[${index}]`);
+      return;
+    }
+    addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes', `${path}.scenes[${index}].type`, `${path}.scenes[${index}].type is unsupported`);
   });
+}
+
+function validateFctTrackScene(scene: ObjectRecord, ctx: MutableValidationContext, path: string): void {
+  if (!isOneOf(scene.variant, FCT_TRACK_VARIANTS)) {
+    addReason(ctx, fieldCode(scene, 'variant'), 'message.control.payload.scenes.variant', `${path}.variant`, `${path}.variant is unsupported`);
+  }
+  if (!isOneOf(scene.palette, FCT_TRACK_PALETTES)) {
+    addReason(ctx, fieldCode(scene, 'palette'), 'message.control.payload.scenes.palette', `${path}.palette`, `${path}.palette is unsupported`);
+  }
+  validateOptionalNumberRange(scene, ctx, 'sensitivity', `${path}.sensitivity`, 0, 2);
+  validateOptionalNumberRange(scene, ctx, 'brightness', `${path}.brightness`, 0, 2);
+  validateOptionalNumberRange(scene, ctx, 'contrast', `${path}.contrast`, 0, 2);
+  if (hasOwn(scene, 'blend') && !isOneOf(scene.blend, ['replace', 'over'] as const)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.blend', `${path}.blend`, `${path}.blend must be replace or over`);
+  }
+}
+
+function validateOptionalNumberRange(
+  input: ObjectRecord,
+  ctx: MutableValidationContext,
+  key: string,
+  path: string,
+  min: number,
+  max: number
+): void {
+  if (!hasOwn(input, key)) return;
+  const value = input[key];
+  if (!isNumber(value) || value < min || value > max) {
+    addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a number between ${min} and ${max}`);
+  }
 }
 
 function validateVisualEffects(payload: ObjectRecord, ctx: MutableValidationContext, path: string): void {

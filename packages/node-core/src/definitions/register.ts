@@ -82,6 +82,7 @@ import {
 import {
   createSceneBackCameraNode,
   createSceneBoxNode,
+  createSceneFctTrackNode,
   createSceneFrontCameraNode,
   createSceneMelNode,
 } from './nodes/scenes.js';
@@ -164,6 +165,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     // Visual scene chain
     createSceneBoxNode,
     createSceneMelNode,
+    createSceneFctTrackNode,
     createSceneFrontCameraNode,
     createSceneBackCameraNode,
     createEffectConvolutionNode,

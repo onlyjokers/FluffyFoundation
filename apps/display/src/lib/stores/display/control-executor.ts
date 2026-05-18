@@ -10,6 +10,8 @@ import type {
   ScreenColorPayload,
   ShowImagePayload,
   ShowTextPayload,
+  VisualSceneLayerItem,
+  VisualScenesPayload,
 } from '@shugu/protocol';
 import type { NodeExecutor } from '@shugu/sdk-client';
 import { stopAllDisplaySideEffects } from '../display-stop-all';
@@ -39,8 +41,14 @@ export type DisplayControlExecutorDeps = {
   getNodeExecutor: () => NodeExecutor | null;
   screenOverlay: Writable<ScreenOverlayState>;
   textOverlay: Writable<TextOverlayState>;
+  visualScenes: Writable<VisualSceneLayerItem[]>;
   isDev: boolean;
 };
+
+function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] {
+  const record = payload && typeof payload === 'object' ? (payload as VisualScenesPayload) : null;
+  return Array.isArray(record?.scenes) ? record.scenes.slice(0, 12) : [];
+}
 
 export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): {
   executeControl: (action: ControlAction, payload: ControlPayload, executeAtLocal?: number) => void;
@@ -173,6 +181,10 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
         clearText();
         return;
 
+      case 'visualScenes':
+        deps.visualScenes.set(normalizeVisualScenes(payload));
+        return;
+
       case 'shutdown': {
         const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
         if (record?.reason !== 'root-stop-all' && record?.kind !== 'stop-all') return;
@@ -184,6 +196,7 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
           clearActiveImageObjectUrl,
         });
         clearText();
+        deps.visualScenes.set([]);
         return;
       }
 

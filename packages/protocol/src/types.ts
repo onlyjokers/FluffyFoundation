@@ -184,6 +184,40 @@ export interface ShowTextPayload {
   duration?: number;
 }
 
+export const FCT_TRACK_VARIANTS = [
+  'shattered-reality',
+  'acab',
+  'il-crollo-del-cielo',
+  'fantasmi-interrotti',
+  'strategia-della-tensione',
+  'alice-e-le-onde-eterne-della-fine',
+] as const;
+
+export type FctTrackVariant = (typeof FCT_TRACK_VARIANTS)[number];
+
+export const FCT_TRACK_PALETTES = [
+  'red',
+  'dark',
+  'light',
+  'red-white-invert',
+  'red-black',
+  'red-black-invert',
+] as const;
+
+export type FctTrackPalette = (typeof FCT_TRACK_PALETTES)[number];
+
+export type FctTrackBlend = 'replace' | 'over';
+
+export interface FctTrackSceneLayerItem {
+  type: 'fctTrack';
+  variant: FctTrackVariant;
+  palette: FctTrackPalette;
+  sensitivity?: number;
+  brightness?: number;
+  contrast?: number;
+  blend?: FctTrackBlend;
+}
+
 /**
  * Visual scene layer item.
  *
@@ -194,7 +228,8 @@ export type VisualSceneLayerItem =
   | { type: 'box' }
   | { type: 'mel' }
   | { type: 'frontCamera' }
-  | { type: 'backCamera' };
+  | { type: 'backCamera' }
+  | FctTrackSceneLayerItem;
 
 /**
  * Visual scenes pipeline payload.

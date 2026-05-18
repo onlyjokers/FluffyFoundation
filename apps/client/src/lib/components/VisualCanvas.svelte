@@ -17,11 +17,13 @@
   import ImageDisplay from '$lib/components/ImageDisplay.svelte';
   import {
     BoxScene,
+    FctTrackScene,
     MelSpectrogramScene,
     DefaultSceneManager,
     type VisualContext,
     sceneIdsFromLayer,
   } from '@shugu/visual-plugins';
+  import type { FctTrackSceneLayerItem, VisualSceneLayerItem } from '@shugu/protocol';
   import { toneAudioEngine } from '@shugu/multimedia-core';
   import {
     AudioSplitPlugin,
@@ -48,6 +50,7 @@
   let animationId: number;
   let effectCtx: CanvasRenderingContext2D | null = null;
   let effectPipeline: VisualEffectPipeline | null = null;
+  let fctTrackScene: FctTrackScene | null = null;
   let baseVisible = true;
   let lastTime = 0;
   let cameraVideoElement: HTMLVideoElement;
@@ -86,6 +89,8 @@
     // Register scenes (base visuals)
     sceneManager.register(new BoxScene());
     sceneManager.register(new MelSpectrogramScene());
+    fctTrackScene = new FctTrackScene();
+    sceneManager.register(fctTrackScene);
 
     // Effect pipeline setup (shared visual-effects package)
     effectCtx = effectCanvas.getContext('2d');
@@ -106,6 +111,7 @@
     window.removeEventListener('deviceorientation', handleOrientation);
     window.removeEventListener('resize', handleResize);
     sceneManager?.destroy();
+    fctTrackScene = null;
     splitPlugin?.destroy();
     melPlugin?.destroy();
     splitPlugin = null;
@@ -252,10 +258,19 @@
     animationId = requestAnimationFrame(animate);
   }
 
-  function applySceneLayer(scenes: unknown[]): void {
+  function applySceneLayer(scenes: VisualSceneLayerItem[] | unknown[]): void {
     if (!sceneManager) return;
 
     const list = Array.isArray(scenes) ? scenes : [];
+    const fctTrackConfig = [...list]
+      .reverse()
+      .find((item): item is FctTrackSceneLayerItem =>
+        Boolean(item) && typeof item === 'object' && (item as { type?: unknown }).type === 'fctTrack'
+      );
+    if (fctTrackConfig) {
+      fctTrackScene?.configure(fctTrackConfig);
+    }
+
     const desiredSceneIdsRaw = sceneIdsFromLayer(list);
     const desiredSceneIds: string[] = [];
     const desired = new Set<string>();

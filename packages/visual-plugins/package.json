@@ -16,12 +16,14 @@
         "build": "pnpm exec tsc",
         "dev": "pnpm exec tsc --watch",
         "clean": "rm -rf dist-visual-plugins-out",
-    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\""
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\"",
+    "test": "pnpm run build && node --test test/*.test.mjs"
     },
     "files": [
         "dist-visual-plugins-out"
     ],
     "dependencies": {
+        "@shugu/plugin-core": "workspace:*",
         "@shugu/protocol": "workspace:*",
         "three": "^0.160.0"
     },

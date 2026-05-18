@@ -1,0 +1,59 @@
+{
+  "__purpose": "Manager UI overlay for the node-core FCT audio-reactive visual Scene node.",
+  "type": "scene-fct-track",
+  "label": "Scene FCT Track",
+  "category": "Scene",
+  "inputs": [
+    { "id": "in", "label": "In", "type": "scene" },
+    { "id": "sensitivity", "label": "Sensitivity", "type": "number", "min": 0, "max": 2, "step": 0.01 },
+    { "id": "brightness", "label": "Brightness", "type": "number", "min": 0, "max": 2, "step": 0.01 },
+    { "id": "contrast", "label": "Contrast", "type": "number", "min": 0, "max": 2, "step": 0.01 }
+  ],
+  "outputs": [{ "id": "out", "label": "Out", "type": "scene" }],
+  "configSchema": [
+    {
+      "key": "variant",
+      "label": "Variant",
+      "type": "select",
+      "defaultValue": "shattered-reality",
+      "options": [
+        { "value": "shattered-reality", "label": "Shattered Reality" },
+        { "value": "acab", "label": "ACAB" },
+        { "value": "il-crollo-del-cielo", "label": "Il Crollo del Cielo" },
+        { "value": "fantasmi-interrotti", "label": "Fantasmi Interrotti" },
+        { "value": "strategia-della-tensione", "label": "Strategia della Tensione" },
+        {
+          "value": "alice-e-le-onde-eterne-della-fine",
+          "label": "Alice e le Onde Eterne della Fine"
+        }
+      ]
+    },
+    {
+      "key": "palette",
+      "label": "Palette",
+      "type": "select",
+      "defaultValue": "red-black",
+      "options": [
+        { "value": "red", "label": "Red" },
+        { "value": "dark", "label": "Dark" },
+        { "value": "light", "label": "Light" },
+        { "value": "red-white-invert", "label": "Red White Invert" },
+        { "value": "red-black", "label": "Red Black" },
+        { "value": "red-black-invert", "label": "Red Black Invert" }
+      ]
+    },
+    { "key": "sensitivity", "label": "Sensitivity", "type": "number", "defaultValue": 1, "min": 0, "max": 2, "step": 0.01 },
+    { "key": "brightness", "label": "Brightness", "type": "number", "defaultValue": 1, "min": 0, "max": 2, "step": 0.01 },
+    { "key": "contrast", "label": "Contrast", "type": "number", "defaultValue": 1, "min": 0, "max": 2, "step": 0.01 },
+    {
+      "key": "blend",
+      "label": "Blend",
+      "type": "select",
+      "defaultValue": "replace",
+      "options": [
+        { "value": "replace", "label": "Replace" },
+        { "value": "over", "label": "Over" }
+      ]
+    }
+  ]
+}
