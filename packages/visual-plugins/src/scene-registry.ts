@@ -11,6 +11,7 @@ const SCENE_TYPE_TO_ID: Record<VisualSceneType, string | null> = {
   mel: 'mel-scene',
   frontCamera: null,
   backCamera: null,
+  fctTrack: 'fct-track-scene',
 };
 
 export function sceneIdForType(type: VisualSceneType): string | null {

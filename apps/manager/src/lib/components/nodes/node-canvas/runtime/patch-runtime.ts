@@ -26,6 +26,11 @@ type AnyRecord = Record<string, unknown>;
 
 const asRecord = (value: unknown): AnyRecord | null =>
   value && typeof value === 'object' ? (value as AnyRecord) : null;
+
+const managedClientGroupTarget = (clientId: string) => ({
+  mode: 'group' as const,
+  groupId: `client:${clientId}`,
+});
 export type {
   CreatePatchRuntimeOptions,
   PatchRuntime,
@@ -119,7 +124,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     const sdk = getSDK();
     if (!sdk) return;
-    sdk.sendPluginControl({ mode: 'clientIds', ids: [id] }, 'node-executor', command, payload);
+    sdk.sendPluginControl(managedClientGroupTarget(id), 'node-executor', command, payload);
   };
 
   // ────────────────────────────────────────────────────────────────────────────

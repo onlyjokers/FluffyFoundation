@@ -132,6 +132,9 @@ importers:
       '@shugu/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+      '@shugu/visual-plugins':
+        specifier: workspace:*
+        version: link:../../packages/visual-plugins
       socket.io-client:
         specifier: ^4.7.2
         version: 4.8.3
@@ -422,6 +425,9 @@ importers:
 
   packages/visual-plugins:
     dependencies:
+      '@shugu/plugin-core':
+        specifier: workspace:*
+        version: link:../plugin-core
       '@shugu/protocol':
         specifier: workspace:*
         version: link:../protocol

@@ -7,6 +7,7 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
   import { onMount, onDestroy } from 'svelte';
   import { VideoPlayer } from '@shugu/ui-kit';
   import ImageDisplay from '$components/ImageDisplay.svelte';
+  import DisplayVisualScenes from '$components/DisplayVisualScenes.svelte';
   import { toneAudioEngine } from '@shugu/multimedia-core';
   import {
     audioState,
@@ -14,6 +15,7 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     serverState,
     videoState,
     imageState,
+    visualScenes,
     screenOverlay,
     textOverlay,
     initializeDisplay,
@@ -74,6 +76,10 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     if (!$audioState.enabled) void enableAudio();
   }}
 >
+  {#if isConnected}
+    <DisplayVisualScenes scenes={$visualScenes} />
+  {/if}
+
   {#if isConnected && $videoState.url}
     <VideoPlayer
       url={$videoState.url}
@@ -127,17 +133,21 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     overflow: hidden;
   }
 
+  .root :global(.video-overlay) {
+    z-index: 1;
+  }
+
   .screen-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1;
+    z-index: 2;
     pointer-events: none;
   }
 
   .text-overlay {
     position: fixed;
     inset: 0;
-    z-index: 2;
+    z-index: 3;
     display: flex;
     align-items: center;
     justify-content: center;

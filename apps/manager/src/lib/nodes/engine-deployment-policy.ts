@@ -77,6 +77,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   // Visual scenes chain
   'scene-box',
   'scene-mel',
+  'scene-fct-track',
   'scene-front-camera',
   'scene-back-camera',
   'tone-osc',

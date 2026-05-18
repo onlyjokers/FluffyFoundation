@@ -3,11 +3,15 @@
  */
 import type {
   ConvolutionPreset,
+  FctTrackBlend,
+  FctTrackPalette,
+  FctTrackVariant,
   VisualEffect,
   VisualEffectsPayload,
   VisualSceneLayerItem,
   VisualScenesPayload,
 } from '@shugu/protocol';
+import { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
 import type { ClientObjectDeps, NodeCommand } from '../types.js';
@@ -35,6 +39,19 @@ const coerceConvolutionPreset = (value: unknown): ConvolutionPreset | undefined 
   ];
   return allowed.includes(raw as ConvolutionPreset) ? (raw as ConvolutionPreset) : undefined;
 };
+
+const coerceFctVariant = (value: unknown): FctTrackVariant =>
+  typeof value === 'string' && FCT_TRACK_VARIANTS.includes(value as FctTrackVariant)
+    ? (value as FctTrackVariant)
+    : 'shattered-reality';
+
+const coerceFctPalette = (value: unknown): FctTrackPalette =>
+  typeof value === 'string' && FCT_TRACK_PALETTES.includes(value as FctTrackPalette)
+    ? (value as FctTrackPalette)
+    : 'red-black';
+
+const coerceFctBlend = (value: unknown): FctTrackBlend =>
+  value === 'over' ? 'over' : 'replace';
 
 export function createAudioOutNode(): NodeDefinition {
   return {
@@ -292,6 +309,18 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
       }
       if (type === 'backCamera') {
         scenes.push({ type: 'backCamera' });
+        continue;
+      }
+      if (type === 'fctTrack') {
+        scenes.push({
+          type: 'fctTrack',
+          variant: coerceFctVariant(record.variant),
+          palette: coerceFctPalette(record.palette),
+          sensitivity: clampNumber(coerceNumber(record.sensitivity, 1), 0, 2),
+          brightness: clampNumber(coerceNumber(record.brightness, 1), 0, 2),
+          contrast: clampNumber(coerceNumber(record.contrast, 1), 0, 2),
+          blend: coerceFctBlend(record.blend),
+        });
       }
     }
 
