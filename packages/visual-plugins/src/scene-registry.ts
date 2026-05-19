@@ -9,8 +9,8 @@ export type VisualSceneType = VisualSceneLayerItem['type'];
 const SCENE_TYPE_TO_ID: Record<VisualSceneType, string | null> = {
   box: 'box-scene',
   mel: 'mel-scene',
-  frontCamera: null,
-  backCamera: null,
+  frontCamera: 'front-camera-scene',
+  backCamera: 'back-camera-scene',
   fctTrack: 'fct-track-scene',
 };
 

@@ -131,8 +131,19 @@ function validateVisualScenes(payload: ObjectRecord, ctx: MutableValidationConte
       addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes', `${path}.scenes[${index}].type`, `${path}.scenes[${index}].type is unsupported`);
       return;
     }
-    if (isOneOf(scene.type, ['box', 'mel', 'frontCamera', 'backCamera'] as const)) {
+    if (scene.type === 'box') {
       validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`);
+      validateOptionalCssColor(scene, ctx, 'color', `${path}.scenes[${index}].color`);
+      return;
+    }
+    if (scene.type === 'mel') {
+      validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`);
+      return;
+    }
+    if (isOneOf(scene.type, ['frontCamera', 'backCamera'] as const)) {
+      if (hasOwn(scene, 'showBackground')) {
+        addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.showBackground', `${path}.scenes[${index}].showBackground`, `${path}.scenes[${index}].showBackground is not supported for camera scenes`);
+      }
       return;
     }
     if (scene.type === 'fctTrack') {
@@ -186,6 +197,19 @@ function validateOptionalBoolean(
   if (!hasOwn(input, key)) return;
   if (typeof input[key] !== 'boolean') {
     addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a boolean`);
+  }
+}
+
+function validateOptionalCssColor(
+  input: ObjectRecord,
+  ctx: MutableValidationContext,
+  key: string,
+  path: string
+): void {
+  if (!hasOwn(input, key)) return;
+  const value = input[key];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a non-empty CSS color string`);
   }
 }
 

@@ -65,6 +65,9 @@ export interface VisualContext {
 
     /** Audio features from local media/audio playback. */
     playbackAudioFeatures?: VisualAudioFeatures;
+
+    /** Camera stream used by camera scene layers. */
+    cameraStream?: MediaStream | null;
 }
 
 /**

@@ -62,6 +62,17 @@ const coerceSceneShowBackground = (inputValue: unknown, configValue: unknown, fa
   return fallback;
 };
 
+const coerceCssColor = (inputValue: unknown, configValue: unknown, fallback: string): string => {
+  const raw = inputValue !== undefined && inputValue !== null ? inputValue : configValue;
+  if (typeof raw !== 'string') return fallback;
+  const value = raw.trim();
+  if (!value) return fallback;
+  if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) return value;
+  if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(value)) return value;
+  if (/^rgba?\(/i.test(value) || /^hsla?\(/i.test(value)) return value;
+  return fallback;
+};
+
 const coerceFctNumberParam = (
   inputValue: unknown,
   configValue: unknown,
@@ -80,17 +91,20 @@ export function createSceneBoxNode(): NodeDefinition {
     category: 'Scene',
     inputs: [
       { id: 'in', label: 'In', type: 'scene' },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: true },
+      { id: 'color', label: 'Color', type: 'color' },
+      { id: 'showBackground', label: 'Show Background', type: 'boolean' },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: true },
+      { key: 'color', label: 'Color', type: 'color', defaultValue: '#4a90d9' },
+      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
     ],
     process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
       const scene: VisualSceneLayerItem = {
         type: 'box',
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, true),
+        color: coerceCssColor(inputs.color, config.color, '#4a90d9'),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
       };
       return { out: [...chain, scene] };
     },
@@ -104,7 +118,7 @@ export function createSceneMelNode(): NodeDefinition {
     category: 'Scene',
     inputs: [
       { id: 'in', label: 'In', type: 'scene' },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
+      { id: 'showBackground', label: 'Show Background', type: 'boolean' },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
@@ -126,19 +140,13 @@ export function createSceneFrontCameraNode(): NodeDefinition {
     type: 'scene-front-camera',
     label: 'Scene Front Camera',
     category: 'Scene',
-    inputs: [
-      { id: 'in', label: 'In', type: 'scene' },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
-    ],
+    inputs: [{ id: 'in', label: 'In', type: 'scene' }],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
-    configSchema: [
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
-    ],
-    process: (inputs, config) => {
+    configSchema: [],
+    process: (inputs) => {
       const chain = coerceSceneChain(inputs.in);
       const scene: VisualSceneLayerItem = {
         type: 'frontCamera',
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
       };
       return { out: [...chain, scene] };
     },
@@ -150,19 +158,13 @@ export function createSceneBackCameraNode(): NodeDefinition {
     type: 'scene-back-camera',
     label: 'Scene Back Camera',
     category: 'Scene',
-    inputs: [
-      { id: 'in', label: 'In', type: 'scene' },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
-    ],
+    inputs: [{ id: 'in', label: 'In', type: 'scene' }],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
-    configSchema: [
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
-    ],
-    process: (inputs, config) => {
+    configSchema: [],
+    process: (inputs) => {
       const chain = coerceSceneChain(inputs.in);
       const scene: VisualSceneLayerItem = {
         type: 'backCamera',
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
       };
       return { out: [...chain, scene] };
     },
@@ -206,7 +208,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
       { id: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0, max: 2, step: 0.01 },
       { id: 'brightness', label: 'Brightness', type: 'number', min: 0, max: 2, step: 0.01 },
       { id: 'contrast', label: 'Contrast', type: 'number', min: 0, max: 2, step: 0.01 },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: true },
+      { id: 'showBackground', label: 'Show Background', type: 'boolean' },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
@@ -248,7 +250,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
           { value: 'both', label: 'Microphone + Playback' },
         ],
       },
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: true },
+      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
     ],
     process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
@@ -261,7 +263,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
         contrast: coerceFctNumberParam(inputs.contrast, config.contrast, 1, 0, 2),
         blend: coerceFctBlend(config.blend),
         audioSource: coerceFctAudioSource(config.audioSource),
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, true),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
       };
       return { out: [...chain, scene] };
     },

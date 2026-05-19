@@ -1,5 +1,5 @@
 /**
- * Purpose: Base visual layer composition (scenes + media + camera) for VisualCanvas.
+ * Purpose: Base visual layer composition (scenes + media) for VisualCanvas effects.
  */
 
 import type { MediaFit } from '@shugu/multimedia-core';
@@ -22,12 +22,8 @@ export type BaseFrameImageState = {
 export type BaseFrameSources = {
   container: HTMLElement | null;
   effectCanvas: HTMLCanvasElement | null;
-  cameraVideoElement: HTMLVideoElement | null;
   videoState: BaseFrameVideoState;
   imageState: BaseFrameImageState;
-  cameraStream: MediaStream | null;
-  frontCameraEnabled: boolean;
-  backCameraEnabled: boolean;
 };
 
 export type FittedDrawParams = {
@@ -80,6 +76,35 @@ export function getFittedDrawParams(
   return { sx: 0, sy: 0, sw: srcW, sh: srcH, dx, dy, dw, dh };
 }
 
+function normalizeBlendMode(value: string | undefined): GlobalCompositeOperation {
+  switch (value?.trim()) {
+    case 'screen':
+      return 'screen';
+    case 'multiply':
+      return 'multiply';
+    case 'overlay':
+      return 'overlay';
+    case 'darken':
+      return 'darken';
+    case 'lighten':
+      return 'lighten';
+    case 'difference':
+      return 'difference';
+    case 'plus-lighter':
+      return 'lighter';
+    case 'normal':
+    case '':
+    default:
+      return 'source-over';
+  }
+}
+
+function getSceneBackground(canvas: HTMLCanvasElement): string | null {
+  const background = canvas.style.background?.trim();
+  if (!background || background === 'transparent') return null;
+  return background;
+}
+
 export function drawBaseFrame(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -90,12 +115,8 @@ export function drawBaseFrame(
   const {
     container,
     effectCanvas,
-    cameraVideoElement,
     videoState,
     imageState,
-    cameraStream,
-    frontCameraEnabled,
-    backCameraEnabled,
   } = sources;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -109,7 +130,16 @@ export function drawBaseFrame(
     if (c === effectCanvas) continue;
     if (!c.width || !c.height) continue;
     try {
+      ctx.save();
+      const background = getSceneBackground(c);
+      if (background) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = background;
+        ctx.fillRect(0, 0, width, height);
+      }
+      ctx.globalCompositeOperation = normalizeBlendMode(c.style.mixBlendMode);
       ctx.drawImage(c, 0, 0, width, height);
+      ctx.restore();
     } catch {
       // ignore
     }
@@ -197,34 +227,4 @@ export function drawBaseFrame(
     }
   }
 
-  // Draw camera on top (if enabled).
-  if (
-    cameraVideoElement &&
-    cameraStream &&
-    (frontCameraEnabled || backCameraEnabled) &&
-    cameraVideoElement.readyState >= 2
-  ) {
-    const srcW = cameraVideoElement.videoWidth || 0;
-    const srcH = cameraVideoElement.videoHeight || 0;
-    if (srcW > 0 && srcH > 0) {
-      const { sx, sy, sw, sh, dx, dy, dw, dh } = getFittedDrawParams(
-        srcW,
-        srcH,
-        width,
-        height,
-        'cover'
-      );
-      try {
-        ctx.save();
-        if (frontCameraEnabled) {
-          ctx.translate(width, 0);
-          ctx.scale(-1, 1);
-        }
-        ctx.drawImage(cameraVideoElement, sx, sy, sw, sh, dx, dy, dw, dh);
-        ctx.restore();
-      } catch {
-        // ignore
-      }
-    }
-  }
 }
