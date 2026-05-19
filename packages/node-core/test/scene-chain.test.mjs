@@ -43,7 +43,52 @@ test('scene-box appends {type:\"box\"} to the chain', () => {
 
   const context = { nodeId: 'n1', time: 0, deltaTime: 0 };
   const out = def.process({ in: [] }, {}, context);
-  assert.deepEqual(out, { out: [{ type: 'box', showBackground: true }] });
+  assert.deepEqual(out, { out: [{ type: 'box', color: '#4a90d9', showBackground: false }] });
+});
+
+test('scene-box appends color config and input overrides to the chain', () => {
+  const registry = buildRegistry();
+  const def = registry.get('scene-box');
+  assert.ok(def, 'expected scene-box definition');
+
+  assert.deepEqual(
+    def.inputs.map((input) => ({ id: input.id, type: input.type })),
+    [
+      { id: 'in', type: 'scene' },
+      { id: 'color', type: 'color' },
+      { id: 'showBackground', type: 'boolean' },
+    ]
+  );
+
+  const context = { nodeId: 'box', time: 0, deltaTime: 0 };
+  const out = def.process(
+    { in: [], color: '#ff3366', showBackground: true },
+    { color: '#001122', showBackground: false },
+    context
+  );
+
+  assert.deepEqual(out, { out: [{ type: 'box', color: '#ff3366', showBackground: true }] });
+});
+
+test('scene camera nodes do not expose background controls', () => {
+  const registry = buildRegistry();
+  const front = registry.get('scene-front-camera');
+  const back = registry.get('scene-back-camera');
+  assert.ok(front, 'expected scene-front-camera definition');
+  assert.ok(back, 'expected scene-back-camera definition');
+
+  assert.deepEqual(front.inputs.map((input) => input.id), ['in']);
+  assert.deepEqual(front.configSchema, []);
+  assert.deepEqual(back.inputs.map((input) => input.id), ['in']);
+  assert.deepEqual(back.configSchema, []);
+
+  const context = { nodeId: 'cam', time: 0, deltaTime: 0 };
+  assert.deepEqual(front.process({ in: [] }, { showBackground: true }, context), {
+    out: [{ type: 'frontCamera' }],
+  });
+  assert.deepEqual(back.process({ in: [] }, { showBackground: true }, context), {
+    out: [{ type: 'backCamera' }],
+  });
 });
 
 test('scene-fct-track appends configured FCT track scene to the chain', () => {
@@ -77,7 +122,7 @@ test('scene-fct-track appends configured FCT track scene to the chain', () => {
         contrast: 1.1,
         blend: 'over',
         audioSource: 'microphone',
-        showBackground: true,
+        showBackground: false,
       },
     ],
   });
@@ -144,6 +189,25 @@ test('scene-fct-track numeric inputs override config fallbacks', () => {
   });
 });
 
+test('scene-fct-track uses show background config when the input is unconnected', () => {
+  const registry = buildRegistry();
+  const def = registry.get('scene-fct-track');
+  assert.ok(def, 'expected scene-fct-track definition');
+
+  const context = { nodeId: 'fct', time: 0, deltaTime: 0 };
+  const out = def.process(
+    { in: [] },
+    {
+      variant: 'shattered-reality',
+      palette: 'red',
+      showBackground: true,
+    },
+    context
+  );
+
+  assert.equal(out.out[0].showBackground, true);
+});
+
 test('scene box and FCT track preserve ordered overlay layers with background flags', () => {
   const registry = buildRegistry();
   const box = registry.get('scene-box');
@@ -165,7 +229,7 @@ test('scene box and FCT track preserve ordered overlay layers with background fl
   ).out;
 
   assert.deepEqual(fctOut, [
-    { type: 'box', showBackground: true },
+    { type: 'box', color: '#4a90d9', showBackground: true },
     {
       type: 'fctTrack',
       variant: 'acab',
@@ -220,8 +284,8 @@ test('scene-out sends visualScenes and clears on stop', () => {
     action: 'visualScenes',
     payload: {
       scenes: [
-        { type: 'box', showBackground: true },
-        { type: 'frontCamera', showBackground: false },
+        { type: 'box', color: '#4a90d9', showBackground: false },
+        { type: 'frontCamera' },
       ],
     },
   });

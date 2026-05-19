@@ -68,6 +68,16 @@ const coerceSceneShowBackground = (value: unknown): boolean | undefined => {
   return undefined;
 };
 
+const coerceSceneCssColor = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const color = value.trim();
+  if (!color) return undefined;
+  if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) return color;
+  if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(color)) return color;
+  if (/^rgba?\(/i.test(color) || /^hsla?\(/i.test(color)) return color;
+  return undefined;
+};
+
 export function createAudioOutNode(): NodeDefinition {
   return {
     type: 'audio-out',
@@ -311,7 +321,11 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
       const type = getStringValue(record.type) ?? '';
 
       if (type === 'box') {
-        scenes.push({ type: 'box', showBackground: coerceSceneShowBackground(record.showBackground) ?? true });
+        scenes.push({
+          type: 'box',
+          color: coerceSceneCssColor(record.color),
+          showBackground: coerceSceneShowBackground(record.showBackground) ?? true,
+        });
         continue;
       }
       if (type === 'mel') {
@@ -319,11 +333,11 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
         continue;
       }
       if (type === 'frontCamera') {
-        scenes.push({ type: 'frontCamera', showBackground: coerceSceneShowBackground(record.showBackground) ?? false });
+        scenes.push({ type: 'frontCamera' });
         continue;
       }
       if (type === 'backCamera') {
-        scenes.push({ type: 'backCamera', showBackground: coerceSceneShowBackground(record.showBackground) ?? false });
+        scenes.push({ type: 'backCamera' });
         continue;
       }
       if (type === 'fctTrack') {
@@ -336,7 +350,7 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
           contrast: clampNumber(coerceNumber(record.contrast, 1), 0, 2),
           blend: coerceFctBlend(record.blend),
           audioSource: coerceFctAudioSource(record.audioSource),
-          showBackground: coerceSceneShowBackground(record.showBackground) ?? true,
+          showBackground: coerceSceneShowBackground(record.showBackground) ?? false,
         });
       }
     }

@@ -5,11 +5,13 @@
 import * as THREE from 'three';
 import type { VisualScene, VisualContext } from './types.js';
 
+type BoxColor = THREE.ColorRepresentation;
+
 export interface BoxSceneOptions {
-    /** Box color (hex) */
-    color?: number;
-    /** Background color (hex) */
-    backgroundColor?: number;
+    /** Box color (CSS color or hex number) */
+    color?: BoxColor;
+    /** Background color (CSS color or hex number) */
+    backgroundColor?: BoxColor;
     /** Enable wireframe mode */
     wireframe?: boolean;
     /** Base box size */
@@ -64,6 +66,10 @@ export class BoxScene implements VisualScene {
         }
         if (this.renderer) {
             this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground ? 1 : 0);
+        }
+        if (this.box) {
+            const material = this.box.material as THREE.MeshStandardMaterial;
+            material.color.set(this.options.color);
         }
     }
 

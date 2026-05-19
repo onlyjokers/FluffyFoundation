@@ -58,6 +58,7 @@ export interface ConfigField {
     | 'asset-picker'
     | 'local-asset-picker'
     | 'file'
+    | 'color'
     | 'curve';
   defaultValue?: unknown;
   options?: { value: string; label: string }[];

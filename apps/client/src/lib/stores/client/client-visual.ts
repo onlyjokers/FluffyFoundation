@@ -63,6 +63,12 @@ const normalizeShowBackground = (value: unknown, fallback: boolean): boolean => 
   return fallback;
 };
 
+const normalizeCssColor = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const color = value.trim();
+  return color ? color : undefined;
+};
+
 // Independent scene enabled states (derived from visualScenes)
 export const boxSceneEnabled = writable<boolean>(false);
 export const melSceneEnabled = writable<boolean>(false);
@@ -86,7 +92,11 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
     if (!itemRecord) continue;
     const type = typeof itemRecord.type === 'string' ? String(itemRecord.type) : '';
     if (type === 'box') {
-      out.push({ type: 'box', showBackground: normalizeShowBackground(itemRecord.showBackground, true) });
+      out.push({
+        type: 'box',
+        color: normalizeCssColor(itemRecord.color),
+        showBackground: normalizeShowBackground(itemRecord.showBackground, true),
+      });
       continue;
     }
     if (type === 'mel') {
@@ -94,11 +104,11 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
       continue;
     }
     if (type === 'frontCamera') {
-      out.push({ type: 'frontCamera', showBackground: normalizeShowBackground(itemRecord.showBackground, false) });
+      out.push({ type: 'frontCamera' });
       continue;
     }
     if (type === 'backCamera') {
-      out.push({ type: 'backCamera', showBackground: normalizeShowBackground(itemRecord.showBackground, false) });
+      out.push({ type: 'backCamera' });
       continue;
     }
     if (type === 'fctTrack') {

@@ -8,7 +8,7 @@
     { "id": "sensitivity", "label": "Sensitivity", "type": "number", "min": 0, "max": 2, "step": 0.01 },
     { "id": "brightness", "label": "Brightness", "type": "number", "min": 0, "max": 2, "step": 0.01 },
     { "id": "contrast", "label": "Contrast", "type": "number", "min": 0, "max": 2, "step": 0.01 },
-    { "id": "showBackground", "label": "Show Background", "type": "boolean", "defaultValue": true }
+    { "id": "showBackground", "label": "Show Background", "type": "boolean", "defaultValue": false }
   ],
   "outputs": [{ "id": "out", "label": "Out", "type": "scene" }],
   "configSchema": [
@@ -67,6 +67,6 @@
         { "value": "both", "label": "Microphone + Playback" }
       ]
     },
-    { "key": "showBackground", "label": "Show Background", "type": "boolean", "defaultValue": true }
+    { "key": "showBackground", "label": "Show Background", "type": "boolean", "defaultValue": false }
   ]
 }

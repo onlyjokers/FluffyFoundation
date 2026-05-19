@@ -3,8 +3,6 @@
   import {
     melSceneEnabled,
     cameraStream,
-    frontCameraEnabled,
-    backCameraEnabled,
     audioStream,
     visualScenes,
     visualEffects,
@@ -18,6 +16,7 @@
   import ImageDisplay from '$lib/components/ImageDisplay.svelte';
   import {
     BoxScene,
+    CameraScene,
     FctTrackScene,
     MelSpectrogramScene,
     DefaultSceneManager,
@@ -49,7 +48,6 @@
   let effectPipeline: VisualEffectPipeline | null = null;
   let baseVisible = true;
   let lastTime = 0;
-  let cameraVideoElement: HTMLVideoElement;
 
   // Current context data for scene updates
   let context: VisualContext = {};
@@ -85,6 +83,8 @@
     // Register scenes (base visuals)
     sceneManager.registerFactory('box-scene', () => new BoxScene());
     sceneManager.registerFactory('mel-scene', () => new MelSpectrogramScene());
+    sceneManager.registerFactory('front-camera-scene', () => new CameraScene({ facing: 'user' }));
+    sceneManager.registerFactory('back-camera-scene', () => new CameraScene({ facing: 'environment' }));
     sceneManager.registerFactory('fct-track-scene', () => new FctTrackScene());
 
     // Effect pipeline setup (shared visual-effects package)
@@ -123,12 +123,7 @@
     applySceneLayer($visualScenes);
   }
 
-  // Bind camera stream to video element
-  $: if (cameraVideoElement && $cameraStream) {
-    cameraVideoElement.srcObject = $cameraStream;
-  } else if (cameraVideoElement && !$cameraStream) {
-    cameraVideoElement.srcObject = null;
-  }
+  $: context.cameraStream = $cameraStream;
 
   // React to audio stream changes
   $: if ($audioStream && !audioContext) {
@@ -291,7 +286,7 @@
     }
 
     const overlays = Array.from(
-      container.querySelectorAll('.video-overlay, .image-overlay, video.camera-display')
+      container.querySelectorAll('.video-overlay, .image-overlay')
     ) as HTMLElement[];
     for (const el of overlays) {
       el.style.visibility = show ? 'visible' : 'hidden';
@@ -307,12 +302,8 @@
     renderBaseFrame(ctx, width, height, dpr, {
       container,
       effectCanvas,
-      cameraVideoElement,
       videoState: $videoState,
       imageState: $imageState,
-      cameraStream: $cameraStream,
-      frontCameraEnabled: $frontCameraEnabled,
-      backCameraEnabled: $backCameraEnabled,
     });
   }
 
@@ -372,18 +363,6 @@
     />
   {/if}
 
-  <!-- Camera Display -->
-  {#if $cameraStream && ($frontCameraEnabled || $backCameraEnabled)}
-    <video
-      class="camera-display"
-      autoplay
-      playsinline
-      muted
-      bind:this={cameraVideoElement}
-      class:mirror={$frontCameraEnabled}
-    ></video>
-  {/if}
-
   <canvas class="effect-output" bind:this={effectCanvas}></canvas>
 </div>
 
@@ -412,16 +391,4 @@
     visibility: hidden;
   }
 
-  .camera-display {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 1;
-  }
-
-  .camera-display.mirror {
-    transform: scaleX(-1);
-  }
 </style>

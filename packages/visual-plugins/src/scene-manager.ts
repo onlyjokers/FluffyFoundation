@@ -69,6 +69,40 @@ export class DefaultSceneManager implements SceneManager {
         }
     }
 
+    private applyLayerElementStyle(el: HTMLElement, key: string, index: number): void {
+        el.dataset.shuguLayerKey = key;
+        el.style.position = 'absolute';
+        el.style.inset = '0';
+        el.style.width = '100%';
+        el.style.height = '100%';
+        el.style.zIndex = String(index);
+        el.style.pointerEvents = 'none';
+    }
+
+    private getLayerElement(scene: VisualScene): HTMLElement | null {
+        if (!this.container) return null;
+        const matches = Array.from(
+            this.container.querySelectorAll(`[data-shugu-scene-id="${scene.id}"]`)
+        ) as HTMLElement[];
+        return matches[matches.length - 1] ?? null;
+    }
+
+    private reorderLayerElements(layers: Array<{ key: string; sceneId: string; options?: Record<string, unknown> }>): void {
+        if (!this.container) return;
+        layers.forEach((layer, index) => {
+            const scene = this.activeLayerScenes.get(layer.key);
+            if (!scene) return;
+            const el = this.getLayerElement(scene);
+            if (!el) return;
+            this.applyLayerElementStyle(el, layer.key, index);
+            try {
+                this.container?.appendChild(el);
+            } catch {
+                // DOM order is a fallback for hosts that do not honor z-index.
+            }
+        });
+    }
+
     setLayerScenes(layers: Array<{ key: string; sceneId: string; options?: Record<string, unknown> }>): void {
         if (!this.container) return;
         const desired = new Set(layers.map((layer) => layer.key));
@@ -92,15 +126,12 @@ export class DefaultSceneManager implements SceneManager {
                 this.activeLayerScenes.set(layer.key, scene);
                 scene.configure?.(layer.options ?? {});
                 scene.mount(this.container);
-                const matches = Array.from(
-                    this.container.querySelectorAll(`[data-shugu-scene-id="${scene.id}"]`)
-                ) as HTMLElement[];
-                const el = matches[matches.length - 1] ?? null;
-                if (el) el.dataset.shuguLayerKey = layer.key;
             } else {
                 scene.configure?.(layer.options ?? {});
             }
         }
+
+        this.reorderLayerElements(layers);
     }
 
     destroy(): void {

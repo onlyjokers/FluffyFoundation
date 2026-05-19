@@ -7,9 +7,11 @@ import {
   FCT_TRACK_VARIANTS,
   FCT_VISIBLE_THEME_STYLES,
   FctTrackScene,
+  BoxScene,
   SHATTERED_REALITY_FRAGMENT_SHADER,
   buildStageAudioFeaturesForFct,
   fctTrackVisualPlugin,
+  selectFctAudioFeatures,
   sceneIdForType,
 } from '../dist-visual-plugins-out/index.js';
 
@@ -120,6 +122,54 @@ test('FctTrackScene normalizes log-power mel bands into FFT texture values', () 
   assert.equal(features.high, 0.6);
 });
 
+test('FctTrackScene audio source selection does not fall back playback to microphone', () => {
+  const microphone = { rms: 0.8, lowEnergy: 0.8 };
+  const playback = { rms: 0.2, lowEnergy: 0.2 };
+
+  assert.equal(
+    selectFctAudioFeatures(
+      {
+        audioFeatures: microphone,
+        microphoneAudioFeatures: microphone,
+      },
+      'playback'
+    ),
+    undefined
+  );
+  assert.equal(
+    selectFctAudioFeatures(
+      {
+        audioFeatures: microphone,
+        microphoneAudioFeatures: microphone,
+        playbackAudioFeatures: playback,
+      },
+      'playback'
+    ),
+    playback
+  );
+  assert.equal(
+    selectFctAudioFeatures(
+      {
+        audioFeatures: microphone,
+        microphoneAudioFeatures: microphone,
+      },
+      'microphone'
+    ),
+    microphone
+  );
+});
+
+test('FctTrackScene keeps foreground rendering when hiding the background', () => {
+  const source = FctTrackScene.toString();
+  assert.doesNotMatch(source, /colorMask\(true,\s*true,\s*true,\s*this\.showBackground\)/);
+});
+
+test('BoxScene accepts CSS color configuration', () => {
+  const scene = new BoxScene({ color: '#ff3366' });
+  assert.equal(scene.id, 'box-scene');
+  scene.configure({ color: 'red' });
+});
+
 test('FctTrackScene applies the FCT visible theme surface for red and light palettes', () => {
   assert.deepEqual(FCT_VISIBLE_THEME_STYLES.red, {
     background: '#fff',
@@ -152,12 +202,12 @@ test('FctTrackScene applies the FCT visible theme surface for red and light pale
 
   const scene = new FctTrackScene({ palette: 'red' });
   scene.mount(container);
-  assert.equal(container.style.background, '#fff');
-  assert.equal(children[0].style.background, '#fff');
+  assert.equal(container.style.background, 'transparent');
+  assert.equal(children[0].style.background, 'transparent');
 
   scene.configure({ palette: 'light' });
-  assert.equal(container.style.background, '#000');
-  assert.equal(children[0].style.background, '#000');
+  assert.equal(container.style.background, 'transparent');
+  assert.equal(children[0].style.background, 'transparent');
   scene.unmount();
 });
 
@@ -172,4 +222,9 @@ test('FctTrackScene uses the migrated FCT WebGL shader renderer contract', () =>
 
 test('scene registry maps fctTrack payloads to the FCT scene plugin id', () => {
   assert.equal(sceneIdForType('fctTrack'), 'fct-track-scene');
+});
+
+test('scene registry maps camera payloads to camera scene layer plugin ids', () => {
+  assert.equal(sceneIdForType('frontCamera'), 'front-camera-scene');
+  assert.equal(sceneIdForType('backCamera'), 'back-camera-scene');
 });

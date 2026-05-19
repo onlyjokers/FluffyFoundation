@@ -96,7 +96,7 @@ const normalizeOptions = (options: FctTrackSceneOptions = {}): Required<FctTrack
   contrast: clampRange(options.contrast, 1, 0, 2),
   blend: options.blend === 'over' ? 'over' : 'replace',
   audioSource: isFctAudioSource(options.audioSource) ? options.audioSource : 'microphone',
-  showBackground: options.showBackground !== false,
+  showBackground: options.showBackground === true,
 });
 
 const clamp01 = (value: unknown): number => {
@@ -146,6 +146,18 @@ const mergeAudioFeatures = (
     spectralCentroid: avg(first.spectralCentroid, second.spectralCentroid),
   };
 };
+
+export function selectFctAudioFeatures(
+  context: VisualContext,
+  source: FctTrackAudioSource
+): FctAudioFeaturesInput | undefined {
+  if (source === 'playback') return context.playbackAudioFeatures;
+  if (source === 'both') {
+    const merged = mergeAudioFeatures(context.microphoneAudioFeatures, context.playbackAudioFeatures);
+    return merged ?? context.audioFeatures;
+  }
+  return context.microphoneAudioFeatures ?? context.audioFeatures;
+}
 
 export function buildStageAudioFeaturesForFct(
   features: FctAudioFeaturesInput | undefined,
@@ -254,17 +266,12 @@ export class FctTrackScene implements VisualScene {
     }
     this.renderer?.setItem(this.config.variant as StageItem);
     this.renderer?.setTheme(this.config.palette as ThemeName);
+    this.renderer?.setShowBackground(this.config.showBackground);
     this.renderer?.setMode('track');
   }
 
   private readAudioFeatures(context: VisualContext): StageAudioFeatures {
-    const source = (() => {
-      if (this.config.audioSource === 'playback') return context.playbackAudioFeatures ?? context.audioFeatures;
-      if (this.config.audioSource === 'both') {
-        return mergeAudioFeatures(context.microphoneAudioFeatures ?? context.audioFeatures, context.playbackAudioFeatures);
-      }
-      return context.microphoneAudioFeatures ?? context.audioFeatures;
-    })();
+    const source = selectFctAudioFeatures(context, this.config.audioSource);
     return buildStageAudioFeaturesForFct(source, this.config.sensitivity);
   }
 

@@ -7,6 +7,7 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
   import { subscribePlaybackAudioTap, toneAudioEngine } from '@shugu/multimedia-core';
   import {
     BoxScene,
+    CameraScene,
     DefaultSceneManager,
     FctTrackScene,
     MelSpectrogramScene,
@@ -26,6 +27,8 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
   let microphonePipeline: AudioAnalysisPipeline | null = null;
   let playbackPipeline: AudioAnalysisPipeline | null = null;
   let microphoneStream: MediaStream | null = null;
+  let cameraStream: MediaStream | null = null;
+  let cameraRequestedFacing: 'user' | 'environment' | null = null;
   let playbackUnsub: (() => void) | null = null;
   let microphoneRequested = false;
 
@@ -33,6 +36,8 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
     manager = new DefaultSceneManager(container);
     manager.registerFactory('box-scene', () => new BoxScene());
     manager.registerFactory('mel-scene', () => new MelSpectrogramScene());
+    manager.registerFactory('front-camera-scene', () => new CameraScene({ facing: 'user' }));
+    manager.registerFactory('back-camera-scene', () => new CameraScene({ facing: 'environment' }));
     manager.registerFactory('fct-track-scene', () => new FctTrackScene());
     playbackUnsub = subscribePlaybackAudioTap((source, sourceContext) => {
       void setupPlaybackAudioPipeline(source, sourceContext);
@@ -52,6 +57,7 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
     playbackPipeline = null;
     microphoneStream?.getTracks().forEach((track) => track.stop());
     microphoneStream = null;
+    stopCameraStream();
     manager?.destroy();
     manager = null;
   });
@@ -62,6 +68,15 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
 
   $: if (sceneNeedsMicrophone(scenes)) {
     void setupMicrophoneAudioPipeline();
+  }
+
+  $: {
+    const facing = sceneCameraFacing(scenes);
+    if (facing) {
+      void setupCameraStream(facing);
+    } else {
+      stopCameraStream();
+    }
   }
 
   function animate(now: number): void {
@@ -105,6 +120,31 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
     }
   }
 
+  async function setupCameraStream(facingMode: 'user' | 'environment'): Promise<void> {
+    if (cameraStream && cameraRequestedFacing === facingMode) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    stopCameraStream();
+    cameraRequestedFacing = facingMode;
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode } },
+        audio: false,
+      });
+      context.cameraStream = cameraStream;
+    } catch {
+      cameraStream = null;
+      context.cameraStream = null;
+      cameraRequestedFacing = null;
+    }
+  }
+
+  function stopCameraStream(): void {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+    context.cameraStream = null;
+    cameraRequestedFacing = null;
+  }
+
   async function setupPlaybackAudioPipeline(source: AudioNode | null, sourceContext: AudioContext | null): Promise<void> {
     playbackPipeline?.destroy();
     playbackPipeline = null;
@@ -141,6 +181,18 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
       const source = normalizeFctAudioSource(item.audioSource);
       return source === 'microphone' || source === 'both';
     });
+  }
+
+  function sceneCameraFacing(nextScenes: VisualSceneLayerItem[] | unknown[]): 'user' | 'environment' | null {
+    if (!Array.isArray(nextScenes)) return null;
+    for (let i = nextScenes.length - 1; i >= 0; i -= 1) {
+      const scene = nextScenes[i];
+      if (!scene || typeof scene !== 'object') continue;
+      const type = (scene as { type?: unknown }).type;
+      if (type === 'frontCamera') return 'user';
+      if (type === 'backCamera') return 'environment';
+    }
+    return null;
   }
 
   function normalizeFctAudioSource(value: unknown): FctTrackAudioSource {

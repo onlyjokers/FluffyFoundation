@@ -80,12 +80,18 @@ function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] 
     const n = Number(value);
     return Number.isFinite(n) ? Math.max(0, Math.min(2, n)) : fallback;
   };
+  const cssColor = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined;
 
   for (const item of raw) {
     const itemRecord = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
     if (!itemRecord) continue;
     if (itemRecord.type === 'box') {
-      out.push({ type: 'box', showBackground: showBackground(itemRecord.showBackground, true) });
+      out.push({
+        type: 'box',
+        color: cssColor(itemRecord.color),
+        showBackground: showBackground(itemRecord.showBackground, true),
+      });
       continue;
     }
     if (itemRecord.type === 'mel') {
@@ -93,11 +99,11 @@ function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] 
       continue;
     }
     if (itemRecord.type === 'frontCamera') {
-      out.push({ type: 'frontCamera', showBackground: showBackground(itemRecord.showBackground, false) });
+      out.push({ type: 'frontCamera' });
       continue;
     }
     if (itemRecord.type === 'backCamera') {
-      out.push({ type: 'backCamera', showBackground: showBackground(itemRecord.showBackground, false) });
+      out.push({ type: 'backCamera' });
       continue;
     }
     if (itemRecord.type === 'fctTrack') {

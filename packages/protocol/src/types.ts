@@ -216,6 +216,11 @@ export interface BaseVisualSceneLayerItem {
   showBackground?: boolean;
 }
 
+export interface BoxSceneLayerItem extends BaseVisualSceneLayerItem {
+  type: 'box';
+  color?: string;
+}
+
 export interface FctTrackSceneLayerItem extends BaseVisualSceneLayerItem {
   type: 'fctTrack';
   variant: FctTrackVariant;
@@ -234,10 +239,10 @@ export interface FctTrackSceneLayerItem extends BaseVisualSceneLayerItem {
  * Items are applied in array order.
  */
 export type VisualSceneLayerItem =
-  | (BaseVisualSceneLayerItem & { type: 'box' })
+  | BoxSceneLayerItem
   | (BaseVisualSceneLayerItem & { type: 'mel' })
-  | (BaseVisualSceneLayerItem & { type: 'frontCamera' })
-  | (BaseVisualSceneLayerItem & { type: 'backCamera' })
+  | { type: 'frontCamera' }
+  | { type: 'backCamera' }
   | FctTrackSceneLayerItem;
 
 /**

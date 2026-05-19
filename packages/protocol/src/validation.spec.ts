@@ -156,6 +156,45 @@ test('validateMessage accepts configured FCT visual scenes', () => {
   assert.equal(isValidMessage(message), true);
 });
 
+test('validateMessage accepts box scene color and camera scenes without background controls', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        { type: 'box', color: '#ff3366', showBackground: false },
+        { type: 'frontCamera' },
+      ],
+    }
+  );
+
+  assert.equal(validateMessage(message).ok, true);
+  assert.equal(isValidMessage(message), true);
+});
+
+test('validateMessage rejects camera scene background controls and malformed box colors', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        { type: 'box', color: '' },
+        { type: 'backCamera', showBackground: true },
+      ],
+    }
+  );
+
+  const result = validateMessage(message);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.reasons.map((reason) => reason.path),
+    ['payload.scenes[0].color', 'payload.scenes[1].showBackground']
+  );
+});
+
 test('validateMessage rejects invalid FCT visual scene configuration', () => {
   const message = createControlMessage(
     createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
