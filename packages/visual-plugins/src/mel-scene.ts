@@ -18,6 +18,8 @@ export interface MelSceneOptions {
     backgroundColor?: string;
     /** Exponential smoothing factor for mel bands (0-1, higher = smoother) */
     smoothing?: number;
+    /** Fill the scene background instead of rendering transparent. */
+    showBackground?: boolean;
 }
 
 export class MelSpectrogramScene implements VisualScene {
@@ -43,9 +45,20 @@ export class MelSpectrogramScene implements VisualScene {
             maxDb: options.maxDb ?? 0,
             backgroundColor: options.backgroundColor ?? '#05060b',
             smoothing: options.smoothing ?? 0.65,
+            showBackground: options.showBackground ?? false,
         };
 
         this.palette = this.buildPalette();
+    }
+
+    configure(options: MelSceneOptions = {}): void {
+        this.options = { ...this.options, ...options };
+        if (options.showBackground !== undefined) {
+            this.options.showBackground = Boolean(options.showBackground);
+        }
+        if (this.canvas) {
+            this.canvas.style.background = this.options.showBackground ? this.options.backgroundColor : 'transparent';
+        }
     }
 
     mount(container: HTMLElement): void {
@@ -57,6 +70,7 @@ export class MelSpectrogramScene implements VisualScene {
         this.canvas.style.width = '100%';
         this.canvas.style.height = '100%';
         this.canvas.style.display = 'block';
+        this.canvas.style.background = this.options.showBackground ? this.options.backgroundColor : 'transparent';
 
         const ctx = this.canvas.getContext('2d', { alpha: true });
         if (!ctx) return;

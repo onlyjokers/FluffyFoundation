@@ -5,7 +5,12 @@ Purpose: Shared video overlay player used by Client and Display apps.
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
-  import { reportNodeMediaFinish, toneAudioEngine } from '@shugu/multimedia-core';
+  import {
+    clearPlaybackAudioTapSource,
+    reportNodeMediaFinish,
+    setPlaybackAudioTapSource,
+    toneAudioEngine,
+  } from '@shugu/multimedia-core';
   import {
     asPromiseLike,
     getAudioContextCtor,
@@ -63,8 +68,10 @@ Purpose: Shared video overlay player used by Client and Display apps.
       // ignore
     }
     webAudioSource = null;
+    const source = webAudioGain;
     webAudioGain = null;
     webAudioTarget = null;
+    clearPlaybackAudioTapSource(source);
   };
 
   const disposeOwnedAudioContext = () => {
@@ -151,6 +158,7 @@ Purpose: Shared video overlay player used by Client and Display apps.
       webAudioSource = source;
       webAudioGain = gain;
       webAudioTarget = videoElement;
+      setPlaybackAudioTapSource(gain, ctx);
       return true;
     } catch {
       resetWebAudio();

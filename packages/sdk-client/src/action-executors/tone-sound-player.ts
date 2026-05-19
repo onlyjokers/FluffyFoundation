@@ -2,6 +2,7 @@
  * Purpose: ToneSoundPlayer implementation split from action-executors for focused client-side effects.
  */
 import type { PlaySoundPayload } from '@shugu/protocol';
+import { clearPlaybackAudioTapSource, setPlaybackAudioTapSource } from '@shugu/multimedia-core';
 import type { PlayerOptions } from 'tone';
 import type { ToneGainLike, ToneModule, TonePlayerLike } from '../tone-adapter/types.js';
 import { getToneRawContext, unwrapDefaultExport } from '../tone-adapter/tone-guards.js';
@@ -136,6 +137,7 @@ export class ToneSoundPlayer {
 
         this.gain = gain as unknown as ToneGainLike;
         this.player = player as unknown as TonePlayerLike;
+        setPlaybackAudioTapSource(gain as unknown as AudioNode, getToneRawContext(Tone));
 
         const startAt = Tone.now() + Math.max(0, delaySeconds);
         const g = gain.gain;
@@ -170,8 +172,10 @@ export class ToneSoundPlayer {
         } catch {
             // ignore
         }
+        const source = this.gain as unknown as AudioNode | null;
         this.player = null;
         this.gain = null;
+        clearPlaybackAudioTapSource(source);
     }
 
     private async playHtml(url: string, opts: { volume: number; loop: boolean }, delaySeconds: number): Promise<void> {
@@ -200,6 +204,7 @@ export class ToneSoundPlayer {
                 } else {
                     this.htmlSource.connect(raw.destination);
                 }
+                setPlaybackAudioTapSource(this.htmlSource, raw);
             }
         } catch {
             // ignore
@@ -235,8 +240,10 @@ export class ToneSoundPlayer {
         } catch {
             // ignore
         }
+        const source = this.htmlSource;
         this.htmlSource = null;
         this.htmlAudio = null;
+        clearPlaybackAudioTapSource(source);
     }
 
     private clamp(value: number, min: number, max: number): number {

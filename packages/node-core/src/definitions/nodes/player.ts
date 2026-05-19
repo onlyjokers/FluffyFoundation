@@ -3,6 +3,7 @@
  */
 import type {
   ConvolutionPreset,
+  FctTrackAudioSource,
   FctTrackBlend,
   FctTrackPalette,
   FctTrackVariant,
@@ -52,6 +53,20 @@ const coerceFctPalette = (value: unknown): FctTrackPalette =>
 
 const coerceFctBlend = (value: unknown): FctTrackBlend =>
   value === 'over' ? 'over' : 'replace';
+
+const coerceFctAudioSource = (value: unknown): FctTrackAudioSource =>
+  value === 'playback' || value === 'both' ? value : 'microphone';
+
+const coerceSceneShowBackground = (value: unknown): boolean | undefined => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return false;
+    if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') return true;
+  }
+  return undefined;
+};
 
 export function createAudioOutNode(): NodeDefinition {
   return {
@@ -296,19 +311,19 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
       const type = getStringValue(record.type) ?? '';
 
       if (type === 'box') {
-        scenes.push({ type: 'box' });
+        scenes.push({ type: 'box', showBackground: coerceSceneShowBackground(record.showBackground) ?? true });
         continue;
       }
       if (type === 'mel') {
-        scenes.push({ type: 'mel' });
+        scenes.push({ type: 'mel', showBackground: coerceSceneShowBackground(record.showBackground) ?? false });
         continue;
       }
       if (type === 'frontCamera') {
-        scenes.push({ type: 'frontCamera' });
+        scenes.push({ type: 'frontCamera', showBackground: coerceSceneShowBackground(record.showBackground) ?? false });
         continue;
       }
       if (type === 'backCamera') {
-        scenes.push({ type: 'backCamera' });
+        scenes.push({ type: 'backCamera', showBackground: coerceSceneShowBackground(record.showBackground) ?? false });
         continue;
       }
       if (type === 'fctTrack') {
@@ -320,6 +335,8 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
           brightness: clampNumber(coerceNumber(record.brightness, 1), 0, 2),
           contrast: clampNumber(coerceNumber(record.contrast, 1), 0, 2),
           blend: coerceFctBlend(record.blend),
+          audioSource: coerceFctAudioSource(record.audioSource),
+          showBackground: coerceSceneShowBackground(record.showBackground) ?? true,
         });
       }
     }

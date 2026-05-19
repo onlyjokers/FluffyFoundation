@@ -1,7 +1,12 @@
 /**
  * Purpose: Runtime schema validation for control protocol messages and payloads.
  */
-import { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS, type ControlPayload } from '../types.js';
+import {
+  FCT_TRACK_AUDIO_SOURCES,
+  FCT_TRACK_PALETTES,
+  FCT_TRACK_VARIANTS,
+  type ControlPayload,
+} from '../types.js';
 import { CONTROL_ACTIONS, MEDIA_TYPES } from './constants.js';
 import {
   addReason,
@@ -127,6 +132,7 @@ function validateVisualScenes(payload: ObjectRecord, ctx: MutableValidationConte
       return;
     }
     if (isOneOf(scene.type, ['box', 'mel', 'frontCamera', 'backCamera'] as const)) {
+      validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`);
       return;
     }
     if (scene.type === 'fctTrack') {
@@ -150,6 +156,10 @@ function validateFctTrackScene(scene: ObjectRecord, ctx: MutableValidationContex
   if (hasOwn(scene, 'blend') && !isOneOf(scene.blend, ['replace', 'over'] as const)) {
     addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.blend', `${path}.blend`, `${path}.blend must be replace or over`);
   }
+  if (hasOwn(scene, 'audioSource') && !isOneOf(scene.audioSource, FCT_TRACK_AUDIO_SOURCES)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.audioSource', `${path}.audioSource`, `${path}.audioSource must be microphone, playback, or both`);
+  }
+  validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.showBackground`);
 }
 
 function validateOptionalNumberRange(
@@ -164,6 +174,18 @@ function validateOptionalNumberRange(
   const value = input[key];
   if (!isNumber(value) || value < min || value > max) {
     addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a number between ${min} and ${max}`);
+  }
+}
+
+function validateOptionalBoolean(
+  input: ObjectRecord,
+  ctx: MutableValidationContext,
+  key: string,
+  path: string
+): void {
+  if (!hasOwn(input, key)) return;
+  if (typeof input[key] !== 'boolean') {
+    addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a boolean`);
   }
 }
 

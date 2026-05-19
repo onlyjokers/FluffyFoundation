@@ -16,6 +16,8 @@ export interface BoxSceneOptions {
     baseSize?: number;
     /** Audio reactivity strength */
     audioReactivity?: number;
+    /** Fill the scene background instead of rendering transparent. */
+    showBackground?: boolean;
 }
 
 export class BoxScene implements VisualScene {
@@ -45,7 +47,24 @@ export class BoxScene implements VisualScene {
             wireframe: options.wireframe ?? false,
             baseSize: options.baseSize ?? 1.5,
             audioReactivity: options.audioReactivity ?? 2,
+            showBackground: options.showBackground ?? true,
         };
+    }
+
+    configure(options: BoxSceneOptions = {}): void {
+        this.options = {
+            ...this.options,
+            ...options,
+            showBackground: options.showBackground ?? this.options.showBackground,
+        };
+        if (this.scene) {
+            this.scene.background = this.options.showBackground
+                ? new THREE.Color(this.options.backgroundColor)
+                : null;
+        }
+        if (this.renderer) {
+            this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground ? 1 : 0);
+        }
     }
 
     mount(container: HTMLElement): void {
@@ -53,7 +72,9 @@ export class BoxScene implements VisualScene {
 
         // Create scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(this.options.backgroundColor);
+        this.scene.background = this.options.showBackground
+            ? new THREE.Color(this.options.backgroundColor)
+            : null;
 
         // Create camera
         const aspect = container.clientWidth / container.clientHeight;
@@ -64,7 +85,9 @@ export class BoxScene implements VisualScene {
         this.renderer = new THREE.WebGLRenderer({
             antialias: true,
             powerPreference: 'high-performance',
+            alpha: true,
         });
+        this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground ? 1 : 0);
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit for performance
         this.renderer.domElement.dataset.shuguSceneId = this.id;

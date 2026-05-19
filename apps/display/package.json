@@ -24,6 +24,7 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "@shugu/audio-plugins": "workspace:*",
     "@shugu/multimedia-core": "workspace:*",
     "@shugu/node-core": "workspace:*",
     "@shugu/protocol": "workspace:*",

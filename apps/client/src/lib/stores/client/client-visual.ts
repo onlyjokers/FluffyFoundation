@@ -8,7 +8,9 @@ import { writable, get } from 'svelte/store';
 import {
   FCT_TRACK_PALETTES,
   FCT_TRACK_VARIANTS,
+  FCT_TRACK_AUDIO_SOURCES,
   type ConvolutionPreset,
+  type FctTrackAudioSource,
   type FctTrackBlend,
   type FctTrackPalette,
   type FctTrackVariant,
@@ -45,6 +47,22 @@ const isFctPalette = (value: unknown): value is FctTrackPalette =>
 const normalizeFctBlend = (value: unknown): FctTrackBlend =>
   value === 'over' ? 'over' : 'replace';
 
+const normalizeFctAudioSource = (value: unknown): FctTrackAudioSource =>
+  typeof value === 'string' && FCT_TRACK_AUDIO_SOURCES.includes(value as FctTrackAudioSource)
+    ? (value as FctTrackAudioSource)
+    : 'microphone';
+
+const normalizeShowBackground = (value: unknown, fallback: boolean): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return false;
+    if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') return true;
+  }
+  return fallback;
+};
+
 // Independent scene enabled states (derived from visualScenes)
 export const boxSceneEnabled = writable<boolean>(false);
 export const melSceneEnabled = writable<boolean>(false);
@@ -68,19 +86,19 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
     if (!itemRecord) continue;
     const type = typeof itemRecord.type === 'string' ? String(itemRecord.type) : '';
     if (type === 'box') {
-      out.push({ type: 'box' });
+      out.push({ type: 'box', showBackground: normalizeShowBackground(itemRecord.showBackground, true) });
       continue;
     }
     if (type === 'mel') {
-      out.push({ type: 'mel' });
+      out.push({ type: 'mel', showBackground: normalizeShowBackground(itemRecord.showBackground, false) });
       continue;
     }
     if (type === 'frontCamera') {
-      out.push({ type: 'frontCamera' });
+      out.push({ type: 'frontCamera', showBackground: normalizeShowBackground(itemRecord.showBackground, false) });
       continue;
     }
     if (type === 'backCamera') {
-      out.push({ type: 'backCamera' });
+      out.push({ type: 'backCamera', showBackground: normalizeShowBackground(itemRecord.showBackground, false) });
       continue;
     }
     if (type === 'fctTrack') {
@@ -92,38 +110,29 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
         brightness: clampNumber(itemRecord.brightness, 1, 0, 2),
         contrast: clampNumber(itemRecord.contrast, 1, 0, 2),
         blend: normalizeFctBlend(itemRecord.blend),
+        audioSource: normalizeFctAudioSource(itemRecord.audioSource),
+        showBackground: normalizeShowBackground(itemRecord.showBackground, true),
       });
     }
   }
 
-  // De-duplicate scene types, keeping the last occurrence so ordering is preserved.
-  const deduped: VisualSceneLayerItem[] = [];
-  const seen = new Set<string>();
-  for (let i = out.length - 1; i >= 0; i--) {
-    const entry = out[i]!;
-    if (seen.has(entry.type)) continue;
-    seen.add(entry.type);
-    deduped.push(entry);
-  }
-  deduped.reverse();
-
   // Camera is mutually exclusive; keep only the last camera item if both appear.
   const lastCameraIndex = (() => {
-    for (let i = deduped.length - 1; i >= 0; i--) {
-      const t = deduped[i]!.type;
+    for (let i = out.length - 1; i >= 0; i--) {
+      const t = out[i]!.type;
       if (t === 'frontCamera' || t === 'backCamera') return i;
     }
     return -1;
   })();
 
   if (lastCameraIndex >= 0) {
-    const keep = deduped[lastCameraIndex]!.type;
-    return deduped.filter((s) =>
+    const keep = out[lastCameraIndex]!.type;
+    return out.filter((s) =>
       s.type === 'frontCamera' || s.type === 'backCamera' ? s.type === keep : true
     );
   }
 
-  return deduped;
+  return out;
 }
 
 export function syncVisualScenesToLegacyStores(scenes: VisualSceneLayerItem[]): void {
