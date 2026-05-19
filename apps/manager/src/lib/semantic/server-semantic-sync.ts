@@ -230,7 +230,13 @@ export function bindServerSemanticSync(input: {
   onSnapshot?: (snapshot: SemanticGraphSnapshot) => void;
 }): () => void {
   let requestedInitialSnapshot = false;
+  let latestAppliedRevision = Number.NEGATIVE_INFINITY;
   const handleSnapshot = (snapshot: SemanticGraphSnapshot) => {
+    const revision = Number(snapshot.revision);
+    if (Number.isFinite(revision)) {
+      if (revision < latestAppliedRevision) return;
+      latestAppliedRevision = revision;
+    }
     input.onSnapshot?.(snapshot);
     applyServerSemanticSnapshot({
       snapshot,

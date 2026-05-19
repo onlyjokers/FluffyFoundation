@@ -543,6 +543,82 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
   });
 });
 
+test('bindServerSemanticSync ignores stale semantic snapshots after a newer revision was applied', () => {
+  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  let resultHandler:
+    | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
+    | null = null;
+  const loaded: GraphState[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: (handler) => {
+        snapshotHandler = handler;
+        return () => undefined;
+      },
+      onSemanticResult: (handler) => {
+        resultHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: {
+      loadGraph: (graph) => {
+        loaded.push(graph);
+      },
+    },
+    migrationCoordinator: { maybeImport: () => undefined },
+  });
+
+  snapshotHandler?.({
+    ...snapshot([
+      {
+        id: 'server-node',
+        type: 'number',
+        params: { value: 2 },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'new-node',
+        type: 'math',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    revision: 8,
+  });
+
+  resultHandler?.({
+    ok: true,
+    result: {
+      snapshot: {
+        ...snapshot([
+          {
+            id: 'server-node',
+            type: 'number',
+            params: { value: 1 },
+            inputValues: {},
+            outputValues: {},
+          },
+        ]),
+        revision: 7,
+      },
+    },
+  });
+
+  assert.equal(loaded.length, 1);
+  assert.deepEqual(
+    loaded[0]?.nodes.map((node) => [node.id, node.config]),
+    [
+      ['server-node', { value: 2 }],
+      ['new-node', {}],
+    ]
+  );
+});
+
 test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
   let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
   const published: number[] = [];
