@@ -255,6 +255,12 @@ export type SemanticCommand =
       params: Record<string, unknown>;
       scopeGroupId?: string;
     }
+  | {
+      type: 'node.inputs.update';
+      nodeId: string;
+      inputValues: Record<string, unknown>;
+      scopeGroupId?: string;
+    }
   | { type: 'group.create'; group: SemanticGroup }
   | { type: 'group.update'; groupId: string; patch: Partial<SemanticGroup> }
   | { type: 'group.archive'; groupId: string }

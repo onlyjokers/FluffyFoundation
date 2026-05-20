@@ -131,6 +131,7 @@ export async function initReteCanvas(opts: {
     editor,
     areaPlugin,
     nodeEngine: opts.nodeEngine,
+    canvasCommands: opts.canvasCommands,
     nodeMap: opts.nodeMap,
     connectionMap: opts.connectionMap,
     isSyncing: () => opts.isSyncingRef.value,

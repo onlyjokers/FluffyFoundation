@@ -143,11 +143,11 @@ export class SemanticGraphAuthorityService {
       permissions: [
         {
           actorId: 'cli',
-          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+          operations: ['node.add', 'node.connect', 'node.disconnect', 'node.params.update', 'node.inputs.update', 'node.remove', 'graph.replace'],
         },
         {
           actorId: 'canvas',
-          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+          operations: ['node.add', 'node.connect', 'node.disconnect', 'node.params.update', 'node.inputs.update', 'node.remove', 'graph.replace'],
         },
       ],
       revision: this.persisted.revision,

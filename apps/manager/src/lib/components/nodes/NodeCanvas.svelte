@@ -33,6 +33,7 @@
   import { parameterRegistry } from '$lib/parameters/registry';
   import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
   import { displayTransport, getSDK, sensorData, state as managerState } from '$lib/stores/manager';
+  import { serverSemanticSyncState } from '$lib/semantic/server-semantic-sync-state';
   import {
     displayBridgeState,
     ensureDisplayLocalFilesRegisteredFromValue,
@@ -43,6 +44,7 @@
   import { createImportedGraphReplaceCommand } from './node-canvas/io/server-semantic-import-sync';
   import { createReteAdapter, type GraphViewAdapter } from './node-canvas/adapters';
   import { createNodeCanvasSemanticCommands } from './node-canvas/adapters/semantic-command-adapter';
+  import { createManagerSemanticBridge } from '$lib/semantic/manager-semantic-bridge';
   import { createMinimapController } from './node-canvas/controllers/minimap-controller';
   import {
     createGroupController,
@@ -107,6 +109,8 @@
   const nodeMap = new Map<string, NodeInstance>();
   const connectionMap = new Map<string, EngineConnection>();
   const isSyncingRef = { value: false };
+  const isServerSemanticSyncing = () =>
+    Boolean(isSyncingRef.value || serverSemanticSyncState.isApplyingSnapshot);
 
   let graphState: GraphState = { nodes: [], connections: [] };
   let nodeCount = 0;
@@ -144,6 +148,20 @@
     getSDK,
     onError: (message) => {
       lastErrorStore.set(message);
+    },
+    onPendingCommand: (command, requestId) => {
+      serverSemanticSyncState.trackPendingCommand(requestId, command);
+    },
+    onLocalCommand: (command, requestId) => {
+      const bridge = createManagerSemanticBridge({
+        nodeEngine,
+        nodeRegistry,
+        getGroups: () => get(nodeGroups),
+        getPartitions: () => [],
+        isRunningStore,
+        lastErrorStore,
+      });
+      return bridge.dispatch({ actor: { id: 'canvas', role: 'operator' }, command }).ok;
     },
   });
 
@@ -184,7 +202,7 @@
     setNodesDisabled: (ids, disabled) => nodeEngine.setNodesDisabled(ids, disabled),
     requestLoopFramesUpdate: () => requestFramesUpdate(),
     requestMinimapUpdate: () => minimapController?.requestUpdate(),
-    isSyncingGraph: () => isSyncingRef.value,
+    isSyncingGraph: isServerSemanticSyncing,
     stopAndRemoveLoop: (loop: LocalLoop) => loopController?.loopActions.removeLoop(loop),
   });
 
@@ -204,7 +222,7 @@
     getGraphState: () => graphState,
     getAdapter: () => viewAdapter,
     getGroupDisabledNodeIds: () => get(groupController.groupDisabledNodeIds),
-    isSyncingGraph: () => isSyncingRef.value,
+    isSyncingGraph: isServerSemanticSyncing,
     onDeployTimeout: (loopId) => alert(`Deploy timeout for loop ${loopId}`),
     onDeployError: (message) => alert(`Deploy failed: ${message}`),
     onDeployMissingClient: () => alert('Select a client in the Client node before deploying.'),
@@ -247,7 +265,7 @@
     getGraphState: () => graphState,
     getGroupDisabledNodeIds: () => get(groupController.groupDisabledNodeIds),
     getAdapter: () => viewAdapter,
-    isSyncingGraph: () => isSyncingRef.value,
+    isSyncingGraph: isServerSemanticSyncing,
   });
 
   const focusController = createFocusController({
@@ -680,6 +698,7 @@
       setSelectedNode,
       managerState,
       displayBridgeState,
+      serverSemanticSyncState,
       schedulePatchReconcile,
       syncCustomGateInputs,
       rehydrateExpandedCustomFrames,

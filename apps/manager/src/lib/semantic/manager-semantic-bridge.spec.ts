@@ -45,6 +45,7 @@ function createRuntime() {
     targetPortId: string;
   }> = [];
   const configPatches: Array<{ nodeId: string; patch: Record<string, unknown> }> = [];
+  const inputValuePatches: Array<{ nodeId: string; portId: string; value: unknown }> = [];
 
   const runtime = {
     nodeEngine: {
@@ -55,10 +56,19 @@ function createRuntime() {
       addConnection: (connection: (typeof connections)[number]) => {
         connections.push({ ...connection });
       },
+      removeConnection: (connectionId: string) => {
+        const index = connections.findIndex((candidate) => candidate.id === connectionId);
+        if (index >= 0) connections.splice(index, 1);
+      },
       updateNodeConfig: (nodeId: string, patch: Record<string, unknown>) => {
         configPatches.push({ nodeId, patch });
         const node = nodes.find((candidate) => candidate.id === nodeId);
         if (node) node.config = { ...(node.config ?? {}), ...patch };
+      },
+      updateNodeInputValue: (nodeId: string, portId: string, value: unknown) => {
+        inputValuePatches.push({ nodeId, portId, value });
+        const node = nodes.find((candidate) => candidate.id === nodeId);
+        if (node) node.inputValues = { ...(node.inputValues ?? {}), [portId]: value };
       },
       removeNode: (nodeId: string) => {
         const index = nodes.findIndex((candidate) => candidate.id === nodeId);
@@ -73,7 +83,7 @@ function createRuntime() {
     lastErrorStore: writable<string | null>(null),
   };
 
-  return { runtime, nodes, connections, configPatches };
+  return { runtime, nodes, connections, configPatches, inputValuePatches };
 }
 
 test('Manager semantic bridge gives Canvas and CLI-style commands the same graph mutation path', () => {
@@ -139,6 +149,18 @@ test('Manager semantic bridge applies node.params.update through nodeEngine.upda
   assert.deepEqual(nodes[0]?.config, { gain: 2 });
 });
 
+test('Manager semantic bridge applies node.inputs.update through nodeEngine.updateNodeInputValue', () => {
+  const { runtime, inputValuePatches, nodes } = createRuntime();
+  const bridge = createManagerSemanticBridge(runtime);
+
+  assert.equal(bridge.addNode({ ...numberNode, id: 'n-input', type: 'math' }).ok, true);
+  const result = bridge.setNodeInputs('n-input', { a: 5 });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(inputValuePatches, [{ nodeId: 'n-input', portId: 'a', value: 5 }]);
+  assert.deepEqual(nodes[0]?.inputValues, { a: 5 });
+});
+
 test('Manager semantic bridge applies node.remove through nodeEngine.removeNode', () => {
   const { runtime, nodes } = createRuntime();
   const bridge = createManagerSemanticBridge(runtime);
@@ -151,4 +173,37 @@ test('Manager semantic bridge applies node.remove through nodeEngine.removeNode'
 
   assert.equal(result.ok, true);
   assert.deepEqual(nodes, []);
+});
+
+test('Manager semantic bridge applies node.disconnect through nodeEngine.removeConnection', () => {
+  const { runtime, connections } = createRuntime();
+  const bridge = createManagerSemanticBridge(runtime);
+  const mathNode: NodeInstance = {
+    id: 'n2',
+    type: 'math',
+    position: { x: 50, y: 50 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+
+  assert.equal(bridge.addNode(numberNode).ok, true);
+  assert.equal(bridge.addNode(mathNode).ok, true);
+  assert.equal(
+    bridge.connect({
+      id: 'c1',
+      sourceNodeId: 'n1',
+      sourcePortId: 'out',
+      targetNodeId: 'n2',
+      targetPortId: 'a',
+    }).ok,
+    true
+  );
+  const result = bridge.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.disconnect', connectionId: 'c1' },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(connections, []);
 });

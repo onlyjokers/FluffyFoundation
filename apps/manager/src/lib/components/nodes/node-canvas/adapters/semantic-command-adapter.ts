@@ -15,8 +15,10 @@ import { patchNodeGraphLayoutPosition } from '$lib/project/nodeGraphLayout';
 export type CanvasSemanticCommandAdapter = {
   addNode: (node: NodeInstance) => boolean;
   connect: (connection: EngineConnection) => boolean;
+  disconnect: (connectionId: string) => boolean;
   removeNode: (nodeId: string) => boolean;
   setNodeParams: (nodeId: string, params: Record<string, unknown>) => boolean;
+  setNodeInputs: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
   replaceGraph: (graph: GraphState) => boolean;
   dispatch: (command: SemanticCommand) => boolean;
   dispatchForFixture: (command: SemanticCommand) => boolean;
@@ -44,8 +46,11 @@ export function createCanvasSemanticCommandAdapter(opts: {
   return {
     addNode: (node) => dispatch({ type: 'node.add', node }),
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    disconnect: (connectionId) => dispatch({ type: 'node.disconnect', connectionId }),
     removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    setNodeInputs: (nodeId, inputValues) =>
+      dispatch({ type: 'node.inputs.update', nodeId, inputValues } as SemanticCommand),
     replaceGraph: (graph) => dispatch({ type: 'graph.replace', graph }),
     dispatch,
     dispatchForFixture: dispatch,
@@ -62,8 +67,10 @@ function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPa
 function canvasRequestId(command: SemanticCommand): string {
   if (command.type === 'node.add') return `canvas:node.add:${command.node.id}`;
   if (command.type === 'node.connect') return `canvas:node.connect:${command.connection.id}`;
+  if (command.type === 'node.disconnect') return `canvas:node.disconnect:${command.connectionId}`;
   if (command.type === 'node.remove') return `canvas:node.remove:${command.nodeId}`;
   if (command.type === 'node.params.update') return `canvas:node.params.update:${command.nodeId}`;
+  if (command.type === 'node.inputs.update') return `canvas:node.inputs.update:${command.nodeId}`;
   if (command.type === 'graph.replace') return `canvas:graph.replace:${Date.now()}`;
   return `canvas:${command.type}`;
 }
@@ -71,17 +78,32 @@ function canvasRequestId(command: SemanticCommand): string {
 export function createNodeCanvasSemanticCommands(input: {
   getSDK: () => CanvasSemanticSdk | null;
   onError?: (message: string) => void;
+  onLocalCommand?: (command: SemanticCommand, requestId: string) => boolean | void;
+  onPendingCommand?: (command: SemanticCommand, requestId: string) => void;
 }): CanvasSemanticCommandAdapter {
+  const shouldApplyLocally = (command: SemanticCommand): boolean =>
+    command.type === 'node.add' ||
+    command.type === 'node.connect' ||
+    command.type === 'node.disconnect' ||
+    command.type === 'node.remove' ||
+    command.type === 'graph.replace';
+
   const dispatch = (command: SemanticCommand): boolean => {
     const sdk = input.getSDK();
     if (!sdk) {
       input.onError?.('Manager SDK is not connected');
       return false;
     }
+    const requestId = canvasRequestId(command);
+    if (shouldApplyLocally(command)) {
+      const locallyAccepted = input.onLocalCommand?.(command, requestId);
+      if (locallyAccepted === false) return false;
+    }
     sdk.sendSemanticCommand({
-      requestId: canvasRequestId(command),
+      requestId,
       command: semanticPayloadFromCommand(command),
     });
+    input.onPendingCommand?.(command, requestId);
     return true;
   };
 
@@ -91,8 +113,11 @@ export function createNodeCanvasSemanticCommands(input: {
       return dispatch({ type: 'node.add', node });
     },
     connect: (connection) => dispatch({ type: 'node.connect', connection }),
+    disconnect: (connectionId) => dispatch({ type: 'node.disconnect', connectionId }),
     removeNode: (nodeId) => dispatch({ type: 'node.remove', nodeId }),
     setNodeParams: (nodeId, params) => dispatch({ type: 'node.params.update', nodeId, params }),
+    setNodeInputs: (nodeId, inputValues) =>
+      dispatch({ type: 'node.inputs.update', nodeId, inputValues } as SemanticCommand),
     replaceGraph: (graph) => dispatch({ type: 'graph.replace', graph }),
     dispatch,
     dispatchForFixture: dispatch,

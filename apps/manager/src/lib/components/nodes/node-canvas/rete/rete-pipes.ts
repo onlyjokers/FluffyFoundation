@@ -14,10 +14,12 @@ type RetePipeOptions = {
   editor: NodeEditor<BaseSchemes>;
   areaPlugin: AnyAreaPlugin | null;
   nodeEngine: {
-    addConnection: (conn: EngineConnection) => boolean;
-    removeConnection: (id: string) => void;
     removeNode: (id: string) => void;
     updateNodePosition: (id: string, pos: { x: number; y: number }) => void;
+  };
+  canvasCommands: {
+    connect: (connection: EngineConnection) => boolean;
+    disconnect: (connectionId: string) => boolean;
   };
   nodeMap: Map<string, AnyRecord>;
   connectionMap: Map<string, AnyRecord>;
@@ -35,6 +37,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     editor,
     areaPlugin,
     nodeEngine,
+    canvasCommands,
     nodeMap,
     connectionMap,
     isSyncing,
@@ -64,7 +67,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
         targetNodeId: String(c.target),
         targetPortId: String(c.targetInput),
       };
-      const accepted = nodeEngine.addConnection(engineConn);
+      const accepted = canvasCommands.connect(engineConn);
       if (accepted) {
         connectionMap.set(engineConn.id, c);
         const targetNode = nodeMap.get(engineConn.targetNodeId);
@@ -92,7 +95,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
       const targetId = String(raw.target);
       const portId = String(raw.targetInput);
       connectionMap.delete(id);
-      nodeEngine.removeConnection(id);
+      canvasCommands.disconnect(id);
       const targetNode = nodeMap.get(targetId);
       const targetRecord = (targetNode ?? {}) as AnyRecord;
       const input = (targetRecord.inputs as Record<string, AnyRecord> | undefined)?.[portId];

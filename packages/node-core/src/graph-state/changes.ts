@@ -10,6 +10,7 @@ export type GraphChange =
   | { type: 'update-node-type'; nodeId: string; nodeType: string }
   | { type: 'update-node-position'; nodeId: string; position: { x: number; y: number } }
   | { type: 'update-node-config'; nodeId: string; config: Record<string, unknown> }
+  | { type: 'update-node-input-values'; nodeId: string; inputValues: Record<string, unknown> }
   | { type: 'add-connection'; connection: Connection }
   | { type: 'remove-connection'; connectionId: string };
 
@@ -48,6 +49,14 @@ export function applyGraphChanges(state: GraphState, changes: GraphChange[]): Gr
       case 'update-node-config': {
         nodes = nodes.map((node) =>
           String(node.id) === String(change.nodeId) ? { ...node, config: change.config } : node
+        );
+        break;
+      }
+      case 'update-node-input-values': {
+        nodes = nodes.map((node) =>
+          String(node.id) === String(change.nodeId)
+            ? { ...node, inputValues: { ...(node.inputValues ?? {}), ...change.inputValues } }
+            : node
         );
         break;
       }

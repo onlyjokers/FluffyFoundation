@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { createDeleteNodeWithRules } from './custom-node-delete';
 import type { NodeInstance } from '$lib/nodes/types';
 
-test('deleteNodeWithRules dispatches a semantic remove before local node removal', () => {
+test('deleteNodeWithRules delegates local removal to a successful semantic remove command', () => {
   const node: NodeInstance = {
     id: 'n1',
     type: 'number',
@@ -42,5 +42,5 @@ test('deleteNodeWithRules dispatches a semantic remove before local node removal
   deleteNode('n1');
 
   assert.deepEqual(semanticRemovals, ['n1']);
-  assert.deepEqual(localRemovals, ['n1']);
+  assert.deepEqual(localRemovals, []);
 });

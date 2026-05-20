@@ -7,6 +7,7 @@ import {
   bindDisplayBridgeSubscription,
   bindGraphStateSubscription,
   bindGroupUiSubscriptions,
+  bindLocalSemanticGraphChangeSubscription,
   bindManagerClientSubscription,
   bindRuntimeSubscriptions,
 } from './subscriptions';
@@ -23,6 +24,7 @@ export type MountedNodeCanvasResources = {
   graphSync: any;
   socketPositionWatcher: any;
   graphUnsub: (() => void) | null;
+  localSemanticGraphChangeUnsub: (() => void) | null;
   groupNodesUnsub: (() => void) | null;
   groupFramesUnsub: (() => void) | null;
   groupUiStateUnsub: (() => void) | null;
@@ -127,6 +129,14 @@ export async function mountNodeCanvasResources(
     patchRuntime: opts.patchRuntime,
     syncCustomGateInputs: opts.syncCustomGateInputs,
     rehydrateExpandedCustomFrames: opts.rehydrateExpandedCustomFrames,
+    isApplyingServerSemanticSnapshot: () =>
+      Boolean(opts.serverSemanticSyncState?.isApplyingSnapshot),
+  });
+
+  const localSemanticGraphChangeUnsub = bindLocalSemanticGraphChangeSubscription({
+    graphChangesStore: opts.nodeEngine.graphChanges,
+    canvasCommands: opts.canvasCommands,
+    isSyncingGraph: opts.isSyncingGraph ?? (() => Boolean(opts.isSyncingRef?.value)),
   });
 
   const managerUnsub = bindManagerClientSubscription({
@@ -196,6 +206,7 @@ export async function mountNodeCanvasResources(
     ...runtimeSubs,
     ...groupUiSubs,
     graphUnsub,
+    localSemanticGraphChangeUnsub,
     managerUnsub,
     displayBridgeUnsub,
     paramsUnsub,

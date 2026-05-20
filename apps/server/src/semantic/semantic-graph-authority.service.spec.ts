@@ -65,6 +65,45 @@ test('SemanticGraphAuthorityService accepts canvas node.remove and persists dele
   assert.equal(JSON.parse(readFileSync(path, 'utf8')).graph.nodes.length, 0);
 });
 
+test('SemanticGraphAuthorityService accepts canvas node.disconnect and persists edge deletion', () => {
+  const { path, service } = createService();
+  const mathNode = {
+    id: 'n2',
+    type: 'math',
+    position: { x: 120, y: 20 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const connection = {
+    id: 'c1',
+    sourceNodeId: 'n1',
+    sourcePortId: 'out',
+    targetNodeId: 'n2',
+    targetPortId: 'a',
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'graph.replace',
+        graph: { nodes: [numberNode, mathNode], connections: [connection] },
+      },
+    }).ok,
+    true
+  );
+
+  const disconnected = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.disconnect', connectionId: 'c1' },
+  });
+
+  assert.equal(disconnected.ok, true);
+  assert.deepEqual(service.getSnapshot().connections, []);
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')).graph.connections, []);
+});
+
 test('SemanticGraphAuthorityService rejects invalid commands without modifying persisted state', () => {
   const { path, service } = createService();
 

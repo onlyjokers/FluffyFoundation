@@ -501,9 +501,13 @@ function evaluateAgentGroupPolicy(input: {
 
   const budgets = policy.budgets ?? {};
   if (
-    input.command.type === 'node.params.update' &&
+    (input.command.type === 'node.params.update' || input.command.type === 'node.inputs.update') &&
     typeof budgets.maxParamsPerCommand === 'number' &&
-    Object.keys(input.command.params).length > budgets.maxParamsPerCommand
+    Object.keys(
+      input.command.type === 'node.params.update'
+        ? input.command.params
+        : input.command.inputValues
+    ).length > budgets.maxParamsPerCommand
   ) {
     return { allowed: false, reason: 'AI Space budget maxParamsPerCommand exceeded.' };
   }

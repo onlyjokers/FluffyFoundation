@@ -28,8 +28,7 @@ export function createDeleteNodeWithRules(opts: {
     if (!node) return;
 
     const removeNode = (targetId: string): void => {
-      opts.removeNodeCommand?.(targetId);
-      opts.nodeEngine.removeNode(targetId);
+      if (!opts.removeNodeCommand?.(targetId)) opts.nodeEngine.removeNode(targetId);
     };
 
     const state = opts.readCustomNodeState(asRecord(node.config));

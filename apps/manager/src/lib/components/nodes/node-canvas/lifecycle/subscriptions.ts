@@ -50,6 +50,7 @@ export function bindGraphStateSubscription(opts: {
   patchRuntime: any;
   syncCustomGateInputs: (state: unknown) => void;
   rehydrateExpandedCustomFrames: (state: unknown) => void;
+  isApplyingServerSemanticSnapshot?: () => boolean;
 }) {
   let lastGraphNodeCount = -1;
   let lastGraphConnKey = '';
@@ -79,10 +80,49 @@ export function bindGraphStateSubscription(opts: {
     }
 
     opts.graphSync?.schedule(state);
+    if (opts.isApplyingServerSemanticSnapshot?.()) return;
     opts.syncCustomGateInputs(state);
     if (connectionsChanged) opts.groupPortNodesController.scheduleNormalizeProxies();
     opts.patchRuntime.onGraphStateChanged();
     opts.rehydrateExpandedCustomFrames(state);
+  });
+}
+
+export function bindLocalSemanticGraphChangeSubscription(opts: {
+  graphChangesStore: any;
+  canvasCommands: {
+    setNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
+    setNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
+  };
+  isSyncingGraph: () => boolean;
+}) {
+  let didReceiveInitialChanges = false;
+  return opts.graphChangesStore?.subscribe((changes: unknown[]) => {
+    if (!didReceiveInitialChanges) {
+      didReceiveInitialChanges = true;
+      return;
+    }
+    if (opts.isSyncingGraph()) return;
+    for (const change of changes ?? []) {
+      if (!change || typeof change !== 'object') continue;
+      const record = change as Record<string, unknown>;
+      const nodeId = String(record.nodeId ?? '');
+      if (!nodeId) continue;
+
+      if (record.type === 'update-node-config') {
+        const config = record.config;
+        if (config && typeof config === 'object' && !Array.isArray(config)) {
+          opts.canvasCommands.setNodeParams?.(nodeId, config as Record<string, unknown>);
+        }
+      }
+
+      if (record.type === 'update-node-input-values') {
+        const inputValues = record.inputValues;
+        if (inputValues && typeof inputValues === 'object' && !Array.isArray(inputValues)) {
+          opts.canvasCommands.setNodeInputs?.(nodeId, inputValues as Record<string, unknown>);
+        }
+      }
+    }
   });
 }
 
