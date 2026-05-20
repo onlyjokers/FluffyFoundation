@@ -17,8 +17,17 @@ export function normalizeManagerCommandEnvelope(input?: CommandEnvelopeInput): C
   return createCommandEnvelope(input ?? DEFAULT_MANAGER_COMMAND_ENVELOPE);
 }
 
+function nextCommandEnvelopeInput(envelope: CommandEnvelope, scopeGroupId = envelope.scopeGroupId): CommandEnvelopeInput {
+  return {
+    actor: envelope.actor,
+    role: envelope.role,
+    scopeGroupId,
+    ...(envelope.transferId ? { transferId: envelope.transferId } : {}),
+  };
+}
+
 export function nextManagerCommandEnvelope(envelope: CommandEnvelope): CommandEnvelope {
-  return createCommandEnvelope(envelope);
+  return createCommandEnvelope(nextCommandEnvelopeInput(envelope));
 }
 
 export function nextManagerCommandEnvelopeForTarget(
@@ -26,7 +35,7 @@ export function nextManagerCommandEnvelopeForTarget(
   target?: { mode?: string; groupId?: string }
 ): CommandEnvelope {
   if (target?.mode === 'group' && typeof target.groupId === 'string' && target.groupId.trim()) {
-    return createCommandEnvelope({ ...envelope, scopeGroupId: target.groupId.trim() });
+    return createCommandEnvelope(nextCommandEnvelopeInput(envelope, target.groupId.trim()));
   }
   return nextManagerCommandEnvelope(envelope);
 }

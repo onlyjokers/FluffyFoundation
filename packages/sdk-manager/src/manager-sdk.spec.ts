@@ -94,6 +94,51 @@ test('ManagerSDK sendControl preserves caller scope envelope while flushing a si
   assert.notEqual((emitted[0] as { scopeGroupId?: string }).scopeGroupId, '__system__');
 });
 
+test('ManagerSDK refreshes command envelope ids for each emitted control command', async () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+    commandEnvelope: {
+      actor: 'operator-fresh',
+      role: 'manager',
+      scopeGroupId: 'manager-performance',
+      correlationId: 'corr-original',
+      idempotencyKey: 'idem-original',
+    },
+  });
+  const emitted = connectFakeSocket(sdk);
+
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#111111' });
+  await flushMicrotasks();
+  sdk.sendControl({ mode: 'group', groupId: 'stage-left' }, 'screenColor', { color: '#222222' });
+  await flushMicrotasks();
+
+  assert.equal(emitted.length, 2);
+
+  const first = emitted[0] as {
+    actor?: string;
+    scopeGroupId?: string;
+    correlationId?: string;
+    idempotencyKey?: string;
+  };
+  const second = emitted[1] as {
+    actor?: string;
+    scopeGroupId?: string;
+    correlationId?: string;
+    idempotencyKey?: string;
+  };
+
+  assert.equal(first.actor, 'operator-fresh');
+  assert.equal(first.scopeGroupId, 'stage-left');
+  assert.equal(second.actor, 'operator-fresh');
+  assert.equal(second.scopeGroupId, 'stage-left');
+  assert.notEqual(first.correlationId, 'corr-original');
+  assert.notEqual(first.idempotencyKey, 'idem-original');
+  assert.notEqual(second.correlationId, 'corr-original');
+  assert.notEqual(second.idempotencyKey, 'idem-original');
+  assert.notEqual(first.correlationId, second.correlationId);
+  assert.notEqual(first.idempotencyKey, second.idempotencyKey);
+});
+
 test('ManagerSDK sendSemanticCommand reports whether the command was emitted', () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',
