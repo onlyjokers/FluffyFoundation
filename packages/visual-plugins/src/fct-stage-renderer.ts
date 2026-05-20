@@ -30,7 +30,7 @@ export type MirroredStageRenderer = {
   setItem: (item: StageItem) => void;
   setMode: (mode: StageMode) => void;
   setTheme: (theme: ThemeName) => void;
-  setShowBackground: (showBackground: boolean) => void;
+  setShowBackground: (showBackground: number) => void;
   destroy: () => void;
 };
 
@@ -1288,9 +1288,9 @@ function withBackgroundAlphaUniform(fragmentSource: string): string {
 uniform float uShowBackground;
 
 vec4 shuguApplyBackgroundAlpha(vec3 color, vec3 backgroundColor) {
-  if (uShowBackground > 0.5) return vec4(color, 1.0);
+  if (uShowBackground >= 1.0) return vec4(color, 1.0);
   float foreground = smoothstep(0.03, 0.22, distance(color, backgroundColor));
-  return vec4(color, foreground);
+  return vec4(color, max(uShowBackground, foreground));
 }
 `;
 
@@ -1308,9 +1308,9 @@ uniform float uShowBackground;
 uniform vec3 uColorBg;
 
 vec4 shuguApplyBackgroundAlpha(vec3 color) {
-  if (uShowBackground > 0.5) return vec4(color, 1.0);
+  if (uShowBackground >= 1.0) return vec4(color, 1.0);
   float foreground = smoothstep(0.03, 0.22, distance(color, uColorBg));
-  return vec4(color, foreground);
+  return vec4(color, max(uShowBackground, foreground));
 }
 `;
 
@@ -1474,7 +1474,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
   private currentItem: StageItem = 'intro';
   private stageMode: StageMode = 'intro';
   private theme: ThemeName = 'red';
-  private showBackground = true;
+  private showBackground = -1;
   private destroyed = false;
   private frequencyBands: FrequencyBands = { low: 0, mid: 0, high: 0 };
   private flagAnimationStart = 0;
@@ -1765,10 +1765,11 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.requestFrame();
   }
 
-  setShowBackground(showBackground: boolean) {
-    if (this.destroyed || this.showBackground === showBackground) return;
+  setShowBackground(showBackground: number) {
+    const next = Math.max(0, Math.min(1, Number.isFinite(showBackground) ? showBackground : 0));
+    if (this.destroyed || this.showBackground === next) return;
 
-    this.showBackground = showBackground;
+    this.showBackground = next;
     this.requestFrame();
   }
 
@@ -1809,7 +1810,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
   ) {
     if (!uniforms.uShowBackground) return;
     const { bg } = this.getStageColors();
-    this.gl.uniform1f(uniforms.uShowBackground, this.showBackground ? 1 : 0);
+    this.gl.uniform1f(uniforms.uShowBackground, this.showBackground);
     this.gl.uniform3f(uniforms.uColorBg, bg[0], bg[1], bg[2]);
   }
 
@@ -1821,7 +1822,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
   ) {
     if (!uniforms.uShowBackground) return;
     const { bg } = this.getStageColors();
-    this.gl.uniform1f(uniforms.uShowBackground, this.showBackground ? 1 : 0);
+    this.gl.uniform1f(uniforms.uShowBackground, this.showBackground);
     if (uniforms.uColorBg) this.gl.uniform3f(uniforms.uColorBg, bg[0], bg[1], bg[2]);
   }
 

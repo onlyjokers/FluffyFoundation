@@ -58,9 +58,9 @@ function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] 
   const raw = Array.isArray(record?.scenes) ? record.scenes.slice(0, 12) : [];
   const out: VisualSceneLayerItem[] = [];
 
-  const showBackground = (value: unknown, fallback: boolean): boolean => {
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
+  const showBackground = (value: unknown, fallback: number): number => {
+    if (typeof value === 'boolean') return value ? 1 : 0;
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.min(1, value));
     return fallback;
   };
 
@@ -90,12 +90,17 @@ function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] 
       out.push({
         type: 'box',
         color: cssColor(itemRecord.color),
-        showBackground: showBackground(itemRecord.showBackground, true),
+        showBackground: showBackground(itemRecord.showBackground, 0),
+        audioSource: audioSource(itemRecord.audioSource),
       });
       continue;
     }
     if (itemRecord.type === 'mel') {
-      out.push({ type: 'mel', showBackground: showBackground(itemRecord.showBackground, false) });
+      out.push({
+        type: 'mel',
+        showBackground: showBackground(itemRecord.showBackground, 0),
+        audioSource: audioSource(itemRecord.audioSource),
+      });
       continue;
     }
     if (itemRecord.type === 'frontCamera') {
@@ -116,7 +121,7 @@ function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] 
         contrast: numberParam(itemRecord.contrast, 1),
         blend: itemRecord.blend === 'over' ? 'over' : 'replace',
         audioSource: audioSource(itemRecord.audioSource),
-        showBackground: showBackground(itemRecord.showBackground, true),
+        showBackground: showBackground(itemRecord.showBackground, 0),
       });
     }
   }

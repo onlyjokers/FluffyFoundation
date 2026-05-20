@@ -146,7 +146,7 @@ test('validateMessage accepts configured FCT visual scenes', () => {
           contrast: 1.1,
           blend: 'over',
           audioSource: 'both',
-          showBackground: false,
+          showBackground: 0.35,
         },
       ],
     }
@@ -163,8 +163,32 @@ test('validateMessage accepts box scene color and camera scenes without backgrou
     'visualScenes',
     {
       scenes: [
-        { type: 'box', color: '#ff3366', showBackground: false },
+        { type: 'box', color: '#ff3366', showBackground: 0.8, audioSource: 'playback' },
+        { type: 'mel', showBackground: 0.25, audioSource: 'both' },
         { type: 'frontCamera' },
+      ],
+    }
+  );
+
+  assert.equal(validateMessage(message).ok, true);
+  assert.equal(isValidMessage(message), true);
+});
+
+test('validateMessage accepts legacy boolean background controls for visual scenes', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        { type: 'box', showBackground: false },
+        { type: 'mel', showBackground: true },
+        {
+          type: 'fctTrack',
+          variant: 'acab',
+          palette: 'red-black',
+          showBackground: false,
+        },
       ],
     }
   );

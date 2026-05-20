@@ -132,12 +132,14 @@ function validateVisualScenes(payload: ObjectRecord, ctx: MutableValidationConte
       return;
     }
     if (scene.type === 'box') {
-      validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`);
+      validateOptionalOpacityRange(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`, 0, 1);
+      validateOptionalAudioSource(scene, ctx, `${path}.scenes[${index}].audioSource`);
       validateOptionalCssColor(scene, ctx, 'color', `${path}.scenes[${index}].color`);
       return;
     }
     if (scene.type === 'mel') {
-      validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`);
+      validateOptionalOpacityRange(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`, 0, 1);
+      validateOptionalAudioSource(scene, ctx, `${path}.scenes[${index}].audioSource`);
       return;
     }
     if (isOneOf(scene.type, ['frontCamera', 'backCamera'] as const)) {
@@ -167,10 +169,14 @@ function validateFctTrackScene(scene: ObjectRecord, ctx: MutableValidationContex
   if (hasOwn(scene, 'blend') && !isOneOf(scene.blend, ['replace', 'over'] as const)) {
     addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.blend', `${path}.blend`, `${path}.blend must be replace or over`);
   }
+  validateOptionalAudioSource(scene, ctx, `${path}.audioSource`);
+  validateOptionalOpacityRange(scene, ctx, 'showBackground', `${path}.showBackground`, 0, 1);
+}
+
+function validateOptionalAudioSource(scene: ObjectRecord, ctx: MutableValidationContext, path: string): void {
   if (hasOwn(scene, 'audioSource') && !isOneOf(scene.audioSource, FCT_TRACK_AUDIO_SOURCES)) {
-    addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.audioSource', `${path}.audioSource`, `${path}.audioSource must be microphone, playback, or both`);
+    addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.audioSource', path, `${path} must be microphone, playback, or both`);
   }
-  validateOptionalBoolean(scene, ctx, 'showBackground', `${path}.showBackground`);
 }
 
 function validateOptionalNumberRange(
@@ -188,16 +194,18 @@ function validateOptionalNumberRange(
   }
 }
 
-function validateOptionalBoolean(
+function validateOptionalOpacityRange(
   input: ObjectRecord,
   ctx: MutableValidationContext,
   key: string,
-  path: string
+  path: string,
+  min: number,
+  max: number
 ): void {
   if (!hasOwn(input, key)) return;
-  if (typeof input[key] !== 'boolean') {
-    addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a boolean`);
-  }
+  const value = input[key];
+  if (typeof value === 'boolean') return;
+  validateOptionalNumberRange(input, ctx, key, path, min, max);
 }
 
 function validateOptionalCssColor(

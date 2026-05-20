@@ -6,7 +6,7 @@
  */
 
 import type { Connection, NodeInstance } from '@shugu/node-core';
-import { toneAudioEngine } from '@shugu/multimedia-core';
+import { setPlaybackOutputAudioTapSource, toneAudioEngine } from '@shugu/multimedia-core';
 import type {
   AudioDataInstance,
   ToneAdapterDeps,
@@ -101,4 +101,7 @@ export function ensureMasterGain(): void {
   const gain = new toneModule.Gain({ gain: 1 });
   gain.connect(toneModule.Destination);
   masterGain = gain;
+  const raw = toneModule.getContext?.().rawContext;
+  const context = raw && 'createMediaStreamSource' in raw ? (raw as AudioContext) : null;
+  setPlaybackOutputAudioTapSource(gain as unknown as AudioNode, context);
 }

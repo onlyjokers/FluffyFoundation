@@ -93,6 +93,153 @@ function createBuilderWithActivitySpy() {
   return { builder, activity };
 }
 
+function createBuilderWithSyncedInlineConfigSpy() {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-like-node',
+    label: 'Scene Like Node',
+    category: 'Scene',
+    inputs: [{ id: 'audioSource', label: 'Audio Source', type: 'string' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+    configSchema: [
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'playback',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+        ],
+      },
+    ],
+    process: () => ({}),
+  });
+
+  const configUpdates: Array<Record<string, unknown>> = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-like-node',
+        config: {},
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (_nodeId: string, patch: Record<string, unknown>) => {
+        configUpdates.push(patch);
+      },
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      string: new ClassicPreset.Socket('string'),
+      scene: new ClassicPreset.Socket('scene'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  return { builder, configUpdates };
+}
+
+function createBuilderWithSyncedInlineNumberConfigSpy() {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-opacity-node',
+    label: 'Scene Opacity Node',
+    category: 'Scene',
+    inputs: [{ id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 }],
+    outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+    configSchema: [
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 1, min: 0, max: 1, step: 0.01 },
+    ],
+    process: () => ({}),
+  });
+
+  const configUpdates: Array<Record<string, unknown>> = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-opacity-node',
+        config: {},
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (_nodeId: string, patch: Record<string, unknown>) => {
+        configUpdates.push(patch);
+      },
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+      scene: new ClassicPreset.Socket('scene'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  return { builder, configUpdates };
+}
+
+function createBuilderWithSyncedConfigControlDefaultsSpy() {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-config-node',
+    label: 'Scene Config Node',
+    category: 'Scene',
+    inputs: [{ id: 'in', label: 'In', type: 'scene' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+    configSchema: [
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'playback',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+        ],
+      },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 1, min: 0, max: 1, step: 0.01 },
+    ],
+    process: () => ({}),
+  });
+
+  const configUpdates: Array<Record<string, unknown>> = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-config-node',
+        config: {},
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (_nodeId: string, patch: Record<string, unknown>) => {
+        configUpdates.push(patch);
+      },
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      scene: new ClassicPreset.Socket('scene'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  return { builder, configUpdates };
+}
+
 test('getPortDefForSocket preserves nodeEngine.getNode receiver context', () => {
   const builder = createBuilderWithThisBoundGetNode();
 
@@ -140,4 +287,46 @@ test('config control changes notify canvas activity highlighting', () => {
   configControl.setValue(2);
 
   assert.deepEqual(activity, [{ nodeId: 'param-1', portId: 'gain' }]);
+});
+
+test('inline config-backed controls sync their default config before first graph run', () => {
+  const { builder, configUpdates } = createBuilderWithSyncedInlineConfigSpy();
+  builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-like-node',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  assert.deepEqual(configUpdates, [{ audioSource: 'playback' }]);
+});
+
+test('inline number config-backed controls sync their default config before first graph run', () => {
+  const { builder, configUpdates } = createBuilderWithSyncedInlineNumberConfigSpy();
+  builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-opacity-node',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  assert.deepEqual(configUpdates, [{ showBackground: 1 }]);
+});
+
+test('config controls sync their default config before first graph run', () => {
+  const { builder, configUpdates } = createBuilderWithSyncedConfigControlDefaultsSpy();
+  builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-config-node',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  assert.deepEqual(configUpdates, [{ audioSource: 'playback', showBackground: 1 }]);
 });

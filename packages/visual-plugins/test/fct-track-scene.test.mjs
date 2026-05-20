@@ -8,10 +8,12 @@ import {
   FCT_VISIBLE_THEME_STYLES,
   FctTrackScene,
   BoxScene,
+  MelSpectrogramScene,
   SHATTERED_REALITY_FRAGMENT_SHADER,
   buildStageAudioFeaturesForFct,
   fctTrackVisualPlugin,
   selectFctAudioFeatures,
+  selectVisualAudioFeatures,
   sceneIdForType,
 } from '../dist-visual-plugins-out/index.js';
 
@@ -75,7 +77,7 @@ test('FctTrackScene mount and unmount own a single canvas element', () => {
   assert.equal(children.length, 0);
 });
 
-test('FctTrackScene can hide its theme background for overlay composition', () => {
+test('FctTrackScene leaves DOM backgrounds transparent and delegates background opacity to WebGL', () => {
   const children = [];
   const container = {
     style: {},
@@ -92,15 +94,15 @@ test('FctTrackScene can hide its theme background for overlay composition', () =
     },
   };
 
-  const scene = new FctTrackScene({ palette: 'red-black', showBackground: false });
+  const scene = new FctTrackScene({ palette: 'red-black', showBackground: 0.35 });
   scene.mount(container);
   assert.equal(container.style.background, 'transparent');
   assert.equal(children[0].style.background, 'transparent');
   assert.equal(scene.getConfig().audioSource, 'microphone');
 
-  scene.configure({ showBackground: true, audioSource: 'both' });
-  assert.equal(container.style.background, '#000');
-  assert.equal(children[0].style.background, '#000');
+  scene.configure({ showBackground: 1, audioSource: 'both' });
+  assert.equal(container.style.background, 'transparent');
+  assert.equal(children[0].style.background, 'transparent');
   assert.equal(scene.getConfig().audioSource, 'both');
   scene.unmount();
 });
@@ -157,6 +159,57 @@ test('FctTrackScene audio source selection does not fall back playback to microp
     ),
     microphone
   );
+});
+
+test('shared visual audio source selection keeps playback isolated and mixes both', () => {
+  const microphone = { rms: 0.8, lowEnergy: 0.8, melBands: [-1, -2] };
+  const playback = { rms: 0.2, lowEnergy: 0.2, melBands: [-7, -6] };
+
+  assert.equal(
+    selectVisualAudioFeatures(
+      {
+        audioFeatures: microphone,
+        microphoneAudioFeatures: microphone,
+      },
+      'playback'
+    ),
+    undefined
+  );
+  assert.equal(
+    selectVisualAudioFeatures(
+      {
+        audioFeatures: microphone,
+        microphoneAudioFeatures: microphone,
+        playbackAudioFeatures: playback,
+      },
+      'playback'
+    ),
+    playback
+  );
+  assert.deepEqual(
+    selectVisualAudioFeatures(
+      {
+        audioFeatures: microphone,
+        microphoneAudioFeatures: microphone,
+        playbackAudioFeatures: playback,
+      },
+      'both'
+    ),
+    { rms: 0.5, lowEnergy: 0.5, beatDetected: false, melBands: [-4, -4] }
+  );
+});
+
+test('BoxScene and MelSpectrogramScene accept playback audio source configuration', () => {
+  const box = new BoxScene({ audioSource: 'playback', showBackground: 0.4 });
+  box.configure({ audioSource: 'both', showBackground: 0.7 });
+
+  const mel = new MelSpectrogramScene({ audioSource: 'playback', showBackground: 0.25 });
+  mel.configure({ audioSource: 'both', showBackground: 0.5 });
+});
+
+test('BoxScene keeps fractional backgrounds renderer-alpha transparent', () => {
+  const source = BoxScene.toString();
+  assert.doesNotMatch(source, /showBackground\s*>\s*0[\s\S]*new THREE\.Color/);
 });
 
 test('FctTrackScene keeps foreground rendering when hiding the background', () => {

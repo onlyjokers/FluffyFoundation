@@ -4,6 +4,7 @@
  */
 
 export * from './types.js';
+export * from './audio-source.js';
 export * from './box-scene.js';
 export * from './mel-scene.js';
 export * from './mel-ascii-scene.js';

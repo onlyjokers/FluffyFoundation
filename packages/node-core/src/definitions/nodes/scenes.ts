@@ -50,14 +50,16 @@ const coerceFctAudioSource = (value: unknown): FctTrackAudioSource =>
     ? (value as FctTrackAudioSource)
     : 'microphone';
 
-const coerceSceneShowBackground = (inputValue: unknown, configValue: unknown, fallback = true): boolean => {
+const coerceSceneShowBackground = (inputValue: unknown, configValue: unknown, fallback = 1): number => {
   const raw = inputValue !== undefined && inputValue !== null ? inputValue : configValue;
-  if (typeof raw === 'boolean') return raw;
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw >= 0.5;
+  if (typeof raw === 'boolean') return raw ? 1 : 0;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return clampNumber(raw, 0, 1);
   if (typeof raw === 'string') {
     const normalized = raw.trim().toLowerCase();
-    if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return false;
-    if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') return true;
+    if (normalized === 'false' || normalized === 'off' || normalized === 'no') return 0;
+    if (normalized === 'true' || normalized === 'on' || normalized === 'yes') return 1;
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) return clampNumber(numeric, 0, 1);
   }
   return fallback;
 };
@@ -92,19 +94,31 @@ export function createSceneBoxNode(): NodeDefinition {
     inputs: [
       { id: 'in', label: 'In', type: 'scene' },
       { id: 'color', label: 'Color', type: 'color' },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean' },
+      { id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
       { key: 'color', label: 'Color', type: 'color', defaultValue: '#4a90d9' },
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+          { value: 'both', label: 'Microphone + Playback' },
+        ],
+      },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
     ],
     process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
       const scene: VisualSceneLayerItem = {
         type: 'box',
         color: coerceCssColor(inputs.color, config.color, '#4a90d9'),
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
+        audioSource: coerceFctAudioSource(config.audioSource),
       };
       return { out: [...chain, scene] };
     },
@@ -118,17 +132,29 @@ export function createSceneMelNode(): NodeDefinition {
     category: 'Scene',
     inputs: [
       { id: 'in', label: 'In', type: 'scene' },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean' },
+      { id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+          { value: 'both', label: 'Microphone + Playback' },
+        ],
+      },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
     ],
     process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
       const scene: VisualSceneLayerItem = {
         type: 'mel',
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
+        audioSource: coerceFctAudioSource(config.audioSource),
       };
       return { out: [...chain, scene] };
     },
@@ -208,7 +234,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
       { id: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0, max: 2, step: 0.01 },
       { id: 'brightness', label: 'Brightness', type: 'number', min: 0, max: 2, step: 0.01 },
       { id: 'contrast', label: 'Contrast', type: 'number', min: 0, max: 2, step: 0.01 },
-      { id: 'showBackground', label: 'Show Background', type: 'boolean' },
+      { id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
@@ -250,7 +276,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
           { value: 'both', label: 'Microphone + Playback' },
         ],
       },
-      { key: 'showBackground', label: 'Show Background', type: 'boolean', defaultValue: false },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
     ],
     process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
@@ -263,7 +289,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
         contrast: coerceFctNumberParam(inputs.contrast, config.contrast, 1, 0, 2),
         blend: coerceFctBlend(config.blend),
         audioSource: coerceFctAudioSource(config.audioSource),
-        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, false),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
       };
       return { out: [...chain, scene] };
     },

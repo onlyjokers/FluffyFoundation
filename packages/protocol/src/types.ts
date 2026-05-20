@@ -213,7 +213,9 @@ export const FCT_TRACK_AUDIO_SOURCES = ['microphone', 'playback', 'both'] as con
 export type FctTrackAudioSource = (typeof FCT_TRACK_AUDIO_SOURCES)[number];
 
 export interface BaseVisualSceneLayerItem {
-  showBackground?: boolean;
+  /** Background opacity from 0 (transparent) to 1 (opaque). */
+  showBackground?: number;
+  audioSource?: FctTrackAudioSource;
 }
 
 export interface BoxSceneLayerItem extends BaseVisualSceneLayerItem {

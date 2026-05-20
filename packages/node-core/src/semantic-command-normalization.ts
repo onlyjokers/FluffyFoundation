@@ -43,6 +43,11 @@ const normalizeNodeConfig = (
   const warnings: SemanticWarning[] = [];
 
   for (const field of paramsForDefinition(definition)) {
+    if (field.defaultValue === undefined || field.key in params) continue;
+    params[field.key] = field.defaultValue;
+  }
+
+  for (const field of paramsForDefinition(definition)) {
     if (field.type !== 'number' || !(field.key in params)) continue;
     const value = params[field.key];
     if (typeof value !== 'number' || !Number.isFinite(value)) continue;

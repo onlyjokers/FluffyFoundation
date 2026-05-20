@@ -52,13 +52,15 @@ const normalizeFctAudioSource = (value: unknown): FctTrackAudioSource =>
     ? (value as FctTrackAudioSource)
     : 'microphone';
 
-const normalizeShowBackground = (value: unknown, fallback: boolean): boolean => {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
+const normalizeShowBackground = (value: unknown, fallback: number): number => {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return clampNumber(value, 0, 1);
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
-    if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return false;
-    if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') return true;
+    if (normalized === 'false' || normalized === 'off' || normalized === 'no') return 0;
+    if (normalized === 'true' || normalized === 'on' || normalized === 'yes') return 1;
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) return clampNumber(numeric, 0, 1);
   }
   return fallback;
 };
@@ -95,12 +97,17 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
       out.push({
         type: 'box',
         color: normalizeCssColor(itemRecord.color),
-        showBackground: normalizeShowBackground(itemRecord.showBackground, true),
+        showBackground: normalizeShowBackground(itemRecord.showBackground, 0),
+        audioSource: normalizeFctAudioSource(itemRecord.audioSource),
       });
       continue;
     }
     if (type === 'mel') {
-      out.push({ type: 'mel', showBackground: normalizeShowBackground(itemRecord.showBackground, false) });
+      out.push({
+        type: 'mel',
+        showBackground: normalizeShowBackground(itemRecord.showBackground, 0),
+        audioSource: normalizeFctAudioSource(itemRecord.audioSource),
+      });
       continue;
     }
     if (type === 'frontCamera') {
@@ -121,7 +128,7 @@ export function normalizeVisualScenesPayload(payload: unknown): VisualSceneLayer
         contrast: clampNumber(itemRecord.contrast, 1, 0, 2),
         blend: normalizeFctBlend(itemRecord.blend),
         audioSource: normalizeFctAudioSource(itemRecord.audioSource),
-        showBackground: normalizeShowBackground(itemRecord.showBackground, true),
+        showBackground: normalizeShowBackground(itemRecord.showBackground, 0),
       });
     }
   }

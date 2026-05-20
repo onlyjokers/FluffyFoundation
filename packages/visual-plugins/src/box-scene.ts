@@ -4,8 +4,17 @@
 
 import * as THREE from 'three';
 import type { VisualScene, VisualContext } from './types.js';
+import {
+    clampOpacity,
+    normalizeVisualAudioSource,
+    selectVisualAudioFeatures,
+    type VisualAudioSource,
+} from './audio-source.js';
 
 type BoxColor = THREE.ColorRepresentation;
+type NormalizedBoxSceneOptions = Omit<Required<BoxSceneOptions>, 'showBackground'> & {
+    showBackground: number;
+};
 
 export interface BoxSceneOptions {
     /** Box color (CSS color or hex number) */
@@ -19,7 +28,9 @@ export interface BoxSceneOptions {
     /** Audio reactivity strength */
     audioReactivity?: number;
     /** Fill the scene background instead of rendering transparent. */
-    showBackground?: boolean;
+    showBackground?: number | boolean;
+    /** Audio source used for audio-reactive scale/color. */
+    audioSource?: VisualAudioSource;
 }
 
 export class BoxScene implements VisualScene {
@@ -30,7 +41,7 @@ export class BoxScene implements VisualScene {
     private camera: THREE.PerspectiveCamera | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private box: THREE.Mesh | null = null;
-    private options: Required<BoxSceneOptions>;
+    private options: NormalizedBoxSceneOptions;
 
     private targetScale = 1;
     private targetQuat = new THREE.Quaternion();
@@ -49,23 +60,26 @@ export class BoxScene implements VisualScene {
             wireframe: options.wireframe ?? false,
             baseSize: options.baseSize ?? 1.5,
             audioReactivity: options.audioReactivity ?? 2,
-            showBackground: options.showBackground ?? true,
+            showBackground: clampOpacity(options.showBackground, 0),
+            audioSource: normalizeVisualAudioSource(options.audioSource),
         };
     }
 
     configure(options: BoxSceneOptions = {}): void {
+        const { showBackground, audioSource, ...rest } = options;
         this.options = {
             ...this.options,
-            ...options,
-            showBackground: options.showBackground ?? this.options.showBackground,
+            ...rest,
+            showBackground: showBackground !== undefined
+                ? clampOpacity(showBackground, this.options.showBackground)
+                : this.options.showBackground,
+            audioSource: normalizeVisualAudioSource(audioSource, this.options.audioSource),
         };
         if (this.scene) {
-            this.scene.background = this.options.showBackground
-                ? new THREE.Color(this.options.backgroundColor)
-                : null;
+            this.applyBackground();
         }
         if (this.renderer) {
-            this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground ? 1 : 0);
+            this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground);
         }
         if (this.box) {
             const material = this.box.material as THREE.MeshStandardMaterial;
@@ -78,9 +92,7 @@ export class BoxScene implements VisualScene {
 
         // Create scene
         this.scene = new THREE.Scene();
-        this.scene.background = this.options.showBackground
-            ? new THREE.Color(this.options.backgroundColor)
-            : null;
+        this.applyBackground();
 
         // Create camera
         const aspect = container.clientWidth / container.clientHeight;
@@ -93,7 +105,7 @@ export class BoxScene implements VisualScene {
             powerPreference: 'high-performance',
             alpha: true,
         });
-        this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground ? 1 : 0);
+        this.renderer.setClearColor(this.options.backgroundColor, this.options.showBackground);
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit for performance
         this.renderer.domElement.dataset.shuguSceneId = this.id;
@@ -172,14 +184,15 @@ export class BoxScene implements VisualScene {
         }
 
         // Update target scale from audio
-        if (context.audioFeatures) {
-            const rms = context.audioFeatures.rms ?? 0;
+        const audioFeatures = selectVisualAudioFeatures(context, this.options.audioSource);
+        if (audioFeatures) {
+            const rms = audioFeatures.rms ?? 0;
             this.targetScale = 1 + rms * this.options.audioReactivity;
 
             // Change color based on frequency bands
             const material = this.box.material as THREE.MeshStandardMaterial;
-            const low = context.audioFeatures.lowEnergy ?? 0;
-            const high = context.audioFeatures.highEnergy ?? 0;
+            const low = audioFeatures.lowEnergy ?? 0;
+            const high = audioFeatures.highEnergy ?? 0;
 
             // Shift hue based on frequency content
             const hue = 0.55 + (high - low) * 0.3; // Blue-ish base, shifts with audio
@@ -189,7 +202,7 @@ export class BoxScene implements VisualScene {
             material.color.setHSL(hue, saturation, lightness);
 
             // Pulse on beat
-            if (context.audioFeatures.beatDetected) {
+            if (audioFeatures.beatDetected) {
                 this.targetScale = 1.5;
             }
         }
@@ -220,6 +233,13 @@ export class BoxScene implements VisualScene {
         if (!this.container) return;
         this.resize(this.container.clientWidth, this.container.clientHeight);
     };
+
+    private applyBackground(): void {
+        if (!this.scene) return;
+        this.scene.background = this.options.showBackground >= 1
+            ? new THREE.Color(this.options.backgroundColor)
+            : null;
+    }
 
     /**
      * Convert DeviceOrientation alpha/beta/gamma + screen orientation into world quaternion

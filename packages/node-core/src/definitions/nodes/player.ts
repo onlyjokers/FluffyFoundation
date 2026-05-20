@@ -57,13 +57,15 @@ const coerceFctBlend = (value: unknown): FctTrackBlend =>
 const coerceFctAudioSource = (value: unknown): FctTrackAudioSource =>
   value === 'playback' || value === 'both' ? value : 'microphone';
 
-const coerceSceneShowBackground = (value: unknown): boolean | undefined => {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
+const coerceSceneShowBackground = (value: unknown): number | undefined => {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return clampNumber(value, 0, 1);
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
-    if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return false;
-    if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') return true;
+    if (normalized === 'false' || normalized === 'off' || normalized === 'no') return 0;
+    if (normalized === 'true' || normalized === 'on' || normalized === 'yes') return 1;
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) return clampNumber(numeric, 0, 1);
   }
   return undefined;
 };
@@ -324,12 +326,17 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
         scenes.push({
           type: 'box',
           color: coerceSceneCssColor(record.color),
-          showBackground: coerceSceneShowBackground(record.showBackground) ?? true,
+          showBackground: coerceSceneShowBackground(record.showBackground) ?? 0,
+          audioSource: coerceFctAudioSource(record.audioSource),
         });
         continue;
       }
       if (type === 'mel') {
-        scenes.push({ type: 'mel', showBackground: coerceSceneShowBackground(record.showBackground) ?? false });
+        scenes.push({
+          type: 'mel',
+          showBackground: coerceSceneShowBackground(record.showBackground) ?? 0,
+          audioSource: coerceFctAudioSource(record.audioSource),
+        });
         continue;
       }
       if (type === 'frontCamera') {
@@ -350,7 +357,7 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
           contrast: clampNumber(coerceNumber(record.contrast, 1), 0, 2),
           blend: coerceFctBlend(record.blend),
           audioSource: coerceFctAudioSource(record.audioSource),
-          showBackground: coerceSceneShowBackground(record.showBackground) ?? false,
+          showBackground: coerceSceneShowBackground(record.showBackground) ?? 0,
         });
       }
     }

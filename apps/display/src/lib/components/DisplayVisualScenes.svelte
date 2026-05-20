@@ -176,7 +176,10 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
     return nextScenes.some((scene) => {
       if (!scene || typeof scene !== 'object') return false;
       const item = scene as { type?: unknown; audioSource?: unknown };
-      if (item.type === 'mel') return true;
+      if (item.type === 'mel' || item.type === 'box') {
+        const source = normalizeFctAudioSource(item.audioSource);
+        return source === 'microphone' || source === 'both';
+      }
       if (item.type !== 'fctTrack') return false;
       const source = normalizeFctAudioSource(item.audioSource);
       return source === 'microphone' || source === 'both';

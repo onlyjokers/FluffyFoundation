@@ -202,6 +202,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               return control;
             })()
           );
+
+          if (configField && instance.config?.[input.id] === undefined && configField.defaultValue !== undefined) {
+            nodeEngine.updateNodeConfig(instance.id, { [input.id]: clamp(initial) });
+          }
         } else if (input.type === 'string') {
           const initial =
             typeof current === 'string'
@@ -300,6 +304,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         inp.addControl(control);
         inp.showControl = true;
         inputControlKeys.add(input.id);
+
+        if (instance.config?.[input.id] === undefined && configField.defaultValue !== undefined) {
+          nodeEngine.updateNodeConfig(instance.id, { [input.id]: initial });
+        }
       }
 
       node.addInput(input.id, inp);
@@ -311,6 +319,16 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         out.control = new ClientSensorValueControl({ nodeId: instance.id, portId: output.id });
       }
       node.addOutput(output.id, out);
+    }
+
+    const configDefaultPatch: Record<string, unknown> = {};
+    for (const field of def?.configSchema ?? []) {
+      if (inputControlKeys.has(field.key)) continue;
+      if (instance.config?.[field.key] !== undefined || field.defaultValue === undefined) continue;
+      configDefaultPatch[field.key] = field.defaultValue;
+    }
+    if (Object.keys(configDefaultPatch).length > 0) {
+      nodeEngine.updateNodeConfig(instance.id, configDefaultPatch);
     }
 
     for (const field of def?.configSchema ?? []) {
