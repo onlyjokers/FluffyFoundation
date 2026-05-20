@@ -50,6 +50,8 @@ type ReteBuilderOptions = {
   sockets: ReteSocketMap;
   getNumberParamOptions: () => { path: string; label: string }[];
   sendNodeOverride: (nodeId: string, kind: 'input' | 'config', portId: string, value: unknown) => void;
+  sendSemanticNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
+  sendSemanticNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
   onNodeActivity?: (nodeId: string, portId: string) => void;
   onClientNodePick?: (nodeId: string, clientId: string) => void;
   onClientNodeSelectInput?: (nodeId: string, portId: 'index' | 'range', value: number) => void;
@@ -80,6 +82,18 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
   const notifyNodeActivity = (nodeId: string, portId: string) => {
     opts.onNodeActivity?.(nodeId, portId);
+  };
+  const commitUserInputValue = (nodeId: string, portId: string, value: unknown) => {
+    nodeEngine.updateNodeInputValue(nodeId, portId, value);
+    opts.sendSemanticNodeInputs?.(nodeId, { [portId]: value });
+    sendNodeOverride(nodeId, 'input', portId, value);
+    notifyNodeActivity(nodeId, portId);
+  };
+  const commitUserConfigValue = (nodeId: string, key: string, value: unknown) => {
+    nodeEngine.updateNodeConfig(nodeId, { [key]: value });
+    opts.sendSemanticNodeParams?.(nodeId, { [key]: value });
+    sendNodeOverride(nodeId, 'config', key, value);
+    notifyNodeActivity(nodeId, key);
   };
 
   const nodeLabel = (node: NodeInstance): string => {
@@ -177,9 +191,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 initial: clamp(initial),
                 change: (value) => {
                   const next = typeof value === 'number' ? clamp(value) : value;
-                  nodeEngine.updateNodeInputValue(instance.id, input.id, next);
-                  sendNodeOverride(instance.id, 'input', input.id, next);
-                  notifyNodeActivity(instance.id, input.id);
+                  commitUserInputValue(instance.id, input.id, next);
                   if (
                     instance.type === 'client-object' &&
                     (input.id === 'index' || input.id === 'range') &&
@@ -216,9 +228,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           const control = new ClassicPreset.InputControl('text', {
             initial,
             change: (value) => {
-              nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-              sendNodeOverride(instance.id, 'input', input.id, value);
-              notifyNodeActivity(instance.id, input.id);
+              commitUserInputValue(instance.id, input.id, value);
             },
           });
           control.inline = true;
@@ -235,19 +245,19 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           const control = new BooleanControl({
             initial,
             change: (value) => {
-              nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-              sendNodeOverride(instance.id, 'input', input.id, value);
-              notifyNodeActivity(instance.id, input.id);
+              commitUserInputValue(instance.id, input.id, value);
               if (instance.type === 'client-object' && input.id === 'random') {
                 opts.onClientNodeRandom?.(instance.id, value);
               }
               if (String(instance.type).startsWith(CUSTOM_NODE_TYPE_PREFIX) && input.id === 'gate') {
                 const state = readCustomNodeState(instance.config ?? {});
                 if (state) {
-                  nodeEngine.updateNodeConfig(
-                    instance.id,
-                    writeCustomNodeState(instance.config ?? {}, { ...state, manualGate: Boolean(value) })
-                  );
+                  const nextConfig = writeCustomNodeState(instance.config ?? {}, {
+                    ...state,
+                    manualGate: Boolean(value),
+                  });
+                  nodeEngine.updateNodeConfig(instance.id, nextConfig);
+                  opts.sendSemanticNodeParams?.(instance.id, nextConfig);
                 }
               }
             },
@@ -271,9 +281,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             const control = new ClassicPreset.InputControl('text', {
               initial,
               change: (value) => {
-                nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-                sendNodeOverride(instance.id, 'input', input.id, value);
-                notifyNodeActivity(instance.id, input.id);
+                commitUserInputValue(instance.id, input.id, value);
               },
             });
             control.inline = true;
@@ -295,9 +303,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial,
           options: configField.options ?? [],
           change: (value) => {
-            nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-            sendNodeOverride(instance.id, 'input', input.id, value);
-            notifyNodeActivity(instance.id, input.id);
+            commitUserInputValue(instance.id, input.id, value);
           },
         });
         control.inline = true;
@@ -343,9 +349,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             initial: String(current ?? ''),
             options: field.options ?? [],
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              commitUserConfigValue(instance.id, key, value);
             },
           })
         );
@@ -376,9 +380,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             label: field.label,
             initial,
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              commitUserConfigValue(instance.id, key, value);
             },
           })
         );
@@ -396,9 +398,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: clamp(Number(current ?? 0)),
           change: (value) => {
             const next = typeof value === 'number' ? clamp(value) : value;
-            nodeEngine.updateNodeConfig(instance.id, { [key]: next });
-            sendNodeOverride(instance.id, 'config', key, next);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, next);
           },
         });
         control.controlLabel = field.label;
@@ -412,6 +412,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           change: (value) => {
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
+            opts.sendSemanticNodeParams?.(instance.id, { [key]: value });
             if (instance.type === 'client-object') {
               opts.onClientNodePick?.(instance.id, value);
             }
@@ -428,9 +429,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, value);
           },
         });
         node.addControl(key, control);
@@ -441,9 +440,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, value);
           },
         });
         node.addControl(key, control);
@@ -459,9 +456,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               label: `${p.label} (${p.path})`,
             })),
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              commitUserConfigValue(instance.id, key, value);
             },
           })
         );
@@ -474,9 +469,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             accept: field.accept,
             buttonLabel: field.buttonLabel,
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              commitUserConfigValue(instance.id, key, value);
             },
           })
         );
@@ -508,18 +501,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               const nextEnd = typeof valueRecord?.endSec === 'number' ? valueRecord.endSec : -1;
               const nextCursor = valueRecord?.cursorSec;
 
-              nodeEngine.updateNodeInputValue(instance.id, 'startSec', nextStart);
-              sendNodeOverride(instance.id, 'input', 'startSec', nextStart);
-              notifyNodeActivity(instance.id, 'startSec');
-
-              nodeEngine.updateNodeInputValue(instance.id, 'endSec', nextEnd);
-              sendNodeOverride(instance.id, 'input', 'endSec', nextEnd);
-              notifyNodeActivity(instance.id, 'endSec');
+              commitUserInputValue(instance.id, 'startSec', nextStart);
+              commitUserInputValue(instance.id, 'endSec', nextEnd);
 
               if (typeof nextCursor === 'number' && Number.isFinite(nextCursor)) {
-                nodeEngine.updateNodeInputValue(instance.id, 'cursorSec', nextCursor);
-                sendNodeOverride(instance.id, 'input', 'cursorSec', nextCursor);
-                notifyNodeActivity(instance.id, 'cursorSec');
+                commitUserInputValue(instance.id, 'cursorSec', nextCursor);
               }
 
               // Keep config in sync for persistence/debugging (not used by runtime).
@@ -527,9 +513,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               return;
             }
 
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, value);
           },
         });
         control.nodeId = instance.id;
@@ -547,9 +531,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial,
           nodeId: instance.id,
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, value);
           },
         });
         curveControl.nodeId = instance.id;
@@ -560,9 +542,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           placeholder: 'Type a note…',
           initial: typeof current === 'string' ? current : String(current ?? ''),
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, value);
           },
         });
         noteControl.nodeId = instance.id;
@@ -571,9 +551,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         const control = new ClassicPreset.InputControl('text', {
           initial: String(current ?? ''),
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitUserConfigValue(instance.id, key, value);
           },
         });
         control.controlLabel = field.label;

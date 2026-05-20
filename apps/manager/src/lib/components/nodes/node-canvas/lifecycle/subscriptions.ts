@@ -54,6 +54,23 @@ export function bindGraphStateSubscription(opts: {
 }) {
   let lastGraphNodeCount = -1;
   let lastGraphConnKey = '';
+  let lastGraphShapeKey = '';
+
+  const graphShapeKey = (state: any): string => {
+    const nodes = (state.nodes ?? [])
+      .map((node: any) => ({ id: String(node.id ?? ''), type: String(node.type ?? '') }))
+      .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
+    const connections = (state.connections ?? [])
+      .map((connection: any) => ({
+        id: String(connection.id ?? ''),
+        sourceNodeId: String(connection.sourceNodeId ?? ''),
+        sourcePortId: String(connection.sourcePortId ?? ''),
+        targetNodeId: String(connection.targetNodeId ?? ''),
+        targetPortId: String(connection.targetPortId ?? ''),
+      }))
+      .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
+    return JSON.stringify({ nodes, connections });
+  };
 
   return opts.graphStateStore?.subscribe((state: any) => {
     if ((state.nodes ?? []).some((n: any) => String(n.type).startsWith('midi-'))) {
@@ -67,6 +84,10 @@ export function bindGraphStateSubscription(opts: {
     const nextConnKey = (state.connections ?? []).map((c: any) => String(c.id)).join('|');
     const connectionsChanged = nextConnKey !== lastGraphConnKey;
     lastGraphConnKey = nextConnKey;
+
+    const nextShapeKey = graphShapeKey(state);
+    const shapeChanged = nextShapeKey !== lastGraphShapeKey;
+    lastGraphShapeKey = nextShapeKey;
 
     // Only reconcile on node removal to avoid interfering with imports (nodes are added one-by-one).
     if (prevNodeCount >= 0 && nextNodeCount < prevNodeCount) {
@@ -83,7 +104,7 @@ export function bindGraphStateSubscription(opts: {
     if (opts.isApplyingServerSemanticSnapshot?.()) return;
     opts.syncCustomGateInputs(state);
     if (connectionsChanged) opts.groupPortNodesController.scheduleNormalizeProxies();
-    opts.patchRuntime.onGraphStateChanged();
+    if (shapeChanged) opts.patchRuntime.onGraphStateChanged();
     opts.rehydrateExpandedCustomFrames(state);
   });
 }
@@ -96,34 +117,8 @@ export function bindLocalSemanticGraphChangeSubscription(opts: {
   };
   isSyncingGraph: () => boolean;
 }) {
-  let didReceiveInitialChanges = false;
-  return opts.graphChangesStore?.subscribe((changes: unknown[]) => {
-    if (!didReceiveInitialChanges) {
-      didReceiveInitialChanges = true;
-      return;
-    }
-    if (opts.isSyncingGraph()) return;
-    for (const change of changes ?? []) {
-      if (!change || typeof change !== 'object') continue;
-      const record = change as Record<string, unknown>;
-      const nodeId = String(record.nodeId ?? '');
-      if (!nodeId) continue;
-
-      if (record.type === 'update-node-config') {
-        const config = record.config;
-        if (config && typeof config === 'object' && !Array.isArray(config)) {
-          opts.canvasCommands.setNodeParams?.(nodeId, config as Record<string, unknown>);
-        }
-      }
-
-      if (record.type === 'update-node-input-values') {
-        const inputValues = record.inputValues;
-        if (inputValues && typeof inputValues === 'object' && !Array.isArray(inputValues)) {
-          opts.canvasCommands.setNodeInputs?.(nodeId, inputValues as Record<string, unknown>);
-        }
-      }
-    }
-  });
+  void opts;
+  return () => undefined;
 }
 
 export function bindGroupUiSubscriptions(opts: {

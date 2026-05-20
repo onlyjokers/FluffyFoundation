@@ -94,6 +94,27 @@ test('ManagerSDK sendControl preserves caller scope envelope while flushing a si
   assert.notEqual((emitted[0] as { scopeGroupId?: string }).scopeGroupId, '__system__');
 });
 
+test('ManagerSDK sendSemanticCommand reports whether the command was emitted', () => {
+  const sdk = new ManagerSDK({
+    serverUrl: 'http://localhost:3001',
+  });
+
+  const disconnectedResult = sdk.sendSemanticCommand({
+    requestId: 'semantic-offline',
+    command: { kind: 'graph.snapshot' },
+  });
+
+  assert.equal(disconnectedResult, false);
+
+  connectFakeSocket(sdk);
+  const connectedResult = sdk.sendSemanticCommand({
+    requestId: 'semantic-online',
+    command: { kind: 'graph.snapshot' },
+  });
+
+  assert.equal(connectedResult, true);
+});
+
 test('ManagerSDK sendControl preserves caller scope envelope while flushing a control batch', async () => {
   const sdk = new ManagerSDK({
     serverUrl: 'http://localhost:3001',

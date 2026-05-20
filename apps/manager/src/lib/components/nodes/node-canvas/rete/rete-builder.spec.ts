@@ -289,6 +289,67 @@ test('config control changes notify canvas activity highlighting', () => {
   assert.deepEqual(activity, [{ nodeId: 'param-1', portId: 'gain' }]);
 });
 
+test('input and config control changes dispatch explicit semantic commands', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'param-node',
+    label: 'Param Node',
+    category: 'Values',
+    inputs: [{ id: 'amount', label: 'Amount', type: 'number', defaultValue: 0 }],
+    outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    configSchema: [{ key: 'gain', label: 'Gain', type: 'number', defaultValue: 1 }],
+    process: () => ({}),
+  });
+  const params: unknown[] = [];
+  const inputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'param-1',
+        type: 'param-node',
+        config: { gain: 1 },
+        inputValues: { amount: 0 },
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeParams: (nodeId, patch) => {
+      params.push({ nodeId, patch });
+      return true;
+    },
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'param-1',
+    type: 'param-node',
+    config: { gain: 1 },
+    inputValues: { amount: 0 },
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const inputControl = node.inputs.amount?.control as ClassicPreset.InputControl<'number'>;
+  const configControl = node.controls.gain as ClassicPreset.InputControl<'number'>;
+  inputControl.setValue(5);
+  configControl.setValue(2);
+
+  assert.deepEqual(inputs, [{ nodeId: 'param-1', patch: { amount: 5 } }]);
+  assert.deepEqual(params, [{ nodeId: 'param-1', patch: { gain: 2 } }]);
+});
+
 test('inline config-backed controls sync their default config before first graph run', () => {
   const { builder, configUpdates } = createBuilderWithSyncedInlineConfigSpy();
   builder.buildReteNode({

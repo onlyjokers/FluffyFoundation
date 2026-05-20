@@ -46,6 +46,7 @@ export type ServerSemanticLayoutPositions = Map<string, { x: number; y: number }
 
 type PendingSemanticCommandReader = () => SemanticCommand[];
 type PendingSemanticCommandSettler = (requestId: string) => void;
+type PendingSemanticCommandClearer = () => void;
 
 function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGraphSnapshot | null {
   if (!message.ok) return null;
@@ -321,8 +322,10 @@ export function bindServerSemanticSync(input: {
   afterApply?: () => void;
   getPendingCommands?: PendingSemanticCommandReader;
   settlePendingCommand?: PendingSemanticCommandSettler;
+  clearPendingCommands?: PendingSemanticCommandClearer;
 }): () => void {
   let requestedInitialSnapshot = false;
+  let wasDisconnected = false;
   let latestAppliedRevision = Number.NEGATIVE_INFINITY;
   const handleSnapshot = (snapshot: SemanticGraphSnapshot) => {
     const revision = Number(snapshot.revision);
@@ -363,10 +366,22 @@ export function bindServerSemanticSync(input: {
       if (snapshot) handleSnapshot(snapshot);
     }) ?? (() => undefined);
   const unsubscribeState = input.sdk.onStateChange((state) => {
-    if (requestedInitialSnapshot) return;
-    if (state.status !== 'connected') return;
-    requestedInitialSnapshot = true;
-    input.sdk.requestSemanticSnapshot('graph-snapshot');
+    if (state.status !== 'connected') {
+      if (requestedInitialSnapshot) wasDisconnected = true;
+      return;
+    }
+
+    if (!requestedInitialSnapshot) {
+      requestedInitialSnapshot = true;
+      input.sdk.requestSemanticSnapshot('graph-snapshot');
+      return;
+    }
+
+    if (!wasDisconnected) return;
+    wasDisconnected = false;
+    input.clearPendingCommands?.();
+    latestAppliedRevision = Number.NEGATIVE_INFINITY;
+    input.sdk.requestSemanticSnapshot('graph-snapshot:reconnect');
   });
 
   return () => {

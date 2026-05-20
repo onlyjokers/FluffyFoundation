@@ -252,6 +252,7 @@ export function connect(config: ManagerSDKConfig): void {
         },
         getPendingCommands: () => serverSemanticSyncState.getPendingCommands(),
         settlePendingCommand: (requestId) => serverSemanticSyncState.settlePendingCommand(requestId),
+        clearPendingCommands: () => serverSemanticSyncState.clearPendingCommands(),
     });
 
     // Subscribe to state changes

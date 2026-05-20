@@ -53,6 +53,9 @@ export interface CreateClientSelectionBindingOptions {
   getAreaPlugin: () => AnyAreaPlugin;
   getNodeMap: () => Map<string, AnyRecord>;
   sendNodeOverride: SendNodeOverrideFn;
+  sendSemanticNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
+  sendSemanticNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
+  schedulePatchReconcile?: (reason: string, options?: { immediate?: boolean }) => void;
 }
 
 export function createClientSelectionBinding(opts: CreateClientSelectionBindingOptions): ClientSelectionBinding {
@@ -65,6 +68,9 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     getAreaPlugin,
     getNodeMap,
     sendNodeOverride,
+    sendSemanticNodeParams,
+    sendSemanticNodeInputs,
+    schedulePatchReconcile,
   } = opts;
 
   const audienceClientIdsInOrder = () =>
@@ -112,7 +118,13 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
   const syncClientNodeUi = async (
     nodeId: string,
     slice: ReturnType<typeof computeClientSlice>,
-    opts?: { updateInputs?: boolean; updateControls?: boolean; updateConfig?: boolean }
+    opts?: {
+      updateInputs?: boolean;
+      updateControls?: boolean;
+      updateConfig?: boolean;
+      syncSemanticConfig?: boolean;
+      syncSemanticInputs?: boolean;
+    }
   ) => {
     if (!slice) return;
     const node = nodeEngine.getNode(nodeId);
@@ -127,15 +139,28 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     if (updateConfig) {
       if (slice.firstId && slice.firstId !== currentClientId) {
         nodeEngine.updateNodeConfig(nodeId, { clientId: slice.firstId });
+        if (opts?.syncSemanticConfig) sendSemanticNodeParams?.(nodeId, { clientId: slice.firstId });
       } else if (!slice.firstId && currentClientId) {
         nodeEngine.updateNodeConfig(nodeId, { clientId: '' });
+        if (opts?.syncSemanticConfig) sendSemanticNodeParams?.(nodeId, { clientId: '' });
       }
     }
 
     // Clamp + persist unconnected inputs (connected inputs are driven by upstream nodes).
+    const semanticInputs: Record<string, unknown> = {};
+    const currentInputs = asRecord(node.inputValues) ?? {};
     if (updateInputs) {
-      if (!isInputConnected(nodeId, 'index')) nodeEngine.updateNodeInputValue(nodeId, 'index', slice.index);
-      if (!isInputConnected(nodeId, 'range')) nodeEngine.updateNodeInputValue(nodeId, 'range', slice.range);
+      if (!isInputConnected(nodeId, 'index') && !Object.is(currentInputs.index, slice.index)) {
+        nodeEngine.updateNodeInputValue(nodeId, 'index', slice.index);
+        semanticInputs.index = slice.index;
+      }
+      if (!isInputConnected(nodeId, 'range') && !Object.is(currentInputs.range, slice.range)) {
+        nodeEngine.updateNodeInputValue(nodeId, 'range', slice.range);
+        semanticInputs.range = slice.range;
+      }
+    }
+    if (opts?.syncSemanticInputs && Object.keys(semanticInputs).length > 0) {
+      sendSemanticNodeInputs?.(nodeId, semanticInputs);
     }
 
     // Keep live display outputs usable even when the engine is stopped.
@@ -281,7 +306,11 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
       sendNodeOverride(nodeId, 'input', 'range', slice.range);
     }
 
-    await syncClientNodeUi(nodeId, slice);
+    await syncClientNodeUi(nodeId, slice, {
+      syncSemanticConfig: true,
+      syncSemanticInputs: pickerOnlyChange,
+    });
+    schedulePatchReconcile?.('client-selection', { immediate: true });
   };
 
   const syncClientNodesFromInputs = () => {

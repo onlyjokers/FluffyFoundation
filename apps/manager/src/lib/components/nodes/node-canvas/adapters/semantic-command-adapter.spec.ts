@@ -107,7 +107,10 @@ test('NodeCanvas semantic commands send opaque semantic payloads through the Man
   const sent: unknown[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: (input: unknown) => sent.push(input),
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
     }),
   });
 
@@ -127,7 +130,10 @@ test('NodeCanvas semantic commands send node.remove payloads through the Manager
   const sent: unknown[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: (input: unknown) => sent.push(input),
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
     }),
   });
 
@@ -147,7 +153,10 @@ test('NodeCanvas semantic commands send node.disconnect payloads through the Man
   const sent: unknown[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: (input: unknown) => sent.push(input),
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
     }),
   });
 
@@ -167,7 +176,10 @@ test('NodeCanvas semantic commands send node.inputs.update payloads through the 
   const sent: unknown[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: (input: unknown) => sent.push(input),
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
     }),
   });
 
@@ -188,7 +200,10 @@ test('NodeCanvas semantic commands send graph.replace payloads for canvas clear'
   const sent: unknown[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: (input: unknown) => sent.push(input),
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
     }),
   });
 
@@ -205,7 +220,10 @@ test('NodeCanvas semantic commands optimistically apply structural graph command
   const localCommands: SemanticCommand[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: () => events.push('send'),
+      sendSemanticCommand: () => {
+        events.push('send');
+        return true;
+      },
     }),
     onLocalCommand: (command) => {
       events.push('local');
@@ -236,7 +254,10 @@ test('NodeCanvas semantic commands do not send structural commands rejected by l
   const events: string[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: () => events.push('send'),
+      sendSemanticCommand: () => {
+        events.push('send');
+        return true;
+      },
     }),
     onPendingCommand: () => events.push('pending'),
     onLocalCommand: () => {
@@ -264,7 +285,10 @@ test('NodeCanvas semantic commands track node value commands after SDK send with
   const localCommands: SemanticCommand[] = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
-      sendSemanticCommand: () => events.push('send'),
+      sendSemanticCommand: () => {
+        events.push('send');
+        return true;
+      },
     }),
     onPendingCommand: (command, requestId) => {
       tracked.push({ requestId, command });
@@ -290,4 +314,22 @@ test('NodeCanvas semantic commands track node value commands after SDK send with
       command: { type: 'node.inputs.update', nodeId: 'n1', inputValues: { value: 42 } },
     },
   ]);
+});
+
+test('NodeCanvas semantic commands do not track pending commands when SDK send fails', () => {
+  const events: string[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: () => false,
+    }),
+    onError: (message) => events.push(`error:${message}`),
+    onPendingCommand: () => events.push('pending'),
+    onLocalCommand: () => {
+      events.push('local');
+      return true;
+    },
+  });
+
+  assert.equal(adapter.setNodeParams('n1', { value: 7 }), false);
+  assert.deepEqual(events, ['error:Manager SDK is not connected']);
 });

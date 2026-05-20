@@ -152,7 +152,7 @@
     onPendingCommand: (command, requestId) => {
       serverSemanticSyncState.trackPendingCommand(requestId, command);
     },
-    onLocalCommand: (command, requestId) => {
+    onLocalCommand: (command, _requestId) => {
       const bridge = createManagerSemanticBridge({
         nodeEngine,
         nodeRegistry,
@@ -306,6 +306,9 @@
     getAreaPlugin: () => areaPlugin,
     getNodeMap: () => nodeMap,
     sockets,
+    sendSemanticNodeParams: (nodeId, params) => canvasCommands.setNodeParams(nodeId, params),
+    sendSemanticNodeInputs: (nodeId, inputValues) =>
+      canvasCommands.setNodeInputs(nodeId, inputValues),
   });
 
   const syncSleepNodeSockets = sleepNodeSockets.syncSleepNodeSockets;
@@ -328,6 +331,9 @@
     sockets,
     getNumberParamOptions: () => numberParamOptions,
     sendNodeOverride,
+    sendSemanticNodeParams: (nodeId, params) => canvasCommands.setNodeParams(nodeId, params),
+    sendSemanticNodeInputs: (nodeId, inputValues) =>
+      canvasCommands.setNodeInputs(nodeId, inputValues),
     onNodeActivity: (nodeId) => midiController.showNodeActivity(nodeId),
     onClientNodePick: (nodeId, clientId) => void applyClientNodeSelection(nodeId, { clientId }),
     onClientNodeSelectInput: (nodeId, portId, value) =>

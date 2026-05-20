@@ -5,7 +5,7 @@ import { writable } from 'svelte/store';
 
 import { bindGraphStateSubscription, bindLocalSemanticGraphChangeSubscription } from './subscriptions';
 
-test('bindLocalSemanticGraphChangeSubscription forwards local config and input edits', () => {
+test('bindLocalSemanticGraphChangeSubscription does not mirror graph-change echoes into semantic commands', () => {
   const graphChanges = writable<unknown[]>([]);
   const params: unknown[] = [];
   const inputs: unknown[] = [];
@@ -31,8 +31,8 @@ test('bindLocalSemanticGraphChangeSubscription forwards local config and input e
   ]);
 
   unsubscribe?.();
-  assert.deepEqual(params, [{ nodeId: 'n1', patch: { value: 9 } }]);
-  assert.deepEqual(inputs, [{ nodeId: 'n1', patch: { value: 10 } }]);
+  assert.deepEqual(params, []);
+  assert.deepEqual(inputs, []);
 });
 
 test('bindLocalSemanticGraphChangeSubscription ignores changes caused by server graph sync', () => {
@@ -78,7 +78,7 @@ test('bindLocalSemanticGraphChangeSubscription ignores stale changes replayed on
   graphChanges.set([{ type: 'update-node-config', nodeId: 'n1', config: { value: 10 } }]);
 
   unsubscribe?.();
-  assert.deepEqual(params, [{ nodeId: 'n1', patch: { value: 10 } }]);
+  assert.deepEqual(params, []);
 });
 
 test('bindGraphStateSubscription syncs the view but suppresses graph-derived writes while server semantic sync is applying', () => {
@@ -107,5 +107,54 @@ test('bindGraphStateSubscription syncs the view but suppresses graph-derived wri
 
   unsubscribe?.();
   assert.equal(graphSyncCalls.length, 2);
+  assert.deepEqual(patchRuntimeCalls, []);
+});
+
+test('bindGraphStateSubscription skips patch reconcile for param-only graph updates', () => {
+  const graphState = writable({
+    nodes: [
+      {
+        id: 'n1',
+        type: 'number',
+        position: { x: 0, y: 0 },
+        config: { value: 1 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  });
+  const patchRuntimeCalls: string[] = [];
+
+  const unsubscribe = bindGraphStateSubscription({
+    graphStateStore: graphState,
+    graphSync: { schedule: () => undefined },
+    groupController: { reconcileGraphNodes: () => [] },
+    groupPortNodesController: {
+      removeGroupPortNodesForGroupIds: () => 0,
+      scheduleNormalizeProxies: () => patchRuntimeCalls.push('normalize'),
+    },
+    patchRuntime: { onGraphStateChanged: () => patchRuntimeCalls.push('patch') },
+    syncCustomGateInputs: () => undefined,
+    rehydrateExpandedCustomFrames: () => undefined,
+    isApplyingServerSemanticSnapshot: () => false,
+  });
+  patchRuntimeCalls.length = 0;
+
+  graphState.set({
+    nodes: [
+      {
+        id: 'n1',
+        type: 'number',
+        position: { x: 0, y: 0 },
+        config: { value: 2 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  });
+
+  unsubscribe?.();
   assert.deepEqual(patchRuntimeCalls, []);
 });

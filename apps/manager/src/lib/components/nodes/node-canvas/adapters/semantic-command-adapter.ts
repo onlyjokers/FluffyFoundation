@@ -8,7 +8,6 @@ import {
   type SemanticCommandBus,
 } from '@shugu/node-core';
 import type { SemanticCommandPayload } from '@shugu/protocol';
-import type { ManagerSDK } from '@shugu/sdk-manager';
 import type { Connection as EngineConnection, GraphState, NodeInstance } from '$lib/nodes/types';
 import { patchNodeGraphLayoutPosition } from '$lib/project/nodeGraphLayout';
 
@@ -57,7 +56,14 @@ export function createCanvasSemanticCommandAdapter(opts: {
   };
 }
 
-type CanvasSemanticSdk = Pick<ManagerSDK, 'sendSemanticCommand'>;
+type CanvasSemanticSdk = {
+  sendSemanticCommand: (input: {
+    target?: unknown;
+    command: SemanticCommandPayload;
+    dryRun?: boolean;
+    requestId: string;
+  }) => boolean;
+};
 
 function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPayload {
   const { type, ...rest } = command;
@@ -99,10 +105,14 @@ export function createNodeCanvasSemanticCommands(input: {
       const locallyAccepted = input.onLocalCommand?.(command, requestId);
       if (locallyAccepted === false) return false;
     }
-    sdk.sendSemanticCommand({
+    const emitted = sdk.sendSemanticCommand({
       requestId,
       command: semanticPayloadFromCommand(command),
     });
+    if (!emitted) {
+      input.onError?.('Manager SDK is not connected');
+      return false;
+    }
     input.onPendingCommand?.(command, requestId);
     return true;
   };

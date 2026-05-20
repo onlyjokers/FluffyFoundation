@@ -306,8 +306,8 @@ export class ManagerSDK {
         command: SemanticCommandPayload;
         dryRun?: boolean;
         requestId: string;
-    }): void {
-        if (!this.socket?.connected) return;
+    }): boolean {
+        if (!this.socket?.connected) return false;
         const message = createSemanticMessage({
             target: input.target ?? { mode: 'server' },
             actor: this.commandEnvelope.actor,
@@ -317,6 +317,7 @@ export class ManagerSDK {
             requestId: input.requestId,
         });
         this.socket.emit(SOCKET_EVENTS.MSG, message);
+        return true;
     }
 
     /**

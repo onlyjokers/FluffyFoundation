@@ -94,6 +94,70 @@ function createHarness() {
   return { runtime: createPatchRuntime(opts), sent };
 }
 
+function createImmediateHarness() {
+  let graph: GraphState = {
+    nodes: [node('scene', 'scene-fct-track'), node('out', 'scene-out'), node('client', 'client-object')],
+    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+  };
+  const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
+    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'in', type: 'scene' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
+    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+  ]);
+  const payload = basePayload();
+
+  const opts: CreatePatchRuntimeOptions = {
+    nodeEngine: {
+      getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: () => null,
+      exportGraphForPatchFromRootNodeIds: () => payload,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => graph,
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: () => ({
+        route: 'server',
+        hasLocalSession: false,
+        hasLocalReady: false,
+        hasRemoteDisplay: false,
+      }),
+      sendPlugin: () => undefined,
+    },
+    getSDK: () => ({
+      sendPluginControl: (target, pluginName, command, nextPayload) => {
+        sent.push({ target, pluginName, command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  };
+
+  return {
+    runtime: createPatchRuntime(opts),
+    sent,
+    setGraph: (nextGraph: GraphState) => {
+      graph = nextGraph;
+    },
+  };
+}
+
 test('patch runtime targets node-executor commands at the managed client group', async () => {
   const { runtime, sent } = createHarness();
 
@@ -107,5 +171,49 @@ test('patch runtime targets node-executor commands at the managed client group',
   assert.deepEqual(sent[1].target, { mode: 'group', groupId: 'client:client-1' });
   assert.equal(sent[1].command, 'start');
 
+  runtime.destroy();
+});
+
+test('patch runtime does not redeploy when graph changes keep the same topology', () => {
+  const { runtime, sent, setGraph } = createImmediateHarness();
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+
+  sent.length = 0;
+  setGraph({
+    nodes: [
+      { ...node('scene', 'scene-fct-track'), config: { intensity: 0.7 } },
+      node('out', 'scene-out'),
+      node('client', 'client-object'),
+    ],
+    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+  });
+
+  runtime.onGraphStateChanged();
+
+  assert.deepEqual(sent.map((message) => message.command), []);
+  runtime.destroy();
+});
+
+test('patch runtime does not redeploy when unrelated canvas topology changes outside the active patch', () => {
+  const { runtime, sent, setGraph } = createImmediateHarness();
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  sent.length = 0;
+
+  setGraph({
+    nodes: [
+      node('scene', 'scene-fct-track'),
+      node('out', 'scene-out'),
+      node('client', 'client-object'),
+      node('note-1', 'note'),
+    ],
+    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+  });
+
+  runtime.onGraphStateChanged();
+
+  assert.deepEqual(sent.map((message) => message.command), []);
   runtime.destroy();
 });

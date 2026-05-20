@@ -115,7 +115,7 @@ export interface PatchRuntime {
   onLoopDeployListChanged(): void;
   onGroupDisabledChanged(disabled: Set<string>): void;
   onRunningChanged(running: boolean): void;
-  scheduleReconcile(reason: string): void;
+  scheduleReconcile(reason: string, options?: { immediate?: boolean }): void;
   stopAllDeployedPatches(): void;
   clearMidiLoopBridgeState(): void;
   syncPatchVisualState(): void;

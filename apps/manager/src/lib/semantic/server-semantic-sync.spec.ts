@@ -748,6 +748,35 @@ test('bindServerSemanticSync requests server snapshot when Manager SDK reaches c
   assert.deepEqual(requested, ['graph-snapshot']);
 });
 
+test('bindServerSemanticSync clears pending local commands and refreshes snapshots on reconnect', () => {
+  const requested: string[] = [];
+  let stateHandler: ((state: { status: string }) => void) | null = null;
+  let clearCount = 0;
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: () => () => undefined,
+      onStateChange: (handler) => {
+        stateHandler = handler;
+        return () => undefined;
+      },
+      requestSemanticSnapshot: (requestId?: string) => requested.push(requestId ?? ''),
+    },
+    nodeEngine: { loadGraph: () => undefined },
+    migrationCoordinator: { maybeImport: () => undefined },
+    clearPendingCommands: () => {
+      clearCount += 1;
+    },
+  });
+
+  stateHandler?.({ status: 'connected' });
+  stateHandler?.({ status: 'disconnected' });
+  stateHandler?.({ status: 'connected' });
+
+  assert.deepEqual(requested, ['graph-snapshot', 'graph-snapshot:reconnect']);
+  assert.equal(clearCount, 1);
+});
+
 test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot requests', () => {
   let resultHandler:
     | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
