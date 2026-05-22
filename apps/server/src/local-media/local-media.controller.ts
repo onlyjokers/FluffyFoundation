@@ -1,7 +1,7 @@
 /**
  * Purpose: Local Media HTTP API — list/validate and stream local files with Range support.
  *
- * This is used by "Load * From Local (Display only)" nodes.
+ * This is used by "Load * From Local (Display)" nodes.
  */
 
 import {

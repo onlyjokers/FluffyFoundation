@@ -158,3 +158,20 @@ test('configured client-object target receives command sink effects', async () =
 
   assert.equal(commands[0].clientId, 'client-b');
 });
+
+test('default registry exposes display-object for server semantic authority', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const display = registry.get('display-object');
+
+  assert.equal(display?.label, 'Display');
+  assert.equal(display?.metadata?.platformTargets.includes('display'), true);
+  assert.equal(display?.inputs.some((input) => input.id === 'in' && input.type === 'command'), true);
+  assert.equal(display?.configSchema.some((field) => field.key === 'displayId'), true);
+});

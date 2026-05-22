@@ -2,7 +2,7 @@
  * Purpose: Manager-side cache + validation helpers for Local Media (server-local files).
  *
  * Backed by server `GET /api/local-media` + `POST /api/local-media/validate` (write-token protected).
- * This enables "Load * From Local(Display only)" nodes to pick/validate absolute file paths
+ * This enables "Load * From Local(Display)" nodes to pick/validate absolute file paths
  * without uploading anything to the Asset Service.
  */
 

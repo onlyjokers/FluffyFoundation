@@ -33,3 +33,32 @@ test('Display executor applies showText and hideText controls to the text overla
   executor.executeControl('hideText', {});
   assert.deepEqual(get(textOverlay), createClearedDisplayTextOverlayState());
 });
+
+test('Display executor expands custom control-batch payloads', () => {
+  const textOverlay = writable(createClearedDisplayTextOverlayState());
+  const screenOverlay = writable(createClearedDisplayScreenOverlayState());
+  const visualScenes = writable([]);
+  const executor = createDisplayControlExecutor({
+    getMultimediaCore: () => null,
+    getNodeExecutor: () => null,
+    screenOverlay,
+    textOverlay,
+    visualScenes,
+    isDev: false,
+  });
+
+  executor.executeControl('custom', {
+    kind: 'control-batch',
+    items: [
+      { action: 'showText', payload: { text: 'Batch Display' } },
+      { action: 'screenColor', payload: { color: '#112233', opacity: 0.5, mode: 'solid' } },
+      { action: 'visualScenes', payload: { scenes: [{ type: 'box', color: '#445566' }] } },
+    ],
+  });
+
+  assert.equal(get(textOverlay).text, 'Batch Display');
+  assert.equal(get(screenOverlay).color, '#112233');
+  assert.deepEqual(get(visualScenes), [
+    { type: 'box', color: '#445566', showBackground: 0, audioSource: 'microphone' },
+  ]);
+});

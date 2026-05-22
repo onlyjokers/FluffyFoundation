@@ -327,6 +327,11 @@ export class ClientRegistryService {
         }
     }
     getClientsByGroup(groupId: string): ConnectionInfo[] {
+        if (groupId.startsWith('client:')) {
+            const clientId = groupId.slice('client:'.length);
+            const client = this.clients.get(clientId);
+            return client && client.connected ? [client] : [];
+        }
         return Array.from(this.clients.values()).filter(c => c.group === groupId && c.connected);
     }
     getDisplayDescriptors(): DisplayDescriptor[] {

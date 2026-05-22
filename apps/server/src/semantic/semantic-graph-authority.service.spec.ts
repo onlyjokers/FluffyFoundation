@@ -148,6 +148,27 @@ test('SemanticGraphAuthorityService exposes Arduino UNO plugin node definitions 
   assert.equal(pwm?.aiSummary?.permissions.includes('hardware:serial'), true);
 });
 
+test('SemanticGraphAuthorityService accepts display-object nodes for server-owned snapshots', () => {
+  const { service } = createService();
+  const displayNode = {
+    id: 'display-1',
+    type: 'display-object',
+    position: { x: 10, y: 20 },
+    config: { displayId: 'display-a' },
+    inputValues: {},
+    outputValues: {},
+  };
+
+  const added = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.add', node: displayNode },
+  });
+
+  assert.equal(added.ok, true);
+  assert.equal(service.getSnapshot().nodes[0]?.id, 'display-1');
+  assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'display-object'), true);
+});
+
 test('SemanticGraphAuthorityService persists custom node definitions and AI capability settings', () => {
   const { path, service } = createService();
   const customDefinition = {

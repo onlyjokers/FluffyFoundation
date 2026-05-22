@@ -76,7 +76,7 @@ export function registerLoadAudioNodes(registry: NodeRegistry, deps: ToneAdapter
 
   registerLoadAudioNode(registry, deps, {
     type: 'load-audio-from-local',
-    label: 'Load Audio From Local(Display only) (client)',
+    label: 'Load Audio From Local(Display) (client)',
     inputs: [
       { id: 'asset', label: 'Asset', type: 'string', defaultValue: '' },
       { id: 'startSec', label: 'Start (s)', type: 'number', defaultValue: 0, min: 0, step: 0.01 },

@@ -331,7 +331,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         const displayTargets = targets.filter((id) => isDisplayTarget(id));
         if (displayTargets.length === 0) {
           nodeEngine.lastError.set(
-            'Load * From Local(Display only) requires a Display target (connect Deploy to Display).'
+            'Load * From Local(Display) requires a Display target (connect Deploy to Display).'
           );
           return false;
         }

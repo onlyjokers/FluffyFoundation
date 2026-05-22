@@ -40,3 +40,21 @@ test('getControlPlaneSnapshot exposes selected client ownership from the registr
     },
   });
 });
+
+test('getClientsByGroup resolves managed client aliases even when a client has an explicit group', () => {
+  const registry = new ClientRegistryService();
+  registry.registerConnection('socket-display', 'client', 'Display user agent', {
+    deviceId: 'display-1',
+    instanceId: 'tab-display',
+  });
+  registry.setClientGroup('display-1', 'display');
+
+  assert.deepEqual(
+    registry.getClientsByGroup('display').map((client) => client.clientId),
+    ['display-1']
+  );
+  assert.deepEqual(
+    registry.getClientsByGroup('client:display-1').map((client) => client.clientId),
+    ['display-1']
+  );
+});

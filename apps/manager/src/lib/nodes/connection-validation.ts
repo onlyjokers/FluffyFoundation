@@ -249,7 +249,7 @@ export function getLocalOnlyPatchRoutingError({
     if (!rootId) continue;
     if (!rootContainsLocalOnlyNodes(rootId)) continue;
     if (rootRoutesToClientObject(rootId)) {
-      return 'Load * From Local(Display only) can only connect Deploy to Display (not Client).';
+      return 'Load * From Local(Display) can only connect Deploy to Display (not Client).';
     }
   }
 

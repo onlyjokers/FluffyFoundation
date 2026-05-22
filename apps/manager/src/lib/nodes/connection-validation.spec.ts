@@ -114,7 +114,7 @@ test('getLocalOnlyPatchRoutingError blocks local-only patch roots routed to clie
 
   assert.equal(
     getLocalOnlyPatchRoutingError({ graph, getNodeDefinition: def }),
-    'Load * From Local(Display only) can only connect Deploy to Display (not Client).'
+    'Load * From Local(Display) can only connect Deploy to Display (not Client).'
   );
 });
 

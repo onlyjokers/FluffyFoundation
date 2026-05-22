@@ -186,6 +186,48 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
   };
 }
 
+export function createDisplayObjectNode(): NodeDefinition {
+  return {
+    type: 'display-object',
+    label: 'Display',
+    category: 'Objects',
+    metadata: {
+      version: '2.0.0',
+      platformTargets: ['manager', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['display:control', 'control:send'],
+      description:
+        'Routes command messages to selected Display endpoints without exposing UI layout details.',
+      compatibility: [
+        {
+          target: 'command outputs',
+          rule: 'Accepts command sink inputs from media, image, visual, and processor nodes.',
+          repairHint: 'Connect command-producing nodes to Display when output is not visible.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Show media on Display',
+          summary: 'Connect play-media cmd output to Display input to route playback commands.',
+        },
+      ],
+      risks: ['Can change the live Display surface immediately.'],
+      repairHints: ['Verify the target Display is connected before assuming a command failed.'],
+    },
+    inputs: [
+      { id: 'index', label: 'Index', type: 'number', min: 1, step: 1 },
+      { id: 'range', label: 'Range', type: 'number', min: 1, step: 1 },
+      { id: 'random', label: 'Random', type: 'boolean' },
+      { id: 'in', label: 'In', type: 'command', kind: 'sink' },
+    ],
+    outputs: [],
+    configSchema: [
+      { key: 'displayId', label: 'Displays', type: 'client-picker', defaultValue: '' },
+    ],
+    process: () => ({}),
+  };
+}
+
 export function createCmdAggregatorNode(): NodeDefinition {
   const maxInputs = 8;
   const inputs = Array.from({ length: maxInputs }, (_, idx) => {

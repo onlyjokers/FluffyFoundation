@@ -31,7 +31,7 @@ export function createLoadImageFromAssetsNode(): NodeDefinition {
 export function createLoadImageFromLocalNode(): NodeDefinition {
   return {
     type: 'load-image-from-local',
-    label: 'Load Image From Local(Display only)',
+    label: 'Load Image From Local(Display)',
     category: 'Assets',
     inputs: [{ id: 'asset', label: 'Asset', type: 'string', defaultValue: '' }],
     outputs: [{ id: 'ref', label: 'Image Out', type: 'image', kind: 'sink' }],

@@ -262,7 +262,7 @@ const normalizeLocalMediaRef = (raw: string, kind: 'audio' | 'image' | 'video'):
 if (!nodeRegistry.get('load-audio-from-local')) {
   nodeRegistry.register({
     type: 'load-audio-from-local',
-    label: 'Load Audio From Local(Display only)',
+    label: 'Load Audio From Local(Display)',
     category: 'Assets',
     inputs: [
       { id: 'asset', label: 'Asset', type: 'string', defaultValue: '' },
@@ -317,7 +317,7 @@ if (!nodeRegistry.get('load-audio-from-local')) {
 if (!nodeRegistry.get('load-image-from-local')) {
   nodeRegistry.register({
     type: 'load-image-from-local',
-    label: 'Load Image From Local(Display only)',
+    label: 'Load Image From Local(Display)',
     category: 'Assets',
     inputs: [{ id: 'asset', label: 'Asset', type: 'string', defaultValue: '' }],
     outputs: [{ id: 'ref', label: 'Image Out', type: 'image', kind: 'sink' }],
@@ -372,7 +372,7 @@ if (!nodeRegistry.get('load-image-from-local')) {
 if (!nodeRegistry.get('load-video-from-local')) {
   nodeRegistry.register({
     type: 'load-video-from-local',
-    label: 'Load Video From Local(Display only)',
+    label: 'Load Video From Local(Display)',
     category: 'Assets',
     inputs: [
       { id: 'asset', label: 'Asset', type: 'string', defaultValue: '' },
@@ -490,4 +490,3 @@ if (!nodeRegistry.get('load-video-from-local')) {
   });
 }
 }
-

@@ -247,7 +247,7 @@ export function createLoadVideoFromAssetsNode(): NodeDefinition {
 export function createLoadVideoFromLocalNode(): NodeDefinition {
   return {
     type: 'load-video-from-local',
-    label: 'Load Video From Local(Display only)',
+    label: 'Load Video From Local(Display)',
     category: 'Assets',
     inputs: [
       { id: 'asset', label: 'Asset', type: 'string', defaultValue: '' },

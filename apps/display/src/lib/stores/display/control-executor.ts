@@ -5,6 +5,7 @@ import type { Writable } from 'svelte/store';
 import type { MultimediaCore } from '@shugu/multimedia-core';
 import type {
   ControlAction,
+  ControlBatchPayload,
   ControlPayload,
   FctTrackAudioSource,
   FctTrackPalette,
@@ -146,6 +147,13 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
   let lastControlLogAt = 0;
   let textClearHandle: ReturnType<typeof setTimeout> | null = null;
 
+  const isControlBatchPayload = (payload: ControlPayload): payload is ControlBatchPayload =>
+    Boolean(
+      payload &&
+        typeof payload === 'object' &&
+        (payload as ControlBatchPayload).kind === 'control-batch'
+    );
+
   const setScreenColor = (payload: ScreenColorPayload): void => {
     deps.screenOverlay.set(createDisplayScreenOverlayState(payload));
   };
@@ -159,6 +167,28 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
   };
 
   const executeNow = (action: ControlAction, payload: ControlPayload): void => {
+    if (action === 'custom' && isControlBatchPayload(payload)) {
+      const batchExecuteAt =
+        typeof payload.executeAt === 'number' && Number.isFinite(payload.executeAt)
+          ? payload.executeAt
+          : undefined;
+      for (const item of payload.items) {
+        const executeAt =
+          typeof item.executeAt === 'number' && Number.isFinite(item.executeAt)
+            ? item.executeAt
+            : batchExecuteAt;
+        if (typeof executeAt === 'number') {
+          const delay = executeAt - Date.now();
+          if (delay > 0) {
+            setTimeout(() => executeNow(item.action, item.payload), delay);
+            continue;
+          }
+        }
+        executeNow(item.action, item.payload);
+      }
+      return;
+    }
+
     switch (action) {
       case 'showImage': {
         const imagePayload = payload as ShowImagePayload;

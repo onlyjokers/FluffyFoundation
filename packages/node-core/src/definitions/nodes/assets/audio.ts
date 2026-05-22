@@ -290,7 +290,7 @@ export function createLoadAudioAssetFromAssetsNode(): NodeDefinition {
 export function createLoadAudioFromLocalNode(): NodeDefinition {
   return {
     type: 'load-audio-from-local',
-    label: 'Load Audio From Local(Display only)',
+    label: 'Load Audio From Local(Display)',
     category: 'Assets',
     inputs: [
       { id: 'asset', label: 'Asset', type: 'string', defaultValue: '' },
