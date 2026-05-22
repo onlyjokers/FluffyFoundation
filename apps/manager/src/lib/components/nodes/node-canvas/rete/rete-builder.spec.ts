@@ -255,6 +255,36 @@ test('inputAllowsMultiple preserves nodeEngine.getNode receiver context', () => 
   assert.equal(builder.inputAllowsMultiple('node-1', 'sink'), true);
 });
 
+test('builder treats projection sockets as editor-only and not connectable semantic ports', () => {
+  const builder = createReteBuilder({
+    nodeRegistry: new NodeRegistry(),
+    nodeEngine: {
+      getNode: () => ({
+        id: 'view:custom:owner:inner',
+        type: 'source-node',
+        config: {},
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    isProjectionId: (id) => String(id).startsWith('view:'),
+  });
+
+  assert.equal(
+    builder.getPortDefForSocket({ nodeId: 'view:custom:owner:inner', side: 'output', key: 'value' }),
+    null
+  );
+  assert.equal(builder.inputAllowsMultiple('view:custom:owner:inner', 'sink'), false);
+});
+
 test('input control changes notify canvas activity highlighting', () => {
   const { builder, activity } = createBuilderWithActivitySpy();
   const node = builder.buildReteNode({
@@ -390,4 +420,40 @@ test('config controls sync their default config before first graph run', () => {
   });
 
   assert.deepEqual(configUpdates, [{ audioSource: 'playback', showBackground: 1 }]);
+});
+
+test('editor projection nodes never sync default config back to the semantic graph', () => {
+  const inlineSelect = createBuilderWithSyncedInlineConfigSpy();
+  inlineSelect.builder.buildReteNode({
+    id: 'view:custom:owner:scene-select',
+    type: 'scene-like-node',
+    config: { editorProjection: true },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const inlineNumber = createBuilderWithSyncedInlineNumberConfigSpy();
+  inlineNumber.builder.buildReteNode({
+    id: 'view:custom:owner:scene-number',
+    type: 'scene-opacity-node',
+    config: { editorProjection: true },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const configControls = createBuilderWithSyncedConfigControlDefaultsSpy();
+  configControls.builder.buildReteNode({
+    id: 'view:custom:owner:scene-config',
+    type: 'scene-config-node',
+    config: { editorProjection: true },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  assert.deepEqual(inlineSelect.configUpdates, []);
+  assert.deepEqual(inlineNumber.configUpdates, []);
+  assert.deepEqual(configControls.configUpdates, []);
 });

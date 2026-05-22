@@ -789,6 +789,10 @@ class NodeEngineClass {
     };
   }
 
+  exportCompiledGraphForPatchPlanning(): GraphState {
+    return compileGraphForPatch(this.runtime.exportGraph(), get(customNodeDefinitions) ?? []);
+  }
+
   exportGraphForPatch(): {
     graph: Pick<GraphState, 'nodes' | 'connections'>;
     meta: {

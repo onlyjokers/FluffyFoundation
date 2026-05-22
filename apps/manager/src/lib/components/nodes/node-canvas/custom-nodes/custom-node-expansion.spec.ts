@@ -17,7 +17,7 @@ const makeNode = (id: string): NodeInstance => ({
   outputValues: {},
 });
 
-test('handleExpandCustomNode skips non-object internal entries', () => {
+test('handleExpandCustomNode tolerates non-object internal entries without mutating graph', () => {
   const addedNodes: NodeInstance[] = [];
   const addedConnections: Connection[] = [];
 
@@ -109,8 +109,285 @@ test('handleExpandCustomNode skips non-object internal entries', () => {
   });
 
   assert.doesNotThrow(() => expansion.handleExpandCustomNode(motherNode.id));
-  assert.equal(addedNodes.length, 1);
+  assert.equal(addedNodes.length, 0);
   assert.equal(addedConnections.length, 0);
+});
+
+test('handleExpandCustomNode is a view-only action and does not mutate the engine graph', () => {
+  const engineMutations: string[] = [];
+
+  const motherNode: NodeInstance = {
+    id: 'node-1',
+    type: 'custom-node',
+    position: { x: 10, y: 20 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+
+  const internalGraph: GraphState = {
+    nodes: [makeNode('inner-1')],
+    connections: [
+      {
+        id: 'inner-c1',
+        sourceNodeId: 'inner-1',
+        sourcePortId: 'value',
+        targetNodeId: 'inner-2',
+        targetPortId: 'value',
+      },
+    ],
+  };
+
+  const state: CustomNodeInstanceState = {
+    definitionId: 'def-1',
+    groupId: 'group-1',
+    role: 'mother',
+    manualGate: true,
+    internal: internalGraph,
+  };
+
+  const def: CustomNodeDefinition = {
+    definitionId: 'def-1',
+    name: 'Custom Node',
+    template: internalGraph,
+    ports: [],
+  };
+
+  const groupStore = writable([]);
+  const framesStore = writable([]);
+  const expandedCustomByGroupId = new Map<string, { groupId: string; nodeId: string }>();
+  const forcedHiddenNodeIds = new Set<string>();
+
+  const expansion = createCustomNodeExpansion({
+    expandedCustomByGroupId,
+    forcedHiddenNodeIds,
+    nodeEngine: {
+      getNode: (nodeId) => (nodeId === motherNode.id ? motherNode : null),
+      addNode: () => engineMutations.push('addNode'),
+      removeNode: () => engineMutations.push('removeNode'),
+      addConnection: () => engineMutations.push('addConnection'),
+      removeConnection: () => engineMutations.push('removeConnection'),
+      updateNodePosition: () => engineMutations.push('updateNodePosition'),
+      updateNodeConfig: () => engineMutations.push('updateNodeConfig'),
+      updateNodeInputValue: () => engineMutations.push('updateNodeInputValue'),
+      exportGraph: () => ({
+        nodes: [motherNode],
+        connections: [
+          {
+            id: 'external-c1',
+            sourceNodeId: 'external',
+            sourcePortId: 'value',
+            targetNodeId: motherNode.id,
+            targetPortId: 'p:inner-1',
+          },
+        ],
+      }),
+    },
+    groupController: {
+      nodeGroups: groupStore,
+      setGroups: () => engineMutations.push('setGroups'),
+      scheduleHighlight: () => {},
+    },
+    groupPortNodesController: {
+      ensureGroupPortNodes: () => engineMutations.push('ensureGroupPortNodes'),
+      scheduleAlign: () => {},
+      scheduleNormalizeProxies: () => {},
+    },
+    groupFrames: framesStore,
+    nodeRegistry: { get: () => null } as NodeRegistry,
+    requestFramesUpdate: () => {},
+    readCustomNodeState: () => state,
+    writeCustomNodeState: (config) => config,
+    getCustomNodeDefinition: (definitionId) => (definitionId === def.definitionId ? def : null),
+    upsertCustomNodeDefinition: () => engineMutations.push('upsertCustomNodeDefinition'),
+    customNodeDefinitions: writable([]),
+    definitionsInCycles: () => new Set(),
+    buildGroupPortIndex: () => new Map(),
+    groupIdFromNode: () => null,
+    isGroupPortNodeType: () => false,
+    deepestGroupIdContainingNode: () => null,
+    syncCoupledCustomNodesForDefinition: () => engineMutations.push('syncCoupledCustomNodesForDefinition'),
+    materializeInternalNodeId: (customNodeId, internalNodeId) =>
+      `cn:${customNodeId}:${internalNodeId}`,
+    isMaterializedInternalNodeId: (customNodeId, nodeId) =>
+      nodeId.startsWith(`cn:${customNodeId}:`),
+    internalNodeIdFromMaterialized: (customNodeId, nodeId) =>
+      nodeId.replace(`cn:${customNodeId}:`, ''),
+    customNodeIdFromMaterializedNodeId: () => null,
+  });
+
+  expansion.handleExpandCustomNode(motherNode.id);
+
+  assert.deepEqual(engineMutations, []);
+  assert.deepEqual(expandedCustomByGroupId.get('group-1'), { groupId: 'group-1', nodeId: 'node-1' });
+  assert.equal(forcedHiddenNodeIds.has('node-1'), false);
+});
+
+test('handleCollapseCustomNodeFrame only clears expanded view state', () => {
+  const engineMutations: string[] = [];
+  let projectionSyncs = 0;
+  const motherNode: NodeInstance = {
+    id: 'node-1',
+    type: 'custom-node',
+    position: { x: 10, y: 20 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const expandedCustomByGroupId = new Map<string, { groupId: string; nodeId: string }>([
+    ['group-1', { groupId: 'group-1', nodeId: 'node-1' }],
+  ]);
+  const groupStore = writable([{ id: 'group-1', parentId: null, name: 'Custom', nodeIds: [] }]);
+
+  const expansion = createCustomNodeExpansion({
+    expandedCustomByGroupId,
+    forcedHiddenNodeIds: new Set(),
+    nodeEngine: {
+      getNode: (nodeId) => (nodeId === motherNode.id ? motherNode : null),
+      addNode: () => engineMutations.push('addNode'),
+      removeNode: () => engineMutations.push('removeNode'),
+      addConnection: () => engineMutations.push('addConnection'),
+      removeConnection: () => engineMutations.push('removeConnection'),
+      updateNodePosition: () => engineMutations.push('updateNodePosition'),
+      updateNodeConfig: () => engineMutations.push('updateNodeConfig'),
+      updateNodeInputValue: () => engineMutations.push('updateNodeInputValue'),
+      exportGraph: () => ({ nodes: [motherNode], connections: [] }),
+    },
+    groupController: {
+      nodeGroups: groupStore,
+      setGroups: () => engineMutations.push('setGroups'),
+      scheduleHighlight: () => {},
+    },
+    groupPortNodesController: {
+      ensureGroupPortNodes: () => engineMutations.push('ensureGroupPortNodes'),
+      scheduleAlign: () => engineMutations.push('scheduleAlign'),
+      scheduleNormalizeProxies: () => engineMutations.push('scheduleNormalizeProxies'),
+    },
+    groupFrames: writable([]),
+    nodeRegistry: { get: () => null } as NodeRegistry,
+    requestFramesUpdate: () => {},
+    readCustomNodeState: () => ({
+      definitionId: 'def-1',
+      groupId: 'group-1',
+      role: 'mother',
+      manualGate: true,
+      internal: { nodes: [], connections: [] },
+    }),
+    writeCustomNodeState: (config) => config,
+    getCustomNodeDefinition: () => ({
+      definitionId: 'def-1',
+      name: 'Custom Node',
+      template: { nodes: [], connections: [] },
+      ports: [],
+    }),
+    upsertCustomNodeDefinition: () => engineMutations.push('upsertCustomNodeDefinition'),
+    customNodeDefinitions: writable([]),
+    definitionsInCycles: () => new Set(),
+    buildGroupPortIndex: () => new Map(),
+    groupIdFromNode: () => null,
+    isGroupPortNodeType: () => false,
+    deepestGroupIdContainingNode: () => null,
+    syncCoupledCustomNodesForDefinition: () => engineMutations.push('syncCoupledCustomNodesForDefinition'),
+    materializeInternalNodeId: (customNodeId, internalNodeId) =>
+      `cn:${customNodeId}:${internalNodeId}`,
+    isMaterializedInternalNodeId: () => false,
+    internalNodeIdFromMaterialized: (_customNodeId, nodeId) => nodeId,
+    customNodeIdFromMaterializedNodeId: () => null,
+    syncEditorProjection: () => {
+      projectionSyncs += 1;
+    },
+  });
+
+  expansion.handleCollapseCustomNodeFrame('group-1');
+
+  assert.deepEqual(engineMutations, []);
+  assert.equal(expandedCustomByGroupId.has('group-1'), false);
+  assert.equal(projectionSyncs, 1);
+});
+
+test('rehydrateExpandedCustomFrames does not revive legacy materialized topology as expanded state', () => {
+  const mutations: string[] = [];
+  const expandedCustomByGroupId = new Map<string, { groupId: string; nodeId: string }>();
+
+  const motherNode: NodeInstance = {
+    id: 'mother-1',
+    type: 'custom-node',
+    position: { x: 0, y: 0 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+
+  const expansion = createCustomNodeExpansion({
+    expandedCustomByGroupId,
+    forcedHiddenNodeIds: new Set(),
+    nodeEngine: {
+      getNode: (nodeId) => (nodeId === motherNode.id ? motherNode : null),
+      exportGraph: () => ({ nodes: [motherNode], connections: [] }),
+    },
+    groupController: {
+      nodeGroups: writable([]),
+      setGroups: () => mutations.push('setGroups'),
+      scheduleHighlight: () => mutations.push('scheduleHighlight'),
+    },
+    groupPortNodesController: {
+      ensureGroupPortNodes: () => mutations.push('ensureGroupPortNodes'),
+      scheduleAlign: () => mutations.push('scheduleAlign'),
+      scheduleNormalizeProxies: () => mutations.push('scheduleNormalizeProxies'),
+    },
+    groupFrames: writable([]),
+    nodeRegistry: { get: () => null } as NodeRegistry,
+    requestFramesUpdate: () => mutations.push('requestFramesUpdate'),
+    readCustomNodeState: () => ({
+      definitionId: 'def-1',
+      groupId: 'group-1',
+      role: 'mother',
+      manualGate: true,
+      internal: { nodes: [], connections: [] },
+    }),
+    writeCustomNodeState: (config) => config,
+    getCustomNodeDefinition: () => ({
+      definitionId: 'def-1',
+      name: 'Custom',
+      template: { nodes: [], connections: [] },
+      ports: [],
+    }),
+    upsertCustomNodeDefinition: () => mutations.push('upsertCustomNodeDefinition'),
+    customNodeDefinitions: writable([]),
+    definitionsInCycles: () => new Set(),
+    buildGroupPortIndex: () => new Map(),
+    groupIdFromNode: () => null,
+    isGroupPortNodeType: () => false,
+    deepestGroupIdContainingNode: () => null,
+    syncCoupledCustomNodesForDefinition: () => mutations.push('syncCoupledCustomNodesForDefinition'),
+    materializeInternalNodeId: (customNodeId, internalNodeId) => `cn:${customNodeId}:${internalNodeId}`,
+    isMaterializedInternalNodeId: (customNodeId, nodeId) => nodeId.startsWith(`cn:${customNodeId}:`),
+    internalNodeIdFromMaterialized: (customNodeId, nodeId) => nodeId.replace(`cn:${customNodeId}:`, ''),
+    customNodeIdFromMaterializedNodeId: (nodeId) => {
+      if (!nodeId.startsWith('cn:')) return null;
+      const parts = nodeId.split(':');
+      return parts.length > 2 ? parts[1] : null;
+    },
+    syncEditorProjection: () => mutations.push('syncEditorProjection'),
+  });
+
+  expansion.rehydrateExpandedCustomFrames({
+    nodes: [
+      motherNode,
+      {
+        id: 'cn:mother-1:inner-1',
+        type: 'number',
+        position: { x: 10, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  });
+
+  assert.deepEqual(mutations, []);
+  assert.equal(expandedCustomByGroupId.size, 0);
 });
 
 test('handleDenodelizeGroup ignores non-object graph nodes', () => {

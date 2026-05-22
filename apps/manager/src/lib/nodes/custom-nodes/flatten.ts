@@ -140,6 +140,9 @@ export function expandCustomNodesForCompile(graph: GraphState, definitions: Cust
           `[custom-node-flatten] missing definition for ${String(state.definitionId ?? '')}`
         );
       }
+      if (!state.manualGate || node.inputValues?.gate === false) {
+        continue;
+      }
 
       const internalGraph = state.internal as GraphState;
       const internalNodes = Array.isArray(internalGraph?.nodes) ? internalGraph.nodes : [];

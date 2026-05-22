@@ -26,6 +26,7 @@ export type NodeRegistryLike = {
 export type NodeEngineLike = {
   getNode(nodeId: string): NodeInstance | undefined;
   getLastComputedInputs(nodeId: string): Record<string, unknown> | null;
+  exportCompiledGraphForPatchPlanning?(): GraphState;
   exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): PatchPayload;
   lastError: Readable<string | null> & { set(value: string | null): void };
   setPatchOffloadedNodeIds(nodeIds: string[]): void;

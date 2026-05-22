@@ -1,7 +1,6 @@
 /**
  * Purpose: Build Rete nodes and apply dynamic port constraints.
  */
-import { get } from 'svelte/store';
 import { ClassicPreset, type BaseSchemes } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 import type {
@@ -12,7 +11,6 @@ import type {
   Connection as EngineConnection,
 } from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
-import { audienceClients } from '$lib/stores/manager';
 import { CUSTOM_NODE_TYPE_PREFIX } from '$lib/nodes/custom-nodes/store';
 import { readCustomNodeState, writeCustomNodeState } from '$lib/nodes/custom-nodes/instance';
 import {
@@ -53,9 +51,11 @@ type ReteBuilderOptions = {
   sendSemanticNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
   sendSemanticNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
   onNodeActivity?: (nodeId: string, portId: string) => void;
+  getAudienceClientCount?: () => number;
   onClientNodePick?: (nodeId: string, clientId: string) => void;
   onClientNodeSelectInput?: (nodeId: string, portId: 'index' | 'range', value: number) => void;
   onClientNodeRandom?: (nodeId: string, value: boolean) => void;
+  isProjectionId?: (id: string) => boolean;
 };
 
 export type ReteBuilder = {
@@ -98,7 +98,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
   const nodeLabel = (node: NodeInstance): string => {
     if (node.type === 'client-object') {
-      const onlineCount = get(audienceClients).length;
+      const onlineCount = Math.max(0, Math.floor(Number(opts.getAudienceClientCount?.() ?? 0)));
       return `Client: ${onlineCount} online`;
     }
     if (node.type === 'group-frame') {
@@ -117,6 +117,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const buildReteNode = (instance: NodeInstance): ClassicPreset.Node => {
     const def = nodeRegistry.get(instance.type);
     const node = new ClassicPreset.Node(nodeLabel(instance));
+    const isEditorProjection = Boolean((instance.config as Record<string, unknown> | undefined)?.editorProjection);
     const configFields = def?.configSchema ?? [];
     const configFieldByKey = new Map<string, ConfigField>();
     for (const field of configFields) configFieldByKey.set(field.key, field);
@@ -190,6 +191,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               const control = new ClassicPreset.InputControl('number', {
                 initial: clamp(initial),
                 change: (value) => {
+                  if (isEditorProjection || value === initial) return;
                   const next = typeof value === 'number' ? clamp(value) : value;
                   commitUserInputValue(instance.id, input.id, next);
                   if (
@@ -215,7 +217,12 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             })()
           );
 
-          if (configField && instance.config?.[input.id] === undefined && configField.defaultValue !== undefined) {
+          if (
+            !isEditorProjection &&
+            configField &&
+            instance.config?.[input.id] === undefined &&
+            configField.defaultValue !== undefined
+          ) {
             nodeEngine.updateNodeConfig(instance.id, { [input.id]: clamp(initial) });
           }
         } else if (input.type === 'string') {
@@ -228,6 +235,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           const control = new ClassicPreset.InputControl('text', {
             initial,
             change: (value) => {
+              if (isEditorProjection || value === initial) return;
               commitUserInputValue(instance.id, input.id, value);
             },
           });
@@ -245,6 +253,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           const control = new BooleanControl({
             initial,
             change: (value) => {
+              if (isEditorProjection || value === initial) return;
               commitUserInputValue(instance.id, input.id, value);
               if (instance.type === 'client-object' && input.id === 'random') {
                 opts.onClientNodeRandom?.(instance.id, value);
@@ -258,6 +267,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                   });
                   nodeEngine.updateNodeConfig(instance.id, nextConfig);
                   opts.sendSemanticNodeParams?.(instance.id, nextConfig);
+                  notifyNodeActivity(instance.id, 'gate');
                 }
               }
             },
@@ -281,6 +291,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             const control = new ClassicPreset.InputControl('text', {
               initial,
               change: (value) => {
+                if (isEditorProjection || value === initial) return;
                 commitUserInputValue(instance.id, input.id, value);
               },
             });
@@ -303,6 +314,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial,
           options: configField.options ?? [],
           change: (value) => {
+            if (isEditorProjection || value === initial) return;
             commitUserInputValue(instance.id, input.id, value);
           },
         });
@@ -311,7 +323,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         inp.showControl = true;
         inputControlKeys.add(input.id);
 
-        if (instance.config?.[input.id] === undefined && configField.defaultValue !== undefined) {
+        if (
+          !isEditorProjection &&
+          instance.config?.[input.id] === undefined &&
+          configField.defaultValue !== undefined
+        ) {
           nodeEngine.updateNodeConfig(instance.id, { [input.id]: initial });
         }
       }
@@ -333,7 +349,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       if (instance.config?.[field.key] !== undefined || field.defaultValue === undefined) continue;
       configDefaultPatch[field.key] = field.defaultValue;
     }
-    if (Object.keys(configDefaultPatch).length > 0) {
+    if (!isEditorProjection && Object.keys(configDefaultPatch).length > 0) {
       nodeEngine.updateNodeConfig(instance.id, configDefaultPatch);
     }
 
@@ -349,6 +365,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             initial: String(current ?? ''),
             options: field.options ?? [],
             change: (value) => {
+              if (isEditorProjection || value === String(current ?? '')) return;
               commitUserConfigValue(instance.id, key, value);
             },
           })
@@ -380,6 +397,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             label: field.label,
             initial,
             change: (value) => {
+              if (isEditorProjection || value === initial) return;
               commitUserConfigValue(instance.id, key, value);
             },
           })
@@ -397,6 +415,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         const control = new ClassicPreset.InputControl('number', {
           initial: clamp(Number(current ?? 0)),
           change: (value) => {
+            const initialValue = clamp(Number(current ?? 0));
+            if (isEditorProjection || value === initialValue) return;
             const next = typeof value === 'number' ? clamp(value) : value;
             commitUserConfigValue(instance.id, key, next);
           },
@@ -411,6 +431,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           label: field.label,
           initial: String(current ?? ''),
           change: (value) => {
+            if (isEditorProjection || value === String(current ?? '')) return;
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             opts.sendSemanticNodeParams?.(instance.id, { [key]: value });
             if (instance.type === 'client-object') {
@@ -429,6 +450,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
+            if (isEditorProjection || value === String(current ?? '')) return;
             commitUserConfigValue(instance.id, key, value);
           },
         });
@@ -440,6 +462,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
+            if (isEditorProjection || value === String(current ?? '')) return;
             commitUserConfigValue(instance.id, key, value);
           },
         });
@@ -456,6 +479,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               label: `${p.label} (${p.path})`,
             })),
             change: (value) => {
+              if (isEditorProjection || value === String(current ?? '')) return;
               commitUserConfigValue(instance.id, key, value);
             },
           })
@@ -469,6 +493,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             accept: field.accept,
             buttonLabel: field.buttonLabel,
             change: (value) => {
+              if (isEditorProjection || value === current) return;
               commitUserConfigValue(instance.id, key, value);
             },
           })
@@ -488,6 +513,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           max: field.max,
           step: field.step,
           change: (value) => {
+            if (isEditorProjection) return;
             // Special: asset timeline controls are UI helpers which update input ports (so they are connectable/modulatable).
             const timelineNodeTypes = new Set([
               'load-audio-from-assets',
@@ -531,6 +557,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial,
           nodeId: instance.id,
           change: (value) => {
+            if (isEditorProjection) return;
             commitUserConfigValue(instance.id, key, value);
           },
         });
@@ -542,6 +569,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           placeholder: 'Type a note…',
           initial: typeof current === 'string' ? current : String(current ?? ''),
           change: (value) => {
+            const initialValue = typeof current === 'string' ? current : String(current ?? '');
+            if (isEditorProjection || value === initialValue) return;
             commitUserConfigValue(instance.id, key, value);
           },
         });
@@ -551,6 +580,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         const control = new ClassicPreset.InputControl('text', {
           initial: String(current ?? ''),
           change: (value) => {
+            if (isEditorProjection || value === String(current ?? '')) return;
             commitUserConfigValue(instance.id, key, value);
           },
         });
@@ -584,6 +614,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const getEngineNode = (nodeId: string): NodeInstance | undefined => nodeEngine.getNode?.(nodeId);
 
   const getPortDefForSocket = (socket: { nodeId: string; side: 'input' | 'output'; key: string }): NodePort | null => {
+    if (opts.isProjectionId?.(String(socket.nodeId ?? ''))) return null;
     return findPortDefForSocket(nodeRegistry, getEngineNode, socket);
   };
 
@@ -596,6 +627,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   };
 
   const inputAllowsMultiple = (nodeId: string, inputKey: string): boolean => {
+    if (opts.isProjectionId?.(String(nodeId ?? ''))) return false;
     return doesInputAllowMultiple(nodeRegistry, getEngineNode, nodeId, inputKey);
   };
 

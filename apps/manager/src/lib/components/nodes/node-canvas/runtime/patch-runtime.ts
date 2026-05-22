@@ -199,8 +199,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   };
 
   const resolvePatchDeploymentPlan = (): PatchDeploymentPlan | null => {
+    const compiledGraph =
+      typeof nodeEngine.exportCompiledGraphForPatchPlanning === 'function'
+        ? nodeEngine.exportCompiledGraphForPatchPlanning()
+        : undefined;
+
     return resolvePatchDeploymentPlanCore({
       graph: getGraphState(),
+      compiledGraph,
       disabledNodeIds: get(groupDisabledNodeIds),
       clientIdsInOrder,
       audienceClientIdsInOrder,

@@ -271,6 +271,10 @@ export function createPickerController(opts: PickerControllerOptions) {
 
     const initial = get(initialSocket);
     if (get(mode) === 'connect' && initial && item.matchPort) {
+      if (!opts.getPortDefForSocket(initial)) {
+        closePicker();
+        return;
+      }
       const connId = `conn-${crypto.randomUUID?.() ?? Date.now()}`;
       const engineConn: EngineConnection =
         initial.side === 'output'

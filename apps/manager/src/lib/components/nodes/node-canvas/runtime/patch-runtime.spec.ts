@@ -174,6 +174,100 @@ test('patch runtime targets node-executor commands at the managed client group',
   runtime.destroy();
 });
 
+test('patch runtime deploys a compiled custom-node patch from a collapsed editor graph', () => {
+  const { runtime, sent, setGraph } = createImmediateHarness();
+
+  const compiledGraph: GraphState = {
+    nodes: [
+      node('cn:custom-1:scene', 'scene-fct-track'),
+      node('cn:custom-1:out', 'scene-out'),
+      node('cn:custom-1:client', 'client-object'),
+    ],
+    connections: [
+      {
+        id: 'compiled-cmd',
+        sourceNodeId: 'cn:custom-1:out',
+        sourcePortId: 'cmd',
+        targetNodeId: 'cn:custom-1:client',
+        targetPortId: 'in',
+      },
+    ],
+  };
+
+  setGraph({
+    nodes: [node('custom-1', 'custom:def-1')],
+    connections: [],
+  });
+
+  runtime.destroy();
+
+  const sentFromCompiled: typeof sent = [];
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
+    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'in', type: 'scene' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
+    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+  ]);
+  const collapsedGraph: GraphState = {
+    nodes: [node('custom-1', 'custom:def-1')],
+    connections: [],
+  };
+  const payload = basePayload();
+  payload.graph = {
+    nodes: compiledGraph.nodes,
+    connections: compiledGraph.connections,
+  };
+  payload.meta.loopId = 'patch:scene-out:cn:custom-1:out:compiled';
+
+  const compiledRuntime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => collapsedGraph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: () => null,
+      exportCompiledGraphForPatchPlanning: () => compiledGraph,
+      exportGraphForPatchFromRootNodeIds: () => payload,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => collapsedGraph,
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: () => ({
+        route: 'server',
+        hasLocalSession: false,
+        hasLocalReady: false,
+        hasRemoteDisplay: false,
+      }),
+      sendPlugin: () => undefined,
+    },
+    getSDK: () => ({
+      sendPluginControl: (target, pluginName, command, nextPayload) => {
+        sentFromCompiled.push({ target, pluginName, command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  compiledRuntime.scheduleReconcile('compiled-custom-node', { immediate: true });
+
+  assert.deepEqual(sentFromCompiled.map((message) => message.command), ['deploy', 'start']);
+  assert.deepEqual(sentFromCompiled[0]?.target, { mode: 'group', groupId: 'client:client-1' });
+  compiledRuntime.destroy();
+});
+
 test('patch runtime does not redeploy when graph changes keep the same topology', () => {
   const { runtime, sent, setGraph } = createImmediateHarness();
 

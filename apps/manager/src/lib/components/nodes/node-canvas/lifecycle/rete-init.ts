@@ -42,6 +42,7 @@ export async function initReteCanvas(opts: {
   openConnectPicker: (...args: any[]) => unknown;
   setGraphState: (state: unknown) => void;
   setNodeCount: (count: number) => void;
+  getProjectionState?: () => unknown;
   getSelectedNodeId: () => string;
   syncSleepNodeSockets: (state: unknown) => void | Promise<void>;
   flushPendingCollapsedNodes: () => void | Promise<void>;
@@ -84,6 +85,7 @@ export async function initReteCanvas(opts: {
       addNode: opts.addNode,
       findPortRowSocketAt: opts.findPortRowSocketAt,
       openConnectPicker: opts.openConnectPicker,
+      isProjectionId: opts.isProjectionId,
     })
   );
 
@@ -107,6 +109,7 @@ export async function initReteCanvas(opts: {
     applyMidiMapRangeConstraints: opts.reteBuilder.applyMidiMapRangeConstraints,
     setGraphState: opts.setGraphState,
     setNodeCount: opts.setNodeCount,
+    getProjectionState: opts.getProjectionState,
     getSelectedNodeId: opts.getSelectedNodeId,
     onAfterSync: () => {
       const graphState = get(opts.graphStateStore);
@@ -141,6 +144,7 @@ export async function initReteCanvas(opts: {
     handleDroppedNodesAfterDrag: opts.groupController.handleDroppedNodesAfterDrag,
     requestFramesUpdate: opts.requestFramesUpdate,
     requestMinimapUpdate: opts.minimapController.requestUpdate,
+    isProjectionId: opts.isProjectionId,
   });
 
   registerGroupFrameTranslatePipe({

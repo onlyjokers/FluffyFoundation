@@ -107,6 +107,7 @@ export async function mountNodeCanvasResources(
     openConnectPicker: opts.openConnectPicker,
     setGraphState: opts.setGraphState,
     setNodeCount: opts.setNodeCount,
+    getProjectionState: opts.getProjectionState,
     getSelectedNodeId: opts.getSelectedNodeId,
     syncSleepNodeSockets: opts.syncSleepNodeSockets,
     flushPendingCollapsedNodes: opts.flushPendingCollapsedNodes,
@@ -119,6 +120,7 @@ export async function mountNodeCanvasResources(
     focusController: opts.focusController,
     syncClientNodesFromInputs: opts.syncClientNodesFromInputs,
     setSelectedNode: opts.setSelectedNode,
+    isProjectionId: opts.isProjectionId,
   });
 
   const graphUnsub = bindGraphStateSubscription({

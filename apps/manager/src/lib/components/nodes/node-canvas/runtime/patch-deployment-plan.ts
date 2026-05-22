@@ -18,6 +18,7 @@ export type PatchDeploymentPlan = {
 
 export type PatchDeploymentPlanOptions = {
   graph: GraphState;
+  compiledGraph?: GraphState;
   disabledNodeIds: Set<string>;
   clientIdsInOrder: () => string[];
   audienceClientIdsInOrder: () => string[];
@@ -51,6 +52,7 @@ export function resolvePatchDeploymentPlan(
 ): PatchDeploymentPlan | null {
   const {
     graph,
+    compiledGraph,
     disabledNodeIds,
     clientIdsInOrder,
     audienceClientIdsInOrder,
@@ -64,7 +66,9 @@ export function resolvePatchDeploymentPlan(
     setLastError,
   } = opts;
 
-  const roots = (graph.nodes ?? [])
+  const planningGraph = compiledGraph ?? graph;
+
+  const roots = (planningGraph.nodes ?? [])
     .filter((node) => PATCH_ROOT_TYPES.has(String(node.type ?? '')))
     .map((node) => ({ id: String(node.id ?? ''), type: String(node.type ?? '') }))
     .filter((n) => Boolean(n.id));
@@ -73,7 +77,7 @@ export function resolvePatchDeploymentPlan(
 
   const connectedAll = new Set(clientIdsInOrder());
   const connectedAudience = new Set(audienceClientIdsInOrder());
-  const connections: Connection[] = graph.connections ?? [];
+  const connections: Connection[] = planningGraph.connections ?? [];
 
   const activeRoots = enabledRoots.filter((root) =>
     connections.some((c) => String(c.sourceNodeId) === root.id && String(c.sourcePortId) === 'cmd')
@@ -105,10 +109,12 @@ export function resolvePatchDeploymentPlan(
   }
 
   const typeById = new Map<string, string>();
-  for (const n of graph.nodes ?? []) {
+  const planningNodeById = new Map<string, NodeInstance>();
+  for (const n of planningGraph.nodes ?? []) {
     const id = String(n?.id ?? '');
     if (!id) continue;
     typeById.set(id, String(n?.type ?? ''));
+    planningNodeById.set(id, n);
   }
 
   const getCommandOutputPorts = (type: string): string[] => {
@@ -124,7 +130,7 @@ export function resolvePatchDeploymentPlan(
   };
 
   const resolveClientId = (nodeId: string, outputPortId: string) => {
-    const runtimeNode = getRuntimeNode(nodeId);
+    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
     const runtimeOut = asRecord(runtimeNode?.outputValues?.[outputPortId]);
     const fromOut =
       typeof runtimeOut?.clientId === 'string' ? String(runtimeOut.clientId).trim() : '';
@@ -134,7 +140,7 @@ export function resolvePatchDeploymentPlan(
   };
 
   const resolveClientNodeTargets = (nodeId: string): string[] => {
-    const runtimeNode = getRuntimeNode(nodeId);
+    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
     if (!runtimeNode) return [];
     const computed = getLastComputedInputs(nodeId);
     const isPortConnected = (portId: string) =>
@@ -215,7 +221,7 @@ export function resolvePatchDeploymentPlan(
     const displayIds = displayClientIdsInOrder();
     if (displayIds.length === 0) return { explicit: false, ids: [] };
 
-    const runtimeNode = getRuntimeNode(nodeId);
+    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
     if (!runtimeNode) return { explicit: false, ids: displayIds };
 
     const config = asRecord(runtimeNode.config);

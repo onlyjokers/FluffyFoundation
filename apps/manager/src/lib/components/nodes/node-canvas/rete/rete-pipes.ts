@@ -30,6 +30,7 @@ type RetePipeOptions = {
   handleDroppedNodesAfterDrag: (nodeIds: string[]) => void;
   requestFramesUpdate: () => void;
   requestMinimapUpdate: () => void;
+  isProjectionId?: (id: string) => boolean;
 };
 
 export function bindRetePipes(opts: RetePipeOptions) {
@@ -47,12 +48,18 @@ export function bindRetePipes(opts: RetePipeOptions) {
     handleDroppedNodesAfterDrag,
     requestFramesUpdate,
     requestMinimapUpdate,
+    isProjectionId = () => false,
   } = opts;
 
   let multiDragLeaderId: string | null = null;
   let multiDragLeaderLastPos: { x: number; y: number } | null = null;
   let multiDragTranslateDepth = 0;
   const isMultiDragTranslate = () => multiDragTranslateDepth > 0;
+  const validId = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    return trimmed ? trimmed : '';
+  };
 
   editor.addPipe(async (ctx) => {
     if (!ctx || typeof ctx !== 'object') return ctx;
@@ -60,12 +67,21 @@ export function bindRetePipes(opts: RetePipeOptions) {
 
     if (ctx.type === 'connectioncreated') {
       const c = ctx.data as AnyRecord;
+      const id = validId(c.id);
+      const source = validId(c.source);
+      const sourceOutput = validId(c.sourceOutput);
+      const target = validId(c.target);
+      const targetInput = validId(c.targetInput);
+      if (!id || !source || !sourceOutput || !target || !targetInput) return ctx;
+      if (isProjectionId(source) || isProjectionId(target) || isProjectionId(id)) {
+        return ctx;
+      }
       const engineConn: EngineConnection = {
-        id: String(c.id),
-        sourceNodeId: String(c.source),
-        sourcePortId: String(c.sourceOutput),
-        targetNodeId: String(c.target),
-        targetPortId: String(c.targetInput),
+        id,
+        sourceNodeId: source,
+        sourcePortId: sourceOutput,
+        targetNodeId: target,
+        targetPortId: targetInput,
       };
       const accepted = canvasCommands.connect(engineConn);
       if (accepted) {
@@ -91,9 +107,14 @@ export function bindRetePipes(opts: RetePipeOptions) {
 
     if (ctx.type === 'connectionremoved') {
       const raw = ctx.data as AnyRecord;
-      const id = String(raw.id);
-      const targetId = String(raw.target);
-      const portId = String(raw.targetInput);
+      const id = validId(raw.id);
+      const targetId = validId(raw.target);
+      const portId = validId(raw.targetInput);
+      if (!id) return ctx;
+      if (isProjectionId(id) || isProjectionId(targetId)) {
+        connectionMap.delete(id);
+        return ctx;
+      }
       connectionMap.delete(id);
       canvasCommands.disconnect(id);
       const targetNode = nodeMap.get(targetId);
@@ -112,8 +133,10 @@ export function bindRetePipes(opts: RetePipeOptions) {
     }
 
     if (ctx.type === 'noderemoved') {
-      const id = String((ctx.data as AnyRecord).id);
+      const id = validId((ctx.data as AnyRecord).id);
+      if (!id) return ctx;
       nodeMap.delete(id);
+      if (isProjectionId(id)) return ctx;
       nodeEngine.removeNode(id);
     }
 
@@ -134,6 +157,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
       if (isProgrammaticTranslate() || isMultiDragTranslate()) return ctx;
 
       const id = String(ctx.data?.id ?? '');
+      if (isProjectionId(id)) return ctx;
       const selectedIds = get(groupSelectionNodeIds);
       if (id && selectedIds.size > 1 && selectedIds.has(id)) {
         multiDragLeaderId = id;
@@ -148,6 +172,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     if (ctx?.type === 'nodedragged') {
       if (syncing) return ctx;
       const id = String(ctx.data?.id ?? '');
+      if (isProjectionId(id)) return ctx;
       const selectedIds = get(groupSelectionNodeIds);
       const movedNodeIds =
         multiDragLeaderId && id === multiDragLeaderId && selectedIds.size > 1 && selectedIds.has(id)
@@ -183,6 +208,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
       if (syncing) return ctx;
       const { id, position, previous } = ctx.data ?? {};
       if (id && position) {
+        if (isProjectionId(String(id))) return ctx;
         // Ignore no-op translations (including NodeView's initial translate(0,0) on construction).
         if (
           previous &&

@@ -24,6 +24,7 @@ type CustomNodeCompositionOptions = {
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;
   forcedHiddenNodeIds: Set<string>;
   setExpandedCustomGroupIds: (next: Set<string>) => void;
+  syncEditorProjection?: () => void;
   customNodeType: (definitionId: string) => string;
   addCustomNodeDefinition: (def: CustomNodeDefinition) => void;
   upsertCustomNodeDefinitionCommand?: (definition: CustomNodeDefinition) => void;
@@ -85,6 +86,7 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
     getCustomNodeDefinition: opts.getCustomNodeDefinition,
     upsertCustomNodeDefinition: opts.upsertCustomNodeDefinition,
     getCustomNodeActions: () => customNodeActions,
+    syncEditorProjection: opts.syncEditorProjection,
   });
 
   const refreshExpandedCustomGroupIds = () => {
@@ -119,6 +121,7 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
   const customNodeExpansion = createCustomNodeExpansion({
     expandedCustomByGroupId: opts.expandedCustomByGroupId,
     onExpandedGroupIdsChange: opts.setExpandedCustomGroupIds,
+    syncEditorProjection: opts.syncEditorProjection,
     forcedHiddenNodeIds: opts.forcedHiddenNodeIds,
     nodeEngine: opts.nodeEngine,
     groupController: opts.groupController,
