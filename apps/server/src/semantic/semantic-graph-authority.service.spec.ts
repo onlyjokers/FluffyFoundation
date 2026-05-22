@@ -242,6 +242,82 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
   assert.equal(restartedSnapshot.agentCapabilities?.nodes?.[0]?.nodeType, 'custom:triplet-pulse');
 });
 
+test('SemanticGraphAuthorityService compiles Custom Nodes on the server authority lane', () => {
+  const { service } = createService();
+  const customDefinition = {
+    definitionId: 'server-custom',
+    name: 'Server Custom',
+    template: {
+      nodes: [
+        {
+          id: 'inner-number',
+          type: 'number',
+          position: { x: 0, y: 0 },
+          config: { value: 5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    ports: [
+      {
+        portKey: 'value',
+        side: 'output',
+        label: 'Value',
+        type: 'number',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'inner-number', portId: 'value' },
+      },
+    ],
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'definition.custom.upsert',
+        definition: customDefinition,
+      } as never,
+    }).ok,
+    true
+  );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.add',
+        node: {
+          id: 'custom-1',
+          type: 'custom:server-custom',
+          position: { x: 0, y: 0 },
+          config: {
+            customNode: {
+              definitionId: 'server-custom',
+              groupId: 'group-1',
+              role: 'mother',
+              manualGate: true,
+              internal: customDefinition.template,
+            },
+          },
+          inputValues: {},
+          outputValues: {},
+        },
+      } as never,
+    }).ok,
+    true
+  );
+
+  const compiled = service.getCompiledGraphForPatchPlanning();
+
+  assert.deepEqual(
+    compiled.nodes.map((node) => [node.id, node.type]),
+    [['cn:custom-1:inner-number', 'number']]
+  );
+  assert.deepEqual(compiled.connections, []);
+});
+
 test('SemanticGraphAuthorityService defaults persistence to apps/server/data/semantic-graph.json', () => {
   assert.equal(
     normalize(SemanticGraphAuthorityService.defaultStoragePath).endsWith(

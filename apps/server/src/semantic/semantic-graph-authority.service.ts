@@ -10,6 +10,7 @@ import {
   cloneAgentCapabilities,
   cloneCustomDefinitions,
   createCustomNodeDefinitionNode,
+  compileGraphForPatch,
   createSemanticCommandBus,
   cloneGroups,
   cloneGraph,
@@ -79,6 +80,13 @@ export class SemanticGraphAuthorityService {
 
   getHistory() {
     return this.createBus().getHistory();
+  }
+
+  getCompiledGraphForPatchPlanning(): GraphState {
+    return compileGraphForPatch(
+      cloneGraph(this.persisted.graph),
+      cloneCustomDefinitions(this.persisted.customDefinitions)
+    );
   }
 
   dispatch(input: {
