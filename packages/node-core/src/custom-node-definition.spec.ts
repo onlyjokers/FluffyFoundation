@@ -64,10 +64,16 @@ test('customNodeType creates stable custom node type ids', () => {
   assert.equal(customNodeType('pulse'), 'custom:pulse');
 });
 
-test('createCustomNodeDefinitionNode infers public port bounds from internal node definitions', () => {
+test('createCustomNodeDefinitionNode exposes Active gate plus inferred public port bounds', () => {
   const node = createCustomNodeDefinitionNode(customDefinition, [numberNode]);
 
   assert.deepEqual(node.inputs, [
+    {
+      id: 'gate',
+      label: 'Active',
+      type: 'boolean',
+      defaultValue: true,
+    },
     {
       id: 'amount',
       label: 'Amount',

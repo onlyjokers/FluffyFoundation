@@ -124,6 +124,8 @@ const materializeInternalNodeId = (customNodeId: string, internalNodeId: string)
   return `cn:${String(customNodeId ?? '')}:${String(internalNodeId ?? '')}`;
 };
 
+type InputBinding = { nodeId: string; portId: string; value: unknown };
+
 const isCustomNodeInstance = (node: NodeInstance): boolean => {
   if (!node) return false;
   return Boolean(readCustomNodeState(asRecord(node.config)));
@@ -137,6 +139,52 @@ function definitionById(definitions: CustomNodeDefinition[]): Map<string, Custom
   }
   return map;
 }
+
+const publicInputBindings = (
+  node: NodeInstance,
+  definition: CustomNodeDefinition,
+  internalGraph: GraphState
+): InputBinding[] => {
+  const inputValues = asRecord(node.inputValues);
+  const internalNodesById = new Map(
+    (internalGraph.nodes ?? []).map((inner) => [String(inner?.id ?? ''), inner])
+  );
+  const connections = Array.isArray(internalGraph.connections) ? internalGraph.connections : [];
+  const bindings: InputBinding[] = [];
+
+  const appendBinding = (nodeId: string, portId: string, value: unknown) => {
+    if (!nodeId || !portId) return;
+    bindings.push({ nodeId, portId, value });
+  };
+
+  for (const port of definition.ports ?? []) {
+    if (String(port.side ?? '') !== 'input') continue;
+    const portKey = getString(port.portKey, '');
+    if (!portKey || !Object.prototype.hasOwnProperty.call(inputValues, portKey)) continue;
+    const bindingNodeId = getString(port.binding?.nodeId, '');
+    const bindingPortId = getString(port.binding?.portId, '');
+    if (!bindingNodeId || !bindingPortId) continue;
+    const value = inputValues[portKey];
+    const bindingNode = internalNodesById.get(bindingNodeId) ?? null;
+
+    if (String(bindingNode?.type ?? '') === 'group-proxy' && bindingPortId === 'in') {
+      for (const connection of connections) {
+        if (String(connection.sourceNodeId ?? '') !== bindingNodeId) continue;
+        if (String(connection.sourcePortId ?? '') !== 'out') continue;
+        appendBinding(
+          getString(connection.targetNodeId, ''),
+          getString(connection.targetPortId, ''),
+          value
+        );
+      }
+      continue;
+    }
+
+    appendBinding(bindingNodeId, bindingPortId, value);
+  }
+
+  return bindings;
+};
 
 export function expandCustomNodesForCompile(
   graph: GraphState,
@@ -186,7 +234,10 @@ export function expandCustomNodesForCompile(
           `[custom-node-compiler] missing definition for ${String(state.definitionId ?? '')}`
         );
       }
-      if (!state.manualGate || node.inputValues?.gate === false) {
+      const gateValue = Object.prototype.hasOwnProperty.call(node.inputValues ?? {}, 'gate')
+        ? node.inputValues?.gate
+        : state.manualGate;
+      if (gateValue === false) {
         continue;
       }
 
@@ -195,6 +246,12 @@ export function expandCustomNodesForCompile(
       const internalConnections = Array.isArray(internalGraph?.connections)
         ? internalGraph.connections
         : [];
+      const inputValuesByInternalNode = new Map<string, Record<string, unknown>>();
+      for (const binding of publicInputBindings(node, def, internalGraph)) {
+        const patch = inputValuesByInternalNode.get(binding.nodeId) ?? {};
+        patch[binding.portId] = binding.value;
+        inputValuesByInternalNode.set(binding.nodeId, patch);
+      }
 
       for (const inner of internalNodes) {
         const record = asRecord(inner);
@@ -202,6 +259,7 @@ export function expandCustomNodesForCompile(
         const type = getString(record.type, '');
         if (!innerId || !type) continue;
         const position = asRecord(record.position);
+        const inputValuePatch = inputValuesByInternalNode.get(innerId) ?? {};
         nextNodes.push({
           ...record,
           id: materializeInternalNodeId(instanceId, innerId),
@@ -211,7 +269,7 @@ export function expandCustomNodesForCompile(
             y: Number(position.y ?? 0),
           },
           config: { ...asRecord(record.config) },
-          inputValues: { ...asRecord(record.inputValues) },
+          inputValues: { ...asRecord(record.inputValues), ...inputValuePatch },
           outputValues: {},
         } as NodeInstance);
       }

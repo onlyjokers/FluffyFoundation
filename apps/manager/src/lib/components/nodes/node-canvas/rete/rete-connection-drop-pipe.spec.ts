@@ -5,11 +5,35 @@ import { writable } from 'svelte/store';
 
 import { createReteConnectionDropPipe } from './rete-connection-drop-pipe';
 
-function createHarness() {
+type HarnessOptions = {
+  findPortRowSocketAt?: (
+    clientX: number,
+    clientY: number,
+    desiredSide: 'input' | 'output'
+  ) => { nodeId: string; side: 'input' | 'output'; key: string } | null;
+  translateProjectionConnection?: (connection: {
+    id: string;
+    sourceNodeId: string;
+    sourcePortId: string;
+    targetNodeId: string;
+    targetPortId: string;
+  }) =>
+    | {
+        id: string;
+        sourceNodeId: string;
+        sourcePortId: string;
+        targetNodeId: string;
+        targetPortId: string;
+      }
+    | null;
+};
+
+function createHarness(options: HarnessOptions = {}) {
   const connected: unknown[] = [];
   const openedSockets: unknown[] = [];
   const draggingSockets: unknown[] = [];
   const edgeHighlights: unknown[] = [];
+  const projectionConnectionTranslations: unknown[] = [];
 
   const pipe = createReteConnectionDropPipe({
     getLastPointerClient: () => ({ x: 100, y: 120 }),
@@ -44,12 +68,16 @@ function createHarness() {
     },
     computeGraphPosition: () => ({ x: 0, y: 0 }),
     addNode: () => undefined,
-    findPortRowSocketAt: () => null,
+    findPortRowSocketAt: options.findPortRowSocketAt ?? (() => null),
     openConnectPicker: (socket) => openedSockets.push(socket),
     isProjectionId: (id) => String(id).startsWith('view:'),
+    translateProjectionConnection: (connection) => {
+      projectionConnectionTranslations.push(connection);
+      return options.translateProjectionConnection?.(connection) ?? null;
+    },
   });
 
-  return { pipe, connected, openedSockets, draggingSockets, edgeHighlights };
+  return { pipe, connected, openedSockets, draggingSockets, edgeHighlights, projectionConnectionTranslations };
 }
 
 test('connectionpick from a projection socket is view-only', () => {
@@ -80,4 +108,55 @@ test('connectiondrop from a projection socket does not create semantic connectio
 
   assert.deepEqual(connected, []);
   assert.deepEqual(openedSockets, []);
+});
+
+test('connectiondrop to a projection socket translates to custom node public port', () => {
+  const { pipe, connected, projectionConnectionTranslations } = createHarness({
+    findPortRowSocketAt: () => ({
+      nodeId: 'view:custom:custom-1:input-proxy',
+      side: 'input',
+      key: 'in',
+    }),
+    translateProjectionConnection: () => ({
+      id: 'canonical-c1',
+      sourceNodeId: 'number-1',
+      sourcePortId: 'value',
+      targetNodeId: 'custom-1',
+      targetPortId: 'amount',
+    }),
+  });
+
+  pipe({
+    type: 'connectiondrop',
+    data: {
+      created: false,
+      initial: { nodeId: 'number-1', side: 'output', key: 'value' },
+      socket: {},
+    },
+  });
+
+  assert.equal(projectionConnectionTranslations.length, 1);
+  assert.deepEqual(
+    {
+      sourceNodeId: (projectionConnectionTranslations[0] as { sourceNodeId: string }).sourceNodeId,
+      sourcePortId: (projectionConnectionTranslations[0] as { sourcePortId: string }).sourcePortId,
+      targetNodeId: (projectionConnectionTranslations[0] as { targetNodeId: string }).targetNodeId,
+      targetPortId: (projectionConnectionTranslations[0] as { targetPortId: string }).targetPortId,
+    },
+    {
+      sourceNodeId: 'number-1',
+      sourcePortId: 'value',
+      targetNodeId: 'view:custom:custom-1:input-proxy',
+      targetPortId: 'in',
+    }
+  );
+  assert.deepEqual(connected, [
+    {
+      id: 'canonical-c1',
+      sourceNodeId: 'number-1',
+      sourcePortId: 'value',
+      targetNodeId: 'custom-1',
+      targetPortId: 'amount',
+    },
+  ]);
 });

@@ -18,6 +18,7 @@ type NodeEngine = {
 
 type CustomNodeExpansionOptions = {
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;
+  forcedHiddenNodeIds: Set<string>;
   onExpandedGroupIdsChange?: (next: Set<string>) => void;
   syncEditorProjection?: () => void;
   nodeEngine: NodeEngine;
@@ -57,6 +58,7 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
     if (!def) return;
 
     opts.expandedCustomByGroupId.set(groupId, { groupId, nodeId: id });
+    opts.forcedHiddenNodeIds.add(id);
     refreshExpandedCustomGroupIds();
 
     opts.groupController.scheduleHighlight();
@@ -74,6 +76,7 @@ export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
     if (!motherNodeId) return;
 
     opts.expandedCustomByGroupId.delete(rootGroupId);
+    opts.forcedHiddenNodeIds.delete(motherNodeId);
     refreshExpandedCustomGroupIds();
 
     opts.groupController.scheduleHighlight();

@@ -5,7 +5,9 @@ import { writable } from 'svelte/store';
 
 import { bindRetePipes } from './rete-pipes';
 
-function createHarness() {
+function createHarness(
+  options: { translateProjectionConnection?: (connection: unknown) => unknown } = {}
+) {
   const editorPipes: Array<(ctx: Record<string, unknown>) => Promise<Record<string, unknown>>> = [];
   const areaPipes: Array<(ctx: Record<string, unknown>) => Promise<Record<string, unknown>>> = [];
   const editor = {
@@ -26,6 +28,8 @@ function createHarness() {
   const disconnected: string[] = [];
   const removedNodes: string[] = [];
   const movedNodes: Array<{ id: string; pos: { x: number; y: number } }> = [];
+  const projectionConnectionTranslations: unknown[] = [];
+  const connectionMap = new Map();
 
   bindRetePipes({
     editor: editor as never,
@@ -49,7 +53,7 @@ function createHarness() {
       },
     },
     nodeMap: new Map(),
-    connectionMap: new Map(),
+    connectionMap,
     isSyncing: () => false,
     setSelectedNode: () => undefined,
     groupSelectionNodeIds: writable(new Set<string>()),
@@ -58,13 +62,26 @@ function createHarness() {
     requestFramesUpdate: () => undefined,
     requestMinimapUpdate: () => undefined,
     isProjectionId: (id) => String(id).startsWith('view:'),
+    translateProjectionConnection: (connection) => {
+      projectionConnectionTranslations.push(connection);
+      return options.translateProjectionConnection?.(connection) ?? null;
+    },
   });
 
-  return { editorPipes, areaPipes, connections, disconnected, removedNodes, movedNodes };
+  return {
+    editorPipes,
+    areaPipes,
+    connections,
+    disconnected,
+    removedNodes,
+    movedNodes,
+    projectionConnectionTranslations,
+    connectionMap,
+  };
 }
 
 test('bindRetePipes routes connectioncreated through semantic canvas connect command', async () => {
-  const { editorPipes, connections } = createHarness();
+  const { editorPipes, connections, connectionMap } = createHarness();
 
   await editorPipes[0]?.({
     type: 'connectioncreated',
@@ -86,6 +103,7 @@ test('bindRetePipes routes connectioncreated through semantic canvas connect com
       targetPortId: 'in',
     },
   ]);
+  assert.equal(connectionMap.has('c1'), true);
 });
 
 test('bindRetePipes routes connectionremoved through semantic canvas disconnect command', async () => {
@@ -104,7 +122,8 @@ test('bindRetePipes routes connectionremoved through semantic canvas disconnect 
 });
 
 test('bindRetePipes ignores editor-only projection mutations', async () => {
-  const { editorPipes, areaPipes, connections, disconnected, removedNodes, movedNodes } = createHarness();
+  const { editorPipes, areaPipes, connections, disconnected, removedNodes, movedNodes } =
+    createHarness();
 
   await editorPipes[0]?.({
     type: 'connectioncreated',
@@ -137,6 +156,50 @@ test('bindRetePipes ignores editor-only projection mutations', async () => {
   assert.deepEqual(disconnected, []);
   assert.deepEqual(removedNodes, []);
   assert.deepEqual(movedNodes, []);
+});
+
+test('bindRetePipes translates external projection connections to custom node public ports', async () => {
+  const { editorPipes, connections, projectionConnectionTranslations, connectionMap } =
+    createHarness({
+      translateProjectionConnection: () => ({
+        id: 'canonical-c1',
+        sourceNodeId: 'external-source',
+        sourcePortId: 'value',
+        targetNodeId: 'custom-1',
+        targetPortId: 'amount',
+      }),
+    });
+
+  await editorPipes[0]?.({
+    type: 'connectioncreated',
+    data: {
+      id: 'view:transient',
+      source: 'external-source',
+      sourceOutput: 'value',
+      target: 'view:custom:custom-1:input-proxy',
+      targetInput: 'in',
+    },
+  });
+
+  assert.deepEqual(projectionConnectionTranslations, [
+    {
+      id: 'view:transient',
+      sourceNodeId: 'external-source',
+      sourcePortId: 'value',
+      targetNodeId: 'view:custom:custom-1:input-proxy',
+      targetPortId: 'in',
+    },
+  ]);
+  assert.deepEqual(connections, [
+    {
+      id: 'canonical-c1',
+      sourceNodeId: 'external-source',
+      sourcePortId: 'value',
+      targetNodeId: 'custom-1',
+      targetPortId: 'amount',
+    },
+  ]);
+  assert.equal(connectionMap.has('canonical-c1'), false);
 });
 
 test('bindRetePipes ignores malformed editor removal events instead of issuing semantic commands', async () => {

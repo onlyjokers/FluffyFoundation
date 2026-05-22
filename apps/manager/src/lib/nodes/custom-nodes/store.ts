@@ -113,7 +113,7 @@ export const customNodeDefinitions: Writable<CustomNodeDefinition[]> = writable(
 export { CUSTOM_NODE_TYPE_PREFIX, customNodeType };
 
 function gatePort(): NodePort {
-  return { id: 'gate', label: 'Gate', type: 'boolean', defaultValue: true };
+  return { id: 'gate', label: 'Active', type: 'boolean', defaultValue: true };
 }
 
 function portsFor(definition: CustomNodeDefinition): { inputs: NodePort[]; outputs: NodePort[] } {

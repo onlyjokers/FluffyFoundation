@@ -91,6 +91,7 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
 
   const customNodeExpansion = createCustomNodeExpansion({
     expandedCustomByGroupId: opts.expandedCustomByGroupId,
+    forcedHiddenNodeIds: opts.forcedHiddenNodeIds,
     onExpandedGroupIdsChange: opts.setExpandedCustomGroupIds,
     syncEditorProjection: opts.syncEditorProjection,
     nodeEngine: opts.nodeEngine,

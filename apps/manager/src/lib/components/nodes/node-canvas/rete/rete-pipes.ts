@@ -31,6 +31,7 @@ type RetePipeOptions = {
   requestFramesUpdate: () => void;
   requestMinimapUpdate: () => void;
   isProjectionId?: (id: string) => boolean;
+  translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
 };
 
 export function bindRetePipes(opts: RetePipeOptions) {
@@ -49,6 +50,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     requestFramesUpdate,
     requestMinimapUpdate,
     isProjectionId = () => false,
+    translateProjectionConnection = () => null,
   } = opts;
 
   let multiDragLeaderId: string | null = null;
@@ -73,9 +75,6 @@ export function bindRetePipes(opts: RetePipeOptions) {
       const target = validId(c.target);
       const targetInput = validId(c.targetInput);
       if (!id || !source || !sourceOutput || !target || !targetInput) return ctx;
-      if (isProjectionId(source) || isProjectionId(target) || isProjectionId(id)) {
-        return ctx;
-      }
       const engineConn: EngineConnection = {
         id,
         sourceNodeId: source,
@@ -83,16 +82,26 @@ export function bindRetePipes(opts: RetePipeOptions) {
         targetNodeId: target,
         targetPortId: targetInput,
       };
-      const accepted = canvasCommands.connect(engineConn);
+      const isProjectionConnection =
+        isProjectionId(source) || isProjectionId(target) || isProjectionId(id);
+      const canonicalConn = isProjectionConnection
+        ? translateProjectionConnection(engineConn)
+        : engineConn;
+      if (!canonicalConn) return ctx;
+      const accepted = canvasCommands.connect(canonicalConn);
       if (accepted) {
-        connectionMap.set(engineConn.id, c);
-        const targetNode = nodeMap.get(engineConn.targetNodeId);
+        if (!isProjectionConnection) {
+          connectionMap.set(canonicalConn.id, c);
+        }
+        const targetNode = nodeMap.get(canonicalConn.targetNodeId);
         const targetRecord = (targetNode ?? {}) as AnyRecord;
-        const input = (targetRecord.inputs as Record<string, AnyRecord> | undefined)?.[engineConn.targetPortId];
+        const input = (targetRecord.inputs as Record<string, AnyRecord> | undefined)?.[
+          canonicalConn.targetPortId
+        ];
         const control = input?.control as ControlLike | undefined;
         if (control && Boolean(control.readonly) !== true) {
           control.readonly = true;
-          await areaPlugin?.update?.('node', engineConn.targetNodeId);
+          await areaPlugin?.update?.('node', canonicalConn.targetNodeId);
         }
       } else if (editor) {
         try {
@@ -123,7 +132,9 @@ export function bindRetePipes(opts: RetePipeOptions) {
       const control = input?.control as ControlLike | undefined;
       if (control) {
         const stillConnected = Array.from(connectionMap.values()).some(
-          (conn) => String((conn as AnyRecord).target) === targetId && String((conn as AnyRecord).targetInput) === portId
+          (conn) =>
+            String((conn as AnyRecord).target) === targetId &&
+            String((conn as AnyRecord).targetInput) === portId
         );
         if (Boolean(control.readonly) !== stillConnected) {
           control.readonly = stillConnected;

@@ -62,6 +62,7 @@ type ReteConnectionDropPipeOptions = {
   ) => SocketData | null;
   openConnectPicker: (socket: SocketData) => void;
   isProjectionId?: (id: string) => boolean;
+  translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
 };
 
 const validPortTypes = new Set([
@@ -235,9 +236,6 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
     const desiredSide = initialSocket.side === 'output' ? 'input' : 'output';
     const snapped = options.findPortRowSocketAt(pointer.x, pointer.y, desiredSide);
     if (snapped) {
-      if (isProjectionId(snapped.nodeId)) {
-        return ctx;
-      }
       const engineConn: EngineConnection =
         initialSocket.side === 'output'
           ? {
@@ -254,7 +252,13 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
               targetNodeId: initialSocket.nodeId,
               targetPortId: initialSocket.key,
             };
-      options.canvasCommands.connect(engineConn);
+      const connectionToCreate = isProjectionId(snapped.nodeId)
+        ? (options.translateProjectionConnection?.(engineConn) ?? null)
+        : engineConn;
+      if (!connectionToCreate) {
+        return ctx;
+      }
+      options.canvasCommands.connect(connectionToCreate);
       options.groupPortNodesController.scheduleNormalizeProxies();
     } else {
       options.openConnectPicker(initialSocket);

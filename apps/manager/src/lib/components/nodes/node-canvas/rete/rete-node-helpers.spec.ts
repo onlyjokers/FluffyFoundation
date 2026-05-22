@@ -4,6 +4,7 @@ import {
   buildGroupFrameProxyPorts,
   formatPortValue,
   inferBypassPorts,
+  resolveRenderedNodeType,
   sortByIndex,
   type PortDefinitionLike,
 } from './rete-node-helpers';
@@ -19,6 +20,11 @@ test('sortByIndex keeps existing index ordering semantics', () => {
     sortByIndex(entries).map(([key]) => key),
     ['missing', 'early', 'late']
   );
+});
+
+test('resolveRenderedNodeType falls back to projected view node type when no canonical instance exists', () => {
+  assert.equal(resolveRenderedNodeType('', 'group-proxy'), 'group-proxy');
+  assert.equal(resolveRenderedNodeType('number', 'group-proxy'), 'number');
 });
 
 test('buildGroupFrameProxyPorts derives labels and frame-relative ordering', () => {

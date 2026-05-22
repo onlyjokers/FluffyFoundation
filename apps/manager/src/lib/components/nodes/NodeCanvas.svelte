@@ -69,14 +69,16 @@
   import { createReteBuilder } from './node-canvas/rete/rete-builder';
   import { createReteSockets } from './node-canvas/rete/rete-sockets';
   import { readAreaTransform } from './node-canvas/utils/view-utils';
-  import {
-    type ExpandedCustomNodeFrame,
-  } from './node-canvas/custom-nodes/custom-node-expansion';
+  import { type ExpandedCustomNodeFrame } from './node-canvas/custom-nodes/custom-node-expansion';
   import {
     buildCustomNodeProjectionGraph,
     isCustomNodeProjectionId,
     mergeProjectionGraphs,
+    parseCustomNodeProjectionNodeId,
+    resolveCustomNodeProjectionPublicConnection,
+    writeCustomNodeProjectionValue,
   } from './node-canvas/custom-nodes/custom-node-projection';
+  import { buildCustomNodeProjectionFrame } from './node-canvas/custom-nodes/custom-node-projection-frame';
   import { createCustomNodeComposition } from './node-canvas/custom-nodes/custom-node-composition';
   import { createNodeAdder } from './node-canvas/custom-nodes/node-addition';
   import { createDeleteNodeWithRules } from './node-canvas/custom-nodes/custom-node-delete';
@@ -86,10 +88,7 @@
     deriveGateModeGroupIds,
     deriveGroupGateNodeIdByGroupId,
   } from './node-canvas/groups/group-gate-state';
-  import {
-    buildGroupPortIndex,
-    groupIdFromNode,
-  } from './node-canvas/utils/group-port-utils';
+  import { buildGroupPortIndex, groupIdFromNode } from './node-canvas/utils/group-port-utils';
   import { createMinimapProjection } from './node-canvas/utils/minimap-projection';
   import { initNodeCanvasRuntime } from './node-canvas/runtime/runtime-init';
   import {
@@ -260,8 +259,10 @@
 
   const { minimap, minimapUi } = minimapController;
 
+  let getNodeActivityGraphState = () => graphState;
+
   const midiController = createMidiHighlightController({
-    getGraphState: () => graphState,
+    getGraphState: () => getNodeActivityGraphState(),
     getGroupDisabledNodeIds: () => get(groupController.groupDisabledNodeIds),
     getAdapter: () => viewAdapter,
     isSyncingGraph: isServerSemanticSyncing,
@@ -333,13 +334,24 @@
     sendSemanticNodeParams: (nodeId, params) => canvasCommands.setNodeParams(nodeId, params),
     sendSemanticNodeInputs: (nodeId, inputValues) =>
       canvasCommands.setNodeInputs(nodeId, inputValues),
-    onNodeActivity: (nodeId) => midiController.showNodeActivity(nodeId),
+    onNodeActivity: (nodeId, portId) => midiController.showNodeActivity(nodeId, portId),
     getAudienceClientCount: () => get(audienceClients).length,
     onClientNodePick: (nodeId, clientId) => void applyClientNodeSelection(nodeId, { clientId }),
     onClientNodeSelectInput: (nodeId, portId, value) =>
       void applyClientNodeSelection(nodeId, { [portId]: value }),
     onClientNodeRandom: (nodeId, value) => void applyClientNodeSelection(nodeId, { random: value }),
     isProjectionId: isCustomNodeProjectionId,
+    commitProjectionValue: ({ nodeId, kind, key, value }) =>
+      writeCustomNodeProjectionValue({
+        projectionNodeId: nodeId,
+        kind,
+        key,
+        value,
+        getOwnerNode: (ownerId) => nodeEngine.getNode(ownerId),
+        updateOwnerConfig: (ownerId, config) => nodeEngine.updateNodeConfig(ownerId, config),
+        sendSemanticNodeParams: (ownerId, params) => canvasCommands.setNodeParams(ownerId, params),
+        sendNodeOverride,
+      }),
   });
 
   let pickerControllerRef: ReturnType<typeof createPickerController> | null = null;
@@ -455,46 +467,53 @@
       const state = node ? readCustomNodeState(node.config ?? {}) : null;
       const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
       if (!node || !state || !definition) return [];
-      return [buildCustomNodeProjectionGraph({ customNode: node, state, definition })];
+      return [
+        buildCustomNodeProjectionGraph({
+          customNode: node,
+          state,
+          definition,
+          externalConnections: get(graphStateStore).connections ?? [],
+        }),
+      ];
     });
     return mergeProjectionGraphs({ nodes: [], connections: [] }, projections);
   };
+  getNodeActivityGraphState = () => mergeProjectionGraphs(graphState, [getCustomNodeProjectionState()]);
   const getCustomNodeProjectionFrames = () => {
     const projection = getCustomNodeProjectionState();
-    const nodes = Array.isArray(projection.nodes) ? projection.nodes : [];
     return Array.from(expandedCustomByGroupId.values()).flatMap((expanded) => {
       const ownerId = String(expanded.nodeId ?? '');
       const owner = nodeEngine.getNode(ownerId);
       const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
       const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
-      const ownedNodes = nodes.filter(
-        (node) => String(node.config?.projectionOwnerNodeId ?? '') === ownerId
-      );
-      if (!owner || !state || !definition || ownedNodes.length === 0) return [];
-      const xs = ownedNodes.map((node) => Number(node.position?.x ?? 0));
-      const ys = ownedNodes.map((node) => Number(node.position?.y ?? 0));
-      const left = Math.min(...xs) - 36;
-      const top = Math.min(...ys) - 64;
-      const right = Math.max(...xs) + 220;
-      const bottom = Math.max(...ys) + 160;
-      return [
-        {
-          group: {
-            id: String(expanded.groupId),
-            parentId: null,
-            name: String(definition.name ?? 'Custom Node'),
-            nodeIds: ownedNodes.map((node) => String(node.id)),
-            disabled: !state.manualGate,
-            minimized: false,
-          },
-          left,
-          top,
-          width: Math.max(240, right - left),
-          height: Math.max(180, bottom - top),
-          effectiveDisabled: !state.manualGate,
-          depth: 0,
-        },
-      ];
+      if (!owner || !state || !definition) return [];
+      const frame = buildCustomNodeProjectionFrame({
+        ownerId,
+        groupId: String(expanded.groupId),
+        name: String(definition.name ?? 'Custom Node'),
+        disabled: !state.manualGate,
+        projection,
+        getNodeBounds: (nodeId) => viewAdapter.getNodeBounds(String(nodeId)),
+      });
+      return frame ? [frame] : [];
+    });
+  };
+
+  const translateCustomNodeProjectionConnection = (
+    connection: EngineConnection
+  ): EngineConnection | null => {
+    const source = parseCustomNodeProjectionNodeId(String(connection.sourceNodeId ?? ''));
+    const target = parseCustomNodeProjectionNodeId(String(connection.targetNodeId ?? ''));
+    const ownerId = source?.customNodeId ?? target?.customNodeId ?? '';
+    if (!ownerId) return null;
+    const owner = nodeEngine.getNode(ownerId);
+    const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
+    const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
+    if (!owner || !definition) return null;
+    return resolveCustomNodeProjectionPublicConnection({
+      connection,
+      customNode: owner,
+      definition,
     });
   };
 
@@ -643,20 +662,19 @@
     setSelectedNode,
   });
 
-  const { handleToggleEngine, handleClear, viewportCenterGraphPos } =
-    createCanvasActions({
-      nodeEngine,
-      replaceGraphCommand: (graph) => canvasCommands.replaceGraph(graph),
-      isRunningStore,
-      getLoopController: () => loopController,
-      groupController,
-      getContainer: () => container,
-      getNodeCount: () => nodeCount,
-      computeGraphPosition,
-      schedulePatchReconcile,
-      stopAllDeployedPatches,
-      confirm,
-    });
+  const { handleToggleEngine, handleClear, viewportCenterGraphPos } = createCanvasActions({
+    nodeEngine,
+    replaceGraphCommand: (graph) => canvasCommands.replaceGraph(graph),
+    isRunningStore,
+    getLoopController: () => loopController,
+    groupController,
+    getContainer: () => container,
+    getNodeCount: () => nodeCount,
+    computeGraphPosition,
+    schedulePatchReconcile,
+    stopAllDeployedPatches,
+    confirm,
+  });
 
   const importCustomNode = () => {
     importCustomNodeInputEl?.click?.();
@@ -733,6 +751,7 @@
       setGraphState: (state) => (graphState = state as GraphState),
       setNodeCount: (count) => (nodeCount = count),
       getProjectionState: getCustomNodeProjectionState,
+      translateProjectionConnection: translateCustomNodeProjectionConnection,
       isProjectionId: isCustomNodeProjectionId,
       getSelectedNodeId: () => selectedNodeId,
       syncSleepNodeSockets,
@@ -860,7 +879,7 @@
     onPick: handlePickerPick,
   }}
   {reteBuilder}
-    groupFrames={[...$groupFrames, ...getCustomNodeProjectionFrames()]}
+  groupFrames={[...$groupFrames, ...getCustomNodeProjectionFrames()]}
   editModeGroupId={$editModeGroupId}
   selectedGroupId={$selectedGroupId}
   groupEditToast={$groupEditToast}

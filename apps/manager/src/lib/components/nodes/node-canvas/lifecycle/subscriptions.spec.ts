@@ -158,3 +158,68 @@ test('bindGraphStateSubscription skips patch reconcile for param-only graph upda
   unsubscribe?.();
   assert.deepEqual(patchRuntimeCalls, []);
 });
+
+test('bindGraphStateSubscription reconciles patch runtime when custom node gate config changes', () => {
+  const graphState = writable({
+    nodes: [
+      {
+        id: 'custom-1',
+        type: 'custom:def-1',
+        position: { x: 0, y: 0 },
+        config: {
+          customNode: {
+            definitionId: 'def-1',
+            groupId: 'group-1',
+            role: 'mother',
+            manualGate: false,
+            internal: { nodes: [], connections: [] },
+          },
+        },
+        inputValues: { gate: false },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  });
+  const patchRuntimeCalls: string[] = [];
+
+  const unsubscribe = bindGraphStateSubscription({
+    graphStateStore: graphState,
+    graphSync: { schedule: () => undefined },
+    groupController: { reconcileGraphNodes: () => [] },
+    groupPortNodesController: {
+      removeGroupPortNodesForGroupIds: () => 0,
+      scheduleNormalizeProxies: () => patchRuntimeCalls.push('normalize'),
+    },
+    patchRuntime: { onGraphStateChanged: () => patchRuntimeCalls.push('patch') },
+    syncCustomGateInputs: () => undefined,
+    rehydrateExpandedCustomFrames: () => undefined,
+    isApplyingServerSemanticSnapshot: () => false,
+  });
+  patchRuntimeCalls.length = 0;
+
+  graphState.set({
+    nodes: [
+      {
+        id: 'custom-1',
+        type: 'custom:def-1',
+        position: { x: 0, y: 0 },
+        config: {
+          customNode: {
+            definitionId: 'def-1',
+            groupId: 'group-1',
+            role: 'mother',
+            manualGate: true,
+            internal: { nodes: [], connections: [] },
+          },
+        },
+        inputValues: { gate: true },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  });
+
+  unsubscribe?.();
+  assert.deepEqual(patchRuntimeCalls, ['patch']);
+});

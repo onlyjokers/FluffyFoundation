@@ -285,6 +285,125 @@ test('builder treats projection sockets as editor-only and not connectable seman
   assert.equal(builder.inputAllowsMultiple('view:custom:owner:inner', 'sink'), false);
 });
 
+test('buildReteNode stores source instance metadata for projected view nodes', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'group-proxy',
+    label: 'Group Proxy',
+    category: 'Group',
+    inputs: [{ id: 'in', label: 'In', type: 'number' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  const node = builder.buildReteNode({
+    id: 'view:custom:owner:proxy',
+    type: 'group-proxy',
+    config: { editorProjection: true, direction: 'input', portType: 'number' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  }) as ClassicPreset.Node & { type?: string; config?: Record<string, unknown> };
+
+  assert.equal(node.type, 'group-proxy');
+  assert.deepEqual(node.config, { editorProjection: true, direction: 'input', portType: 'number' });
+});
+
+test('custom node Active gate can toggle off and back on even when returning to its initial value', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'custom:test-gate-toggle',
+    label: 'Gate Toggle Custom',
+    category: 'Custom',
+    inputs: [{ id: 'gate', label: 'Active', type: 'boolean', defaultValue: true }],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const inputPatches: unknown[] = [];
+  const configPatches: unknown[] = [];
+  const config = {
+    customNode: {
+      definitionId: 'test-gate-toggle',
+      groupId: 'group-1',
+      role: 'mother',
+      manualGate: true,
+      internal: { nodes: [], connections: [] },
+    },
+  };
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'custom-1',
+        type: 'custom:test-gate-toggle',
+        config,
+        inputValues: { gate: true },
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      boolean: new ClassicPreset.Socket('boolean'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputPatches.push({ nodeId, patch });
+      return true;
+    },
+    sendSemanticNodeParams: (nodeId, patch) => {
+      configPatches.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'custom-1',
+    type: 'custom:test-gate-toggle',
+    config,
+    inputValues: { gate: true },
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const gateControl = node.inputs.gate?.control as { setValue: (value: boolean) => void };
+  gateControl.setValue(false);
+  gateControl.setValue(true);
+
+  assert.deepEqual(inputPatches, [
+    { nodeId: 'custom-1', patch: { gate: false } },
+    { nodeId: 'custom-1', patch: { gate: true } },
+  ]);
+  assert.equal(
+    Boolean(
+      (
+        (configPatches[1] as { patch?: { customNode?: { manualGate?: boolean } } } | undefined)
+          ?.patch?.customNode
+      )?.manualGate
+    ),
+    true
+  );
+});
+
 test('input control changes notify canvas activity highlighting', () => {
   const { builder, activity } = createBuilderWithActivitySpy();
   const node = builder.buildReteNode({
@@ -456,4 +575,81 @@ test('editor projection nodes never sync default config back to the semantic gra
   assert.deepEqual(inlineSelect.configUpdates, []);
   assert.deepEqual(inlineNumber.configUpdates, []);
   assert.deepEqual(configControls.configUpdates, []);
+});
+
+test('editor projection controls commit user changes through the projection callback', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'param-node',
+    label: 'Param Node',
+    category: 'Values',
+    inputs: [{ id: 'amount', label: 'Amount', type: 'number', defaultValue: 0 }],
+    outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    configSchema: [{ key: 'gain', label: 'Gain', type: 'number', defaultValue: 1 }],
+    process: () => ({}),
+  });
+  const engineInputUpdates: unknown[] = [];
+  const engineConfigUpdates: unknown[] = [];
+  const semanticInputs: unknown[] = [];
+  const semanticParams: unknown[] = [];
+  const projectionUpdates: unknown[] = [];
+  const activity: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: (nodeId, portId, value) => {
+        engineInputUpdates.push({ nodeId, portId, value });
+      },
+      updateNodeConfig: (nodeId, patch) => {
+        engineConfigUpdates.push({ nodeId, patch });
+      },
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      semanticInputs.push({ nodeId, patch });
+      return true;
+    },
+    sendSemanticNodeParams: (nodeId, patch) => {
+      semanticParams.push({ nodeId, patch });
+      return true;
+    },
+    commitProjectionValue: (update) => {
+      projectionUpdates.push(update);
+      return true;
+    },
+    onNodeActivity: (nodeId, portId) => activity.push({ nodeId, portId }),
+  });
+
+  const node = builder.buildReteNode({
+    id: 'view:custom:custom-1:inner',
+    type: 'param-node',
+    config: { editorProjection: true, gain: 1 },
+    inputValues: { amount: 0 },
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const inputControl = node.inputs.amount?.control as ClassicPreset.InputControl<'number'>;
+  const configControl = node.controls.gain as ClassicPreset.InputControl<'number'>;
+  inputControl.setValue(5);
+  configControl.setValue(2);
+
+  assert.deepEqual(projectionUpdates, [
+    { nodeId: 'view:custom:custom-1:inner', kind: 'input', key: 'amount', value: 5 },
+    { nodeId: 'view:custom:custom-1:inner', kind: 'config', key: 'gain', value: 2 },
+  ]);
+  assert.deepEqual(engineInputUpdates, []);
+  assert.deepEqual(engineConfigUpdates, []);
+  assert.deepEqual(semanticInputs, []);
+  assert.deepEqual(semanticParams, []);
+  assert.deepEqual(activity, [
+    { nodeId: 'view:custom:custom-1:inner', portId: 'amount' },
+    { nodeId: 'view:custom:custom-1:inner', portId: 'gain' },
+  ]);
 });

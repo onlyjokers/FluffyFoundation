@@ -22,6 +22,7 @@ const createExpansionHarness = (opts: {
   state: CustomNodeInstanceState;
   definition?: CustomNodeDefinition;
   expandedCustomByGroupId?: Map<string, { groupId: string; nodeId: string }>;
+  forcedHiddenNodeIds?: Set<string>;
   mutations?: string[];
   onProjectionSync?: () => void;
 }) => {
@@ -36,6 +37,7 @@ const createExpansionHarness = (opts: {
 
   return createCustomNodeExpansion({
     expandedCustomByGroupId: opts.expandedCustomByGroupId ?? new Map(),
+    forcedHiddenNodeIds: opts.forcedHiddenNodeIds ?? new Set(),
     nodeEngine: {
       getNode: (nodeId) => (nodeId === opts.motherNode.id ? opts.motherNode : null),
     },
@@ -134,6 +136,33 @@ test('handleExpandCustomNode is a view-only action and does not mutate the engin
   assert.deepEqual(expandedCustomByGroupId.get('group-1'), { groupId: 'group-1', nodeId: 'node-1' });
 });
 
+test('handleExpandCustomNode hides the collapsed mother node while its projection is expanded', () => {
+  const motherNode: NodeInstance = {
+    id: 'node-1',
+    type: 'custom-node',
+    position: { x: 10, y: 20 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const forcedHiddenNodeIds = new Set<string>();
+  const expansion = createExpansionHarness({
+    motherNode,
+    forcedHiddenNodeIds,
+    state: {
+      definitionId: 'def-1',
+      groupId: 'group-1',
+      role: 'mother',
+      manualGate: true,
+      internal: { nodes: [makeNode('inner-1')], connections: [] },
+    },
+  });
+
+  expansion.handleExpandCustomNode(motherNode.id);
+
+  assert.equal(forcedHiddenNodeIds.has('node-1'), true);
+});
+
 test('handleCollapseCustomNodeFrame only clears expanded view state', () => {
   const engineMutations: string[] = [];
   let projectionSyncs = 0;
@@ -169,6 +198,37 @@ test('handleCollapseCustomNodeFrame only clears expanded view state', () => {
   assert.deepEqual(engineMutations, []);
   assert.equal(expandedCustomByGroupId.has('group-1'), false);
   assert.equal(projectionSyncs, 1);
+});
+
+test('handleCollapseCustomNodeFrame restores the collapsed mother node', () => {
+  const motherNode: NodeInstance = {
+    id: 'node-1',
+    type: 'custom-node',
+    position: { x: 10, y: 20 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const forcedHiddenNodeIds = new Set<string>(['node-1']);
+  const expandedCustomByGroupId = new Map<string, { groupId: string; nodeId: string }>([
+    ['group-1', { groupId: 'group-1', nodeId: 'node-1' }],
+  ]);
+  const expansion = createExpansionHarness({
+    motherNode,
+    expandedCustomByGroupId,
+    forcedHiddenNodeIds,
+    state: {
+      definitionId: 'def-1',
+      groupId: 'group-1',
+      role: 'mother',
+      manualGate: true,
+      internal: { nodes: [], connections: [] },
+    },
+  });
+
+  expansion.handleCollapseCustomNodeFrame('group-1');
+
+  assert.equal(forcedHiddenNodeIds.has('node-1'), false);
 });
 
 test('rehydrateExpandedCustomFrames does not revive legacy materialized topology as expanded state', () => {

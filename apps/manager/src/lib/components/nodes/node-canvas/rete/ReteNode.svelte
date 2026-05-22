@@ -15,6 +15,7 @@
     buildGroupFrameProxyPorts,
     formatPortValue,
     inferBypassPorts as inferBypassPortsFromDefinition,
+    resolveRenderedNodeType,
     sortByIndex,
     type AnyRecord,
     type BypassPorts,
@@ -75,12 +76,18 @@
   let nodeId = '';
   $: nodeId = String(data?.id ?? '');
 
-  $: instanceType = String(nodeEngine.getNode(nodeId)?.type ?? '');
+  $: instanceType = resolveRenderedNodeType(nodeEngine.getNode(nodeId)?.type, (data as AnyRecord)?.type);
   $: isCmdAggregator = instanceType === 'cmd-aggregator';
   $: isGroupPortNode = ['group-activate', 'group-gate', 'group-proxy'].includes(instanceType);
   $: isGroupFrameNode = instanceType === 'group-frame';
   $: proxyDirection =
-    instanceType === 'group-proxy' ? String((nodeEngine.getNode(nodeId)?.config as AnyRecord)?.direction ?? 'output') : '';
+    instanceType === 'group-proxy'
+      ? String(
+          (nodeEngine.getNode(nodeId)?.config as AnyRecord)?.direction ??
+            ((data as AnyRecord)?.config as AnyRecord | undefined)?.direction ??
+            'output'
+        )
+      : '';
 
   $: {
     // Keep in sync with runtime config changes (e.g. Uncouple promotes child → mother).

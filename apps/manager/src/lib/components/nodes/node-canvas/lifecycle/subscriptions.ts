@@ -55,6 +55,7 @@ export function bindGraphStateSubscription(opts: {
   let lastGraphNodeCount = -1;
   let lastGraphConnKey = '';
   let lastGraphShapeKey = '';
+  let lastCompiledTopologyAffectingKey = '';
 
   const graphShapeKey = (state: any): string => {
     const nodes = (state.nodes ?? [])
@@ -70,6 +71,24 @@ export function bindGraphStateSubscription(opts: {
       }))
       .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
     return JSON.stringify({ nodes, connections });
+  };
+
+  const compiledTopologyAffectingKey = (state: any): string => {
+    const nodes = (state.nodes ?? [])
+      .map((node: any) => {
+        const type = String(node.type ?? '');
+        if (!type.startsWith('custom:')) return null;
+        const customNode = asRecord(node.config)?.customNode;
+        const customState = asRecord(customNode);
+        return {
+          id: String(node.id ?? ''),
+          gate: node.inputValues?.gate === false ? false : true,
+          manualGate: customState.manualGate === false ? false : true,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
+    return JSON.stringify(nodes);
   };
 
   return opts.graphStateStore?.subscribe((state: any) => {
@@ -89,6 +108,10 @@ export function bindGraphStateSubscription(opts: {
     const shapeChanged = nextShapeKey !== lastGraphShapeKey;
     lastGraphShapeKey = nextShapeKey;
 
+    const nextCompiledTopologyKey = compiledTopologyAffectingKey(state);
+    const compiledTopologyChanged = nextCompiledTopologyKey !== lastCompiledTopologyAffectingKey;
+    lastCompiledTopologyAffectingKey = nextCompiledTopologyKey;
+
     // Only reconcile on node removal to avoid interfering with imports (nodes are added one-by-one).
     if (prevNodeCount >= 0 && nextNodeCount < prevNodeCount) {
       const removedGroupIds = opts.groupController.reconcileGraphNodes(state);
@@ -104,7 +127,7 @@ export function bindGraphStateSubscription(opts: {
     if (opts.isApplyingServerSemanticSnapshot?.()) return;
     opts.syncCustomGateInputs(state);
     if (connectionsChanged) opts.groupPortNodesController.scheduleNormalizeProxies();
-    if (shapeChanged) opts.patchRuntime.onGraphStateChanged();
+    if (shapeChanged || compiledTopologyChanged) opts.patchRuntime.onGraphStateChanged();
     opts.rehydrateExpandedCustomFrames(state);
   });
 }
