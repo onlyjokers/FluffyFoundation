@@ -13,7 +13,7 @@
     contextmenu: { parameter: Parameter<unknown>; event: MouseEvent };
   }>();
 
-  function handleContextMenu(e: CustomEvent<{ parameter: Parameter<unknown>; event: MouseEvent }>) {
+  function handleContextMenu(e: CustomEvent<{ parameter: Parameter<any>; event: MouseEvent }>) {
     dispatch('contextmenu', e.detail);
   }
 
@@ -40,16 +40,20 @@
         return 'input';
     }
   }
+
+  $: numberParameter = parameter as unknown as Parameter<number>;
+  $: booleanParameter = parameter as unknown as Parameter<boolean>;
+  $: stringParameter = parameter as unknown as Parameter<string>;
 </script>
 
 {#if widgetType === 'slider' || widgetType === 'knob'}
-  <ParamSlider {parameter} {label} on:contextmenu={handleContextMenu} />
+  <ParamSlider parameter={numberParameter} {label} on:contextmenu={handleContextMenu} />
 {:else if widgetType === 'toggle'}
-  <ParamToggle {parameter} {label} on:contextmenu={handleContextMenu} />
+  <ParamToggle parameter={booleanParameter} {label} on:contextmenu={handleContextMenu} />
 {:else if widgetType === 'color'}
-  <ParamColor {parameter} {label} on:contextmenu={handleContextMenu} />
+  <ParamColor parameter={stringParameter} {label} on:contextmenu={handleContextMenu} />
 {:else if widgetType === 'select'}
-  <ParamSelect {parameter} {label} on:contextmenu={handleContextMenu} />
+  <ParamSelect parameter={stringParameter} {label} on:contextmenu={handleContextMenu} />
 {:else}
   <!-- Fallback: simple text display -->
   <div class="param-fallback">

@@ -10,6 +10,9 @@ type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
 type AnyRecord = Record<string, unknown>;
 type ControlLike = { readonly?: boolean };
 
+const asRecord = (value: unknown): AnyRecord =>
+  value && typeof value === 'object' ? (value as AnyRecord) : {};
+
 type RetePipeOptions = {
   editor: NodeEditor<BaseSchemes>;
   areaPlugin: AnyAreaPlugin | null;
@@ -155,19 +158,21 @@ export function bindRetePipes(opts: RetePipeOptions) {
   });
 
   if (!areaPlugin) return;
-  areaPlugin.addPipe(async (ctx: AnyRecord) => {
+  areaPlugin.addPipe(async (ctx: unknown) => {
+    const record = asRecord(ctx);
+    const data = asRecord(record.data);
     // During graph sync we translate nodes programmatically (engine -> view). Rete also emits an initial
     // `nodetranslated` from NodeView construction (0,0), which must NOT be treated as a user move,
     // otherwise it overwrites engine positions and makes import/paste layouts "fly" to the top-left.
     const syncing = isSyncing();
-    if (ctx?.type === 'nodepicked') {
-      setSelectedNode(String(ctx.data?.id ?? ''));
+    if (record.type === 'nodepicked') {
+      setSelectedNode(String(data.id ?? ''));
     }
-    if (ctx?.type === 'nodetranslate') {
+    if (record.type === 'nodetranslate') {
       if (syncing) return ctx;
       if (isProgrammaticTranslate() || isMultiDragTranslate()) return ctx;
 
-      const id = String(ctx.data?.id ?? '');
+      const id = String(data.id ?? '');
       if (isProjectionId(id)) return ctx;
       const selectedIds = get(groupSelectionNodeIds);
       if (id && selectedIds.size > 1 && selectedIds.has(id)) {
@@ -180,9 +185,9 @@ export function bindRetePipes(opts: RetePipeOptions) {
         multiDragLeaderLastPos = null;
       }
     }
-    if (ctx?.type === 'nodedragged') {
+    if (record.type === 'nodedragged') {
       if (syncing) return ctx;
-      const id = String(ctx.data?.id ?? '');
+      const id = String(data.id ?? '');
       if (isProjectionId(id)) return ctx;
       const selectedIds = get(groupSelectionNodeIds);
       const movedNodeIds =
@@ -206,18 +211,24 @@ export function bindRetePipes(opts: RetePipeOptions) {
         }
       }
     }
-    if (ctx?.type === 'translated' || ctx?.type === 'zoomed' || ctx?.type === 'nodetranslated') {
+    if (record.type === 'translated' || record.type === 'zoomed' || record.type === 'nodetranslated') {
       requestMinimapUpdate();
       requestFramesUpdate();
     }
-    if (ctx?.type === 'pointerdown') {
-      const target = ctx.data?.event?.target as HTMLElement | undefined;
+    if (record.type === 'pointerdown') {
+      const event = asRecord(data.event);
+      const target = event.target as HTMLElement | undefined;
       const clickedNode = target?.closest?.('.node');
       if (!clickedNode) setSelectedNode('');
     }
-    if (ctx?.type === 'nodetranslated') {
+    if (record.type === 'nodetranslated') {
       if (syncing) return ctx;
-      const { id, position, previous } = ctx.data ?? {};
+      const id = data.id;
+      const position = asRecord(data.position);
+      const previous = asRecord(data.previous);
+      const x = Number(position.x);
+      const y = Number(position.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return ctx;
       if (id && position) {
         if (isProjectionId(String(id))) return ctx;
         // Ignore no-op translations (including NodeView's initial translate(0,0) on construction).
@@ -241,11 +252,11 @@ export function bindRetePipes(opts: RetePipeOptions) {
           !isProgrammaticTranslate()
         ) {
           if (!multiDragLeaderLastPos) {
-            multiDragLeaderLastPos = { x: position.x, y: position.y };
+            multiDragLeaderLastPos = { x, y };
           } else {
-            const dx = position.x - multiDragLeaderLastPos.x;
-            const dy = position.y - multiDragLeaderLastPos.y;
-            multiDragLeaderLastPos = { x: position.x, y: position.y };
+            const dx = x - multiDragLeaderLastPos.x;
+            const dy = y - multiDragLeaderLastPos.y;
+            multiDragLeaderLastPos = { x, y };
 
             if ((dx || dy) && areaPlugin?.nodeViews) {
               multiDragTranslateDepth += 1;
@@ -267,7 +278,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
           }
         }
 
-        nodeEngine.updateNodePosition(nodeId, { x: position.x, y: position.y });
+        nodeEngine.updateNodePosition(nodeId, { x, y });
       }
     }
     return ctx;

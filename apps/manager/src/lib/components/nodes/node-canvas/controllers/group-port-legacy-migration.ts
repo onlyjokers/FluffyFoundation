@@ -1,12 +1,14 @@
 // Purpose: Migrate legacy Group Activate nodes to Group Gate nodes.
 import { get } from 'svelte/store';
-import type { GraphState } from '$lib/nodes/types';
+import type { GraphState, NodePort } from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
 import type { NodeEngine } from '$lib/nodes/engine';
 import type { GroupController } from './group-controller';
 import { buildGroupPortIndex, GROUP_GATE_NODE_TYPE } from '../utils/group-port-utils';
 
 type AnyRecord = Record<string, unknown>;
+const asRecord = (value: unknown): AnyRecord =>
+  value && typeof value === 'object' ? (value as AnyRecord) : {};
 
 type LegacyGroupActivateMigrationOptions = {
   nodeEngine: NodeEngine;
@@ -74,7 +76,7 @@ export function migrateLegacyGroupActivateNodes(opts: LegacyGroupActivateMigrati
         continue;
       }
 
-      const raw = (legacyNode as AnyRecord)?.inputValues?.active;
+      const raw = asRecord(legacyNode.inputValues).active;
       const manualActive =
         typeof raw === 'boolean'
           ? raw
@@ -102,8 +104,9 @@ export function migrateLegacyGroupActivateNodes(opts: LegacyGroupActivateMigrati
       const coerceToBool = (source: { sourceNodeId: string; sourcePortId: string }) => {
         const sourceNode = nodeById.get(source.sourceNodeId);
         const sourceDef = sourceNode ? opts.nodeRegistry.get(String((sourceNode as AnyRecord).type ?? '')) : null;
-        const portDef = sourceDef?.outputs?.find((p: AnyRecord) => String(p.id) === String(source.sourcePortId)) ?? null;
-        const portType = String((portDef as AnyRecord)?.type ?? 'any');
+        const portDef: NodePort | null =
+          sourceDef?.outputs?.find((p) => String(p.id) === String(source.sourcePortId)) ?? null;
+        const portType = String(portDef?.type ?? 'any');
         if (portType === 'boolean') return { nodeId: source.sourceNodeId, portId: source.sourcePortId };
 
         const convId = opts.addNode('logic-number-to-boolean', { x: hintX - 260, y: hintY - 20 });

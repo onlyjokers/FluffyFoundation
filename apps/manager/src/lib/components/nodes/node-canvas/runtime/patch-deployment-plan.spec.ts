@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { Connection, GraphState, NodeDefinition, NodeInstance } from '$lib/nodes/types';
+import type { Connection, GraphState, NodeDefinition, NodeInstance, NodePort } from '$lib/nodes/types';
 import { resolvePatchDeploymentPlan } from './patch-deployment-plan';
 
 const definitions = new Map<string, NodeDefinition>();
@@ -29,6 +29,8 @@ const connection = (
   targetNodeId: string,
   targetPortId: string
 ): Connection => ({ id, sourceNodeId, sourcePortId, targetNodeId, targetPortId });
+
+const port = (id: string, type: NodePort['type']): NodePort => ({ id, label: id, type });
 
 const plan = (
   graph: GraphState,
@@ -239,31 +241,39 @@ test('resolvePatchDeploymentPlan reports multiple enabled roots without active d
 definitions.set('image-out', {
   type: 'image-out',
   label: 'Image Out',
+  category: 'Scene',
   inputs: [],
-  outputs: [{ id: 'cmd', type: 'command' }],
+  outputs: [port('cmd', 'command')],
+  configSchema: [],
   process: () => ({}),
 });
 
 definitions.set('video-out', {
   type: 'video-out',
   label: 'Video Out',
+  category: 'Scene',
   inputs: [],
-  outputs: [{ id: 'cmd', type: 'command' }],
+  outputs: [port('cmd', 'command')],
+  configSchema: [],
   process: () => ({}),
 });
 
 definitions.set('client-object', {
   type: 'client-object',
   label: 'Client',
-  inputs: [{ id: 'in', type: 'command' }],
-  outputs: [{ id: 'out', type: 'client' }],
+  category: 'Objects',
+  inputs: [port('in', 'command')],
+  outputs: [port('out', 'client')],
+  configSchema: [],
   process: () => ({}),
 });
 
 definitions.set('display-object', {
   type: 'display-object',
   label: 'Display',
-  inputs: [{ id: 'in', type: 'command' }],
+  category: 'Objects',
+  inputs: [port('in', 'command')],
   outputs: [],
+  configSchema: [],
   process: () => ({}),
 });

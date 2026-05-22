@@ -1,6 +1,6 @@
 // Purpose: Custom Node conversion actions (uncouple, nodelize, denodelize).
 import { get, type Readable } from 'svelte/store';
-import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
+import type { Connection, GraphState, NodeInstance, NodePort, PortType } from '$lib/nodes/types';
 import type { CustomNodeDefinition, CustomNodePort } from '$lib/nodes/custom-nodes/types';
 import type { CustomNodeInstanceState } from '$lib/nodes/custom-nodes/instance';
 import type { NodeRegistry } from '@shugu/node-core';
@@ -58,6 +58,24 @@ type NodeEngine = {
   removeConnection: (connId: string) => void;
 };
 
+const validPortTypes = new Set([
+  'number',
+  'boolean',
+  'string',
+  'asset',
+  'color',
+  'audio',
+  'image',
+  'video',
+  'scene',
+  'effect',
+  'client',
+  'command',
+  'fuzzy',
+  'array',
+  'any',
+]);
+
 type CustomNodeActionsOptions = {
   nodeEngine: NodeEngine;
   nodeRegistry: NodeRegistry;
@@ -114,8 +132,9 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
 
     const template = cloneGraphState(state.internal);
 
-    const ports = baseDef.ports.map((p) => ({
+    const ports: CustomNodePort[] = baseDef.ports.map((p) => ({
       ...p,
+      type: p.type as NodePort['type'],
       binding: { ...p.binding },
     }));
 
@@ -426,7 +445,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
 
       const portTypeRaw =
         typeof node.config?.portType === 'string' ? node.config.portType : 'any';
-      const type = portTypeRaw ? portTypeRaw : 'any';
+      const type = validPortTypes.has(portTypeRaw) ? (portTypeRaw as PortType) : 'any';
       const pinned = Boolean(node.config?.pinned);
 
       const pos = positionFor(id);

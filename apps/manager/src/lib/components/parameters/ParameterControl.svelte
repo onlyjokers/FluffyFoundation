@@ -40,19 +40,26 @@
       }[]
     | undefined;
   $: step = param?.metadata?.step;
+  $: numberValue = typeof $store === 'number' ? $store : Number($store ?? 0);
+  $: stringValue = typeof $store === 'string' || typeof $store === 'number' ? $store : String($store ?? '');
+  $: booleanValue = Boolean($store);
 
   function handleTrigger() {
     param?.setValue(true, 'ui');
     // Immediately reset to default to avoid sticky button
     param?.setValue(param.defaultValue, 'ui');
   }
+
+  const eventDetail = (event: Event): unknown =>
+    (event as CustomEvent<unknown>).detail;
 </script>
 
 {#if !param}
   <div class="param-missing">Missing param: {path}</div>
 {:else if type === 'number' && (widget === 'slider' || widget === undefined)}
   <Slider
-    bind:value={$store}
+    value={numberValue}
+    on:input={(event) => store.set(eventDetail(event))}
     min={min ?? 0}
     max={max ?? 1}
     step={step ?? 0.01}
@@ -62,7 +69,8 @@
 {:else if type === 'number'}
   <Input
     type="number"
-    bind:value={$store}
+    value={numberValue}
+    on:input={(event) => store.set(eventDetail(event))}
     min={min ?? 0}
     max={max ?? 1}
     step={step ?? 0.01}
@@ -71,7 +79,8 @@
   />
 {:else if type === 'boolean'}
   <Toggle
-    bind:checked={$store}
+    checked={booleanValue}
+    on:change={(event) => store.set(eventDetail(event))}
     label={label ?? param.metadata?.label ?? param.path}
     description={description ?? param.metadata?.description}
     class="param-toggle"
@@ -91,7 +100,12 @@
     {label ?? param.metadata?.label ?? param.path}
   </Button>
 {:else}
-  <Input bind:value={$store} label={label ?? param.metadata?.label ?? param.path} {disabled} />
+  <Input
+    value={stringValue}
+    on:input={(event) => store.set(eventDetail(event))}
+    label={label ?? param.metadata?.label ?? param.path}
+    {disabled}
+  />
 {/if}
 
 <style>

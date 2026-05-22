@@ -9,7 +9,7 @@ import type { GraphState, NodeInstance, PortType } from '$lib/nodes/types';
 import { asRecord, getBoolean, getNumber, getString } from '$lib/utils/value-guards';
 import { generateCustomNodeGroupId, readCustomNodeState, writeCustomNodeState } from './instance';
 import type { CustomNodeInstanceState } from './instance';
-import type { CustomNodeDefinition } from './types';
+import type { CustomNodeDefinition, CustomNodePort } from './types';
 import { customNodeType } from './custom-node-type';
 import { dependenciesForDefinition } from './deps';
 
@@ -23,6 +23,31 @@ export type CustomNodeFileV1 = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function asPortType(value: unknown): PortType {
+  const text = getString(value, 'any');
+  return (
+    [
+      'number',
+      'boolean',
+      'string',
+      'asset',
+      'color',
+      'audio',
+      'image',
+      'video',
+      'scene',
+      'effect',
+      'client',
+      'command',
+      'fuzzy',
+      'array',
+      'any',
+    ] as const
+  ).includes(text as PortType)
+    ? (text as PortType)
+    : 'any';
 }
 
 function cloneGraphForFile(graph: GraphState): GraphState {
@@ -113,7 +138,7 @@ export function buildCustomNodeFile(definitions: CustomNodeDefinition[], rootDef
         portKey: String(p?.portKey ?? ''),
         side: String(p?.side) === 'input' ? 'input' : ('output' as const),
         label: String(p?.label ?? ''),
-        type: getString(p?.type, 'any') as PortType,
+        type: asPortType(p?.type),
         pinned: getBoolean(p?.pinned, false),
         y: typeof p?.y === 'number' ? p.y : Number(p?.y ?? 0),
         binding: {
@@ -189,12 +214,12 @@ export function parseCustomNodeFile(payload: unknown): CustomNodeFileV1 | null {
     };
 
     const portsRaw = Array.isArray(item.ports) ? item.ports : [];
-    const ports = portsRaw
+    const ports: CustomNodePort[] = portsRaw
       .map((p) => ({
         portKey: String(p?.portKey ?? ''),
-        side: String(p?.side) === 'input' ? 'input' : ('output' as const),
+        side: String(p?.side) === 'input' ? ('input' as const) : ('output' as const),
         label: String(p?.label ?? ''),
-        type: getString(p?.type, 'any') as PortType,
+        type: asPortType(p?.type),
         pinned: getBoolean(p?.pinned, false),
         y: typeof p?.y === 'number' ? p.y : Number(p?.y ?? 0),
         binding: {

@@ -17,8 +17,18 @@
   import type { Connection, NodeInstance } from '$lib/nodes/types';
 
   type AnyRecord = Record<string, unknown>;
+  type TimeRangeControlData = AnyRecord & {
+    label?: string;
+    max?: number;
+    min?: number;
+    nodeId?: string;
+    nodeType?: string;
+    readonly?: boolean;
+    setValue?: (value: unknown) => void;
+    step?: number;
+  };
 
-  export let data: AnyRecord;
+  export let data: TimeRangeControlData;
   export let isInline = false;
   export let hasLabel = false;
 
@@ -69,6 +79,9 @@
 
   const isFiniteNumber = (value: unknown): value is number =>
     typeof value === 'number' && Number.isFinite(value);
+
+  const asNodeRecord = (node: NodeInstance | null | undefined): AnyRecord =>
+    node ? (node as unknown as AnyRecord) : {};
 
   const secondsFormatter = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 2,
@@ -323,13 +336,20 @@
     timeRangeStep = isFiniteNumber(data.step) ? Number(data.step) : 0.01;
 
     const runtimeNode = timeRangeNodeId ? nodeEngine.getNode(timeRangeNodeId) : null;
+    const runtimeRecord = asNodeRecord(runtimeNode);
+    const runtimeConfig = (runtimeRecord.config && typeof runtimeRecord.config === 'object'
+      ? runtimeRecord.config
+      : {}) as AnyRecord;
+    const runtimeInputs = (runtimeRecord.inputValues && typeof runtimeRecord.inputValues === 'object'
+      ? runtimeRecord.inputValues
+      : {}) as AnyRecord;
     const assetId =
-      typeof (runtimeNode as AnyRecord)?.config?.assetId === 'string'
-        ? String((runtimeNode as AnyRecord).config.assetId).trim()
+      typeof runtimeConfig.assetId === 'string'
+        ? String(runtimeConfig.assetId).trim()
         : '';
     const localAssetPath =
-      typeof (runtimeNode as AnyRecord)?.config?.assetPath === 'string'
-        ? String((runtimeNode as AnyRecord).config.assetPath).trim()
+      typeof runtimeConfig.assetPath === 'string'
+        ? String(runtimeConfig.assetPath).trim()
         : '';
 
     const timelineAssetKey =
@@ -416,7 +436,7 @@
     const playRaw =
       resolveConnectedBoolean(timeRangeNodeId, 'play') ??
       (() => {
-        const raw = (runtimeNode as AnyRecord)?.inputValues?.play;
+        const raw = runtimeInputs.play;
         if (typeof raw === 'boolean') return raw;
         const num = typeof raw === 'number' ? raw : Number(raw);
         return Number.isFinite(num) ? num >= 0.5 : false;
@@ -424,7 +444,7 @@
     const loopRaw =
       resolveConnectedBoolean(timeRangeNodeId, 'loop') ??
       (() => {
-        const raw = (runtimeNode as AnyRecord)?.inputValues?.loop;
+        const raw = runtimeInputs.loop;
         if (typeof raw === 'boolean') return raw;
         const num = typeof raw === 'number' ? raw : Number(raw);
         return Number.isFinite(num) ? num >= 0.5 : false;
@@ -432,7 +452,7 @@
     const reverseRaw =
       resolveConnectedBoolean(timeRangeNodeId, 'reverse') ??
       (() => {
-        const raw = (runtimeNode as AnyRecord)?.inputValues?.reverse;
+        const raw = runtimeInputs.reverse;
         if (typeof raw === 'boolean') return raw;
         const num = typeof raw === 'number' ? raw : Number(raw);
         return Number.isFinite(num) ? num >= 0.5 : false;
@@ -452,8 +472,8 @@
           String(c.targetNodeId) === timeRangeNodeId && String(c.targetPortId) === 'asset'
       );
       const localInputValue =
-        typeof (runtimeNode as AnyRecord)?.inputValues?.asset === 'string'
-          ? String((runtimeNode as AnyRecord).inputValues.asset).trim()
+        typeof runtimeInputs.asset === 'string'
+          ? String(runtimeInputs.asset).trim()
           : '';
       const hasAsset =
         timeRangeNodeType === 'load-audio-from-assets' ||
@@ -494,7 +514,7 @@
     const start = Math.max(timeRangeMin, startSec);
     const end = endSec >= 0 ? Math.max(start, endSec) : -1;
     const cursor = cursorSec >= 0 ? Math.max(start, cursorSec) : -1;
-    data?.setValue?.({ startSec: start, endSec: end, cursorSec: cursor });
+    data.setValue?.({ startSec: start, endSec: end, cursorSec: cursor });
   };
 
   const handleTimeRangeStartSlider = (event: Event) => {

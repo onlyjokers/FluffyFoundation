@@ -1,5 +1,6 @@
 // Connection-pick/drop pipe for group gate, group proxy, and socket snapping behavior.
 import { get } from 'svelte/store';
+import type { Readable } from 'svelte/store';
 
 import type { Connection as EngineConnection } from '$lib/nodes/types';
 import { asRecord, getString } from '$lib/utils/value-guards';
@@ -24,7 +25,7 @@ type ReteConnectionDropPipeOptions = {
     findGroupGateTargetAt: (clientX: number, clientY: number) => { groupId: string } | null;
   };
   groupController: {
-    nodeGroups: Parameters<typeof get>[0];
+    nodeGroups: Readable<Array<{ id?: string; nodeIds?: unknown[] }>>;
   };
   nodeEngine: {
     exportGraph: () => { nodes?: Array<{ id?: string; type?: string; config?: unknown }> };

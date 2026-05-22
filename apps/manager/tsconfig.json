@@ -10,5 +10,13 @@
         "sourceMap": true,
         "strict": true,
         "moduleResolution": "bundler"
-    }
+    },
+    "exclude": [
+        "src/**/*.spec.ts",
+        "src/**/*.spec.tsx",
+        "src/**/*.spec.svelte",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.test.svelte"
+    ]
 }

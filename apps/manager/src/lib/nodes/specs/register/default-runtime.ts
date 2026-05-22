@@ -3,7 +3,7 @@
  */
 import { get } from 'svelte/store';
 import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
-import { registerDefaultNodeDefinitions, type NodeCommand } from '@shugu/node-core';
+import { registerDefaultNodeDefinitions, type LatestSensorDataLike, type NodeCommand } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, getSDK, sensorData, state } from '$lib/stores/manager';
 import { targetManagedClient } from './client-target';
@@ -23,7 +23,12 @@ export function registerDefaultRuntimeNodes(): void {
   getSelectedClientIds: () => [],
   getSensorForClientId: (clientId: string) => {
     if (!clientId) return null;
-    return get(sensorData).get(clientId) ?? null;
+    const data = get(sensorData).get(clientId);
+    if (!data) return null;
+    return {
+      ...data,
+      clientTimestamp: data.clientTimestamp ?? data.serverTimestamp,
+    } satisfies LatestSensorDataLike;
   },
   getImageForClientId: (clientId: string) => {
     if (!clientId) return null;

@@ -166,8 +166,9 @@ export function createPickerController(opts: PickerControllerOptions) {
     const cats = Array.from($itemsByCategory.keys());
     const normalized = cats.filter((c) => c && typeof c === 'string');
     const ordered = CATEGORY_ORDER.filter((c) => normalized.includes(c));
+    const orderedSet = new Set<string>(ordered);
     const rest = normalized
-      .filter((c) => !ordered.includes(c))
+      .filter((c) => !orderedSet.has(c))
       .sort((a, b) => a.localeCompare(b));
     return [...ordered, ...rest];
   });

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { GraphState, NodeDefinition } from '$lib/nodes/types';
+import type { GraphState, NodeDefinition, NodePort } from '$lib/nodes/types';
 import {
   applyTimeRangePlayheadsToPatchPayload,
   computeTopologySignature,
@@ -25,6 +25,8 @@ const graphB: Pick<GraphState, 'nodes' | 'connections'> = {
   connections: [...graphA.connections].reverse(),
 };
 
+const port = (id: string, type: NodePort['type']): NodePort => ({ id, label: id, type });
+
 test('computeTopologySignature is stable regardless of node and connection order', () => {
   assert.equal(computeTopologySignature(graphA), computeTopologySignature(graphB));
 });
@@ -33,8 +35,10 @@ test('isDefinitionBypassableWhenDisabled allows matching non-command input and o
   const def: NodeDefinition = {
     type: 'pass',
     label: 'Pass',
-    inputs: [{ id: 'in', type: 'number' }],
-    outputs: [{ id: 'out', type: 'number' }],
+    category: 'Test',
+    inputs: [port('in', 'number')],
+    outputs: [port('out', 'number')],
+    configSchema: [],
     process: () => ({}),
   };
 
@@ -45,8 +49,10 @@ test('isDefinitionBypassableWhenDisabled rejects command/client pass-throughs', 
   const def: NodeDefinition = {
     type: 'cmd-pass',
     label: 'Command Pass',
-    inputs: [{ id: 'in', type: 'command' }],
-    outputs: [{ id: 'out', type: 'command' }],
+    category: 'Test',
+    inputs: [port('in', 'command')],
+    outputs: [port('out', 'command')],
+    configSchema: [],
     process: () => ({}),
   };
 
@@ -88,6 +94,6 @@ test('applyTimeRangePlayheadsToPatchPayload injects cursorSec for asset media no
 
   applyTimeRangePlayheadsToPatchPayload(payload, (nodeId) => (nodeId === 'audio' ? 12.5 : null));
 
-  assert.equal(payload.graph.nodes[0].inputValues.cursorSec, 12.5);
+  assert.equal((payload.graph.nodes[0].inputValues as Record<string, unknown>).cursorSec, 12.5);
   assert.equal(Object.hasOwn(payload.graph.nodes[1].inputValues, 'cursorSec'), false);
 });

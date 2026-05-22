@@ -8,7 +8,9 @@
   let payload: SensorPayload = {};
 
   $: selectedClientId = $state.selectedClientIds[0] ?? null;
-  $: clientData = selectedClientId ? $sensorData.get(selectedClientId) : null;
+  $: clientData = selectedClientId
+    ? (($sensorData.get(selectedClientId) as unknown as SensorClientData | null | undefined) ?? null)
+    : null;
   $: payload = clientData?.payload ?? {};
 
   function formatValue(val: number | null | undefined): string {

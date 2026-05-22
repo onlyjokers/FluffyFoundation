@@ -33,6 +33,10 @@
   function any<T>(arg: T): AnyRecord {
     return arg as AnyRecord;
   }
+
+  function emitAny(props: unknown): void {
+    emit(props as SvelteArea2D<ClassicScheme>);
+  }
 </script>
 
 {#if !isCollapsed}
@@ -59,7 +63,7 @@
               data-testid="input-socket"
               data-port-id={key}
               init={(element) =>
-                emit({
+                emitAny({
                   type: 'render',
                   data: {
                     type: 'socket',
@@ -70,7 +74,7 @@
                     payload: input.socket,
                   },
                 })}
-              unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+              unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
             />
             <div class="port-body">
               <div class="port-title-line">
@@ -84,7 +88,7 @@
                     class="port-control port-inline-input"
                     data-testid="input-control"
                     init={(element) =>
-                      emit({
+                      emitAny({
                         type: 'render',
                         data: {
                           type: 'control',
@@ -92,7 +96,7 @@
                           payload: any(input).control,
                         },
                       })}
-                    unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+                    unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
                   />
                 {/if}
               </div>
@@ -125,7 +129,7 @@
                     class="port-control port-inline-value"
                     data-testid="output-control"
                     init={(element) =>
-                      emit({
+                      emitAny({
                         type: 'render',
                         data: {
                           type: 'control',
@@ -133,7 +137,7 @@
                           payload: any(output).control,
                         },
                       })}
-                    unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+                    unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
                   />
                 {/if}
               </div>
@@ -143,7 +147,7 @@
               data-testid="output-socket"
               data-port-id={key}
               init={(element) =>
-                emit({
+                emitAny({
                   type: 'render',
                   data: {
                     type: 'socket',
@@ -154,7 +158,7 @@
                     payload: output.socket,
                   },
                 })}
-              unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+              unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
             />
           </div>
         {/each}
@@ -194,7 +198,7 @@
           class={`input-socket port-${portTypeFor('input', String(key))}`}
           data-port-id={key}
           init={(element) =>
-            emit({
+            emitAny({
               type: 'render',
               data: {
                 type: 'socket',
@@ -205,7 +209,7 @@
                 payload: input.socket,
               },
             })}
-          unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+          unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
         />
       </div>
     {/each}
@@ -221,7 +225,7 @@
           class={`output-socket port-${portTypeFor('output', String(key))} ${any(output).disabled ? 'socket-disabled' : ''}`}
           data-port-id={key}
           init={(element) =>
-            emit({
+            emitAny({
               type: 'render',
               data: {
                 type: 'socket',
@@ -232,7 +236,7 @@
                 payload: output.socket,
               },
             })}
-          unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+          unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
         />
       </div>
     {/each}

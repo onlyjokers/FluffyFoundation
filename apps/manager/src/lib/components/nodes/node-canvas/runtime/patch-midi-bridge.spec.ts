@@ -4,7 +4,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { computeMidiBridgeRoutes } from './patch-midi-bridge';
-import type { GraphState, NodeDefinition } from '$lib/nodes/types';
+import type { GraphState, NodeDefinition, NodePort } from '$lib/nodes/types';
+
+const port = (
+  id: string,
+  type: NodePort['type'],
+  extra: Partial<NodePort> = {}
+): NodePort => ({ id, label: id, type, ...extra });
 
 const graph: GraphState = {
   nodes: [
@@ -26,8 +32,10 @@ const registry = {
       return {
         type: 'number',
         label: 'Number',
-        inputs: [{ id: 'in', type: 'number' }],
-        outputs: [{ id: 'out', type: 'number' }],
+        category: 'Values',
+        inputs: [port('in', 'number')],
+        outputs: [port('out', 'number')],
+        configSchema: [],
         process: () => ({}),
       };
     }
@@ -35,8 +43,10 @@ const registry = {
       return {
         type: 'sink-node',
         label: 'Sink',
-        inputs: [{ id: 'sink', type: 'number', kind: 'sink' }],
+        category: 'Test',
+        inputs: [port('sink', 'number', { kind: 'sink' })],
         outputs: [],
+        configSchema: [],
         process: () => ({}),
       };
     }

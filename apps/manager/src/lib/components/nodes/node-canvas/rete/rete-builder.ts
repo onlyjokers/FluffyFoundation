@@ -37,6 +37,31 @@ import { getCmdAggregatorInputCount, getProxyPortType, shouldRenderInputPort } f
 
 type ReteSocketMap = Record<string, ClassicPreset.Socket>;
 type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
+type AnyRecord = Record<string, unknown>;
+type AssetKind = 'audio' | 'image' | 'video' | 'model' | 'any';
+type ControlMeta = {
+  inline?: boolean;
+  controlLabel?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  nodeId?: string;
+  nodeType?: string;
+  portId?: string;
+  integer?: boolean;
+};
+
+const withControlMeta = <T extends object>(control: T, meta: ControlMeta): T => {
+  Object.assign(control as unknown as AnyRecord, meta);
+  return control;
+};
+
+const assetKindFromField = (field: ConfigField): AssetKind => {
+  const raw = (field as unknown as AnyRecord).assetKind;
+  return raw === 'audio' || raw === 'image' || raw === 'video' || raw === 'model' || raw === 'any'
+    ? raw
+    : 'any';
+};
 
 type ReteBuilderOptions = {
   nodeRegistry: NodeRegistry;
@@ -240,15 +265,17 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                   }
                 },
               });
-              control.inline = true;
-              control.min = min;
-              control.max = max;
-              control.step = step;
-              control.nodeId = instance.id;
-              control.nodeType = instance.type;
-              control.portId = input.id;
+              withControlMeta(control, {
+                inline: true,
+                min,
+                max,
+                step,
+                nodeId: instance.id,
+                nodeType: instance.type,
+                portId: input.id,
+              });
               if (instance.type === 'client-object' && (input.id === 'index' || input.id === 'range')) {
-                control.integer = true;
+                withControlMeta(control, { integer: true });
               }
               return control;
             })()
@@ -276,7 +303,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               commitInputValue(input.id, value);
             },
           });
-          control.inline = true;
+          withControlMeta(control, { inline: true });
           inp.addControl(control);
         } else if (input.type === 'boolean') {
           const initial =
@@ -311,7 +338,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               }
             },
           });
-          control.inline = true;
+          withControlMeta(control, { inline: true });
           inp.addControl(control);
         }
         inp.showControl = true;
@@ -334,7 +361,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 commitInputValue(input.id, value);
               },
             });
-            control.inline = true;
+            withControlMeta(control, { inline: true });
             return control;
           })()
         );
@@ -357,7 +384,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             commitInputValue(input.id, value);
           },
         });
-        control.inline = true;
+        withControlMeta(control, { inline: true });
         inp.addControl(control);
         inp.showControl = true;
         inputControlKeys.add(input.id);
@@ -377,7 +404,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
     for (const output of def?.outputs ?? []) {
       const out = new ClassicPreset.Output(socketFor(proxyPortType ?? output.type), output.label ?? output.id);
       if (instance.type === 'proc-client-sensors') {
-        out.control = new ClientSensorValueControl({ nodeId: instance.id, portId: output.id });
+        (out as unknown as AnyRecord).control = new ClientSensorValueControl({ nodeId: instance.id, portId: output.id });
       }
       node.addOutput(output.id, out);
     }
@@ -460,10 +487,12 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             commitConfigValue(key, next);
           },
         });
-        control.controlLabel = field.label;
-        control.min = field.min;
-        control.max = field.max;
-        control.step = field.step;
+        withControlMeta(control, {
+          controlLabel: field.label,
+          min: field.min,
+          max: field.max,
+          step: field.step,
+        });
         node.addControl(key, control);
       } else if (field.type === 'client-picker') {
         const control = new ClientPickerControl({
@@ -483,15 +512,13 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             notifyNodeActivity(instance.id, key);
           },
         });
-        control.nodeId = instance.id;
-        control.nodeType = instance.type;
+        withControlMeta(control, { nodeId: instance.id, nodeType: instance.type });
         node.addControl(key, control);
       } else if (field.type === 'asset-picker') {
-        const assetKindRaw = (field as Record<string, unknown>).assetKind;
         const control = new AssetPickerControl({
           label: field.label,
           initial: String(current ?? ''),
-          assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
+          assetKind: assetKindFromField(field),
           change: (value) => {
             if (value === String(current ?? '')) return;
             commitConfigValue(key, value);
@@ -499,11 +526,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         });
         node.addControl(key, control);
       } else if (field.type === 'local-asset-picker') {
-        const assetKindRaw = (field as Record<string, unknown>).assetKind;
         const control = new LocalAssetPickerControl({
           label: field.label,
           initial: String(current ?? ''),
-          assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
+          assetKind: assetKindFromField(field),
           change: (value) => {
             if (value === String(current ?? '')) return;
             commitConfigValue(key, value);
@@ -603,8 +629,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             commitConfigValue(key, value);
           },
         });
-        curveControl.nodeId = instance.id;
-        curveControl.nodeType = instance.type;
+        withControlMeta(curveControl, { nodeId: instance.id, nodeType: instance.type });
         node.addControl(key, curveControl);
       } else if (instance.type === 'note' && key === 'text') {
         const noteControl = new NoteControl({
@@ -626,12 +651,12 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             commitConfigValue(key, value);
           },
         });
-        control.controlLabel = field.label;
+        withControlMeta(control, { controlLabel: field.label });
         node.addControl(key, control);
       }
     }
 
-    node.position = [instance.position.x, instance.position.y];
+    (node as unknown as AnyRecord).position = [instance.position.x, instance.position.y];
     return node;
   };
 

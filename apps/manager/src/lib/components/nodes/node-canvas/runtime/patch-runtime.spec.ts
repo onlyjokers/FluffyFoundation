@@ -9,7 +9,7 @@ import type {
   DisplayTransportAvailabilityLike,
   PatchPayload,
 } from './patch-runtime-types';
-import type { GraphState, NodeDefinition, NodeInstance } from '$lib/nodes/types';
+import type { GraphState, NodeDefinition, NodeInstance, NodePort } from '$lib/nodes/types';
 
 const node = (id: string, type: string): NodeInstance => ({
   id,
@@ -18,6 +18,30 @@ const node = (id: string, type: string): NodeInstance => ({
   config: {},
   inputValues: {},
   outputValues: {},
+});
+
+const port = (id: string, type: NodePort['type']): NodePort => ({ id, label: id, type });
+
+const definition = (
+  type: string,
+  label: string,
+  inputs: NodePort[],
+  outputs: NodePort[]
+): NodeDefinition => ({
+  type,
+  label,
+  category: 'Test',
+  inputs,
+  outputs,
+  configSchema: [],
+  process: () => ({}),
+});
+
+const defaultAvailability = (): DisplayTransportAvailabilityLike => ({
+  route: 'server',
+  hasLocalSession: false,
+  hasLocalReady: false,
+  hasRemoteDisplay: false,
 });
 
 const basePayload = (): PatchPayload => ({
@@ -39,9 +63,9 @@ function createHarness() {
   };
   const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
   const definitions = new Map<string, NodeDefinition>([
-    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
-    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'in', type: 'scene' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
-    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
   ]);
   const visualStates = new Map<string, Record<string, unknown>>();
   const payload = basePayload();
@@ -101,9 +125,9 @@ function createImmediateHarness() {
   };
   const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
   const definitions = new Map<string, NodeDefinition>([
-    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
-    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'in', type: 'scene' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
-    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
   ]);
   const payload = basePayload();
 
@@ -120,7 +144,7 @@ function createImmediateHarness() {
     adapter: {
       getNodeVisualState: () => ({}),
       setNodeVisualState: async () => undefined,
-    } as CreatePatchRuntimeOptions['adapter'],
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
     isRunningStore: readable(true),
     getGraphState: () => graph,
     groupDisabledNodeIds: readable(new Set<string>()),
@@ -133,13 +157,8 @@ function createImmediateHarness() {
       selectedClientIds: ['client-1'],
     }),
     displayTransport: {
-      getAvailability: () => ({
-        route: 'server',
-        hasLocalSession: false,
-        hasLocalReady: false,
-        hasRemoteDisplay: false,
-      }),
-      sendPlugin: () => undefined,
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
     },
     getSDK: () => ({
       sendPluginControl: (target, pluginName, command, nextPayload) => {
@@ -203,9 +222,9 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
 
   const sentFromCompiled: typeof sent = [];
   const definitions = new Map<string, NodeDefinition>([
-    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
-    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'in', type: 'scene' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
-    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
   ]);
   const collapsedGraph: GraphState = {
     nodes: [node('custom-1', 'custom:def-1')],
@@ -232,7 +251,7 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
     adapter: {
       getNodeVisualState: () => ({}),
       setNodeVisualState: async () => undefined,
-    } as CreatePatchRuntimeOptions['adapter'],
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
     isRunningStore: readable(true),
     getGraphState: () => collapsedGraph,
     groupDisabledNodeIds: readable(new Set<string>()),
@@ -245,13 +264,8 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
       selectedClientIds: ['client-1'],
     }),
     displayTransport: {
-      getAvailability: () => ({
-        route: 'server',
-        hasLocalSession: false,
-        hasLocalReady: false,
-        hasRemoteDisplay: false,
-      }),
-      sendPlugin: () => undefined,
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
     },
     getSDK: () => ({
       sendPluginControl: (target, pluginName, command, nextPayload) => {
@@ -327,10 +341,10 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
   };
   const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
   const definitions = new Map<string, NodeDefinition>([
-    ['number', { type: 'number', label: 'Number', inputs: [{ id: 'value', type: 'number' }], outputs: [{ id: 'value', type: 'number' }], configSchema: [], process: () => ({}) }],
-    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
-    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'amount', type: 'number' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
-    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+    ['number', definition('number', 'Number', [port('value', 'number')], [port('value', 'number')])],
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('amount', 'number')], [port('out', 'scene')])],
+    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
   ]);
   const compiledGraph: GraphState = {
     nodes: [
@@ -374,7 +388,7 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
     adapter: {
       getNodeVisualState: () => ({}),
       setNodeVisualState: async () => undefined,
-    } as CreatePatchRuntimeOptions['adapter'],
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
     isRunningStore: readable(true),
     getGraphState: () => graph,
     groupDisabledNodeIds: readable(new Set<string>()),
@@ -387,13 +401,8 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
       selectedClientIds: ['client-1'],
     }),
     displayTransport: {
-      getAvailability: () => ({
-        route: 'server',
-        hasLocalSession: false,
-        hasLocalReady: false,
-        hasRemoteDisplay: false,
-      }),
-      sendPlugin: () => undefined,
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
     },
     getSDK: () => ({
       sendPluginControl: (target, pluginName, command, nextPayload) => {
@@ -436,10 +445,10 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
   };
   const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
   const definitions = new Map<string, NodeDefinition>([
-    ['number', { type: 'number', label: 'Number', inputs: [{ id: 'value', type: 'number' }], outputs: [{ id: 'value', type: 'number' }], configSchema: [], process: () => ({}) }],
-    ['scene-out', { type: 'scene-out', label: 'Scene Out', inputs: [], outputs: [{ id: 'cmd', type: 'command' }], process: () => ({}) }],
-    ['scene-fct-track', { type: 'scene-fct-track', label: 'Scene FCT', inputs: [{ id: 'brightness', type: 'number' }], outputs: [{ id: 'out', type: 'scene' }], process: () => ({}) }],
-    ['client-object', { type: 'client-object', label: 'Client', inputs: [{ id: 'in', type: 'command' }], outputs: [{ id: 'out', type: 'client' }], process: () => ({}) }],
+    ['number', definition('number', 'Number', [port('value', 'number')], [port('value', 'number')])],
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('brightness', 'number')], [port('out', 'scene')])],
+    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
   ]);
 
   const runtime = createPatchRuntime({
@@ -463,7 +472,7 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
     adapter: {
       getNodeVisualState: () => ({}),
       setNodeVisualState: async () => undefined,
-    } as CreatePatchRuntimeOptions['adapter'],
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
     isRunningStore: readable(true),
     getGraphState: () => graph,
     groupDisabledNodeIds: readable(new Set<string>()),
@@ -476,13 +485,8 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
       selectedClientIds: ['client-1'],
     }),
     displayTransport: {
-      getAvailability: () => ({
-        route: 'server',
-        hasLocalSession: false,
-        hasLocalReady: false,
-        hasRemoteDisplay: false,
-      }),
-      sendPlugin: () => undefined,
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
     },
     getSDK: () => ({
       sendPluginControl: (target, pluginName, command, nextPayload) => {

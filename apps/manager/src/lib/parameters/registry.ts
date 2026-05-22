@@ -1,12 +1,14 @@
 import { Parameter, normalizePath } from './parameter';
 import type { ParameterOptions, ParameterSnapshot } from './types';
 
+type AnyParameter = Parameter<any>;
+
 /**
  * Singleton registry that holds every parameter as a "single source of truth".
  */
 export class ParameterRegistry {
   private static _instance: ParameterRegistry;
-  private parameters = new Map<string, Parameter<unknown>>();
+  private parameters = new Map<string, AnyParameter>();
   private subscribers = new Set<() => void>();
 
   static get instance(): ParameterRegistry {
@@ -47,7 +49,7 @@ export class ParameterRegistry {
 
     const param = new Parameter<T>({ ...options, path });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.parameters.set(path, param as any);
+    this.parameters.set(path, param);
     this.notify();
     return param;
   }
@@ -107,7 +109,7 @@ export class ParameterRegistry {
   /**
    * List parameters under a prefix (e.g., "client/1")
    */
-  list(prefix?: string): Parameter<unknown>[] {
+  list(prefix?: string): AnyParameter[] {
     if (!prefix) return Array.from(this.parameters.values());
     const normalized = normalizePath(prefix);
     const withSlash = normalized.endsWith('/') ? normalized : `${normalized}/`;

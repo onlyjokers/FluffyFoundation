@@ -4,6 +4,8 @@
 import type { BaseSchemes, Scope } from 'rete';
 import { DOMSocketPosition } from 'rete-render-utils';
 
+type AnyRecord = Record<string, unknown>;
+
 export class LiveDOMSocketPosition extends DOMSocketPosition<BaseSchemes, unknown> {
   private ro: ResizeObserver | null = null;
   private observed = new WeakSet<HTMLElement>();
@@ -48,7 +50,9 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<BaseSchemes, unknow
 
     observeAll();
     area.addPipe((ctx) => {
-      if (ctx?.type === 'rendered' && ctx.data?.type === 'node') {
+      const record = (ctx && typeof ctx === 'object' ? ctx : {}) as AnyRecord;
+      const data = (record.data && typeof record.data === 'object' ? record.data : {}) as AnyRecord;
+      if (record.type === 'rendered' && data.type === 'node') {
         observeAll();
       }
       return ctx;
@@ -122,14 +126,15 @@ export class LiveDOMSocketPosition extends DOMSocketPosition<BaseSchemes, unknow
     const target = (element.querySelector?.('.socket') as HTMLElement | null) ?? element;
     const rect = target.getBoundingClientRect();
     const nodeRect = nodeEl.getBoundingClientRect();
-    const k = Number(area?.transform?.k ?? 1) || 1;
+    const transform = (area as unknown as { transform?: { k?: number } } | null)?.transform;
+    const k = Number(transform?.k ?? 1) || 1;
 
     const local = {
       x: (rect.left - nodeRect.left + rect.width / 2) / k,
       y: (rect.top - nodeRect.top + rect.height / 2) / k,
     };
 
-    const props = (this as { props?: { offset?: (pos: { x: number; y: number }, nodeId: string, side: string, key: string) => { x: number; y: number } } }).props;
+    const props = (this as unknown as { props?: { offset?: (pos: { x: number; y: number }, nodeId: string, side: string, key: string) => { x: number; y: number } } }).props;
     if (props?.offset) return props.offset(local, nodeId, side, key);
 
     return { x: local.x, y: local.y };

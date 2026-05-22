@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { SemanticGraphSnapshot } from '@shugu/node-core';
+import type { SemanticResultMessage } from '@shugu/protocol';
 import {
   applyServerSemanticSnapshot,
   bindServerSemanticSync,
@@ -13,6 +14,43 @@ import {
 import type { GraphState } from '$lib/nodes/types';
 
 const positions = (entries: Array<[string, { x: number; y: number }]>) => new Map(entries);
+
+const requireLoaded = (loaded: GraphState | null): GraphState => {
+  assert.ok(loaded);
+  return loaded;
+};
+
+type SnapshotResultHandler = (message: SemanticResultMessage & {
+  ok: boolean;
+  result?: { snapshot?: SemanticGraphSnapshot };
+}) => void;
+type SnapshotRequestResultHandler = (message: SemanticResultMessage & {
+  requestId: string;
+  ok: boolean;
+  result?: { snapshot?: SemanticGraphSnapshot };
+}) => void;
+type SnapshotRequestErrorHandler = (message: SemanticResultMessage & {
+  requestId: string;
+  ok: boolean;
+  error?: { code: string; message: string };
+}) => void;
+
+const semanticResult = (
+  message: Partial<SemanticResultMessage> & Pick<SemanticResultMessage, 'ok'>
+): SemanticResultMessage =>
+  ({
+    type: 'semantic-result',
+    version: 1,
+    serverTimestamp: 0,
+    requestId: '',
+    ...message,
+  }) as SemanticResultMessage;
+
+const noopStateHandler = () => undefined;
+const noopSnapshotHandler = () => undefined;
+const noopSnapshotResultHandler: SnapshotResultHandler = () => undefined;
+const noopSnapshotRequestResultHandler: SnapshotRequestResultHandler = () => undefined;
+const noopSnapshotRequestErrorHandler: SnapshotRequestErrorHandler = () => undefined;
 
 const snapshot = (
   nodes: SemanticGraphSnapshot['nodes'],
@@ -25,6 +63,8 @@ const snapshot = (
   groups: [],
   partitions: [],
   runtimeStatus: { running: false, deployedPartitionIds: [] },
+  customDefinitions: [],
+  agentCapabilities: { version: 1, nodes: [] },
   deviceCapabilities: [],
   errors: [],
   permissions: [],
@@ -61,7 +101,7 @@ test('applyServerSemanticSnapshot mirrors server graph into the Manager NodeEngi
     },
   });
 
-  assert.deepEqual(loaded, {
+  assert.deepEqual(requireLoaded(loaded), {
     nodes: [
       {
         id: 'client-a',
@@ -125,8 +165,7 @@ test('applyServerSemanticSnapshot preserves local positions while applying seman
     },
   });
 
-  assert.ok(loaded);
-  assert.deepEqual(loaded.nodes, [
+  assert.deepEqual(requireLoaded(loaded).nodes, [
     {
       id: 'client-a',
       type: 'client-object',
@@ -187,9 +226,8 @@ test('applyServerSemanticSnapshot places newly added server nodes away from exis
     },
   });
 
-  assert.ok(loaded);
   assert.deepEqual(
-    loaded.nodes.map((node) => node.position),
+    requireLoaded(loaded).nodes.map((node) => node.position),
     [
       { x: 321, y: 654 },
       { x: 561, y: 654 },
@@ -229,9 +267,8 @@ test('applyServerSemanticSnapshot restores node positions from local layout stor
     ]),
   });
 
-  assert.ok(loaded);
   assert.deepEqual(
-    loaded.nodes.map((node) => [node.id, node.position]),
+    requireLoaded(loaded).nodes.map((node) => [node.id, node.position]),
     [
       ['client-a', { x: 420, y: 180 }],
       ['display-a', { x: 780, y: 260 }],
@@ -281,8 +318,7 @@ test('applyServerSemanticSnapshot prefers newer layout storage when server shape
     layoutPositions: positions([['server-node', { x: 300, y: 400 }]]),
   });
 
-  assert.ok(loaded);
-  assert.deepEqual(loaded.nodes[0]?.position, { x: 300, y: 400 });
+  assert.deepEqual(requireLoaded(loaded).nodes[0]?.position, { x: 300, y: 400 });
 });
 
 test('applyServerSemanticSnapshot keeps layout storage after server-side node deletion reloads the graph', () => {
@@ -328,8 +364,7 @@ test('applyServerSemanticSnapshot keeps layout storage after server-side node de
     layoutPositions: positions([['server-node', { x: 300, y: 400 }]]),
   });
 
-  assert.ok(loaded);
-  assert.deepEqual(loaded.nodes[0]?.position, { x: 300, y: 400 });
+  assert.deepEqual(requireLoaded(loaded).nodes[0]?.position, { x: 300, y: 400 });
 });
 
 test('applyServerSemanticSnapshot patches existing node params without reloading the runtime graph', () => {
@@ -726,7 +761,7 @@ test('migration coordinator imports old local project only once when server grap
 
 test('bindServerSemanticSync requests server snapshot when Manager SDK reaches connected state', () => {
   const requested: string[] = [];
-  let stateHandler: ((state: { status: string }) => void) | null = null;
+  let stateHandler: (state: { status: string }) => void = noopStateHandler;
 
   bindServerSemanticSync({
     sdk: {
@@ -741,16 +776,16 @@ test('bindServerSemanticSync requests server snapshot when Manager SDK reaches c
     migrationCoordinator: { maybeImport: () => undefined },
   });
 
-  stateHandler?.({ status: 'connecting' });
-  stateHandler?.({ status: 'connected' });
-  stateHandler?.({ status: 'connected' });
+  stateHandler({ status: 'connecting' });
+  stateHandler({ status: 'connected' });
+  stateHandler({ status: 'connected' });
 
   assert.deepEqual(requested, ['graph-snapshot']);
 });
 
 test('bindServerSemanticSync clears pending local commands and refreshes snapshots on reconnect', () => {
   const requested: string[] = [];
-  let stateHandler: ((state: { status: string }) => void) | null = null;
+  let stateHandler: (state: { status: string }) => void = noopStateHandler;
   let clearCount = 0;
 
   bindServerSemanticSync({
@@ -778,9 +813,7 @@ test('bindServerSemanticSync clears pending local commands and refreshes snapsho
 });
 
 test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot requests', () => {
-  let resultHandler:
-    | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
-    | null = null;
+  let resultHandler: SnapshotResultHandler = noopSnapshotResultHandler;
   let loaded: GraphState | null = null;
 
   bindServerSemanticSync({
@@ -801,7 +834,7 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
     migrationCoordinator: { maybeImport: () => undefined },
   });
 
-  resultHandler?.({
+  resultHandler(semanticResult({
     ok: true,
     result: {
       snapshot: snapshot([
@@ -814,9 +847,9 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
         },
       ]),
     },
-  });
+  }));
 
-  assert.deepEqual(loaded, {
+  assert.deepEqual(requireLoaded(loaded), {
     nodes: [
       {
         id: 'cli-client-c',
@@ -832,9 +865,7 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
 });
 
 test('bindServerSemanticSync settles pending local commands when their semantic result arrives', () => {
-  let resultHandler:
-    | ((message: { requestId: string; ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
-    | null = null;
+  let resultHandler: SnapshotRequestResultHandler = noopSnapshotRequestResultHandler;
   const settled: string[] = [];
 
   bindServerSemanticSync({
@@ -854,19 +885,19 @@ test('bindServerSemanticSync settles pending local commands when their semantic 
     settlePendingCommand: (requestId) => settled.push(requestId),
   });
 
-  resultHandler?.({
+  resultHandler(semanticResult({
     requestId: 'canvas:node.remove:n1',
     ok: true,
     result: {
       snapshot: snapshot([]),
     },
-  });
+  }));
 
   assert.deepEqual(settled, ['canvas:node.remove:n1']);
 });
 
 test('bindServerSemanticSync overlays pending local commands before applying server snapshots', () => {
-  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  let snapshotHandler: (snapshot: SemanticGraphSnapshot) => void = noopSnapshotHandler;
   let loaded: GraphState | null = null;
 
   bindServerSemanticSync({
@@ -887,7 +918,7 @@ test('bindServerSemanticSync overlays pending local commands before applying ser
     getPendingCommands: () => [{ type: 'node.remove', nodeId: 'local-delete' }],
   });
 
-  snapshotHandler?.(
+  snapshotHandler(
     snapshot([
       {
         id: 'local-delete',
@@ -903,13 +934,7 @@ test('bindServerSemanticSync overlays pending local commands before applying ser
 });
 
 test('bindServerSemanticSync requests a fresh snapshot when a pending command is rejected', () => {
-  let resultHandler:
-    | ((message: {
-        requestId: string;
-        ok: boolean;
-        error?: { code: string; message: string };
-      }) => void)
-    | null = null;
+  let resultHandler: SnapshotRequestErrorHandler = noopSnapshotRequestErrorHandler;
   const requested: string[] = [];
   const settled: string[] = [];
 
@@ -930,21 +955,19 @@ test('bindServerSemanticSync requests a fresh snapshot when a pending command is
     settlePendingCommand: (requestId) => settled.push(requestId),
   });
 
-  resultHandler?.({
+  resultHandler(semanticResult({
     requestId: 'canvas:node.add:bad',
     ok: false,
     error: { code: 'rejected', message: 'rejected' },
-  });
+  }));
 
   assert.deepEqual(settled, ['canvas:node.add:bad']);
   assert.deepEqual(requested, ['semantic-result-rejected:canvas:node.add:bad']);
 });
 
 test('bindServerSemanticSync ignores stale semantic snapshots after a newer revision was applied', () => {
-  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
-  let resultHandler:
-    | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
-    | null = null;
+  let snapshotHandler: (snapshot: SemanticGraphSnapshot) => void = noopSnapshotHandler;
+  let resultHandler: SnapshotResultHandler = noopSnapshotResultHandler;
   const loaded: GraphState[] = [];
 
   bindServerSemanticSync({
@@ -968,7 +991,7 @@ test('bindServerSemanticSync ignores stale semantic snapshots after a newer revi
     migrationCoordinator: { maybeImport: () => undefined },
   });
 
-  snapshotHandler?.({
+  snapshotHandler({
     ...snapshot([
       {
         id: 'server-node',
@@ -988,7 +1011,7 @@ test('bindServerSemanticSync ignores stale semantic snapshots after a newer revi
     revision: 8,
   });
 
-  resultHandler?.({
+  resultHandler(semanticResult({
     ok: true,
     result: {
       snapshot: {
@@ -1004,7 +1027,7 @@ test('bindServerSemanticSync ignores stale semantic snapshots after a newer revi
         revision: 7,
       },
     },
-  });
+  }));
 
   assert.equal(loaded.length, 1);
   assert.deepEqual(
@@ -1017,7 +1040,7 @@ test('bindServerSemanticSync ignores stale semantic snapshots after a newer revi
 });
 
 test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
-  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  let snapshotHandler: (snapshot: SemanticGraphSnapshot) => void = noopSnapshotHandler;
   const published: number[] = [];
 
   bindServerSemanticSync({
@@ -1034,13 +1057,13 @@ test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
     onSnapshot: (nextSnapshot) => published.push(nextSnapshot.revision),
   });
 
-  snapshotHandler?.(snapshot([]));
+  snapshotHandler(snapshot([]));
 
   assert.deepEqual(published, [7]);
 });
 
 test('bindServerSemanticSync marks snapshot application boundaries', () => {
-  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  let snapshotHandler: (snapshot: SemanticGraphSnapshot) => void = noopSnapshotHandler;
   const markers: string[] = [];
 
   bindServerSemanticSync({
@@ -1062,7 +1085,7 @@ test('bindServerSemanticSync marks snapshot application boundaries', () => {
     afterApply: () => markers.push('after'),
   });
 
-  snapshotHandler?.(snapshot([]));
+  snapshotHandler(snapshot([]));
 
   assert.deepEqual(markers, ['before', 'load', 'after']);
 });

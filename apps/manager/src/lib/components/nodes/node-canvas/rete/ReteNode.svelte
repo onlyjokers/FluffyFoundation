@@ -7,7 +7,10 @@
   } from 'rete-svelte-plugin/svelte/presets/classic/types';
   import { onDestroy, tick } from 'svelte';
   import { nodeEngine, nodeRegistry } from '$lib/nodes';
-  import { readCustomNodeState } from '$lib/nodes/custom-nodes/instance';
+  import {
+    readCustomNodeState,
+    type CustomNodeInstanceState,
+  } from '$lib/nodes/custom-nodes/instance';
   import type { NodeInstance } from '$lib/nodes/types';
   import ReteNodePorts from './ReteNodePorts.svelte';
   import ReteNodeTitle from './ReteNodeTitle.svelte';
@@ -32,37 +35,46 @@
     groupDisabled?: boolean;
     groupSelected?: boolean;
   };
-  export let data: ClassicScheme['Node'] & NodeExtraData;
+  type ReteNodeData = ClassicScheme['Node'] & NodeExtraData & AnyRecord;
+  type PortEntry = [string, AnyRecord];
+  const asRecord = (value: unknown): AnyRecord =>
+    value && typeof value === 'object' ? (value as unknown as AnyRecord) : {};
+  const emitAny = (props: unknown): void => {
+    emit(props as SvelteArea2D<ClassicScheme>);
+  };
+
+  export let data: ReteNodeData;
   export let emit: (props: SvelteArea2D<ClassicScheme>) => void;
 
   let nodeEl: HTMLDivElement | null = null;
-  let customNodeState = null;
+  let customNodeState: CustomNodeInstanceState | null = null;
 
   // Feature: Node minimize/collapse UI (manager-only visual state).
   // Collapsing only affects layout/visibility; graph execution + connections remain intact.
   const toggleCollapsed = (event: Event) => {
     event.stopPropagation();
     // Important: derive next state from `data.collapsed` to avoid Svelte reactive cycles.
-    const next = !(data as AnyRecord)?.collapsed;
-    (data as AnyRecord).collapsed = next;
+    const next = !data.collapsed;
+    data.collapsed = next;
   };
 
-  $: isCollapsed = isGroupPortNode ? true : Boolean((data as AnyRecord)?.collapsed);
+  $: dataRecord = asRecord(data);
+  $: isCollapsed = isGroupPortNode ? true : Boolean(dataRecord.collapsed);
 
-  $: inputs = sortByIndex(Object.entries(data.inputs));
-  $: controls = sortByIndex(Object.entries(data.controls));
-  $: outputs = sortByIndex(Object.entries(data.outputs));
+  $: inputs = sortByIndex(Object.entries(data.inputs)) as unknown as PortEntry[];
+  $: controls = sortByIndex(Object.entries(data.controls)) as unknown as PortEntry[];
+  $: outputs = sortByIndex(Object.entries(data.outputs)) as unknown as PortEntry[];
 
   // MIDI activity highlight state (set by NodeCanvas).
-  $: isActive = Boolean((data as AnyRecord).active);
-  $: activeInputs = new Set<string>((((data as AnyRecord).activeInputs ?? []) as string[]).map(String));
-  $: activeOutputs = new Set<string>((((data as AnyRecord).activeOutputs ?? []) as string[]).map(String));
-  $: isDeployedPatch = Boolean((data as AnyRecord).deployedPatch);
-  $: isStopped = Boolean((data as AnyRecord).stopped);
-  $: isGroupDisabled = Boolean((data as AnyRecord).groupDisabled);
-  $: isGroupSelected = Boolean((data as AnyRecord).groupSelected);
-  $: isGroupMinimized = Boolean((data as AnyRecord).groupMinimized);
-  $: isHidden = Boolean((data as AnyRecord).hidden);
+  $: isActive = Boolean(dataRecord.active);
+  $: activeInputs = new Set<string>(((Array.isArray(dataRecord.activeInputs) ? dataRecord.activeInputs : []) as unknown[]).map(String));
+  $: activeOutputs = new Set<string>(((Array.isArray(dataRecord.activeOutputs) ? dataRecord.activeOutputs : []) as unknown[]).map(String));
+  $: isDeployedPatch = Boolean(dataRecord.deployedPatch);
+  $: isStopped = Boolean(dataRecord.stopped);
+  $: isGroupDisabled = Boolean(dataRecord.groupDisabled);
+  $: isGroupSelected = Boolean(dataRecord.groupSelected);
+  $: isGroupMinimized = Boolean(dataRecord.groupMinimized);
+  $: isHidden = Boolean(dataRecord.hidden);
 
   // Live Port Values
   // Values are derived from NodeEngine runtime outputs and graph connections.
@@ -76,7 +88,7 @@
   let nodeId = '';
   $: nodeId = String(data?.id ?? '');
 
-  $: instanceType = resolveRenderedNodeType(nodeEngine.getNode(nodeId)?.type, (data as AnyRecord)?.type);
+  $: instanceType = resolveRenderedNodeType(nodeEngine.getNode(nodeId)?.type, dataRecord.type);
   $: isCmdAggregator = instanceType === 'cmd-aggregator';
   $: isGroupPortNode = ['group-activate', 'group-gate', 'group-proxy'].includes(instanceType);
   $: isGroupFrameNode = instanceType === 'group-frame';
@@ -84,7 +96,7 @@
     instanceType === 'group-proxy'
       ? String(
           (nodeEngine.getNode(nodeId)?.config as AnyRecord)?.direction ??
-            ((data as AnyRecord)?.config as AnyRecord | undefined)?.direction ??
+            asRecord(dataRecord.config).direction ??
             'output'
         )
       : '';
@@ -100,8 +112,8 @@
   let groupFrameDisabled = false;
   $: groupFrameDisabled = (() => {
     if (!isGroupFrameNode) return false;
-    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
-    return Boolean(instance?.config?.disabled);
+    const instance = asRecord(nodeEngine.getNode(nodeId));
+    return Boolean(asRecord(instance.config).disabled);
   })();
 
   const cmdAggregatorMaxInputs = (): number => {
@@ -171,8 +183,8 @@
   };
 
   const toggleGroupMinimized = () => {
-    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
-    const raw = instance?.config?.groupId;
+    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const raw = asRecord(instance.config).groupId;
     const groupId = typeof raw === 'string' ? raw : raw ? String(raw) : '';
     if (!groupId) return;
     if (typeof window === 'undefined') return;
@@ -180,8 +192,8 @@
   };
 
   const toggleGroupDisabled = () => {
-    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
-    const raw = instance?.config?.groupId;
+    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const raw = asRecord(instance.config).groupId;
     const groupId = typeof raw === 'string' ? raw : raw ? String(raw) : '';
     if (!groupId) return;
     if (typeof window === 'undefined') return;
@@ -257,10 +269,10 @@
   let groupFramePortAreaHeight = 0;
 
   $: if (isGroupFrameNode && nodeId) {
-    const instance = nodeEngine.getNode(nodeId) as AnyRecord;
-    const rawGroupId = instance?.config?.groupId;
+    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const rawGroupId = asRecord(instance.config).groupId;
     const groupId = typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
-    const groupTop = Number(instance?.position?.y ?? 0);
+    const groupTop = Number(asRecord(instance.position).y ?? 0);
 
     const nodeById = new Map(
       ($graphStateStore.nodes ?? []).map((n: NodeInstance) => [String(n.id), n] as const)
@@ -270,10 +282,11 @@
     const portLabelFor = (nodeId: string, side: 'input' | 'output', portId: string): string => {
       const node = nodeById.get(String(nodeId));
       if (!node) return String(portId);
-      const def = nodeRegistry.get(String((node as AnyRecord).type ?? ''));
+      const def = nodeRegistry.get(String(asRecord(node).type ?? ''));
       const ports = side === 'input' ? def?.inputs : def?.outputs;
-      const port = (ports ?? []).find((p: AnyRecord) => String(p.id) === String(portId)) ?? null;
-      return String((port as AnyRecord)?.label ?? (port as AnyRecord)?.id ?? portId);
+      const port = (ports ?? []).find((p) => String(p.id) === String(portId)) ?? null;
+      const portRecord = asRecord(port);
+      return String(portRecord.label ?? portRecord.id ?? portId);
     };
 
     const result = buildGroupFrameProxyPorts({
@@ -510,7 +523,7 @@
             class="control"
             data-testid={'control-' + key}
             init={(element) =>
-              emit({
+              emitAny({
                 type: 'render',
                 data: {
                   type: 'control',
@@ -518,7 +531,7 @@
                   payload: control,
                 },
               })}
-            unmount={(ref) => emit({ type: 'unmount', data: { element: ref } })}
+            unmount={(ref) => emitAny({ type: 'unmount', data: { element: ref } })}
           />
         {/each}
       </div>

@@ -12,6 +12,7 @@ import { mapRangeWithOptions } from '$lib/features/midi/midi-math';
 import { applyClientSelectionFromInputs, clientSelectionState, displayObjectLogLastAt, getSelectedClientIndexOut, midiBooleanState, midiSourceKey } from './client-selection';
 import { createCommandProcess } from './command-mapping';
 import { coreRuntimeImplByKind } from './core-runtime';
+import { targetManagedClient } from './client-target';
 import { sendDisplayNodeCommand } from './display-targets';
 import { asRecord, coerceBoolean, isFiniteNumber } from './helpers';
 import type { MidiBooleanState, NodeRuntime, NodeSpec } from './types';
@@ -21,7 +22,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
     type: spec.type,
     label: spec.label ?? spec.type,
     category: spec.category ?? 'Other',
-    metadata: spec.metadata,
+    metadata: spec.metadata as NodeDefinition['metadata'],
     inputs: spec.inputs ?? [],
     outputs: spec.outputs ?? [],
     configSchema: spec.configSchema ?? [],

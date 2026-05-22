@@ -35,7 +35,24 @@
   import ReteNoteControl from './ReteNoteControl.svelte';
   import ReteTimeRangeControl from './ReteTimeRangeControl.svelte';
 
-  export let data: AnyRecord;
+  type ControlOption = { value: string; label: string };
+  type ControlData = AnyRecord & {
+    assetKind?: string;
+    button?: boolean;
+    buttonLabel?: string;
+    controlType?: string;
+    inline?: boolean;
+    label?: string;
+    nodeId?: string;
+    nodeType?: string;
+    options?: ControlOption[];
+    placeholder?: string;
+    readonly?: boolean;
+    setValue?: (value: unknown) => void;
+    value?: unknown;
+  };
+
+  export let data: ControlData;
   $: isInline = Boolean((data as AnyRecord)?.inline);
   $: inputControlLabel =
     data instanceof ClassicPreset.InputControl ? (data as AnyRecord).controlLabel : undefined;
@@ -61,6 +78,32 @@
   const midiLastMessageStore = midiService.lastMessage;
   const midiSelectedInputStore = midiService.selectedInputId;
   const midiSupportedStore = midiService.isSupported;
+
+  const setControlValue = (value: unknown): void => {
+    data.setValue?.(value);
+  };
+
+  const asControlOptions = (value: unknown): ControlOption[] =>
+    Array.isArray(value)
+      ? value.map((opt) => ({
+          value: String((opt as AnyRecord)?.value ?? ''),
+          label: String((opt as AnyRecord)?.label ?? (opt as AnyRecord)?.value ?? ''),
+        }))
+      : [];
+
+  const asCurveValue = (value: unknown): [number, number, number, number] | undefined =>
+    Array.isArray(value) && value.length === 4 && value.every((v) => typeof v === 'number')
+      ? (value as [number, number, number, number])
+      : undefined;
+
+  const inputControlType = (value: unknown): 'text' | 'number' =>
+    value === 'number' ? 'number' : 'text';
+  const inputControlValue = (value: unknown): string | number =>
+    typeof value === 'string' || typeof value === 'number' ? value : value == null ? '' : String(value);
+  const inputAttrValue = (value: unknown): string | number | null | undefined =>
+    typeof value === 'string' || typeof value === 'number' || value == null ? value : String(value);
+  const recordValue = (value: unknown): AnyRecord =>
+    value && typeof value === 'object' ? (value as AnyRecord) : {};
 
   function changeInput(event: Event) {
     if (!(data instanceof ClassicPreset.InputControl)) return;
@@ -127,28 +170,28 @@
     if (data.readonly) return;
 
     if (momentaryBooleanResetTimer) clearTimeout(momentaryBooleanResetTimer);
-    data.setValue(true);
+    setControlValue(true);
     // Keep the trigger high long enough for at least one graph tick to observe it.
     momentaryBooleanResetTimer = setTimeout(() => {
       momentaryBooleanResetTimer = null;
-      data.setValue(false);
+      setControlValue(false);
     }, 120);
   }
 
   function changeSelect(event: Event) {
     const target = event.target as HTMLSelectElement;
-    data?.setValue?.(target.value);
+    setControlValue(target.value);
   }
 
   function changeBoolean(event: Event) {
     const target = event.target as HTMLInputElement;
-    data?.setValue?.(Boolean(target.checked));
+    setControlValue(Boolean(target.checked));
   }
 
   function changeNote(event: Event) {
     const target = event.target as HTMLTextAreaElement;
     const next = target.value;
-    data?.setValue?.(next);
+    setControlValue(next);
     // `data.setValue` mutates an object field (no Svelte invalidation), so keep the preview in sync here.
     if (data?.controlType === 'note') noteHtml = renderMarkdownToHtml(next);
   }
@@ -194,7 +237,7 @@
   }
 
   function pickClient(clientId: string) {
-    data?.setValue?.(clientId);
+    setControlValue(clientId);
   }
 
   let didRefreshAssets = false;
@@ -204,7 +247,7 @@
   }
   $: assetPickerOptions =
     data?.controlType === 'asset-picker'
-      ? buildAssetOptions(($assetsStore?.assets ?? []) as AnyRecord[], data.assetKind)
+      ? buildAssetOptions(($assetsStore?.assets ?? []) as AnyRecord[], String(data.assetKind ?? ''))
       : [];
 
   function readinessClass(clientId: string, connected?: boolean): string {
@@ -261,7 +304,7 @@
       : null;
     sensorsClientId = srcNode?.config?.clientId ? String(srcNode.config.clientId) : '';
     sensorsData = sensorsClientId
-      ? (($sensorData.get(sensorsClientId) as AnyRecord) ?? null)
+      ? (($sensorData.get(sensorsClientId) as unknown as AnyRecord) ?? null)
       : null;
     const nextPayload =
       sensorsData && typeof sensorsData.payload === 'object'
@@ -332,7 +375,7 @@
     }
 
     const json = (await res.json().catch(() => null)) as AnyRecord;
-    const assetId = String(json?.asset?.id ?? '');
+    const assetId = String(recordValue(json?.asset).id ?? '');
     if (!assetId) {
       fileUploadError = 'Upload failed: invalid response (missing asset.id)';
       return null;
@@ -354,7 +397,7 @@
     try {
       const uploaded = await uploadFileToAssetService(file);
       if (!uploaded) return;
-      data?.setValue?.(`asset:${uploaded.assetId}`);
+      setControlValue(`asset:${uploaded.assetId}`);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         fileUploadError = 'Upload timed out. Please retry.';
@@ -373,7 +416,7 @@
     const node = ($graphStateStore.nodes ?? []).find(
       (n: NodeInstance) => String(n.id) === midiNodeId
     );
-    midiSource = node?.config?.source ?? null;
+    midiSource = (node?.config?.source as MidiSource | null | undefined) ?? null;
     midiIsLearning = Boolean(
       $midiLearnModeStore.active && $midiLearnModeStore.nodeId === midiNodeId
     );
@@ -423,11 +466,11 @@
     {:else}
       <input
         class="control-input {isInline ? 'inline' : ''}"
-        type={data.type}
-        value={data.value}
-        min={numberInputMin}
-        max={numberInputMax}
-        step={numberInputStep}
+        type={inputControlType(data.type)}
+        value={inputControlValue(data.value)}
+        min={inputAttrValue(numberInputMin)}
+        max={inputAttrValue(numberInputMax)}
+        step={inputAttrValue(numberInputStep)}
         readonly={data.readonly}
         disabled={data.readonly}
         on:pointerdown|stopPropagation
@@ -451,7 +494,7 @@
       {#if data.placeholder}
         <option value="">{data.placeholder}</option>
       {/if}
-      {#each data.options ?? [] as opt (opt.value)}
+      {#each asControlOptions(data.options) as opt (opt.value)}
         <option value={opt.value}>{opt.label}</option>
       {/each}
     </select>
@@ -514,13 +557,13 @@
       <div class="control-label">{data.label}</div>
     {/if}
     <CurveEditor
-      value={data.value}
+      value={asCurveValue(data.value)}
       readonly={Boolean(data.readonly)}
       progress={curveProgress}
       on:change={(e) => {
-        if (data?.setValue) {
+        if (data.setValue) {
           data.value = e.detail;
-          data.setValue(e.detail);
+          setControlValue(e.detail);
         }
       }}
     />

@@ -10,6 +10,9 @@ import type { nodeRegistry as nodeRegistryValue } from '$lib/nodes';
 export type AnyRecord = Record<string, unknown>;
 export type NumberBounds = { min?: number; max?: number; step?: number };
 
+const asRecord = (value: unknown): AnyRecord =>
+  value && typeof value === 'object' ? (value as unknown as AnyRecord) : {};
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
@@ -18,12 +21,13 @@ export const resolveNumberBounds = (
   registry: typeof nodeRegistryValue
 ): NumberBounds => {
   if (!(ctrl instanceof ClassicPreset.InputControl)) return {};
-  if ((ctrl as AnyRecord).type !== 'number') return {};
+  const record = asRecord(ctrl);
+  if (record.type !== 'number') return {};
 
   const fromControl: NumberBounds = {
-    min: isFiniteNumber((ctrl as AnyRecord).min) ? (ctrl as AnyRecord).min : undefined,
-    max: isFiniteNumber((ctrl as AnyRecord).max) ? (ctrl as AnyRecord).max : undefined,
-    step: isFiniteNumber((ctrl as AnyRecord).step) ? (ctrl as AnyRecord).step : undefined,
+    min: isFiniteNumber(record.min) ? record.min : undefined,
+    max: isFiniteNumber(record.max) ? record.max : undefined,
+    step: isFiniteNumber(record.step) ? record.step : undefined,
   };
   if (
     fromControl.min !== undefined ||
@@ -34,10 +38,10 @@ export const resolveNumberBounds = (
   }
 
   const nodeType =
-    typeof (ctrl as AnyRecord).nodeType === 'string' ? String((ctrl as AnyRecord).nodeType) : '';
-  const portId = typeof (ctrl as AnyRecord).portId === 'string' ? String((ctrl as AnyRecord).portId) : '';
+    typeof record.nodeType === 'string' ? String(record.nodeType) : '';
+  const portId = typeof record.portId === 'string' ? String(record.portId) : '';
   const configKey =
-    typeof (ctrl as AnyRecord).configKey === 'string' ? String((ctrl as AnyRecord).configKey) : '';
+    typeof record.configKey === 'string' ? String(record.configKey) : '';
   const key = portId || configKey;
   if (!nodeType || !key) return {};
 
@@ -87,7 +91,7 @@ export const buildAssetOptions = (
   }));
 };
 
-export const clientLabel = (c: ClientInfo): string => String((c as AnyRecord).clientId ?? '');
+export const clientLabel = (c: ClientInfo): string => String(asRecord(c).clientId ?? '');
 
 export const readinessClass = (
   readinessByClient: Map<string, AnyRecord>,
@@ -150,9 +154,9 @@ export const buildClientPickerView = (args: {
 
   const clientById = new Map<string, ClientInfo>();
   for (const c of args.audienceClients) {
-    const id = String((c as AnyRecord)?.clientId ?? '');
+    const id = String(asRecord(c).clientId ?? '');
     if (!id) continue;
-    clientById.set(id, c as ClientInfo);
+    clientById.set(id, c as unknown as ClientInfo);
   }
 
   const node = args.getNode(nodeId);
@@ -193,8 +197,8 @@ export const buildClientPickerView = (args: {
   const orderedClients = ordered.map((id) => clientById.get(id)).filter(Boolean) as ClientInfo[];
   return orderedClients.map((c) => ({
     client: c,
-    selected: selectedIdSet.has(String((c as AnyRecord)?.clientId ?? '')),
-    primary: String((c as AnyRecord)?.clientId ?? '') === selectedFirstId,
+    selected: selectedIdSet.has(String(asRecord(c).clientId ?? '')),
+    primary: String(asRecord(c).clientId ?? '') === selectedFirstId,
   }));
 };
 

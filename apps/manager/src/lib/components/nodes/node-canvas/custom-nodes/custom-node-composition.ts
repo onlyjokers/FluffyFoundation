@@ -1,8 +1,7 @@
 // Purpose: Compose Custom Node handlers/actions/expansion for NodeCanvas.
 import type { Readable } from 'svelte/store';
 import type { NodeRegistry } from '@shugu/node-core';
-import type { GraphState } from '$lib/nodes/types';
-import type { nodeEngine as managerNodeEngine } from '$lib/nodes/engine';
+import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { CustomNodeInstanceState } from '$lib/nodes/custom-nodes/instance';
 import type { GraphViewAdapter } from '../adapters';
@@ -14,7 +13,18 @@ import { createCustomNodeHandlers } from './custom-node-handlers';
 import { createCustomNodeActions } from './custom-node-actions';
 
 type CustomNodeCompositionOptions = {
-  nodeEngine: typeof managerNodeEngine;
+  nodeEngine: {
+    getNode: (nodeId: string) => NodeInstance | null;
+    exportGraph: () => GraphState;
+    updateNodeType: (nodeId: string, type: string) => void;
+    updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
+    updateNodeInputValue: (nodeId: string, portId: string, value: unknown) => void;
+    updateNodePosition: (nodeId: string, pos: { x: number; y: number }) => void;
+    addNode: (node: NodeInstance) => void;
+    removeNode: (nodeId: string) => void;
+    addConnection: (conn: Connection) => void;
+    removeConnection: (connId: string) => void;
+  };
   nodeRegistry: NodeRegistry;
   groupController: GroupController;
   groupPortNodesController: GroupPortNodesController;
@@ -57,7 +67,6 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
     getCustomNodeDefinition: opts.getCustomNodeDefinition,
     upsertCustomNodeDefinition: opts.upsertCustomNodeDefinition,
     getCustomNodeActions: () => customNodeActions,
-    syncEditorProjection: opts.syncEditorProjection,
   });
 
   const refreshExpandedCustomGroupIds = () => {

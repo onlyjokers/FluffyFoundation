@@ -10,8 +10,14 @@
   import { localMediaStore, type LocalMediaKind } from '$lib/stores/local-media';
 
   type AnyRecord = Record<string, unknown>;
+  type LocalAssetControlData = AnyRecord & {
+    assetKind?: string;
+    readonly?: boolean;
+    setValue?: (value: unknown) => void;
+    value?: unknown;
+  };
 
-  export let data: AnyRecord;
+  export let data: LocalAssetControlData;
   export let isInline = false;
   export let hasLabel = false;
 
@@ -60,6 +66,10 @@
   let displayLocalFileInput: HTMLInputElement | null = null;
   let lastServerLocalAssetPath = '';
   let lastDisplayFileRef = '';
+
+  const setControlValue = (value: unknown): void => {
+    data.setValue?.(value);
+  };
 
   $: {
     const current = typeof data?.value === 'string' ? String(data.value) : '';
@@ -121,6 +131,9 @@
     });
   }
 
+  const displayLocalKind = (value: unknown): string => String(value ?? '');
+  const stringValue = (value: unknown): string => (typeof value === 'string' ? value : '');
+
   function acceptForLocalKind(kind: LocalMediaKind | null): string {
     if (kind === 'audio') return 'audio/*';
     if (kind === 'image') return 'image/*';
@@ -142,13 +155,13 @@
     if (next === 'display') {
       localAssetDraftDirty = false;
       localAssetDraft = lastServerLocalAssetPath;
-      if (!isDisplayFileRef(current)) data?.setValue?.(lastDisplayFileRef || '');
+      if (!isDisplayFileRef(current)) setControlValue(lastDisplayFileRef || '');
       return;
     }
 
     localAssetDraftDirty = false;
     localAssetDraft = lastServerLocalAssetPath;
-    if (isDisplayFileRef(current) || !current) data?.setValue?.(lastServerLocalAssetPath || '');
+    if (isDisplayFileRef(current) || !current) setControlValue(lastServerLocalAssetPath || '');
   };
 
   const openDisplayLocalFilePicker = () => {
@@ -165,7 +178,7 @@
     localAssetDraft = '';
     localAssetSource = 'display';
     localAssetSourcePinned = true;
-    data?.setValue?.(target.value);
+    setControlValue(target.value);
   };
 
   const onDisplayLocalFileChange = (event: Event) => {
@@ -189,7 +202,7 @@
     localAssetDraft = '';
     localAssetSource = 'display';
     localAssetSourcePinned = true;
-    data?.setValue?.(buildDisplayFileRef(entry.id));
+    setControlValue(buildDisplayFileRef(entry.id));
   };
 
   const changeLocalAssetSelect = (event: Event) => {
@@ -200,7 +213,7 @@
     localAssetError = null;
     localAssetSource = 'server';
     localAssetSourcePinned = true;
-    data?.setValue?.(next);
+    setControlValue(next);
   };
 
   const onLocalAssetDraftInput = (event: Event) => {
@@ -218,7 +231,7 @@
       localAssetError = null;
       localAssetSourcePinned = true;
       localAssetSource = 'server';
-      data?.setValue?.('');
+      setControlValue('');
       return;
     }
 
@@ -237,7 +250,7 @@
       localAssetDraft = validated.path;
       localAssetSourcePinned = true;
       localAssetSource = 'server';
-      data?.setValue?.(validated.path);
+      setControlValue(validated.path);
     } catch (err) {
       localAssetError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -300,8 +313,8 @@
         Choose file
       </button>
       <div class="file-name">
-        {#if isDisplayFileRef(data.value)}
-          {displayLocalSelectedName(data.value) || String(data.value)}
+        {#if isDisplayFileRef(stringValue(data.value))}
+          {displayLocalSelectedName(stringValue(data.value)) || stringValue(data.value)}
         {:else}
           No file selected
         {/if}
@@ -320,13 +333,13 @@
 
     <select
       class="control-input {isInline ? 'inline' : ''}"
-      value={isDisplayFileRef(data.value) ? data.value : ''}
+      value={isDisplayFileRef(stringValue(data.value)) ? stringValue(data.value) : ''}
       disabled={data.readonly}
       on:pointerdown|stopPropagation
       on:change={changeDisplayLocalSelect}
     >
       <option value="">(picked files)</option>
-      {#each buildDisplayLocalMediaOptions(String(data.assetKind ?? '')) as opt (opt.value)}
+        {#each buildDisplayLocalMediaOptions(displayLocalKind(data.assetKind)) as opt (opt.value)}
         <option value={opt.value}>{opt.label}</option>
       {/each}
     </select>

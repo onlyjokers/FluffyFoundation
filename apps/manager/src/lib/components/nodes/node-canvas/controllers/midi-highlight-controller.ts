@@ -4,7 +4,7 @@
 import { get } from 'svelte/store';
 import type { GraphState } from '$lib/nodes/types';
 import { midiService, type MidiEvent } from '$lib/features/midi/midi-service';
-import { midiNodeBridge, midiSourceMatchesEvent } from '$lib/features/midi/midi-node-bridge';
+import { midiNodeBridge, midiSourceMatchesEvent, type MidiSource } from '$lib/features/midi/midi-node-bridge';
 import type { GraphViewAdapter } from '../adapters';
 import { computeMidiHighlightState, computeNodeActivityHighlightState } from './midi-highlight';
 import { nodeRegistry } from '$lib/nodes';
@@ -28,6 +28,11 @@ type MidiHighlightControllerOptions = {
 const MIDI_HIGHLIGHT_TTL_MS = 180;
 const midiSourceNodeTypes = new Set(['midi-fuzzy', 'midi-boolean']);
 const midiTraversalStopNodeTypes = new Set(['client-object']);
+const sourceMatchesMidiEvent = (
+  source: unknown,
+  event: unknown,
+  selectedInputId: string | null
+): boolean => midiSourceMatchesEvent(source as MidiSource | null | undefined, event as MidiEvent, selectedInputId);
 
 export function createMidiHighlightController(opts: MidiHighlightControllerOptions): MidiHighlightController {
   let midiUnsub: (() => void) | null = null;
@@ -120,7 +125,7 @@ export function createMidiHighlightController(opts: MidiHighlightControllerOptio
           selectedInputId,
           sourceNodeTypes: midiSourceNodeTypes,
           traversalStopNodeTypes: midiTraversalStopNodeTypes,
-          midiSourceMatchesEvent,
+          midiSourceMatchesEvent: sourceMatchesMidiEvent,
           nodeRegistry,
         });
 
@@ -193,7 +198,7 @@ export function createMidiHighlightController(opts: MidiHighlightControllerOptio
     const matched = (graph.nodes ?? [])
       .filter((n) => midiSourceNodeTypes.has(String(n.type)))
       .filter((n) => !disabledNodeIds.has(String(n.id)))
-      .some((n) => midiSourceMatchesEvent((n.config as Record<string, unknown>)?.source, event, selectedInputId));
+      .some((n) => sourceMatchesMidiEvent((n.config as Record<string, unknown>)?.source, event, selectedInputId));
 
     if (!matched) return;
 

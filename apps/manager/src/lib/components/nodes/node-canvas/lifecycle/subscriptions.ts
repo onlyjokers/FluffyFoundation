@@ -1,5 +1,7 @@
 // Purpose: Bind NodeCanvas store subscriptions outside the Svelte component shell.
 import { get } from 'svelte/store';
+import type { GraphState } from '$lib/nodes/types';
+import type { NodeGroup } from '../controllers/group-controller';
 import { asRecord, getBoolean, getString } from '$lib/utils/value-guards';
 import { midiService } from '$lib/features/midi/midi-service';
 import {
@@ -156,7 +158,7 @@ export function bindGroupUiSubscriptions(opts: {
   let lastGroupsKeyFromProject = '';
   let lastGroupsKeyFromCanvas = '';
 
-  const groupUiStateUnsub = opts.nodeGroupsState.subscribe((groups: unknown[]) => {
+    const groupUiStateUnsub = opts.nodeGroupsState.subscribe((groups: NodeGroup[]) => {
     if (syncingGroupsToProject) return;
     const nextKey = groupSnapshotKey(groups ?? []);
     if (nextKey === lastGroupsKeyFromProject || nextKey === lastGroupsKeyFromCanvas) return;
@@ -169,7 +171,7 @@ export function bindGroupUiSubscriptions(opts: {
     syncingGroupsFromProject = false;
   });
 
-  const groupNodesUnsub = opts.nodeGroups.subscribe((groups: unknown[]) => {
+    const groupNodesUnsub = opts.nodeGroups.subscribe((groups: NodeGroup[]) => {
     const nextKey = groupSnapshotKey(groups ?? []);
     lastGroupsKeyFromCanvas = nextKey;
     if (!syncingGroupsFromProject && nextKey !== lastGroupsKeyFromProject) {
@@ -232,7 +234,7 @@ export function bindManagerClientSubscription(opts: {
     // Client node titles depend on online client count; refresh labels when client list changes.
     void opts.graphSync?.schedule(get(opts.graphStateStore));
 
-    const engineState = get(opts.graphStateStore);
+    const engineState = get(opts.graphStateStore) as GraphState;
     // If a project ever ended up with a Display clientId inside a Client node, clear it.
     if (displayIdSet.size > 0) {
       for (const node of engineState.nodes ?? []) {

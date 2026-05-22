@@ -8,6 +8,8 @@ import { buildGroupPortIndex, isGroupPortNodeType } from '../utils/group-port-ut
 
 type Bounds = { left: number; top: number; right: number; bottom: number };
 type AnyRecord = Record<string, unknown>;
+const asRecord = (value: unknown): AnyRecord =>
+  value && typeof value === 'object' ? (value as AnyRecord) : {};
 
 export interface FocusController {
   focusNodeIds(nodeIdsRaw: string[], opts?: { force?: boolean }): void;
@@ -121,9 +123,9 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
 
     const getNodeBoundsApprox = (nodeId: string): Bounds | null => {
       const node = nodeById.get(String(nodeId));
-      const pos = (node as AnyRecord)?.position;
-      const x = Number(pos?.x ?? 0);
-      const y = Number(pos?.y ?? 0);
+      const pos = asRecord((node as AnyRecord)?.position);
+      const x = Number(pos.x ?? 0);
+      const y = Number(pos.y ?? 0);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
       const w = 230;
       const h = 100;
@@ -157,11 +159,12 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
     const childrenByParentId = new Map<string, string[]>();
 
     for (const g of groups) {
-      const id = String(g?.id ?? '');
+      const id = String(asRecord(g).id ?? '');
       if (!id) continue;
       byId.set(id, g);
 
-      const pid = g?.parentId ? String(g.parentId) : '';
+      const groupRecord = asRecord(g);
+      const pid = groupRecord.parentId ? String(groupRecord.parentId) : '';
       if (!pid) continue;
       const list = childrenByParentId.get(pid) ?? [];
       list.push(id);
@@ -181,11 +184,12 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
     let bounds: Bounds | null = null;
     const frames = getGroupFrames();
     if (Array.isArray(frames) && frames.length > 0) {
-      const frame = frames.find((f) => String(f?.group?.id ?? '') === targetId) ?? null;
-      const left = Number(frame?.left);
-      const top = Number(frame?.top);
-      const width = Number(frame?.width);
-      const height = Number(frame?.height);
+      const frame = frames.find((f) => String(asRecord(asRecord(f).group).id ?? '') === targetId) ?? null;
+      const frameRecord = asRecord(frame);
+      const left = Number(frameRecord.left);
+      const top = Number(frameRecord.top);
+      const width = Number(frameRecord.width);
+      const height = Number(frameRecord.height);
       if (Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(width) && Number.isFinite(height)) {
         bounds = { left, top, right: left + width, bottom: top + height };
       }
@@ -198,8 +202,9 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
 
       const getPortBoundsApprox = (nodeId: string): Bounds | null => {
         const node = nodeById.get(String(nodeId));
-        const x = Number((node as AnyRecord)?.position?.x ?? 0);
-        const y = Number((node as AnyRecord)?.position?.y ?? 0);
+        const pos = asRecord((node as AnyRecord)?.position);
+        const x = Number(pos.x ?? 0);
+        const y = Number(pos.y ?? 0);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
         const w = 80;
         const h = 44;
@@ -216,7 +221,8 @@ export function createFocusController(opts: CreateFocusControllerOptions): Focus
     const nodeIdsSet = new Set<string>();
     for (const gid of groupIds) {
       const g = byId.get(gid);
-      for (const nid of g?.nodeIds ?? []) {
+      const nodeIds = asRecord(g).nodeIds;
+      for (const nid of (Array.isArray(nodeIds) ? nodeIds : [])) {
         const id = String(nid);
         if (id) nodeIdsSet.add(id);
       }

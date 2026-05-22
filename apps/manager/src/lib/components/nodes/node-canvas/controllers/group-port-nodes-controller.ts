@@ -3,7 +3,7 @@
  */
 
 import { get } from 'svelte/store';
-import type { GraphState, NodeInstance } from '$lib/nodes/types';
+import type { GraphState, NodeInstance, NodePort } from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
 import type { GraphViewAdapter } from '../adapters';
 import type { GroupController } from './group-controller';
@@ -18,6 +18,8 @@ import {
 } from '../utils/group-port-utils';
 import { GROUP_FRAME_NODE_TYPE, syncGroupFrameNodes } from './group-frame-node-sync';
 import { alignGroupProxyNodes } from './group-proxy-alignment';
+import type { Connection } from '$lib/nodes/types';
+import type { GroupFrame } from './group-types';
 const isGroupDecorationNodeType = (type: string) => isGroupPortNodeType(type) || type === GROUP_FRAME_NODE_TYPE;
 
 export type GroupPortNodesController = {
@@ -40,6 +42,10 @@ export type CreateGroupPortNodesControllerOptions = {
 };
 
 type AnyRecord = Record<string, unknown>;
+const asRecord = (value: unknown): AnyRecord =>
+  value && typeof value === 'object' ? (value as AnyRecord) : {};
+const recordArray = (value: unknown): AnyRecord[] =>
+  Array.isArray(value) ? (value as AnyRecord[]) : [];
 
 export function createGroupPortNodesController(
   opts: CreateGroupPortNodesControllerOptions
@@ -111,11 +117,11 @@ export function createGroupPortNodesController(
 
     const state = nodeEngine.exportGraph() as GraphState;
     const nodes = Array.isArray(state.nodes) ? state.nodes : [];
-    const connections = Array.isArray((state as AnyRecord).connections) ? (state as AnyRecord).connections : [];
+    const connections = Array.isArray(state.connections) ? state.connections : [];
     const gateNodeIdsByGroupId = new Map<string, string[]>();
     for (const node of nodes) {
       const type = String((node as AnyRecord).type ?? '');
-      const gid = groupIdFromNode(node as AnyRecord);
+      const gid = groupIdFromNode(node);
       if (!gid) continue;
 
       if (type === GROUP_GATE_NODE_TYPE) {
@@ -127,7 +133,7 @@ export function createGroupPortNodesController(
       }
     }
 
-    const groupIdSet = new Set(groups.map((g: AnyRecord) => String((g as AnyRecord).id ?? '')).filter(Boolean));
+    const groupIdSet = new Set(groups.map((g) => String(g.id ?? '')).filter(Boolean));
 
     // Remove Group Gate nodes whose group no longer exists.
     for (const [gid, ids] of gateNodeIdsByGroupId.entries()) {
@@ -189,7 +195,7 @@ export function createGroupPortNodesController(
 
     const state = nodeEngine.exportGraph() as GraphState;
     const index = buildGroupPortIndex(state);
-    const nodeById = new Map((state.nodes ?? []).map((n: AnyRecord) => [String(n.id), n]));
+    const nodeById = new Map((state.nodes ?? []).map((n) => [String(n.id), n] as const));
     const connections = Array.isArray(state.connections) ? state.connections : [];
 
     groupController.beginProgrammaticTranslate();
@@ -201,7 +207,7 @@ export function createGroupPortNodesController(
         if (!ports) continue;
 
         const centerY = frame.top + frame.height / 2;
-        const isMinimized = Boolean((frame as AnyRecord)?.group?.minimized);
+        const isMinimized = Boolean(frame.group?.minimized);
 
         if (ports.gateId) {
           const nodeId = String(ports.gateId);
@@ -217,7 +223,10 @@ export function createGroupPortNodesController(
           }
         }
 
-        const proxyIds = Array.isArray((ports as AnyRecord).proxyIds) ? (ports as AnyRecord).proxyIds : [];
+        const portsRecord = asRecord(ports);
+        const proxyIds = Array.isArray(portsRecord.proxyIds)
+          ? portsRecord.proxyIds.map(String).filter(Boolean)
+          : [];
         alignGroupProxyNodes({ frame, proxyIds, nodeById, connections, adapter });
       }
     } finally {
@@ -245,7 +254,7 @@ export function createGroupPortNodesController(
       const nodes = Array.isArray(state.nodes) ? state.nodes : [];
       const connections = Array.isArray(state.connections) ? state.connections : [];
 
-      const nodeById = new Map(nodes.map((n: AnyRecord) => [String(n.id), n] as const));
+      const nodeById = new Map((nodes as NodeInstance[]).map((n) => [String(n.id), n] as const));
 
       const groupById = new Map<string, { id: string; parentId: string | null; nodeSet: Set<string> }>();
       const childrenByParentId = new Map<string, string[]>();
@@ -253,7 +262,8 @@ export function createGroupPortNodesController(
         const id = String((g as AnyRecord).id ?? '');
         if (!id) continue;
         const parentId = (g as AnyRecord).parentId ? String((g as AnyRecord).parentId) : null;
-        const nodeIds = Array.isArray((g as AnyRecord).nodeIds) ? (g as AnyRecord).nodeIds.map(String).filter(Boolean) : [];
+        const groupRecord = asRecord(g);
+        const nodeIds = Array.isArray(groupRecord.nodeIds) ? groupRecord.nodeIds.map(String).filter(Boolean) : [];
         groupById.set(id, { id, parentId, nodeSet: new Set(nodeIds) });
         if (!parentId) continue;
         const list = childrenByParentId.get(parentId) ?? [];
@@ -339,7 +349,7 @@ export function createGroupPortNodesController(
       ]);
 
       const resolveProxyPortType = (node: AnyRecord): string => {
-        const raw = node?.config?.portType;
+        const raw = asRecord(node.config).portType;
         const t = typeof raw === 'string' ? raw : raw ? String(raw) : '';
         return validPortTypes.has(t) ? t : 'any';
       };
@@ -350,8 +360,8 @@ export function createGroupPortNodesController(
         if (String(node.type) === GROUP_PROXY_NODE_TYPE) return resolveProxyPortType(node);
         const def = nodeRegistry.get(String(node.type ?? ''));
         const ports = side === 'input' ? def?.inputs : def?.outputs;
-        const port = (ports ?? []).find((p: AnyRecord) => String(p.id) === String(portId));
-        const t = String((port as AnyRecord)?.type ?? 'any');
+        const port: NodePort | undefined = (ports ?? []).find((p) => String(p.id) === String(portId));
+        const t = String(port?.type ?? 'any');
         return validPortTypes.has(t) ? t : 'any';
       };
 
@@ -369,17 +379,17 @@ export function createGroupPortNodesController(
         const type = String(node.type ?? '');
 
         if (type === GROUP_GATE_NODE_TYPE) {
-          const gid = groupIdFromNode(node);
+          const gid = groupIdFromNode(node as NodeInstance);
           if (!gid) return [];
           const path = getPath(gid);
           return path.slice(0, Math.max(0, path.length - 1));
         }
 
         if (type === GROUP_PROXY_NODE_TYPE) {
-          const gid = groupIdFromNode(node);
+          const gid = groupIdFromNode(node as NodeInstance);
           const path = gid ? getPath(gid) : [];
           const parentPath = path.slice(0, Math.max(0, path.length - 1));
-          const direction = String((node.config as AnyRecord)?.direction ?? 'output');
+          const direction = String(asRecord(node.config).direction ?? 'output');
           if (direction === 'input') {
             if (side === 'input' && portId === 'in') return parentPath;
             return path;
@@ -393,7 +403,7 @@ export function createGroupPortNodesController(
         return primary ? getPath(primary) : [];
       };
 
-      const frameByGroupId = new Map<string, AnyRecord>();
+      const frameByGroupId = new Map<string, GroupFrame>();
       for (const frame of get(groupController.groupFrames) ?? []) {
         const gid = String(frame?.group?.id ?? '');
         if (gid) frameByGroupId.set(gid, frame);
@@ -410,7 +420,7 @@ export function createGroupPortNodesController(
         const baseY = frame ? frame.top + frame.height / 2 : 120 + getNodeCount() * 6;
         const x = frame
           ? (() => {
-              const isMinimized = Boolean((frame as AnyRecord)?.group?.minimized);
+              const isMinimized = Boolean(frame.group?.minimized);
               if (isMinimized) {
                 const right = frame.left + frame.width;
                 return direction === 'input'
@@ -436,7 +446,7 @@ export function createGroupPortNodesController(
         }
 
         if (frame) {
-          const isMinimized = Boolean((frame as AnyRecord)?.group?.minimized);
+          const isMinimized = Boolean(frame.group?.minimized);
           const minimizedHeaderHeight = 44;
           const minimizedRowHeight = 28;
           const minimizedPad = 6;
@@ -462,7 +472,12 @@ export function createGroupPortNodesController(
         return addNode(GROUP_PROXY_NODE_TYPE, pos, { groupId, direction, portType, pinned: false });
       };
 
-      const toRewrite: AnyRecord[] = [];
+      const toRewrite: {
+        conn: Connection;
+        sourceCtx: string[];
+        targetCtx: string[];
+        wireType: string;
+      }[] = [];
       for (const conn of connections) {
         const connId = String(conn.id ?? '');
         if (!connId) continue;
@@ -476,7 +491,7 @@ export function createGroupPortNodesController(
 
         // Safety: the Group Gate input must never be driven from inside its own group subtree (including child groups).
         if (String(targetNode.type) === GROUP_GATE_NODE_TYPE && String(conn.targetPortId) === 'active') {
-          const gid = groupIdFromNode(targetNode);
+          const gid = groupIdFromNode(targetNode as NodeInstance);
           if (gid && sourceCtx.includes(String(gid))) {
             nodeEngine.removeConnection(connId);
             nodeEngine.lastError?.set?.('Group gate input cannot originate from inside the group.');
@@ -507,8 +522,8 @@ export function createGroupPortNodesController(
 
           nodeEngine.removeConnection(connId);
 
-          const sourceCtx: string[] = entry.sourceCtx ?? [];
-          const targetCtx: string[] = entry.targetCtx ?? [];
+          const sourceCtx = entry.sourceCtx;
+          const targetCtx = entry.targetCtx;
           const wireType: string = validPortTypes.has(entry.wireType) ? entry.wireType : 'any';
 
           const prefixLen = commonPrefixLen(sourceCtx, targetCtx);
@@ -545,7 +560,7 @@ export function createGroupPortNodesController(
       const nextState = nodeEngine.exportGraph();
       const nextNodes = Array.isArray(nextState.nodes) ? nextState.nodes : [];
       const nextConnections = Array.isArray(nextState.connections) ? nextState.connections : [];
-      const nextNodeById = new Map(nextNodes.map((n: AnyRecord) => [String(n.id), n] as const));
+      const nextNodeById = new Map(nextNodes.map((n) => [String(n.id), n] as const));
       for (const node of nextNodes) {
         const id = String((node as AnyRecord)?.id ?? '');
         if (!id || nodeById.has(id)) continue;
@@ -562,8 +577,8 @@ export function createGroupPortNodesController(
         }
         const def = nodeRegistry.get(String(instance.type ?? ''));
         const ports = side === 'input' ? def?.inputs : def?.outputs;
-        const port = (ports ?? []).find((p: AnyRecord) => String(p.id) === String(portId)) ?? null;
-        const t = String((port as AnyRecord)?.type ?? 'any');
+        const port = (ports ?? []).find((p) => String(p.id) === String(portId)) ?? null;
+        const t = String((port as unknown as AnyRecord)?.type ?? 'any');
         return validPortTypes.has(t) ? t : 'any';
       };
 
@@ -572,7 +587,7 @@ export function createGroupPortNodesController(
         if (!node) return [];
         const type = String(node.type ?? '');
         if (isGroupPortNodeType(type)) {
-          const gid = groupIdFromNode(node as AnyRecord);
+          const gid = groupIdFromNode(node);
           return gid ? getPath(gid) : [];
         }
         const primary = primaryGroupIdForNode(String(nodeId));
@@ -584,11 +599,12 @@ export function createGroupPortNodesController(
         if (String(node.type) !== GROUP_PROXY_NODE_TYPE) continue;
         const id = String(node.id ?? '');
         if (!id) continue;
-        const pinned = Boolean((node as AnyRecord)?.config?.pinned);
-        const directionRaw = String((node as AnyRecord)?.config?.direction ?? 'output');
+        const config = asRecord(node.config);
+        const pinned = Boolean(config.pinned);
+        const directionRaw = String(config.direction ?? 'output');
         let direction: 'input' | 'output' = directionRaw === 'input' ? 'input' : 'output';
 
-        const groupId = groupIdFromNode(node as AnyRecord);
+        const groupId = groupIdFromNode(node);
         const group = groupById.get(groupId);
         const nodeSet = group?.nodeSet ?? null;
         const groupIdKey = String(groupId ?? '');

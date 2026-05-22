@@ -1,17 +1,15 @@
 // Purpose: Keep NodeCanvas node selection state synchronized with Rete nodes.
 import type { Writable } from 'svelte/store';
 import type { AreaPlugin } from 'rete-area-plugin';
-import type { ClassicPreset } from 'rete';
+import type { BaseSchemes } from 'rete';
 import type { NodeInstance } from '$lib/nodes/types';
-
-type ReteSchemes = ClassicPreset.Schemes;
 
 type SelectionControllerOptions = {
   getSelectedNodeId: () => string;
   setSelectedNodeId: (nodeId: string) => void;
   selectedGroupId: Writable<string | null>;
   nodeMap: Map<string, NodeInstance>;
-  getAreaPlugin: () => AreaPlugin<ReteSchemes> | null;
+  getAreaPlugin: () => AreaPlugin<BaseSchemes> | null;
 };
 
 export function createSelectionController(opts: SelectionControllerOptions) {

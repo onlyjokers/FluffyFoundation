@@ -1,5 +1,5 @@
 // Purpose: Derive Custom Node boundary ports from expanded group proxy nodes.
-import type { Connection, NodeInstance } from '$lib/nodes/types';
+import type { Connection, NodeInstance, PortType } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
 import type { NodeGroup } from '../controllers/group-controller';
@@ -84,7 +84,7 @@ export function deriveCustomNodePortsFromProxies(opts: {
     const portKey = `p:${internalProxyId}`;
 
     const portTypeRaw = getString(config.portType, 'any');
-    const type = validPortTypes.has(portTypeRaw) ? portTypeRaw : 'any';
+    const type = validPortTypes.has(portTypeRaw) ? (portTypeRaw as PortType) : 'any';
     const pinned = getBoolean(config.pinned, false);
 
     const pos = proxy.position ?? { x: 0, y: 0 };

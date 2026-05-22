@@ -72,7 +72,7 @@ export const state = writable<ManagerState>({
 export const displayTransport = createDisplayTransport({
     managerState: state,
     displayBridgeState,
-    getSDK,
+    getSDK: () => getSDK() as unknown as Parameters<typeof createDisplayTransport>[0]['getSDK'] extends () => infer T ? T : never,
     local: {
         sendControl: sendLocalDisplayControl,
         sendPlugin: sendLocalDisplayPlugin,

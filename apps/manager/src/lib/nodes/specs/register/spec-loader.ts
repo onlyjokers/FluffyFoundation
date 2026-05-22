@@ -11,7 +11,7 @@ export function loadSpecs(): NodeSpec[] {
   const specs: NodeSpec[] = [];
 
   for (const mod of Object.values(modules)) {
-    const spec = mod?.default;
+    const spec = mod?.default as Record<string, unknown> | null;
     if (!spec || typeof spec !== 'object') continue;
     const type = typeof spec.type === 'string' ? spec.type.trim() : '';
     if (!type) continue;

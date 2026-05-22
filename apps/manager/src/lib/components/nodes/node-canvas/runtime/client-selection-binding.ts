@@ -189,8 +189,11 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     const reteNode = getNodeMap().get(String(nodeId));
     if (!reteNode || !areaPlugin) return;
 
-    const indexCtrl = asRecord((reteNode as AnyRecord)?.inputs?.index?.control) as InputControlLike | null;
-    const rangeCtrl = asRecord((reteNode as AnyRecord)?.inputs?.range?.control) as InputControlLike | null;
+    const reteInputs = asRecord(reteNode.inputs) ?? {};
+    const indexInput = asRecord(reteInputs.index) ?? {};
+    const rangeInput = asRecord(reteInputs.range) ?? {};
+    const indexCtrl = asRecord(indexInput.control) as InputControlLike | null;
+    const rangeCtrl = asRecord(rangeInput.control) as InputControlLike | null;
 
     if (indexCtrl && updateControls) {
       indexCtrl.min = 1;
@@ -295,12 +298,13 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
 
     // When the picker drives index/range, also forward overrides to any deployed loop/patch runtime.
     // (Input controls already do this via their own change handlers.)
-    const pickerOnlyChange =
+    const pickerOnlyChange = Boolean(
       typeof next.clientId === 'string' &&
       next.clientId &&
       typeof next.index !== 'number' &&
       typeof next.range !== 'number' &&
-      typeof next.random !== 'boolean';
+      typeof next.random !== 'boolean'
+    );
     if (pickerOnlyChange) {
       sendNodeOverride(nodeId, 'input', 'index', slice.index);
       sendNodeOverride(nodeId, 'input', 'range', slice.range);

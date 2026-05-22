@@ -1,5 +1,5 @@
 // Purpose: Build the NodeCanvas add-node command while keeping Custom Node safeguards isolated.
-import { get } from 'svelte/store';
+import { get, type Readable } from 'svelte/store';
 import { asRecord } from '$lib/utils/value-guards';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 
@@ -35,7 +35,7 @@ export function createNodeAdder(opts: {
     config: Record<string, unknown>,
     state: Record<string, unknown>
   ) => Record<string, unknown>;
-  customNodeDefinitions: unknown;
+  customNodeDefinitions: Readable<unknown[]>;
   wouldCreateCycle: (definitions: unknown[], parentDefinitionId: string, childDefinitionId: string) => boolean;
   getGroupFrames: () => unknown[];
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;

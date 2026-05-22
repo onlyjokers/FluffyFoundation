@@ -13,6 +13,10 @@ import {
   NodeRuntime,
   normalizeNodeConfigForDefinition,
 } from '@shugu/node-core';
+import type {
+  GraphState as CoreGraphState,
+  NodeInstance as CoreNodeInstance,
+} from '@shugu/node-core';
 
 import type { Connection, GraphChange, GraphState, NodeInstance } from './types';
 import { nodeRegistry } from './registry';
@@ -49,6 +53,10 @@ import {
 export type { LocalLoop } from './local-loop-detection';
 
 const TICK_INTERVAL = 33; // ~30 FPS
+
+const asManagerGraph = (graph: CoreGraphState): GraphState => graph as unknown as GraphState;
+const asManagerNode = (node: CoreNodeInstance | undefined): NodeInstance | undefined =>
+  node as unknown as NodeInstance | undefined;
 
 const LEGACY_TONE_FIELDS_BY_TYPE = new Map<string, string[]>([
   ['tone-delay', ['bus', 'order', 'enabled']],
@@ -175,7 +183,7 @@ class NodeEngineClass {
   // ========== Graph Manipulation ==========
 
   addNode(node: NodeInstance): void {
-    const snapshot = this.runtime.exportGraph();
+    const snapshot = asManagerGraph(this.runtime.exportGraph());
     const config = { ...(node.config ?? {}) };
     const inputValues = { ...(node.inputValues ?? {}) };
     stripLegacyToneFields(String(node.type), config, inputValues);
@@ -185,7 +193,7 @@ class NodeEngineClass {
       inputValues,
       outputValues: { ...(node.outputValues ?? {}) },
     };
-    const next = applyGraphChanges(snapshot, [{ type: 'add-node', node: sanitizedNode }]);
+    const next = asManagerGraph(applyGraphChanges(snapshot, [{ type: 'add-node', node: sanitizedNode }]));
 
     this.runtime.loadGraph(next);
     this.syncGraphState();
@@ -194,8 +202,8 @@ class NodeEngineClass {
   }
 
   removeNode(nodeId: string): void {
-    const snapshot = this.runtime.exportGraph();
-    const next = applyGraphChanges(snapshot, [{ type: 'remove-node', nodeId }]);
+    const snapshot = asManagerGraph(this.runtime.exportGraph());
+    const next = asManagerGraph(applyGraphChanges(snapshot, [{ type: 'remove-node', nodeId }]));
 
     this.cleanupGraphTransition(snapshot, next, { reason: 'removeNode' });
     this.runtime.loadGraph(next);
@@ -361,7 +369,7 @@ class NodeEngineClass {
   }
 
   addConnection(connection: Connection): boolean {
-    const snapshot = this.runtime.exportGraph();
+    const snapshot = asManagerGraph(this.runtime.exportGraph());
     const validationError = getConnectionValidationError({
       graph: snapshot,
       connection,
@@ -373,7 +381,7 @@ class NodeEngineClass {
     }
 
     const next = applySelectionMapOptions(
-      applyGraphChanges(snapshot, [{ type: 'add-connection', connection }])
+      asManagerGraph(applyGraphChanges(snapshot, [{ type: 'add-connection', connection }]))
     );
 
     const localOnlyError = getLocalOnlyPatchRoutingError({
@@ -405,9 +413,9 @@ class NodeEngineClass {
   }
 
   removeConnection(connectionId: string): void {
-    const snapshot = this.runtime.exportGraph();
+    const snapshot = asManagerGraph(this.runtime.exportGraph());
     const next = applySelectionMapOptions(
-      applyGraphChanges(snapshot, [{ type: 'remove-connection', connectionId }])
+      asManagerGraph(applyGraphChanges(snapshot, [{ type: 'remove-connection', connectionId }]))
     );
 
     this.cleanupGraphTransition(snapshot, next, { reason: 'removeConnection' });
@@ -418,7 +426,7 @@ class NodeEngineClass {
   }
 
   getNode(nodeId: string): NodeInstance | undefined {
-    return this.runtime.getNode(nodeId);
+    return asManagerNode(this.runtime.getNode(nodeId));
   }
 
   getLastComputedInputs(nodeId: string): Record<string, unknown> | null {
@@ -444,7 +452,7 @@ class NodeEngineClass {
 
   clear(): void {
     this.stop();
-    const prev = this.runtime.exportGraph();
+    const prev = asManagerGraph(this.runtime.exportGraph());
     this.runtime.clear();
     this.offloadedNodeIds.clear();
     this.offloadedPatchNodeIds.clear();
@@ -452,7 +460,7 @@ class NodeEngineClass {
     this.disabledNodeIds.clear();
     this.syncGraphState();
     clearNodeGraphLayout();
-    this.emitGraphChanges(prev, this.runtime.exportGraph());
+    this.emitGraphChanges(prev, asManagerGraph(this.runtime.exportGraph()));
     this.updateLocalLoops();
 
     // Reset all node-origin modulation
@@ -462,7 +470,7 @@ class NodeEngineClass {
   // ========== Serialization ==========
 
   private syncGraphState(): void {
-    this.graphState.set(this.runtime.getGraphRef());
+    this.graphState.set(asManagerGraph(this.runtime.getGraphRef()));
   }
 
   private emitGraphChanges(prev: GraphState, next: GraphState): void {
@@ -471,7 +479,7 @@ class NodeEngineClass {
   }
 
   loadGraph(state: GraphState): void {
-    const prev = this.runtime.exportGraph();
+    const prev = asManagerGraph(this.runtime.exportGraph());
     const rawNodes = Array.isArray(state.nodes) ? state.nodes : [];
     const rawConnections = Array.isArray(state.connections) ? state.connections : [];
 
@@ -603,7 +611,7 @@ class NodeEngineClass {
 
   private updateLocalLoops(): void {
     try {
-      const loops = detectLocalClientLoops(this.runtime.getGraphRef());
+      const loops = detectLocalClientLoops(asManagerGraph(this.runtime.getGraphRef()));
       this.localLoops.set(loops);
 
       // If a loop vanished, clear its offload flags.
@@ -682,7 +690,7 @@ class NodeEngineClass {
 
     // AI model refs act as global deployment toggles (unconnected by design).
     // Include them so the client NodeExecutor can enable/disable its AI runtime.
-    const graphSnapshot = this.runtime.exportGraph();
+    const graphSnapshot = asManagerGraph(this.runtime.exportGraph());
     for (const node of graphSnapshot.nodes ?? []) {
       if (String(node.type) !== 'ai-model-ref') continue;
       const nodeId = String(node.id);
@@ -699,7 +707,7 @@ class NodeEngineClass {
     }
 
     const nodeSet = new Set(nodes.map((n) => n.id));
-    const { connections } = this.runtime.getGraphRef();
+    const { connections } = asManagerGraph(this.runtime.getGraphRef());
     const loopConnections = connections.filter(
       (c) => nodeSet.has(c.sourceNodeId) && nodeSet.has(c.targetNodeId)
     );
@@ -732,7 +740,10 @@ class NodeEngineClass {
     };
     assetRefs: string[];
   } {
-    const snapshot = compileGraphForPatch(this.runtime.exportGraph(), get(customNodeDefinitions) ?? []);
+    const snapshot = asManagerGraph(compileGraphForPatch(
+      asManagerGraph(this.runtime.exportGraph()),
+      get(customNodeDefinitions) ?? []
+    ));
     const ids = Array.from(new Set((rootNodeIds ?? []).map(String).filter(Boolean))).sort();
     if (ids.length === 0) throw new Error('No patch root ids provided.');
 
@@ -790,7 +801,10 @@ class NodeEngineClass {
   }
 
   exportCompiledGraphForPatchPlanning(): GraphState {
-    return compileGraphForPatch(this.runtime.exportGraph(), get(customNodeDefinitions) ?? []);
+    return asManagerGraph(compileGraphForPatch(
+      asManagerGraph(this.runtime.exportGraph()),
+      get(customNodeDefinitions) ?? []
+    ));
   }
 
   exportGraphForPatch(): {
@@ -804,7 +818,7 @@ class NodeEngineClass {
     };
     assetRefs: string[];
   } {
-    const snapshot = this.runtime.exportGraph();
+    const snapshot = asManagerGraph(this.runtime.exportGraph());
     const selectedRoots = selectPatchRoots(snapshot);
     return this.exportGraphForPatchFromRootNodeIds(selectedRoots.map((n) => String(n.id)));
   }
@@ -812,3 +826,4 @@ class NodeEngineClass {
 
 // Singleton instance
 export const nodeEngine = new NodeEngineClass();
+export type NodeEngine = typeof nodeEngine;

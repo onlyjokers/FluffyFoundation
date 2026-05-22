@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { Connection, GraphState, NodeDefinition } from './types';
+import type { Connection, GraphState, NodeDefinition, NodePort } from './types';
 import {
   getConnectionValidationError,
   getLocalOnlyPatchRoutingError,
@@ -23,6 +23,12 @@ const node = (id: string, type: string, config: Record<string, unknown> = {}) =>
   config,
   inputValues: {},
   outputValues: {},
+});
+
+const port = (id: string, type: NodePort['type']): NodePort => ({ id, label: id, type });
+const nodeDef = (definition: Omit<NodeDefinition, 'configSchema'> & Partial<Pick<NodeDefinition, 'configSchema'>>): NodeDefinition => ({
+  ...definition,
+  configSchema: definition.configSchema ?? [],
 });
 
 const connection = (
@@ -128,98 +134,110 @@ test('getLocalOnlyPatchRoutingError allows local-only patch roots routed to disp
   assert.equal(getLocalOnlyPatchRoutingError({ graph, getNodeDefinition: def }), null);
 });
 
-registry.set('number', {
+registry.set('number', nodeDef({
   type: 'number',
   label: 'Number',
+  category: 'Values',
   inputs: [],
-  outputs: [{ id: 'out', type: 'number' }],
+  outputs: [port('out', 'number')],
   process: () => ({}),
-});
+}));
 
-registry.set('audio-source', {
+registry.set('audio-source', nodeDef({
   type: 'audio-source',
   label: 'Audio',
+  category: 'Values',
   inputs: [],
-  outputs: [{ id: 'out', type: 'audio' }],
+  outputs: [port('out', 'audio')],
   process: () => ({}),
-});
+}));
 
-registry.set('any-target', {
+registry.set('any-target', nodeDef({
   type: 'any-target',
   label: 'Any Target',
-  inputs: [{ id: 'in', type: 'any' }],
+  category: 'Values',
+  inputs: [port('in', 'any')],
   outputs: [],
   process: () => ({}),
-});
+}));
 
-registry.set('string-target', {
+registry.set('string-target', nodeDef({
   type: 'string-target',
   label: 'String Target',
-  inputs: [{ id: 'in', type: 'string' }],
+  category: 'Values',
+  inputs: [port('in', 'string')],
   outputs: [],
   process: () => ({}),
-});
+}));
 
-registry.set('group-proxy', {
+registry.set('group-proxy', nodeDef({
   type: 'group-proxy',
   label: 'Group Proxy',
+  category: 'Values',
   inputs: [],
-  outputs: [{ id: 'out', type: 'any' }],
+  outputs: [port('out', 'any')],
   process: () => ({}),
-});
+}));
 
-registry.set('logic-sleep', {
+registry.set('logic-sleep', nodeDef({
   type: 'logic-sleep',
   label: 'Sleep',
-  inputs: [{ id: 'input', type: 'any' }],
-  outputs: [{ id: 'output', type: 'any' }],
+  category: 'Logic',
+  inputs: [port('input', 'any')],
+  outputs: [port('output', 'any')],
   process: () => ({}),
-});
+}));
 
-registry.set('load-image-from-local', {
+registry.set('load-image-from-local', nodeDef({
   type: 'load-image-from-local',
   label: 'Local Image',
+  category: 'Assets',
   inputs: [],
-  outputs: [{ id: 'image', type: 'image' }],
+  outputs: [port('image', 'image')],
   process: () => ({}),
-});
+}));
 
-registry.set('load-video-from-local', {
+registry.set('load-video-from-local', nodeDef({
   type: 'load-video-from-local',
   label: 'Local Video',
+  category: 'Assets',
   inputs: [],
-  outputs: [{ id: 'video', type: 'video' }],
+  outputs: [port('video', 'video')],
   process: () => ({}),
-});
+}));
 
-registry.set('image-out', {
+registry.set('image-out', nodeDef({
   type: 'image-out',
   label: 'Image Out',
-  inputs: [{ id: 'image', type: 'image' }],
-  outputs: [{ id: 'cmd', type: 'command' }],
+  category: 'Scene',
+  inputs: [port('image', 'image')],
+  outputs: [port('cmd', 'command')],
   process: () => ({}),
-});
+}));
 
-registry.set('video-out', {
+registry.set('video-out', nodeDef({
   type: 'video-out',
   label: 'Video Out',
-  inputs: [{ id: 'video', type: 'video' }],
-  outputs: [{ id: 'cmd', type: 'command' }],
+  category: 'Scene',
+  inputs: [port('video', 'video')],
+  outputs: [port('cmd', 'command')],
   process: () => ({}),
-});
+}));
 
-registry.set('client-object', {
+registry.set('client-object', nodeDef({
   type: 'client-object',
   label: 'Client',
-  inputs: [{ id: 'in', type: 'command' }],
+  category: 'Objects',
+  inputs: [port('in', 'command')],
   outputs: [],
   process: () => ({}),
-});
+}));
 
-registry.set('display-object', {
+registry.set('display-object', nodeDef({
   type: 'display-object',
   label: 'Display',
-  inputs: [{ id: 'in', type: 'command' }],
+  category: 'Objects',
+  inputs: [port('in', 'command')],
   outputs: [],
   process: () => ({}),
-});
+}));

@@ -154,12 +154,12 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
             // ignore
           }
           opts.nodeMap.delete(n.id);
-          reteNode = null;
+          reteNode = undefined;
         }
         if (!reteNode) {
           const existing = opts.editor.getNode(n.id);
           if (existing) {
-            reteNode = existing;
+            reteNode = existing as unknown as ClassicPreset.Node;
             opts.nodeMap.set(n.id, reteNode);
           } else {
             reteNode = opts.buildReteNode(n);
@@ -186,7 +186,10 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
         if (opts.connectionMap.has(c.id)) continue;
         const existing = opts.editor.getConnection(c.id);
         if (existing) {
-          opts.connectionMap.set(c.id, existing);
+          opts.connectionMap.set(
+            c.id,
+            existing as unknown as ClassicPreset.Connection<ClassicPreset.Node, ClassicPreset.Node>
+          );
           continue;
         }
         const src = opts.nodeMap.get(c.sourceNodeId);
@@ -194,7 +197,9 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
         if (!src || !tgt) continue;
         const conn = new ClassicPreset.Connection(src, c.sourcePortId, tgt, c.targetPortId);
         conn.id = c.id;
-        await opts.editor.addConnection(conn);
+        await opts.editor.addConnection(
+          conn as unknown as Parameters<typeof opts.editor.addConnection>[0]
+        );
         opts.connectionMap.set(c.id, conn);
       }
 

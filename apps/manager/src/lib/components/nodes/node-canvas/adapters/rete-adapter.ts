@@ -5,7 +5,7 @@
  * a renderer-agnostic interface for controllers.
  */
 import type { BaseSchemes } from 'rete';
-import type { AreaPlugin } from 'rete-area-plugin';
+import { AreaExtensions, type AreaPlugin } from 'rete-area-plugin';
 import type {
   GraphViewAdapter,
   ViewportTransform,
@@ -61,7 +61,7 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
     if (!area) return;
     area.transform = { k: transform.k, x: transform.tx, y: transform.ty };
     // Force area update (update() is private in Rete types)
-    (area as { update?: () => void }).update?.();
+    (area as unknown as { update?: () => void }).update?.();
     requestFramesUpdate();
   };
 
@@ -69,12 +69,15 @@ export function createReteAdapter(opts: ReteAdapterOptions): GraphViewAdapter {
     const areaPlugin = getAreaPlugin();
     if (!areaPlugin) return;
     const nodeMap = getNodeMap();
-    const nodes = nodeIds.map((id) => nodeMap.get(id)).filter(Boolean);
+    const nodes = nodeIds
+      .map((id) => nodeMap.get(id))
+      .filter((node): node is AnyRecord => Boolean(node)) as unknown as Parameters<
+      typeof AreaExtensions.zoomAt
+    >[1];
     if (nodes.length === 0) return;
 
     // Use Rete's zoomAt extension if available
     try {
-      const { AreaExtensions } = await import('rete-area-plugin');
       await AreaExtensions.zoomAt(areaPlugin, nodes);
       requestFramesUpdate();
     } catch {

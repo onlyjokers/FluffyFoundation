@@ -392,7 +392,7 @@ export function createLoopController(opts: LoopControllerOptions): LoopControlle
 
   sensorUnsub = sensorData.subscribe((map) => {
     for (const [clientId, msg] of map.entries()) {
-      const m = msg as Record<string, unknown>;
+      const m = msg as unknown as Record<string, unknown>;
       if (!m || m.sensorType !== 'custom') continue;
       const payload = (m.payload ?? {}) as Record<string, unknown>;
       if (payload?.kind !== 'node-executor') continue;

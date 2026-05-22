@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { writable } from 'svelte/store';
 import { test } from 'node:test';
 
-import { createManagerSemanticBridge } from './manager-semantic-bridge';
-import type { NodeInstance } from '$lib/nodes/types';
-import type { NodeDefinition } from '@shugu/node-core';
+import { createManagerSemanticBridge, type ManagerSemanticBridgeRuntime } from './manager-semantic-bridge';
+import type { Connection, NodeInstance } from '$lib/nodes/types';
+import { NodeRegistry, type NodeDefinition } from '@shugu/node-core';
 
 const definitions: NodeDefinition[] = [
   {
@@ -15,6 +15,7 @@ const definitions: NodeDefinition[] = [
     inputs: [],
     outputs: [{ id: 'out', label: 'Out', type: 'number' }],
     configSchema: [],
+    process: () => ({}),
   },
   {
     type: 'math',
@@ -22,7 +23,8 @@ const definitions: NodeDefinition[] = [
     category: 'Logic',
     inputs: [{ id: 'a', label: 'A', type: 'number' }],
     outputs: [{ id: 'out', label: 'Out', type: 'number' }],
-    configSchema: [{ key: 'gain', type: 'number', label: 'Gain', default: 1 }],
+    configSchema: [{ key: 'gain', type: 'number', label: 'Gain', defaultValue: 1 }],
+    process: () => ({}),
   },
 ];
 
@@ -37,23 +39,20 @@ const numberNode: NodeInstance = {
 
 function createRuntime() {
   const nodes: NodeInstance[] = [];
-  const connections: Array<{
-    id: string;
-    sourceNodeId: string;
-    sourcePortId: string;
-    targetNodeId: string;
-    targetPortId: string;
-  }> = [];
+  const connections: Connection[] = [];
   const configPatches: Array<{ nodeId: string; patch: Record<string, unknown> }> = [];
   const inputValuePatches: Array<{ nodeId: string; portId: string; value: unknown }> = [];
 
-  const runtime = {
+  const registry = new NodeRegistry();
+  for (const definition of definitions) registry.register(definition);
+
+  const runtime: ManagerSemanticBridgeRuntime = {
     nodeEngine: {
       exportGraph: () => ({ nodes: nodes.map((node) => ({ ...node })), connections: connections.map((conn) => ({ ...conn })) }),
       addNode: (node: NodeInstance) => {
         nodes.push({ ...node });
       },
-      addConnection: (connection: (typeof connections)[number]) => {
+      addConnection: (connection: Connection) => {
         connections.push({ ...connection });
       },
       removeConnection: (connectionId: string) => {
@@ -74,9 +73,13 @@ function createRuntime() {
         const index = nodes.findIndex((candidate) => candidate.id === nodeId);
         if (index >= 0) nodes.splice(index, 1);
       },
+      replaceNodeInputValues: (nodeId: string, inputValues: Record<string, unknown>) => {
+        const node = nodes.find((candidate) => candidate.id === nodeId);
+        if (node) node.inputValues = { ...inputValues };
+      },
       lastError: writable<string | null>(null),
     },
-    nodeRegistry: { list: () => definitions },
+    nodeRegistry: registry,
     getGroups: () => [],
     getPartitions: () => [],
     isRunningStore: writable(false),

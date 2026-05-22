@@ -1,5 +1,6 @@
 // Double-click handling for opening group edit mode from the canvas.
 import { get } from 'svelte/store';
+import type { Readable } from 'svelte/store';
 import type { BaseSchemes } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 
@@ -11,7 +12,7 @@ type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
 type CanvasGroupEditDblClickOptions = {
   container: HTMLDivElement;
   getAreaPlugin: () => AnyAreaPlugin | null | undefined;
-  groupFrames: Parameters<typeof get>[0];
+  groupFrames: Readable<GroupFrame[]>;
   toggleGroupEditMode: (groupId: string) => void;
 };
 

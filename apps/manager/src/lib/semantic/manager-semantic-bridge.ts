@@ -59,6 +59,10 @@ export type ManagerSemanticBridge = {
 
 const defaultCanvasActor: SemanticActor = { id: 'canvas', role: 'operator' };
 
+const asManagerNode = (node: unknown): NodeInstance => node as unknown as NodeInstance;
+const asManagerConnection = (connection: unknown): EngineConnection =>
+  connection as unknown as EngineConnection;
+
 const runtimeStatusFor = (runtime: ManagerSemanticBridgeRuntime) => {
   const partitions = runtime.getPartitions();
   return {
@@ -99,8 +103,8 @@ export function createManagerSemanticBridge(
 
   const applyAcceptedCommand = (command: SemanticCommand) => {
     semanticRevision += 1;
-    if (command.type === 'node.add') runtime.nodeEngine.addNode(command.node);
-    if (command.type === 'node.connect') runtime.nodeEngine.addConnection(command.connection);
+    if (command.type === 'node.add') runtime.nodeEngine.addNode(asManagerNode(command.node));
+    if (command.type === 'node.connect') runtime.nodeEngine.addConnection(asManagerConnection(command.connection));
     if (command.type === 'node.disconnect') runtime.nodeEngine.removeConnection(command.connectionId);
     if (command.type === 'node.remove') runtime.nodeEngine.removeNode(command.nodeId);
     if (command.type === 'node.params.update') runtime.nodeEngine.updateNodeConfig(command.nodeId, command.params);

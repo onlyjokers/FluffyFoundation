@@ -11,6 +11,10 @@ import { createGraphSync } from '../rete/rete-sync';
 import { bindRetePipes } from '../rete/rete-pipes';
 import { setupReteRenderPreset } from '../rete/setup-rete-render';
 import { registerGroupFrameTranslatePipe } from '../groups/group-frame-translate';
+import type { Connection as EngineConnection, GraphState } from '$lib/nodes/types';
+import type { SocketData } from '../controllers/picker-controller';
+
+type AnyRecord = Record<string, unknown>;
 
 export async function initReteCanvas(opts: {
   container: HTMLDivElement;
@@ -58,7 +62,7 @@ export async function initReteCanvas(opts: {
   syncClientNodesFromInputs: () => void;
   setSelectedNode: (id: string) => void;
 }) {
-  const editor = new NodeEditor(opts.editorId);
+  const editor = new NodeEditor();
   const areaPlugin = new AreaPlugin(opts.container);
   const connection = new ConnectionPlugin();
   const render = new SveltePlugin();
@@ -67,13 +71,12 @@ export async function initReteCanvas(opts: {
   areaPlugin?.area?.setZoomHandler?.(null);
 
   editor.use(areaPlugin);
-  areaPlugin.use(connection);
-  areaPlugin.use(render);
-  areaPlugin.use(history);
+  areaPlugin.use(connection as unknown as Parameters<typeof areaPlugin.use>[0]);
+  areaPlugin.use(render as unknown as Parameters<typeof areaPlugin.use>[0]);
+  areaPlugin.use(history as unknown as Parameters<typeof areaPlugin.use>[0]);
 
   connection.addPreset(ConnectionPresets.classic.setup());
-  connection.addPipe(
-    createReteConnectionDropPipe({
+  const connectionDropPipe = createReteConnectionDropPipe({
       getLastPointerClient: opts.getLastPointerClient,
       setConnectDraggingSocket: opts.setConnectDraggingSocket,
       setGroupEdgeHighlight: opts.setGroupEdgeHighlight,
@@ -85,15 +88,21 @@ export async function initReteCanvas(opts: {
       groupPortNodesController: opts.groupPortNodesController,
       computeGraphPosition: opts.computeGraphPosition,
       addNode: opts.addNode,
-      findPortRowSocketAt: opts.findPortRowSocketAt,
-      openConnectPicker: opts.openConnectPicker,
+      findPortRowSocketAt: opts.findPortRowSocketAt as (
+        clientX: number,
+        clientY: number,
+        desiredSide: 'input' | 'output'
+      ) => SocketData | null,
+      openConnectPicker: opts.openConnectPicker as (socket: SocketData) => void,
       isProjectionId: opts.isProjectionId,
-      translateProjectionConnection: opts.translateProjectionConnection,
-    })
-  );
+      translateProjectionConnection: opts.translateProjectionConnection as
+        | ((connection: EngineConnection) => EngineConnection | null)
+        | undefined,
+    });
+  connection.addPipe(connectionDropPipe as unknown as Parameters<typeof connection.addPipe>[0]);
 
   const socketPositionWatcher = setupReteRenderPreset({
-    render,
+    render: render as unknown as Parameters<typeof setupReteRenderPreset>[0]['render'],
     requestFramesUpdate: opts.requestFramesUpdate,
     socketPositionWatcher: opts.socketPositionWatcher,
     createSocketPositionWatcher: () => new LiveDOMSocketPosition(opts.requestFramesUpdate),
@@ -112,7 +121,7 @@ export async function initReteCanvas(opts: {
     applyMidiMapRangeConstraints: opts.reteBuilder.applyMidiMapRangeConstraints,
     setGraphState: opts.setGraphState,
     setNodeCount: opts.setNodeCount,
-    getProjectionState: opts.getProjectionState,
+    getProjectionState: opts.getProjectionState as (() => GraphState) | undefined,
     getSelectedNodeId: opts.getSelectedNodeId,
     onAfterSync: () => {
       const graphState = get(opts.graphStateStore);
@@ -148,7 +157,9 @@ export async function initReteCanvas(opts: {
     requestFramesUpdate: opts.requestFramesUpdate,
     requestMinimapUpdate: opts.minimapController.requestUpdate,
     isProjectionId: opts.isProjectionId,
-    translateProjectionConnection: opts.translateProjectionConnection,
+    translateProjectionConnection: opts.translateProjectionConnection as
+      | ((connection: EngineConnection) => EngineConnection | null)
+      | undefined,
   });
 
   registerGroupFrameTranslatePipe({
@@ -161,7 +172,10 @@ export async function initReteCanvas(opts: {
     requestMinimapUpdate: opts.minimapController.requestUpdate,
   });
 
-  await AreaExtensions.zoomAt(areaPlugin, Array.from(opts.nodeMap.values()));
+  await AreaExtensions.zoomAt(
+    areaPlugin,
+    Array.from(opts.nodeMap.values()) as unknown as Parameters<typeof AreaExtensions.zoomAt>[1]
+  );
   opts.minimapController.requestUpdate();
   opts.requestFramesUpdate();
 

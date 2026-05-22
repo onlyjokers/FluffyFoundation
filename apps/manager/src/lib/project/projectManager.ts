@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { nodeEngine } from '$lib/nodes/engine';
 import type { GraphState, PortType } from '$lib/nodes/types';
+import type { CustomNodePort } from '$lib/nodes/custom-nodes/types';
 import { parameterRegistry } from '$lib/parameters/registry';
 import { minimapPreferences, type MinimapPreferences } from './uiState';
 import { nodeGroupsState } from './nodeGraphUiState';
@@ -197,13 +198,13 @@ export function loadLocalProject(): boolean {
       };
 
       const portsRaw = Array.isArray(item.ports) ? item.ports : [];
-      const ports = portsRaw
+      const ports: CustomNodePort[] = portsRaw
         .map((p) => {
           const portRecord = isRecord(p) ? p : null;
           const bindingRecord = isRecord(portRecord?.binding) ? portRecord?.binding : null;
           return {
             portKey: String(portRecord?.portKey ?? ''),
-            side: String(portRecord?.side) === 'input' ? 'input' : ('output' as const),
+            side: String(portRecord?.side) === 'input' ? ('input' as const) : ('output' as const),
             label: String(portRecord?.label ?? ''),
             type: String(portRecord?.type ?? 'any') as PortType,
             pinned: Boolean(portRecord?.pinned),

@@ -5,6 +5,8 @@ import type { GraphViewAdapter } from '../adapters';
 import type { GroupFrame } from './group-types';
 
 type AnyRecord = Record<string, unknown>;
+const asRecord = (value: unknown): AnyRecord =>
+  value && typeof value === 'object' ? (value as AnyRecord) : {};
 
 export type GroupProxyAlignmentOptions = {
   frame: GroupFrame;
@@ -92,8 +94,9 @@ function buildProxyItem(
   centerY: number,
   clampCenterY: (y: number) => number
 ): ProxyItem {
-  const direction = String(proxyNode?.config?.direction ?? 'output') === 'input' ? 'input' : 'output';
-  const pinned = Boolean(proxyNode?.config?.pinned);
+  const config = asRecord(proxyNode.config);
+  const direction = String(config.direction ?? 'output') === 'input' ? 'input' : 'output';
+  const pinned = Boolean(config.pinned);
   const cur = adapter.getNodePosition(proxyId);
   const curCenterY = cur ? cur.y + PROXY_NODE_HALF_HEIGHT : centerY;
   let desiredCenterY = centerY;

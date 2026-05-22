@@ -2,7 +2,7 @@
  * Purpose: Bridge manager-side JSON specs to node-core runtime implementations.
  */
 import { get } from 'svelte/store';
-import { NodeRegistry as CoreNodeRegistry, registerDefaultNodeDefinitions } from '@shugu/node-core';
+import { NodeRegistry as CoreNodeRegistry, registerDefaultNodeDefinitions, type LatestSensorDataLike } from '@shugu/node-core';
 import type { NodeDefinition } from '../../types';
 import { getSDK, sensorData } from '$lib/stores/manager';
 import { targetManagedClient } from './client-target';
@@ -17,7 +17,12 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     getClientId: () => null,
     getSensorForClientId: (clientId) => {
       if (!clientId) return null;
-      return get(sensorData).get(clientId) ?? null;
+      const data = get(sensorData).get(clientId);
+      if (!data) return null;
+      return {
+        ...data,
+        clientTimestamp: data.clientTimestamp ?? data.serverTimestamp,
+      } satisfies LatestSensorDataLike;
     },
     executeCommand: () => {
       // Manager always routes via executeCommandForClientId.

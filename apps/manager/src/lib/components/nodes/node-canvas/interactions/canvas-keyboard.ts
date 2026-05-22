@@ -1,14 +1,15 @@
 // Keyboard shortcuts for NodeCanvas selection, clipboard, and deletion.
 import { get } from 'svelte/store';
+import type { Readable } from 'svelte/store';
 
 type CanvasKeyboardOptions = {
   windowRef: Window;
   isToolbarMenuOpen: () => boolean;
   closeToolbarMenu: () => void;
-  isPickerOpen: Parameters<typeof get>[0];
+  isPickerOpen: Readable<boolean>;
   closePicker: () => void;
-  groupSelectionNodeIds: Parameters<typeof get>[0];
-  selectedGroupId: Parameters<typeof get>[0];
+  groupSelectionNodeIds: Readable<Set<string>>;
+  selectedGroupId: Readable<string | null>;
   clearGroupSelection: () => void;
   getSelectedNodeId: () => string;
   deleteNodeWithRules: (nodeId: string) => void;
@@ -41,7 +42,12 @@ export function bindCanvasKeyboard(options: CanvasKeyboardOptions): (event: Keyb
       return;
     }
 
-    const el = (event.target as HTMLElement | null) ?? document.activeElement;
+    const el =
+      event.target instanceof HTMLElement
+        ? event.target
+        : document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
     const tag = el?.tagName?.toLowerCase?.() ?? '';
     const isEditing =
       tag === 'input' ||

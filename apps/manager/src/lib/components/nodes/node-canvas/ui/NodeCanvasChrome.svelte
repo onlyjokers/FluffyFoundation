@@ -5,12 +5,14 @@
   import ModelDistributionPanel from './panels/ModelDistributionPanel.svelte';
   import GroupFramesOverlay from './overlays/GroupFramesOverlay.svelte';
   import LoopFramesOverlay from './overlays/LoopFramesOverlay.svelte';
+  import type { LoopFrame } from '../controllers/loop-controller';
   import MarqueeOverlay from './overlays/MarqueeOverlay.svelte';
   import NodeCanvasMinimap from './NodeCanvasMinimap.svelte';
   import NodeCanvasToolbar from './NodeCanvasToolbar.svelte';
   import NodePickerOverlay from './NodePickerOverlay.svelte';
   import PerformanceDebugConsole from './PerformanceDebugConsole.svelte';
   import NodeCanvasReteStyles from '../styles/NodeCanvasReteStyles.svelte';
+  import type { GroupFrame, NodeGroup } from '../controllers/group-types';
 
   export let container: HTMLDivElement | null = null;
   export let importGraphInputEl: HTMLInputElement | null = null;
@@ -24,7 +26,7 @@
   export let gridScale = 1;
   export let gridOffset = { x: 0, y: 0 };
   export let nodeCount = 0;
-  export let groups = [];
+  export let groups: NodeGroup[] = [];
   export let graphConnectionCount = 0;
   export let lastError = null;
   export let isToolbarMenuOpen = false;
@@ -53,18 +55,18 @@
   export let picker;
   export let reteBuilder;
 
-  export let groupFrames = [];
+  export let groupFrames: GroupFrame[] = [];
   export let editModeGroupId = null;
   export let selectedGroupId = null;
   export let groupEditToast = null;
   export let groupEdgeHighlight = null;
   export let gateModeGroupIds = null;
   export let groupGateNodeIdByGroupId = null;
-  export let expandedCustomGroupIds = new Set();
+  export let expandedCustomGroupIds: Set<string> = new Set();
   export let groupOverlayActions;
 
-  export let loopFrames = [];
-  export let deployedLoopIds = new Set();
+  export let loopFrames: LoopFrame[] = [];
+  export let deployedLoopIds: Set<string> = new Set();
   export let loopController;
   export let frameDragController;
 

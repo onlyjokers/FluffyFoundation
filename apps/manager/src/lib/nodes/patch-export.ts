@@ -281,10 +281,10 @@ export function exportGraphForPatch(
   for (const n of effectiveNodes) {
     // Include asset-picker config fields which may store bare assetIds (not prefixed refs).
     if (registry) {
-      const def = registry.get(String(n.type));
-      for (const field of def?.configSchema ?? []) {
-        const fieldRecord =
-          field && typeof field === 'object' ? (field as Record<string, unknown>) : null;
+        const def = registry.get(String(n.type));
+        for (const field of def?.configSchema ?? []) {
+          const fieldRecord =
+          field && typeof field === 'object' ? (field as unknown as Record<string, unknown>) : null;
         if (fieldRecord?.type !== 'asset-picker') continue;
         const key = typeof fieldRecord.key === 'string' ? fieldRecord.key : String(fieldRecord?.key ?? '');
         if (!key) continue;
