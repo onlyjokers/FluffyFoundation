@@ -1,7 +1,12 @@
 /**
  * Purpose: Runtime schema validation for control protocol messages and payloads.
  */
-import { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS, type ControlPayload } from '../types.js';
+import {
+  FCT_TRACK_AUDIO_SOURCES,
+  FCT_TRACK_PALETTES,
+  FCT_TRACK_VARIANTS,
+  type ControlPayload,
+} from '../types.js';
 import { CONTROL_ACTIONS, MEDIA_TYPES } from './constants.js';
 import {
   addReason,
@@ -126,7 +131,21 @@ function validateVisualScenes(payload: ObjectRecord, ctx: MutableValidationConte
       addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes', `${path}.scenes[${index}].type`, `${path}.scenes[${index}].type is unsupported`);
       return;
     }
-    if (isOneOf(scene.type, ['box', 'mel', 'frontCamera', 'backCamera'] as const)) {
+    if (scene.type === 'box') {
+      validateOptionalOpacityRange(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`, 0, 1);
+      validateOptionalAudioSource(scene, ctx, `${path}.scenes[${index}].audioSource`);
+      validateOptionalCssColor(scene, ctx, 'color', `${path}.scenes[${index}].color`);
+      return;
+    }
+    if (scene.type === 'mel') {
+      validateOptionalOpacityRange(scene, ctx, 'showBackground', `${path}.scenes[${index}].showBackground`, 0, 1);
+      validateOptionalAudioSource(scene, ctx, `${path}.scenes[${index}].audioSource`);
+      return;
+    }
+    if (isOneOf(scene.type, ['frontCamera', 'backCamera'] as const)) {
+      if (hasOwn(scene, 'showBackground')) {
+        addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.showBackground', `${path}.scenes[${index}].showBackground`, `${path}.scenes[${index}].showBackground is not supported for camera scenes`);
+      }
       return;
     }
     if (scene.type === 'fctTrack') {
@@ -150,6 +169,14 @@ function validateFctTrackScene(scene: ObjectRecord, ctx: MutableValidationContex
   if (hasOwn(scene, 'blend') && !isOneOf(scene.blend, ['replace', 'over'] as const)) {
     addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.blend', `${path}.blend`, `${path}.blend must be replace or over`);
   }
+  validateOptionalAudioSource(scene, ctx, `${path}.audioSource`);
+  validateOptionalOpacityRange(scene, ctx, 'showBackground', `${path}.showBackground`, 0, 1);
+}
+
+function validateOptionalAudioSource(scene: ObjectRecord, ctx: MutableValidationContext, path: string): void {
+  if (hasOwn(scene, 'audioSource') && !isOneOf(scene.audioSource, FCT_TRACK_AUDIO_SOURCES)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes.audioSource', path, `${path} must be microphone, playback, or both`);
+  }
 }
 
 function validateOptionalNumberRange(
@@ -164,6 +191,33 @@ function validateOptionalNumberRange(
   const value = input[key];
   if (!isNumber(value) || value < min || value > max) {
     addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a number between ${min} and ${max}`);
+  }
+}
+
+function validateOptionalOpacityRange(
+  input: ObjectRecord,
+  ctx: MutableValidationContext,
+  key: string,
+  path: string,
+  min: number,
+  max: number
+): void {
+  if (!hasOwn(input, key)) return;
+  const value = input[key];
+  if (typeof value === 'boolean') return;
+  validateOptionalNumberRange(input, ctx, key, path, min, max);
+}
+
+function validateOptionalCssColor(
+  input: ObjectRecord,
+  ctx: MutableValidationContext,
+  key: string,
+  path: string
+): void {
+  if (!hasOwn(input, key)) return;
+  const value = input[key];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    addReason(ctx, 'protocol.field.invalid', `message.control.payload.scenes.${key}`, path, `${path} must be a non-empty CSS color string`);
   }
 }
 

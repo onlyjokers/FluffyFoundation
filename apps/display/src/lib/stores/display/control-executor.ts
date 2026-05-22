@@ -6,12 +6,20 @@ import type { MultimediaCore } from '@shugu/multimedia-core';
 import type {
   ControlAction,
   ControlPayload,
+  FctTrackAudioSource,
+  FctTrackPalette,
+  FctTrackVariant,
   PlayMediaPayload,
   ScreenColorPayload,
   ShowImagePayload,
   ShowTextPayload,
   VisualSceneLayerItem,
   VisualScenesPayload,
+} from '@shugu/protocol';
+import {
+  FCT_TRACK_AUDIO_SOURCES,
+  FCT_TRACK_PALETTES,
+  FCT_TRACK_VARIANTS,
 } from '@shugu/protocol';
 import type { NodeExecutor } from '@shugu/sdk-client';
 import { stopAllDisplaySideEffects } from '../display-stop-all';
@@ -47,7 +55,89 @@ export type DisplayControlExecutorDeps = {
 
 function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] {
   const record = payload && typeof payload === 'object' ? (payload as VisualScenesPayload) : null;
-  return Array.isArray(record?.scenes) ? record.scenes.slice(0, 12) : [];
+  const raw = Array.isArray(record?.scenes) ? record.scenes.slice(0, 12) : [];
+  const out: VisualSceneLayerItem[] = [];
+
+  const showBackground = (value: unknown, fallback: number): number => {
+    if (typeof value === 'boolean') return value ? 1 : 0;
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.min(1, value));
+    return fallback;
+  };
+
+  const audioSource = (value: unknown): FctTrackAudioSource =>
+    typeof value === 'string' && FCT_TRACK_AUDIO_SOURCES.includes(value as FctTrackAudioSource)
+      ? (value as FctTrackAudioSource)
+      : 'microphone';
+  const variant = (value: unknown): FctTrackVariant =>
+    typeof value === 'string' && FCT_TRACK_VARIANTS.includes(value as FctTrackVariant)
+      ? (value as FctTrackVariant)
+      : 'shattered-reality';
+  const palette = (value: unknown): FctTrackPalette =>
+    typeof value === 'string' && FCT_TRACK_PALETTES.includes(value as FctTrackPalette)
+      ? (value as FctTrackPalette)
+      : 'red-black';
+  const numberParam = (value: unknown, fallback: number): number => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.min(2, n)) : fallback;
+  };
+  const cssColor = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined;
+
+  for (const item of raw) {
+    const itemRecord = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+    if (!itemRecord) continue;
+    if (itemRecord.type === 'box') {
+      out.push({
+        type: 'box',
+        color: cssColor(itemRecord.color),
+        showBackground: showBackground(itemRecord.showBackground, 0),
+        audioSource: audioSource(itemRecord.audioSource),
+      });
+      continue;
+    }
+    if (itemRecord.type === 'mel') {
+      out.push({
+        type: 'mel',
+        showBackground: showBackground(itemRecord.showBackground, 0),
+        audioSource: audioSource(itemRecord.audioSource),
+      });
+      continue;
+    }
+    if (itemRecord.type === 'frontCamera') {
+      out.push({ type: 'frontCamera' });
+      continue;
+    }
+    if (itemRecord.type === 'backCamera') {
+      out.push({ type: 'backCamera' });
+      continue;
+    }
+    if (itemRecord.type === 'fctTrack') {
+      out.push({
+        type: 'fctTrack',
+        variant: variant(itemRecord.variant),
+        palette: palette(itemRecord.palette),
+        sensitivity: numberParam(itemRecord.sensitivity, 1),
+        brightness: numberParam(itemRecord.brightness, 1),
+        contrast: numberParam(itemRecord.contrast, 1),
+        blend: itemRecord.blend === 'over' ? 'over' : 'replace',
+        audioSource: audioSource(itemRecord.audioSource),
+        showBackground: showBackground(itemRecord.showBackground, 0),
+      });
+    }
+  }
+
+  const lastCameraIndex = (() => {
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+      const t = out[i]!.type;
+      if (t === 'frontCamera' || t === 'backCamera') return i;
+    }
+    return -1;
+  })();
+  if (lastCameraIndex < 0) return out;
+  const keep = out[lastCameraIndex]!.type;
+  return out.filter((scene) =>
+    scene.type === 'frontCamera' || scene.type === 'backCamera' ? scene.type === keep : true
+  );
 }
 
 export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): {

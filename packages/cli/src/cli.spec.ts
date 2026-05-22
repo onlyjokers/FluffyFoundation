@@ -97,7 +97,10 @@ test('createCliRunner sends semantic command and prints structured JSON', async 
           stateHandler = null;
         };
       },
-      sendSemanticCommand: (input: unknown) => sent.push(input),
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
       onSemanticResult: (handler: (message: SemanticResultMessage) => void) => {
         queueMicrotask(() =>
           handler({
@@ -179,6 +182,7 @@ test('createCliRunner waits for SDK connection before sending live semantic comm
             snapshotRevision: 1,
           })
         );
+        return true;
       },
       onSemanticResult: (handler: (message: SemanticResultMessage) => void) => {
         resultHandler = handler;
@@ -228,7 +232,7 @@ test('createCliRunner passes SHUGU_CLI_TRANSPORTS to the ManagerSDK factory', as
           disconnect: () => undefined,
           getState: () => ({ status: 'connected' }),
           onStateChange: () => () => undefined,
-          sendSemanticCommand: () => undefined,
+          sendSemanticCommand: () => true,
           onSemanticResult: (handler: (message: SemanticResultMessage) => void) => {
             queueMicrotask(() =>
               handler({

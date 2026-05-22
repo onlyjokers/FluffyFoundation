@@ -15,6 +15,7 @@ import type {
 import { targetClients } from '@shugu/protocol';
 
 import { nodeEngine } from '$lib/nodes/engine';
+import { serverSemanticSyncState } from '$lib/semantic/server-semantic-sync-state';
 import { parameterRegistry } from '../parameters/registry';
 import { registerDefaultControlParameters } from '../parameters/presets';
 import { readLocalProjectForServerMigration } from '$lib/project/projectManager';
@@ -243,6 +244,15 @@ export function connect(config: ManagerSDKConfig): void {
         setCustomNodeDefinitions: replaceCustomNodeDefinitions,
         getLayoutPositions: readNodeGraphLayoutPositions,
         onSnapshot: (snapshot) => semanticSnapshot.set(snapshot),
+        beforeApply: () => {
+            serverSemanticSyncState.isApplyingSnapshot = true;
+        },
+        afterApply: () => {
+            serverSemanticSyncState.isApplyingSnapshot = false;
+        },
+        getPendingCommands: () => serverSemanticSyncState.getPendingCommands(),
+        settlePendingCommand: (requestId) => serverSemanticSyncState.settlePendingCommand(requestId),
+        clearPendingCommands: () => serverSemanticSyncState.clearPendingCommands(),
     });
 
     // Subscribe to state changes

@@ -61,3 +61,64 @@ test('graph.replace clamps numeric config and normalizes select config before pe
   assert.deepEqual(result.command.graph.nodes[0].config, { value: 3, mode: 'on' });
   assert.deepEqual(bus.getSnapshot().nodes[0].params, { value: 3, mode: 'on' });
 });
+
+test('graph.replace fills missing config defaults before persistence', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 1,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'graph.replace',
+      graph: {
+        nodes: [
+          {
+            id: 'n1',
+            type: 'bounded',
+            position: { x: 10, y: 20 },
+            config: {},
+            inputValues: {},
+            outputValues: {},
+          },
+        ],
+        connections: [],
+      },
+      groups: [],
+      partitions: [],
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.command.graph.nodes[0].config, { value: 0, mode: 'off' });
+  assert.deepEqual(bus.getSnapshot().nodes[0].params, { value: 0, mode: 'off' });
+});
+
+test('node.add fills missing config defaults before persistence', () => {
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions,
+    revision: 1,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.add',
+      node: {
+        id: 'n1',
+        type: 'bounded',
+        position: { x: 10, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.command.node.config, { value: 0, mode: 'off' });
+  assert.deepEqual(bus.getSnapshot().nodes[0].params, { value: 0, mode: 'off' });
+});

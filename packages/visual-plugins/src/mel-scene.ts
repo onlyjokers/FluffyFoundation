@@ -4,6 +4,13 @@
  */
 
 import type { VisualScene, VisualContext } from './types.js';
+import {
+    backgroundWithOpacity,
+    clampOpacity,
+    normalizeVisualAudioSource,
+    selectVisualAudioFeatures,
+    type VisualAudioSource,
+} from './audio-source.js';
 
 export interface MelSceneOptions {
     /** Pixels shifted to the left each frame */
@@ -18,7 +25,15 @@ export interface MelSceneOptions {
     backgroundColor?: string;
     /** Exponential smoothing factor for mel bands (0-1, higher = smoother) */
     smoothing?: number;
+    /** Fill the scene background instead of rendering transparent. */
+    showBackground?: number | boolean;
+    /** Audio source used for the spectrogram. */
+    audioSource?: VisualAudioSource;
 }
+
+type NormalizedMelSceneOptions = Omit<Required<MelSceneOptions>, 'showBackground'> & {
+    showBackground: number;
+};
 
 export class MelSpectrogramScene implements VisualScene {
     readonly id = 'mel-scene';
@@ -28,7 +43,7 @@ export class MelSpectrogramScene implements VisualScene {
     private ctx: CanvasRenderingContext2D | null = null;
     private width = 0;
     private height = 0;
-    private options: Required<MelSceneOptions>;
+    private options: NormalizedMelSceneOptions;
     private smoothedBands: number[] = [];
     private accumulator = 0;
     private palette: [number, number, number][];
@@ -43,9 +58,26 @@ export class MelSpectrogramScene implements VisualScene {
             maxDb: options.maxDb ?? 0,
             backgroundColor: options.backgroundColor ?? '#05060b',
             smoothing: options.smoothing ?? 0.65,
+            showBackground: clampOpacity(options.showBackground, 0),
+            audioSource: normalizeVisualAudioSource(options.audioSource),
         };
 
         this.palette = this.buildPalette();
+    }
+
+    configure(options: MelSceneOptions = {}): void {
+        const { showBackground, audioSource, ...rest } = options;
+        this.options = {
+            ...this.options,
+            ...rest,
+            showBackground: showBackground !== undefined
+                ? clampOpacity(showBackground, this.options.showBackground)
+                : this.options.showBackground,
+            audioSource: normalizeVisualAudioSource(audioSource, this.options.audioSource),
+        };
+        if (this.canvas) {
+            this.canvas.style.background = backgroundWithOpacity(this.options.backgroundColor, this.options.showBackground);
+        }
     }
 
     mount(container: HTMLElement): void {
@@ -57,6 +89,7 @@ export class MelSpectrogramScene implements VisualScene {
         this.canvas.style.width = '100%';
         this.canvas.style.height = '100%';
         this.canvas.style.display = 'block';
+        this.canvas.style.background = backgroundWithOpacity(this.options.backgroundColor, this.options.showBackground);
 
         const ctx = this.canvas.getContext('2d', { alpha: true });
         if (!ctx) return;
@@ -103,7 +136,8 @@ export class MelSpectrogramScene implements VisualScene {
         if (this.accumulator < minInterval) return;
         this.accumulator = 0;
 
-        const melBands = context.audioFeatures?.melBands;
+        const audioFeatures = selectVisualAudioFeatures(context, this.options.audioSource);
+        const melBands = audioFeatures?.melBands;
         if (!melBands || melBands.length === 0) {
             this.fadeCanvas();
             return;

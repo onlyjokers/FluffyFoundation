@@ -19,6 +19,11 @@ import {
   type StageItem,
   type ThemeName,
 } from './fct-stage-renderer.js';
+import {
+  clampOpacity,
+  normalizeVisualAudioSource,
+  selectVisualAudioFeatures,
+} from './audio-source.js';
 import type { VisualContext, VisualScene } from './types.js';
 
 export { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS, SHATTERED_REALITY_FRAGMENT_SHADER };
@@ -90,6 +95,8 @@ const normalizeOptions = (options: FctTrackSceneOptions = {}): Required<FctTrack
   brightness: clampRange(options.brightness, 1, 0, 2),
   contrast: clampRange(options.contrast, 1, 0, 2),
   blend: options.blend === 'over' ? 'over' : 'replace',
+  audioSource: normalizeVisualAudioSource(options.audioSource),
+  showBackground: clampOpacity(options.showBackground, 0),
 });
 
 const clamp01 = (value: unknown): number => {
@@ -105,6 +112,13 @@ const normalizeMelBandForFft = (value: unknown): number => {
   // are log-power values, using the same default -8..0 normalization as MelScene.
   return Math.max(0, Math.min(1, (n + 8) / 8));
 };
+
+export function selectFctAudioFeatures(
+  context: VisualContext,
+  source: Required<FctTrackSceneOptions>['audioSource']
+): FctAudioFeaturesInput | undefined {
+  return selectVisualAudioFeatures(context, source) as FctAudioFeaturesInput | undefined;
+}
 
 export function buildStageAudioFeaturesForFct(
   features: FctAudioFeaturesInput | undefined,
@@ -213,20 +227,21 @@ export class FctTrackScene implements VisualScene {
     }
     this.renderer?.setItem(this.config.variant as StageItem);
     this.renderer?.setTheme(this.config.palette as ThemeName);
+    this.renderer?.setShowBackground(this.config.showBackground);
     this.renderer?.setMode('track');
   }
 
   private readAudioFeatures(context: VisualContext): StageAudioFeatures {
-    return buildStageAudioFeaturesForFct(context.audioFeatures, this.config.sensitivity);
+    const source = selectFctAudioFeatures(context, this.config.audioSource);
+    return buildStageAudioFeaturesForFct(source, this.config.sensitivity);
   }
 
   private applyVisibleThemeSurface(): void {
-    const style = FCT_VISIBLE_THEME_STYLES[this.config.palette];
     if (this.container) {
-      this.container.style.background = style.background;
+      this.container.style.background = 'transparent';
     }
     if (this.canvas) {
-      this.canvas.style.background = style.background;
+      this.canvas.style.background = 'transparent';
     }
   }
 

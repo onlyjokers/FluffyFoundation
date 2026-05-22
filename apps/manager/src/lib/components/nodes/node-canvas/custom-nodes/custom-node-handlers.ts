@@ -1,5 +1,5 @@
 // Purpose: Custom-node UI handlers wired into NodeCanvas without embedding logic there.
-import { get, type Readable } from 'svelte/store';
+import type { Readable } from 'svelte/store';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { CustomNodeInstanceState } from '$lib/nodes/custom-nodes/instance';
@@ -30,10 +30,7 @@ type CustomNodeHandlersOptions = {
   nodeEngine: NodeEngine;
   expandedCustomByGroupId: Map<string, { groupId: string; nodeId: string }>;
   readCustomNodeState: (config: Record<string, unknown>) => CustomNodeInstanceState | null;
-  writeCustomNodeState: (
-    config: Record<string, unknown>,
-    state: CustomNodeInstanceState
-  ) => Record<string, unknown>;
+  writeCustomNodeState: (config: Record<string, unknown>, state: CustomNodeInstanceState) => Record<string, unknown>;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
   upsertCustomNodeDefinition: (def: CustomNodeDefinition) => void;
   getCustomNodeActions: () => CustomNodeActions | null;
@@ -43,22 +40,12 @@ export const createCustomNodeHandlers = (opts: CustomNodeHandlersOptions) => {
   const handleToggleGroupDisabled = (groupId: string) => {
     const id = String(groupId ?? '');
     if (!id) return;
-    opts.groupController.toggleGroupDisabled(id);
 
     const expanded = opts.expandedCustomByGroupId.get(id) ?? null;
-    if (!expanded) return;
-    const nodeId = String(expanded.nodeId ?? '');
-    const node = nodeId ? opts.nodeEngine.getNode(nodeId) : null;
-    const state = node ? opts.readCustomNodeState(asRecord(node.config)) : null;
-    if (!node || !state) return;
-
-    const group = get(opts.groupController.nodeGroups).find((g) => String(g.id ?? '') === id) ?? null;
-    const manualGate = group ? !group.disabled : state.manualGate;
-    opts.nodeEngine.updateNodeConfig(
-      nodeId,
-      opts.writeCustomNodeState(node.config ?? {}, { ...state, manualGate })
-    );
-    opts.nodeEngine.updateNodeInputValue(nodeId, 'gate', manualGate);
+    if (!expanded) {
+      opts.groupController.toggleGroupDisabled(id);
+      return;
+    }
   };
 
   const handleRenameGroup = (groupId: string, name: string) => {

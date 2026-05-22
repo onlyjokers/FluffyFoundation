@@ -240,9 +240,20 @@ class NodeEngineClass {
     const node = this.runtime.getNode(nodeId);
     if (!node) return;
     node.inputValues[portId] = value;
+    this.graphChanges.set([
+      { type: 'update-node-input-values', nodeId, inputValues: { [portId]: value } },
+    ]);
     // UI invalidation: graphState holds live references, but Svelte won't react to deep mutations
     // unless some store updates. Use tickTime as a lightweight "pulse" so controls that read
     // live node state can refresh without syncing the whole graph.
+    this.tickTime.set(Date.now());
+  }
+
+  replaceNodeInputValues(nodeId: string, inputValues: Record<string, unknown>): void {
+    const node = this.runtime.getNode(nodeId);
+    if (!node) return;
+    node.inputValues = { ...inputValues };
+    this.graphChanges.set([{ type: 'update-node-input-values', nodeId, inputValues: { ...inputValues } }]);
     this.tickTime.set(Date.now());
   }
 
@@ -776,6 +787,10 @@ class NodeEngineClass {
       },
       assetRefs: patch.assetRefs,
     };
+  }
+
+  exportCompiledGraphForPatchPlanning(): GraphState {
+    return compileGraphForPatch(this.runtime.exportGraph(), get(customNodeDefinitions) ?? []);
   }
 
   exportGraphForPatch(): {

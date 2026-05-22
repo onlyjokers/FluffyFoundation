@@ -783,6 +783,120 @@ test('semantic command params update clears stale inline input values for the sa
   assert.equal(node?.inputValues.other, 'keep-me');
 });
 
+test('semantic command input update persists inline input values', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'n1',
+          type: 'number',
+          position: { x: 0, y: 0 },
+          config: { value: 1 },
+          inputValues: { value: 1 },
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'number',
+        label: 'Number',
+        category: 'Values',
+        inputs: [{ id: 'value', label: 'Value', type: 'number' }],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 1 }],
+      },
+    ],
+    revision: 1,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'n1',
+      inputValues: { value: 42 },
+    },
+  });
+
+  assert.equal(result.ok, true);
+  const node = bus.getSnapshot().nodes.find((item) => item.id === 'n1');
+  assert.equal(node?.params.value, 1);
+  assert.equal(node?.inputValues.value, 42);
+});
+
+test('semantic command input update rejects unknown ports and invalid values', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'n1',
+          type: 'number',
+          position: { x: 0, y: 0 },
+          config: { value: 1 },
+          inputValues: { value: 1 },
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'number',
+        label: 'Number',
+        category: 'Values',
+        inputs: [{ id: 'value', label: 'Value', type: 'number', min: 0, max: 10 }],
+        outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+        configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 1 }],
+      },
+    ],
+    revision: 1,
+  });
+
+  const unknownPort = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'n1',
+      inputValues: { missing: 42 },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(unknownPort.ok, false);
+  assert.equal(unknownPort.validationErrors[0].code, 'GRAPH.PORT_NOT_FOUND');
+  assert.equal(unknownPort.validationErrors[0].path, 'nodes.n1.inputs.missing');
+
+  const outOfRange = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'n1',
+      inputValues: { value: 42 },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(outOfRange.ok, false);
+  assert.equal(outOfRange.validationErrors[0].code, 'GRAPH.INPUT_OUT_OF_RANGE');
+  assert.equal(outOfRange.validationErrors[0].path, 'nodes.n1.inputs.value');
+
+  const wrongType = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'n1',
+      inputValues: { value: 'loud' },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(wrongType.ok, false);
+  assert.equal(wrongType.validationErrors[0].code, 'GRAPH.INPUT_INVALID');
+  assert.equal(wrongType.validationErrors[0].path, 'nodes.n1.inputs.value');
+});
+
 test('semantic command normalizes select aliases and rejects unsupported select values', () => {
   const bus = createSemanticCommandBus({
     graph: {

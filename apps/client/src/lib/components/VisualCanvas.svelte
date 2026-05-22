@@ -3,8 +3,6 @@
   import {
     melSceneEnabled,
     cameraStream,
-    frontCameraEnabled,
-    backCameraEnabled,
     audioStream,
     visualScenes,
     visualEffects,
@@ -13,24 +11,20 @@
     getSDK,
     connectionStatus,
   } from '$lib/stores/client';
+  import { subscribePlaybackAudioTap } from '@shugu/multimedia-core';
   import { VideoPlayer } from '@shugu/ui-kit';
   import ImageDisplay from '$lib/components/ImageDisplay.svelte';
   import {
     BoxScene,
+    CameraScene,
     FctTrackScene,
     MelSpectrogramScene,
     DefaultSceneManager,
     type VisualContext,
-    sceneIdsFromLayer,
+    sceneLayersFromItems,
   } from '@shugu/visual-plugins';
-  import type { FctTrackSceneLayerItem, VisualSceneLayerItem } from '@shugu/protocol';
+  import type { VisualSceneLayerItem } from '@shugu/protocol';
   import { toneAudioEngine } from '@shugu/multimedia-core';
-  import {
-    AudioSplitPlugin,
-    MelSpectrogramPlugin,
-    type AudioSplitFeature,
-    type MelSpectrogramFeature,
-  } from '@shugu/audio-plugins';
   import {
     createVisualEffectPipeline,
     drawAsciiBorder,
@@ -39,21 +33,21 @@
     type VisualEffectPipeline,
   } from '@shugu/visual-effects';
   import { drawBaseFrame as renderBaseFrame } from '$lib/features/visual-layer/base-frame';
+  import { createAudioAnalysisPipeline, type AudioAnalysisPipeline } from '@shugu/audio-plugins';
   import { createMicSensorPayload } from './audio-sensor-payload';
 
   let container: HTMLElement;
   let sceneManager: DefaultSceneManager | null = null;
   let effectCanvas: HTMLCanvasElement;
-  let splitPlugin: AudioSplitPlugin | null = null;
-  let melPlugin: MelSpectrogramPlugin | null = null;
+  let microphonePipeline: AudioAnalysisPipeline | null = null;
+  let playbackPipeline: AudioAnalysisPipeline | null = null;
   let audioContext: AudioContext | null = null;
+  let playbackUnsub: (() => void) | null = null;
   let animationId: number;
   let effectCtx: CanvasRenderingContext2D | null = null;
   let effectPipeline: VisualEffectPipeline | null = null;
-  let fctTrackScene: FctTrackScene | null = null;
   let baseVisible = true;
   let lastTime = 0;
-  let cameraVideoElement: HTMLVideoElement;
 
   // Current context data for scene updates
   let context: VisualContext = {};
@@ -87,10 +81,11 @@
     sceneManager = new DefaultSceneManager(container);
 
     // Register scenes (base visuals)
-    sceneManager.register(new BoxScene());
-    sceneManager.register(new MelSpectrogramScene());
-    fctTrackScene = new FctTrackScene();
-    sceneManager.register(fctTrackScene);
+    sceneManager.registerFactory('box-scene', () => new BoxScene());
+    sceneManager.registerFactory('mel-scene', () => new MelSpectrogramScene());
+    sceneManager.registerFactory('front-camera-scene', () => new CameraScene({ facing: 'user' }));
+    sceneManager.registerFactory('back-camera-scene', () => new CameraScene({ facing: 'environment' }));
+    sceneManager.registerFactory('fct-track-scene', () => new FctTrackScene());
 
     // Effect pipeline setup (shared visual-effects package)
     effectCtx = effectCanvas.getContext('2d');
@@ -100,6 +95,9 @@
     // Set up device orientation listener
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('resize', handleResize);
+    playbackUnsub = subscribePlaybackAudioTap((source, sourceContext) => {
+      void setupPlaybackAudioPipeline(source, sourceContext);
+    });
 
     // Start animation loop
     lastTime = performance.now();
@@ -110,12 +108,13 @@
     cancelAnimationFrame(animationId);
     window.removeEventListener('deviceorientation', handleOrientation);
     window.removeEventListener('resize', handleResize);
+    playbackUnsub?.();
+    playbackUnsub = null;
     sceneManager?.destroy();
-    fctTrackScene = null;
-    splitPlugin?.destroy();
-    melPlugin?.destroy();
-    splitPlugin = null;
-    melPlugin = null;
+    microphonePipeline?.destroy();
+    playbackPipeline?.destroy();
+    microphonePipeline = null;
+    playbackPipeline = null;
     audioContext = null;
   });
 
@@ -124,12 +123,7 @@
     applySceneLayer($visualScenes);
   }
 
-  // Bind camera stream to video element
-  $: if (cameraVideoElement && $cameraStream) {
-    cameraVideoElement.srcObject = $cameraStream;
-  } else if (cameraVideoElement && !$cameraStream) {
-    cameraVideoElement.srcObject = null;
-  }
+  $: context.cameraStream = $cameraStream;
 
   // React to audio stream changes
   $: if ($audioStream && !audioContext) {
@@ -164,53 +158,47 @@
       }
       const source = audioContext.createMediaStreamSource(stream);
 
-      splitPlugin = new AudioSplitPlugin();
-      melPlugin = new MelSpectrogramPlugin({ melBands: 64, frameRate: 30 });
-
-      await Promise.all([
-        splitPlugin.init(audioContext, source),
-        melPlugin.init(audioContext, source, { melBands: 64, frameRate: 30 }),
-      ]);
-
-      const updateAudioFeatures = (partial: Partial<VisualContext['audioFeatures']>) => {
-        context.audioFeatures = { ...(context.audioFeatures ?? {}), ...partial };
-      };
-
-      splitPlugin.onFeature((feature: AudioSplitFeature) => {
-        updateAudioFeatures({
-          rms: feature.rms,
-          lowEnergy: feature.lowEnergy,
-          midEnergy: feature.midEnergy,
-          highEnergy: feature.highEnergy,
-          bpm: feature.bpm,
-          beatDetected: feature.beatDetected,
-        });
-
-        // Send audio features to server
-        const sdk = getSDK();
-        if (sdk) {
-          sdk.sendSensorData('mic', createMicSensorPayload(feature));
-        }
+      microphonePipeline = await createAudioAnalysisPipeline({
+        audioContext,
+        source,
+        onFeatures: (partial, splitFeature) => {
+          context.microphoneAudioFeatures = { ...(context.microphoneAudioFeatures ?? {}), ...partial };
+          context.audioFeatures = context.microphoneAudioFeatures;
+          if (!splitFeature) return;
+          const sdk = getSDK();
+          if (sdk) {
+            sdk.sendSensorData('mic', createMicSensorPayload(splitFeature));
+          }
+        },
       });
-
-      melPlugin.onFeature((feature: MelSpectrogramFeature) => {
-        updateAudioFeatures({
-          melBands: feature.melBands,
-          rms: feature.rms,
-          spectralCentroid: feature.spectralCentroid,
-        });
-      });
-
-      splitPlugin.start();
-      melPlugin.start();
     } catch (error) {
       console.error('[VisualCanvas] Failed to setup audio pipeline:', error);
-      splitPlugin?.destroy();
-      melPlugin?.destroy();
-      splitPlugin = null;
-      melPlugin = null;
+      microphonePipeline?.destroy();
+      microphonePipeline = null;
       audioContext?.close();
       audioContext = null;
+    }
+  }
+
+  async function setupPlaybackAudioPipeline(source: AudioNode | null, sourceContext: AudioContext | null) {
+    playbackPipeline?.destroy();
+    playbackPipeline = null;
+    context.playbackAudioFeatures = undefined;
+    if (!source || !sourceContext) return;
+
+    try {
+      if (sourceContext.state === 'suspended') await sourceContext.resume();
+      playbackPipeline = await createAudioAnalysisPipeline({
+        audioContext: sourceContext,
+        source,
+        onFeatures: (partial) => {
+          context.playbackAudioFeatures = { ...(context.playbackAudioFeatures ?? {}), ...partial };
+        },
+      });
+    } catch (error) {
+      console.warn('[VisualCanvas] Failed to setup playback audio analysis:', error);
+      playbackPipeline?.destroy();
+      playbackPipeline = null;
     }
   }
 
@@ -262,48 +250,19 @@
     if (!sceneManager) return;
 
     const list = Array.isArray(scenes) ? scenes : [];
-    const fctTrackConfig = [...list]
-      .reverse()
-      .find((item): item is FctTrackSceneLayerItem =>
-        Boolean(item) && typeof item === 'object' && (item as { type?: unknown }).type === 'fctTrack'
-      );
-    if (fctTrackConfig) {
-      fctTrackScene?.configure(fctTrackConfig);
-    }
-
-    const desiredSceneIdsRaw = sceneIdsFromLayer(list);
-    const desiredSceneIds: string[] = [];
-    const desired = new Set<string>();
-
-    for (const sceneId of desiredSceneIdsRaw) {
-      if (!desired.has(sceneId)) {
-        desired.add(sceneId);
-        desiredSceneIds.push(sceneId);
-      }
-    }
-
-    // Disable scenes no longer desired.
-    for (const scene of sceneManager.getActiveScenes()) {
-      if (!desired.has(scene.id)) {
-        sceneManager.setSceneEnabled(scene.id, false);
-      }
-    }
-
-    // Enable desired scenes.
-    for (const sceneId of desiredSceneIds) {
-      sceneManager.setSceneEnabled(sceneId, true);
-    }
+    const layers = sceneLayersFromItems(list);
+    sceneManager.setLayerScenes(layers);
 
     // Best-effort: keep DOM canvas order in sync with the scene chain.
-    reorderSceneCanvases(desiredSceneIds);
+    reorderSceneCanvases(layers.map((layer) => layer.key));
   }
 
-  function reorderSceneCanvases(sceneIds: string[]): void {
+  function reorderSceneCanvases(layerKeys: string[]): void {
     if (!container || !effectCanvas) return;
 
-    for (const id of sceneIds) {
+    for (const key of layerKeys) {
       const canvas = container.querySelector(
-        `canvas[data-shugu-scene-id="${id}"]`
+        `canvas[data-shugu-layer-key="${key}"]`
       ) as HTMLCanvasElement | null;
       if (!canvas) continue;
 
@@ -327,7 +286,7 @@
     }
 
     const overlays = Array.from(
-      container.querySelectorAll('.video-overlay, .image-overlay, video.camera-display')
+      container.querySelectorAll('.video-overlay, .image-overlay')
     ) as HTMLElement[];
     for (const el of overlays) {
       el.style.visibility = show ? 'visible' : 'hidden';
@@ -343,12 +302,8 @@
     renderBaseFrame(ctx, width, height, dpr, {
       container,
       effectCanvas,
-      cameraVideoElement,
       videoState: $videoState,
       imageState: $imageState,
-      cameraStream: $cameraStream,
-      frontCameraEnabled: $frontCameraEnabled,
-      backCameraEnabled: $backCameraEnabled,
     });
   }
 
@@ -408,18 +363,6 @@
     />
   {/if}
 
-  <!-- Camera Display -->
-  {#if $cameraStream && ($frontCameraEnabled || $backCameraEnabled)}
-    <video
-      class="camera-display"
-      autoplay
-      playsinline
-      muted
-      bind:this={cameraVideoElement}
-      class:mirror={$frontCameraEnabled}
-    ></video>
-  {/if}
-
   <canvas class="effect-output" bind:this={effectCanvas}></canvas>
 </div>
 
@@ -448,16 +391,4 @@
     visibility: hidden;
   }
 
-  .camera-display {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 1;
-  }
-
-  .camera-display.mirror {
-    transform: scaleX(-1);
-  }
 </style>

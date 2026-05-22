@@ -8,6 +8,7 @@ import type {
   SemanticDefinition,
   SemanticValidationError,
 } from './semantic-graph-types.js';
+import type { NodePort } from './types.js';
 import {
   definitionForNode,
   isCompatiblePortType,
@@ -39,6 +40,7 @@ export const validateNodeCommand = (
     | { type: 'node.archive' }
     | { type: 'node.restore' }
     | { type: 'node.params.update' }
+    | { type: 'node.inputs.update' }
     | { type: 'node.connect' }
     | { type: 'node.disconnect' }
   >,
@@ -60,6 +62,8 @@ export const validateNodeCommand = (
       return nodeIds.has(String(command.nodeId)) ? [] : [missingNode(String(command.nodeId), 'node')];
     case 'node.params.update':
       return validateParamUpdate(state, command, definitions, nodeIds);
+    case 'node.inputs.update':
+      return validateInputUpdate(state, command, definitions, nodeIds);
     case 'node.connect':
       return validateConnect(state, command, definitions, nodeIds);
     case 'node.disconnect':
@@ -85,6 +89,7 @@ const validateScopeGroup = (
     | { type: 'node.archive' }
     | { type: 'node.restore' }
     | { type: 'node.params.update' }
+    | { type: 'node.inputs.update' }
     | { type: 'node.connect' }
     | { type: 'node.disconnect' }
   >
@@ -138,6 +143,94 @@ const validateParamUpdate = (
   }
   return errors;
 };
+
+const validateInputUpdate = (
+  state: CommandState,
+  command: Extract<SemanticCommand, { type: 'node.inputs.update' }>,
+  definitions: SemanticDefinition[],
+  nodeIds: Set<string>
+): SemanticValidationError[] => {
+  if (!nodeIds.has(String(command.nodeId))) return [missingNode(String(command.nodeId), 'node')];
+  const definition = definitionForNode(state, definitions, String(command.nodeId));
+  if (!definition) return [];
+  const errors: SemanticValidationError[] = [];
+  for (const [portId, value] of Object.entries(command.inputValues)) {
+    const port = portFor(definition, 'inputs', portId);
+    if (!port) {
+      errors.push(
+        validationError(
+          'GRAPH.PORT_NOT_FOUND',
+          `nodes.${command.nodeId}.inputs.${portId}`,
+          `Input port not found: ${command.nodeId}:${portId}`,
+          ['Choose an input port from the node definition.']
+        )
+      );
+      continue;
+    }
+    const valueError = validateInputValue(String(command.nodeId), port, value);
+    if (valueError) errors.push(valueError);
+  }
+  return errors;
+};
+
+const validateInputValue = (
+  nodeId: string,
+  port: NodePort,
+  value: unknown
+): SemanticValidationError | null => {
+  if (port.type === 'any') return null;
+  if (port.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return inputValidationError(nodeId, port.id, 'number', value);
+    }
+    if (typeof port.min === 'number' && value < port.min) {
+      return inputRangeValidationError(nodeId, port.id, value, 'min', port.min);
+    }
+    if (typeof port.max === 'number' && value > port.max) {
+      return inputRangeValidationError(nodeId, port.id, value, 'max', port.max);
+    }
+    return null;
+  }
+  if (port.type === 'boolean') {
+    return typeof value === 'boolean' ? null : inputValidationError(nodeId, port.id, 'boolean', value);
+  }
+  if (port.type === 'string' || port.type === 'color' || port.type === 'asset') {
+    return typeof value === 'string' ? null : inputValidationError(nodeId, port.id, 'string', value);
+  }
+  if (port.type === 'array') {
+    return Array.isArray(value) ? null : inputValidationError(nodeId, port.id, 'array', value);
+  }
+  return null;
+};
+
+const inputValidationError = (
+  nodeId: string,
+  portId: string,
+  expected: string,
+  value: unknown
+): SemanticValidationError =>
+  validationError(
+    'GRAPH.INPUT_INVALID',
+    `nodes.${nodeId}.inputs.${portId}`,
+    `Input ${portId} must be a ${expected}.`,
+    [`Use a ${expected} value for input port ${portId}.`],
+    `Unsupported value: ${String(value)}`
+  );
+
+const inputRangeValidationError = (
+  nodeId: string,
+  portId: string,
+  value: number,
+  bound: 'min' | 'max',
+  limit: number
+): SemanticValidationError =>
+  validationError(
+    'GRAPH.INPUT_OUT_OF_RANGE',
+    `nodes.${nodeId}.inputs.${portId}`,
+    `Input ${portId} is ${bound === 'min' ? 'below minimum' : 'above maximum'} ${limit}.`,
+    [`Use a value ${bound === 'min' ? 'greater than or equal to' : 'less than or equal to'} ${limit}.`],
+    `${value} violates ${bound} ${limit}.`
+  );
 
 const validateConnect = (
   state: CommandState,

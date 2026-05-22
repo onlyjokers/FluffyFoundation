@@ -65,6 +65,45 @@ test('SemanticGraphAuthorityService accepts canvas node.remove and persists dele
   assert.equal(JSON.parse(readFileSync(path, 'utf8')).graph.nodes.length, 0);
 });
 
+test('SemanticGraphAuthorityService accepts canvas node.disconnect and persists edge deletion', () => {
+  const { path, service } = createService();
+  const mathNode = {
+    id: 'n2',
+    type: 'math',
+    position: { x: 120, y: 20 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const connection = {
+    id: 'c1',
+    sourceNodeId: 'n1',
+    sourcePortId: 'out',
+    targetNodeId: 'n2',
+    targetPortId: 'a',
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'graph.replace',
+        graph: { nodes: [numberNode, mathNode], connections: [connection] },
+      },
+    }).ok,
+    true
+  );
+
+  const disconnected = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.disconnect', connectionId: 'c1' },
+  });
+
+  assert.equal(disconnected.ok, true);
+  assert.deepEqual(service.getSnapshot().connections, []);
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')).graph.connections, []);
+});
+
 test('SemanticGraphAuthorityService rejects invalid commands without modifying persisted state', () => {
   const { path, service } = createService();
 
@@ -201,6 +240,255 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
     true
   );
   assert.equal(restartedSnapshot.agentCapabilities?.nodes?.[0]?.nodeType, 'custom:triplet-pulse');
+});
+
+test('SemanticGraphAuthorityService compiles Custom Nodes on the server authority lane', () => {
+  const { service } = createService();
+  const customDefinition = {
+    definitionId: 'server-custom',
+    name: 'Server Custom',
+    template: {
+      nodes: [
+        {
+          id: 'inner-number',
+          type: 'number',
+          position: { x: 0, y: 0 },
+          config: { value: 5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    ports: [
+      {
+        portKey: 'value',
+        side: 'output',
+        label: 'Value',
+        type: 'number',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'inner-number', portId: 'value' },
+      },
+    ],
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'definition.custom.upsert',
+        definition: customDefinition,
+      } as never,
+    }).ok,
+    true
+  );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.add',
+        node: {
+          id: 'custom-1',
+          type: 'custom:server-custom',
+          position: { x: 0, y: 0 },
+          config: {
+            customNode: {
+              definitionId: 'server-custom',
+              groupId: 'group-1',
+              role: 'mother',
+              manualGate: true,
+              internal: customDefinition.template,
+            },
+          },
+          inputValues: {},
+          outputValues: {},
+        },
+      } as never,
+    }).ok,
+    true
+  );
+
+  const compiled = service.getCompiledGraphForPatchPlanning();
+
+  assert.deepEqual(
+    compiled.nodes.map((node) => [node.id, node.type]),
+    [['cn:custom-1:inner-number', 'number']]
+  );
+  assert.deepEqual(compiled.connections, []);
+});
+
+test('SemanticGraphAuthorityService accepts custom Active gate input updates before compiling', () => {
+  const { service } = createService();
+  const customDefinition = {
+    definitionId: 'server-custom-gate',
+    name: 'Server Custom Gate',
+    template: {
+      nodes: [
+        {
+          id: 'inner-number',
+          type: 'number',
+          position: { x: 0, y: 0 },
+          config: { value: 5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    ports: [],
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'definition.custom.upsert',
+        definition: customDefinition,
+      } as never,
+    }).ok,
+    true
+  );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.add',
+        node: {
+          id: 'custom-1',
+          type: 'custom:server-custom-gate',
+          position: { x: 0, y: 0 },
+          config: {
+            customNode: {
+              definitionId: 'server-custom-gate',
+              groupId: 'group-1',
+              role: 'mother',
+              manualGate: false,
+              internal: customDefinition.template,
+            },
+          },
+          inputValues: { gate: false },
+          outputValues: {},
+        },
+      } as never,
+    }).ok,
+    true
+  );
+
+  const gateUpdate = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'custom-1',
+      inputValues: { gate: true },
+    },
+  });
+
+  assert.equal(gateUpdate.ok, true);
+  assert.deepEqual(service.getSnapshot().nodes[0]?.inputValues, { gate: true });
+  assert.deepEqual(
+    service.getCompiledGraphForPatchPlanning().nodes.map((node) => [node.id, node.type]),
+    [['cn:custom-1:inner-number', 'number']]
+  );
+});
+
+test('SemanticGraphAuthorityService compiles custom public input updates into internal nodes', () => {
+  const { service } = createService();
+  const customDefinition = {
+    definitionId: 'server-custom-input',
+    name: 'Server Custom Input',
+    template: {
+      nodes: [
+        {
+          id: 'input-proxy',
+          type: 'group-proxy',
+          position: { x: 0, y: 0 },
+          config: { direction: 'input', portType: 'number' },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'inner-number',
+          type: 'number',
+          position: { x: 100, y: 0 },
+          config: { value: 5 },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'proxy-to-inner',
+          sourceNodeId: 'input-proxy',
+          sourcePortId: 'out',
+          targetNodeId: 'inner-number',
+          targetPortId: 'value',
+        },
+      ],
+    },
+    ports: [
+      {
+        portKey: 'value',
+        side: 'input',
+        label: 'Value',
+        type: 'number',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'input-proxy', portId: 'in' },
+      },
+    ],
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'definition.custom.upsert',
+        definition: customDefinition,
+      } as never,
+    }).ok,
+    true
+  );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.add',
+        node: {
+          id: 'custom-1',
+          type: 'custom:server-custom-input',
+          position: { x: 0, y: 0 },
+          config: {
+            customNode: {
+              definitionId: 'server-custom-input',
+              groupId: 'group-1',
+              role: 'mother',
+              manualGate: true,
+              internal: customDefinition.template,
+            },
+          },
+          inputValues: {},
+          outputValues: {},
+        },
+      } as never,
+    }).ok,
+    true
+  );
+
+  const update = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'custom-1',
+      inputValues: { value: 42 },
+    },
+  });
+
+  assert.equal(update.ok, true);
+  assert.deepEqual(
+    service.getCompiledGraphForPatchPlanning().nodes.map((node) => [node.id, node.inputValues]),
+    [['cn:custom-1:inner-number', { value: 42 }]]
+  );
 });
 
 test('SemanticGraphAuthorityService defaults persistence to apps/server/data/semantic-graph.json', () => {

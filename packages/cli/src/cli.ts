@@ -23,7 +23,7 @@ type CliSdk = {
     command: SemanticCommandPayload;
     requestId: string;
     dryRun: boolean;
-  }): void;
+  }): boolean;
   onSemanticResult(handler: (message: SemanticResultMessage) => void): () => void;
 };
 

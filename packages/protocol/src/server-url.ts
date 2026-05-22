@@ -12,16 +12,18 @@ export type LocalServerUrlInput = {
 };
 
 export function resolveLocalServerUrl(input: LocalServerUrlInput): string {
+  const isLocalhost = input.hostname === 'localhost' || input.hostname === '127.0.0.1';
+  const isAccessingViaIP = !isLocalhost;
   const queryUrl = normalizeUrl(input.queryUrl);
-  if (queryUrl) return queryUrl;
+  if (queryUrl) return resolveExplicitUrlForCurrentPage(queryUrl, input, isLocalhost);
 
   const savedUrl = normalizeUrl(input.savedUrl);
-  const isAccessingViaIP = input.hostname !== 'localhost' && input.hostname !== '127.0.0.1';
   const savedIsLocalhost = Boolean(savedUrl && (savedUrl.includes('localhost') || savedUrl.includes('127.0.0.1')));
   const savedIsHttp = Boolean(savedUrl && savedUrl.toLowerCase().startsWith('http:'));
+  const canUseSavedHttp = Boolean(input.allowInsecureHttp && (isLocalhost || input.currentProtocol !== 'https:'));
   const savedLocalServerHttpUrl =
     savedUrl &&
-    input.allowInsecureHttp &&
+    canUseSavedHttp &&
     savedUrl.toLowerCase().startsWith('https:') &&
     savedIsLocalhost &&
     safeUrlPort(savedUrl) === '3001'
@@ -30,7 +32,7 @@ export function resolveLocalServerUrl(input: LocalServerUrlInput): string {
 
   if (savedLocalServerHttpUrl) return savedLocalServerHttpUrl;
 
-  if (savedUrl && (!savedIsHttp || input.allowInsecureHttp) && !(isAccessingViaIP && savedIsLocalhost)) {
+  if (savedUrl && (!savedIsHttp || canUseSavedHttp) && !(isAccessingViaIP && savedIsLocalhost)) {
     return savedUrl;
   }
 
@@ -38,7 +40,7 @@ export function resolveLocalServerUrl(input: LocalServerUrlInput): string {
     return input.origin;
   }
 
-  const protocol = input.allowInsecureHttp ? 'http' : 'https';
+  const protocol = canUseSavedHttp ? 'http' : 'https';
   return `${protocol}://${input.hostname}:3001`;
 }
 
@@ -52,5 +54,22 @@ function safeUrlPort(value: string): string | null {
     return new URL(value).port;
   } catch {
     return null;
+  }
+}
+
+function resolveExplicitUrlForCurrentPage(
+  value: string,
+  input: LocalServerUrlInput,
+  isLocalhost: boolean,
+): string {
+  if (input.currentProtocol !== 'https:' || isLocalhost || !value.toLowerCase().startsWith('http:')) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.hostname === input.hostname ? value.replace(/^http:/i, 'https:') : value;
+  } catch {
+    return value;
   }
 }

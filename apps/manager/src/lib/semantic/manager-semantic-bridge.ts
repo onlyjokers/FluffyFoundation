@@ -20,8 +20,11 @@ export type ManagerSemanticBridgeRuntime = {
     exportGraph: () => { nodes: NodeInstance[]; connections: EngineConnection[] };
     addNode: (node: NodeInstance) => void;
     addConnection: (connection: EngineConnection) => void | boolean;
+    removeConnection: (connectionId: string) => void;
     removeNode: (nodeId: string) => void;
     updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
+    updateNodeInputValue: (nodeId: string, portId: string, value: unknown) => void;
+    replaceNodeInputValues?: (nodeId: string, inputValues: Record<string, unknown>) => void;
     lastError?: { set?: (message: string | null) => void };
   };
   nodeRegistry: NodeRegistry;
@@ -34,10 +37,16 @@ export type ManagerSemanticBridgeRuntime = {
 export type ManagerSemanticBridge = {
   addNode: (node: NodeInstance, actor?: SemanticActor) => SemanticCommandResult;
   connect: (connection: EngineConnection, actor?: SemanticActor) => SemanticCommandResult;
+  disconnect: (connectionId: string, actor?: SemanticActor) => SemanticCommandResult;
   removeNode: (nodeId: string, actor?: SemanticActor) => SemanticCommandResult;
   setNodeParams: (
     nodeId: string,
     params: Record<string, unknown>,
+    actor?: SemanticActor
+  ) => SemanticCommandResult;
+  setNodeInputs: (
+    nodeId: string,
+    inputValues: Record<string, unknown>,
     actor?: SemanticActor
   ) => SemanticCommandResult;
   dispatch: (input: {
@@ -78,11 +87,11 @@ export function createManagerSemanticBridge(
       permissions: [
         {
           actorId: 'canvas',
-          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove'],
+          operations: ['node.add', 'node.connect', 'node.disconnect', 'node.params.update', 'node.inputs.update', 'node.remove'],
         },
         {
           actorId: 'cli',
-          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove'],
+          operations: ['node.add', 'node.connect', 'node.disconnect', 'node.params.update', 'node.inputs.update', 'node.remove'],
         },
       ],
       revision: semanticRevision,
@@ -92,8 +101,14 @@ export function createManagerSemanticBridge(
     semanticRevision += 1;
     if (command.type === 'node.add') runtime.nodeEngine.addNode(command.node);
     if (command.type === 'node.connect') runtime.nodeEngine.addConnection(command.connection);
+    if (command.type === 'node.disconnect') runtime.nodeEngine.removeConnection(command.connectionId);
     if (command.type === 'node.remove') runtime.nodeEngine.removeNode(command.nodeId);
     if (command.type === 'node.params.update') runtime.nodeEngine.updateNodeConfig(command.nodeId, command.params);
+    if (command.type === 'node.inputs.update') {
+      for (const [portId, value] of Object.entries(command.inputValues)) {
+        runtime.nodeEngine.updateNodeInputValue(command.nodeId, portId, value);
+      }
+    }
   };
 
   const dispatch: ManagerSemanticBridge['dispatch'] = ({ actor, command, dryRun = false }) => {
@@ -111,10 +126,14 @@ export function createManagerSemanticBridge(
       dispatch({ actor, command: { type: 'node.add', node } }),
     connect: (connection, actor = defaultCanvasActor) =>
       dispatch({ actor, command: { type: 'node.connect', connection } }),
+    disconnect: (connectionId, actor = defaultCanvasActor) =>
+      dispatch({ actor, command: { type: 'node.disconnect', connectionId } }),
     removeNode: (nodeId, actor = defaultCanvasActor) =>
       dispatch({ actor, command: { type: 'node.remove', nodeId } }),
     setNodeParams: (nodeId, params, actor = defaultCanvasActor) =>
       dispatch({ actor, command: { type: 'node.params.update', nodeId, params } }),
+    setNodeInputs: (nodeId, inputValues, actor = defaultCanvasActor) =>
+      dispatch({ actor, command: { type: 'node.inputs.update', nodeId, inputValues } }),
     dispatch,
     getSnapshot: () => createBus().getSnapshot(),
   };

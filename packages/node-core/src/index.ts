@@ -17,3 +17,4 @@ export * from './semantic-command-apply.js';
 export * from './semantic-command-normalization.js';
 export * from './semantic-command-bus.js';
 export * from './custom-node-definition.js';
+export * from './custom-node-compiler.js';

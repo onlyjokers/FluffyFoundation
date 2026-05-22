@@ -33,6 +33,8 @@ type RuntimeInitOptions = {
   getAreaPlugin: () => unknown;
   getNodeMap: () => Map<string, unknown>;
   sockets: unknown;
+  sendSemanticNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
+  sendSemanticNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
 };
 
 export type RuntimeInitResult = {
@@ -76,6 +78,9 @@ export const initNodeCanvasRuntime = (opts: RuntimeInitOptions): RuntimeInitResu
     getAreaPlugin: opts.getAreaPlugin,
     getNodeMap: opts.getNodeMap,
     sendNodeOverride: patchRuntime.sendNodeOverride,
+    sendSemanticNodeParams: opts.sendSemanticNodeParams,
+    sendSemanticNodeInputs: opts.sendSemanticNodeInputs,
+    schedulePatchReconcile: (reason, options) => patchRuntime.scheduleReconcile(reason, options),
   });
 
   return { sleepNodeSockets, patchRuntime, clientSelectionBinding };

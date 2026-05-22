@@ -4,31 +4,44 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
 
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { subscribePlaybackAudioTap, toneAudioEngine } from '@shugu/multimedia-core';
   import {
     BoxScene,
+    CameraScene,
     DefaultSceneManager,
     FctTrackScene,
     MelSpectrogramScene,
-    sceneIdsFromLayer,
+    sceneLayersFromItems,
     type VisualContext,
   } from '@shugu/visual-plugins';
-  import type { FctTrackSceneLayerItem, VisualSceneLayerItem } from '@shugu/protocol';
+  import { createAudioAnalysisPipeline, type AudioAnalysisPipeline } from '@shugu/audio-plugins';
+  import type { FctTrackAudioSource, VisualSceneLayerItem } from '@shugu/protocol';
 
   export let scenes: VisualSceneLayerItem[] = [];
 
   let container: HTMLElement;
   let manager: DefaultSceneManager | null = null;
-  let fctTrackScene: FctTrackScene | null = null;
   let animationFrame: number | null = null;
   let lastTime = 0;
-  const context: VisualContext = {};
+  let context: VisualContext = {};
+  let microphonePipeline: AudioAnalysisPipeline | null = null;
+  let playbackPipeline: AudioAnalysisPipeline | null = null;
+  let microphoneStream: MediaStream | null = null;
+  let cameraStream: MediaStream | null = null;
+  let cameraRequestedFacing: 'user' | 'environment' | null = null;
+  let playbackUnsub: (() => void) | null = null;
+  let microphoneRequested = false;
 
   onMount(() => {
     manager = new DefaultSceneManager(container);
-    manager.register(new BoxScene());
-    manager.register(new MelSpectrogramScene());
-    fctTrackScene = new FctTrackScene();
-    manager.register(fctTrackScene);
+    manager.registerFactory('box-scene', () => new BoxScene());
+    manager.registerFactory('mel-scene', () => new MelSpectrogramScene());
+    manager.registerFactory('front-camera-scene', () => new CameraScene({ facing: 'user' }));
+    manager.registerFactory('back-camera-scene', () => new CameraScene({ facing: 'environment' }));
+    manager.registerFactory('fct-track-scene', () => new FctTrackScene());
+    playbackUnsub = subscribePlaybackAudioTap((source, sourceContext) => {
+      void setupPlaybackAudioPipeline(source, sourceContext);
+    });
 
     lastTime = performance.now();
     animate(lastTime);
@@ -36,13 +49,34 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
 
   onDestroy(() => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
+    playbackUnsub?.();
+    playbackUnsub = null;
+    microphonePipeline?.destroy();
+    playbackPipeline?.destroy();
+    microphonePipeline = null;
+    playbackPipeline = null;
+    microphoneStream?.getTracks().forEach((track) => track.stop());
+    microphoneStream = null;
+    stopCameraStream();
     manager?.destroy();
     manager = null;
-    fctTrackScene = null;
   });
 
   $: if (manager) {
     applySceneLayer(scenes);
+  }
+
+  $: if (sceneNeedsMicrophone(scenes)) {
+    void setupMicrophoneAudioPipeline();
+  }
+
+  $: {
+    const facing = sceneCameraFacing(scenes);
+    if (facing) {
+      void setupCameraStream(facing);
+    } else {
+      stopCameraStream();
+    }
   }
 
   function animate(now: number): void {
@@ -52,28 +86,120 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
     animationFrame = requestAnimationFrame(animate);
   }
 
+  async function setupMicrophoneAudioPipeline(): Promise<void> {
+    if (microphoneRequested || microphonePipeline) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    microphoneRequested = true;
+    try {
+      microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mod = await toneAudioEngine.ensureLoaded();
+      type ToneContextLike = { rawContext?: AudioContext };
+      type ToneModuleLike = { getContext?: () => ToneContextLike };
+      const toneCandidate =
+        mod && typeof mod === 'object' && 'default' in mod
+          ? (mod as { default?: unknown }).default ?? mod
+          : mod;
+      const tone = toneCandidate && typeof toneCandidate === 'object'
+        ? (toneCandidate as ToneModuleLike)
+        : null;
+      const audioContext = tone?.getContext?.().rawContext ?? null;
+      if (!audioContext) return;
+      if (audioContext.state === 'suspended') await audioContext.resume();
+      const source = audioContext.createMediaStreamSource(microphoneStream);
+      microphonePipeline = await createAudioAnalysisPipeline({
+        audioContext,
+        source,
+        onFeatures: (partial) => {
+          context.microphoneAudioFeatures = { ...(context.microphoneAudioFeatures ?? {}), ...partial };
+          context.audioFeatures = context.microphoneAudioFeatures;
+        },
+      });
+    } catch {
+      microphonePipeline?.destroy();
+      microphonePipeline = null;
+    }
+  }
+
+  async function setupCameraStream(facingMode: 'user' | 'environment'): Promise<void> {
+    if (cameraStream && cameraRequestedFacing === facingMode) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    stopCameraStream();
+    cameraRequestedFacing = facingMode;
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode } },
+        audio: false,
+      });
+      context.cameraStream = cameraStream;
+    } catch {
+      cameraStream = null;
+      context.cameraStream = null;
+      cameraRequestedFacing = null;
+    }
+  }
+
+  function stopCameraStream(): void {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+    context.cameraStream = null;
+    cameraRequestedFacing = null;
+  }
+
+  async function setupPlaybackAudioPipeline(source: AudioNode | null, sourceContext: AudioContext | null): Promise<void> {
+    playbackPipeline?.destroy();
+    playbackPipeline = null;
+    context.playbackAudioFeatures = undefined;
+    if (!source || !sourceContext) return;
+    try {
+      if (sourceContext.state === 'suspended') await sourceContext.resume();
+      playbackPipeline = await createAudioAnalysisPipeline({
+        audioContext: sourceContext,
+        source,
+        onFeatures: (partial) => {
+          context.playbackAudioFeatures = { ...(context.playbackAudioFeatures ?? {}), ...partial };
+        },
+      });
+    } catch {
+      playbackPipeline?.destroy();
+      playbackPipeline = null;
+    }
+  }
+
   function applySceneLayer(nextScenes: VisualSceneLayerItem[] | unknown[]): void {
     if (!manager) return;
     const list = Array.isArray(nextScenes) ? nextScenes : [];
-    const fctConfig = [...list]
-      .reverse()
-      .find((item): item is FctTrackSceneLayerItem =>
-        Boolean(item) && typeof item === 'object' && (item as { type?: unknown }).type === 'fctTrack'
-      );
-    if (fctConfig) {
-      fctTrackScene?.configure(fctConfig);
-    }
+    manager.setLayerScenes(sceneLayersFromItems(list));
+  }
 
-    const desiredIds = sceneIdsFromLayer(list);
-    const desired = new Set(desiredIds);
-    for (const scene of manager.getActiveScenes()) {
-      if (!desired.has(scene.id)) {
-        manager.setSceneEnabled(scene.id, false);
+  function sceneNeedsMicrophone(nextScenes: VisualSceneLayerItem[] | unknown[]): boolean {
+    if (!Array.isArray(nextScenes)) return false;
+    return nextScenes.some((scene) => {
+      if (!scene || typeof scene !== 'object') return false;
+      const item = scene as { type?: unknown; audioSource?: unknown };
+      if (item.type === 'mel' || item.type === 'box') {
+        const source = normalizeFctAudioSource(item.audioSource);
+        return source === 'microphone' || source === 'both';
       }
+      if (item.type !== 'fctTrack') return false;
+      const source = normalizeFctAudioSource(item.audioSource);
+      return source === 'microphone' || source === 'both';
+    });
+  }
+
+  function sceneCameraFacing(nextScenes: VisualSceneLayerItem[] | unknown[]): 'user' | 'environment' | null {
+    if (!Array.isArray(nextScenes)) return null;
+    for (let i = nextScenes.length - 1; i >= 0; i -= 1) {
+      const scene = nextScenes[i];
+      if (!scene || typeof scene !== 'object') continue;
+      const type = (scene as { type?: unknown }).type;
+      if (type === 'frontCamera') return 'user';
+      if (type === 'backCamera') return 'environment';
     }
-    for (const sceneId of desiredIds) {
-      manager.setSceneEnabled(sceneId, true);
-    }
+    return null;
+  }
+
+  function normalizeFctAudioSource(value: unknown): FctTrackAudioSource {
+    return value === 'playback' || value === 'both' ? value : 'microphone';
   }
 </script>
 

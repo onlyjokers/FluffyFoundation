@@ -98,6 +98,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   let patchPendingCommitByKey = new Map<string, ReturnType<typeof setTimeout>>();
   let deployedPatchByClientId = new Map<string, DeployedPatch>();
   let patchDeployTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastGraphTopologySignature = '';
   let patchLastPlanKey = '';
   let patchRuntimeTargetsLastCheckAt = 0;
 
@@ -198,8 +199,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   };
 
   const resolvePatchDeploymentPlan = (): PatchDeploymentPlan | null => {
+    const compiledGraph =
+      typeof nodeEngine.exportCompiledGraphForPatchPlanning === 'function'
+        ? nodeEngine.exportCompiledGraphForPatchPlanning()
+        : undefined;
+
     return resolvePatchDeploymentPlanCore({
       graph: getGraphState(),
+      compiledGraph,
       disabledNodeIds: get(groupDisabledNodeIds),
       clientIdsInOrder,
       audienceClientIdsInOrder,
@@ -216,6 +223,29 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
   const resolvePatchTargetClientIds = (): string[] =>
     resolvePatchDeploymentPlan()?.targetClientIds ?? [];
+
+  const computeDesiredPatchTopologySignature = (): string => {
+    const plan = resolvePatchDeploymentPlan();
+    if (!plan) return '';
+
+    const signatures: string[] = [];
+    const groupsByRootKey = new Map<string, string[]>();
+    for (const rootIds of plan.rootIdsByClientId.values()) {
+      const key = rootIds.join('|');
+      if (!groupsByRootKey.has(key)) groupsByRootKey.set(key, rootIds);
+    }
+
+    for (const rootIds of groupsByRootKey.values()) {
+      try {
+        const payload = nodeEngine.exportGraphForPatchFromRootNodeIds(rootIds);
+        signatures.push(computeTopologySignature(payload.graph));
+      } catch {
+        signatures.push(`export-error:${rootIds.join('|')}`);
+      }
+    }
+
+    return signatures.sort().join('||');
+  };
 
   const stopAndRemovePatchOnClient = (clientId: string, patchId: string) => {
     const id = String(clientId ?? '');
@@ -245,6 +275,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (!getSDK()) return;
 
     const plan = resolvePatchDeploymentPlan();
+    lastGraphTopologySignature = computeDesiredPatchTopologySignature();
     patchLastPlanKey = plan?.planKey ?? '';
     if (!plan || plan.targetClientIds.length === 0) {
       if (deployedPatchByClientId.size > 0) stopAllDeployedPatches();
@@ -463,8 +494,13 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     });
   };
 
-  const scheduleReconcile = (reason: string) => {
+  const scheduleReconcile = (reason: string, options: { immediate?: boolean } = {}) => {
     if (patchDeployTimer) clearTimeout(patchDeployTimer);
+    if (options.immediate) {
+      patchDeployTimer = null;
+      reconcilePatchDeployment(reason);
+      return;
+    }
     patchDeployTimer = setTimeout(() => {
       patchDeployTimer = null;
       reconcilePatchDeployment(reason);
@@ -585,7 +621,11 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   };
 
   const onGraphStateChanged = () => {
-    scheduleReconcile('graph-change');
+    const nextTopologySignature = computeDesiredPatchTopologySignature();
+    const topologyChanged =
+      lastGraphTopologySignature === '' || nextTopologySignature !== lastGraphTopologySignature;
+    lastGraphTopologySignature = nextTopologySignature;
+    if (topologyChanged) scheduleReconcile('graph-topology-change', { immediate: true });
     midiBridge.markLoopDirty();
 
     // Keep MIDI bridge wiring responsive (MIDI nodes are excluded from deploy topology).

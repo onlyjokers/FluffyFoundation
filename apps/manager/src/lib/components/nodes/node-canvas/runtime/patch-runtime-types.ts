@@ -26,6 +26,7 @@ export type NodeRegistryLike = {
 export type NodeEngineLike = {
   getNode(nodeId: string): NodeInstance | undefined;
   getLastComputedInputs(nodeId: string): Record<string, unknown> | null;
+  exportCompiledGraphForPatchPlanning?(): GraphState;
   exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): PatchPayload;
   lastError: Readable<string | null> & { set(value: string | null): void };
   setPatchOffloadedNodeIds(nodeIds: string[]): void;
@@ -115,7 +116,7 @@ export interface PatchRuntime {
   onLoopDeployListChanged(): void;
   onGroupDisabledChanged(disabled: Set<string>): void;
   onRunningChanged(running: boolean): void;
-  scheduleReconcile(reason: string): void;
+  scheduleReconcile(reason: string, options?: { immediate?: boolean }): void;
   stopAllDeployedPatches(): void;
   clearMidiLoopBridgeState(): void;
   syncPatchVisualState(): void;

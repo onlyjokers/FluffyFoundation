@@ -13,6 +13,7 @@ type NodeEngineLike = { clearDisabledNodes: () => void };
 export type NodeCanvasDestroyContext = {
   container: HTMLDivElement | null;
   graphUnsub: (() => void) | null;
+  localSemanticGraphChangeUnsub: (() => void) | null;
   groupNodesUnsub: (() => void) | null;
   groupFramesUnsub: (() => void) | null;
   groupUiStateUnsub: (() => void) | null;
@@ -57,6 +58,7 @@ export const destroyNodeCanvasResources = (ctx: NodeCanvasDestroyContext) => {
   const win = ctx.windowRef;
 
   ctx.graphUnsub?.();
+  ctx.localSemanticGraphChangeUnsub?.();
   ctx.groupNodesUnsub?.();
   ctx.groupFramesUnsub?.();
   ctx.groupUiStateUnsub?.();

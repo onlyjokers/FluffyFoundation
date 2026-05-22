@@ -95,14 +95,24 @@ const internalNodeTypes = (definition: CustomNodeDefinition): string[] => [
 const exampleConfig = (inputs: NodePort[]): Record<string, unknown> =>
   Object.fromEntries(inputs.filter((port) => port.defaultValue !== undefined).map((port) => [port.id, port.defaultValue]));
 
+const customNodeGatePort = (): NodePort => ({
+  id: 'gate',
+  label: 'Active',
+  type: 'boolean',
+  defaultValue: true,
+});
+
 export function createCustomNodeDefinitionNode(
   definition: CustomNodeDefinition,
   nodeDefinitions: Iterable<NodeDefinition> = []
 ): NodeDefinition {
   const inferredHints = portHintsByBinding(definition, nodeDefinitions);
-  const inputs = (definition.ports ?? [])
-    .filter((port) => port.side === 'input' && port.portKey)
-    .map((port) => portFromCustomPort(port, inferredHints.get(String(port.portKey))));
+  const inputs = [
+    customNodeGatePort(),
+    ...(definition.ports ?? [])
+      .filter((port) => port.side === 'input' && port.portKey)
+      .map((port) => portFromCustomPort(port, inferredHints.get(String(port.portKey)))),
+  ];
   const outputs = (definition.ports ?? [])
     .filter((port) => port.side === 'output' && port.portKey)
     .map((port) => portFromCustomPort(port, inferredHints.get(String(port.portKey))));

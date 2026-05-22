@@ -1,7 +1,6 @@
 /**
  * Purpose: Build Rete nodes and apply dynamic port constraints.
  */
-import { get } from 'svelte/store';
 import { ClassicPreset, type BaseSchemes } from 'rete';
 import type { AreaPlugin } from 'rete-area-plugin';
 import type {
@@ -12,7 +11,6 @@ import type {
   Connection as EngineConnection,
 } from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
-import { audienceClients } from '$lib/stores/manager';
 import { CUSTOM_NODE_TYPE_PREFIX } from '$lib/nodes/custom-nodes/store';
 import { readCustomNodeState, writeCustomNodeState } from '$lib/nodes/custom-nodes/instance';
 import {
@@ -50,10 +48,20 @@ type ReteBuilderOptions = {
   sockets: ReteSocketMap;
   getNumberParamOptions: () => { path: string; label: string }[];
   sendNodeOverride: (nodeId: string, kind: 'input' | 'config', portId: string, value: unknown) => void;
+  sendSemanticNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
+  sendSemanticNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
   onNodeActivity?: (nodeId: string, portId: string) => void;
+  getAudienceClientCount?: () => number;
   onClientNodePick?: (nodeId: string, clientId: string) => void;
   onClientNodeSelectInput?: (nodeId: string, portId: 'index' | 'range', value: number) => void;
   onClientNodeRandom?: (nodeId: string, value: boolean) => void;
+  isProjectionId?: (id: string) => boolean;
+  commitProjectionValue?: (update: {
+    nodeId: string;
+    kind: 'input' | 'config';
+    key: string;
+    value: unknown;
+  }) => boolean;
 };
 
 export type ReteBuilder = {
@@ -81,10 +89,22 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const notifyNodeActivity = (nodeId: string, portId: string) => {
     opts.onNodeActivity?.(nodeId, portId);
   };
+  const commitUserInputValue = (nodeId: string, portId: string, value: unknown) => {
+    nodeEngine.updateNodeInputValue(nodeId, portId, value);
+    opts.sendSemanticNodeInputs?.(nodeId, { [portId]: value });
+    sendNodeOverride(nodeId, 'input', portId, value);
+    notifyNodeActivity(nodeId, portId);
+  };
+  const commitUserConfigValue = (nodeId: string, key: string, value: unknown) => {
+    nodeEngine.updateNodeConfig(nodeId, { [key]: value });
+    opts.sendSemanticNodeParams?.(nodeId, { [key]: value });
+    sendNodeOverride(nodeId, 'config', key, value);
+    notifyNodeActivity(nodeId, key);
+  };
 
   const nodeLabel = (node: NodeInstance): string => {
     if (node.type === 'client-object') {
-      const onlineCount = get(audienceClients).length;
+      const onlineCount = Math.max(0, Math.floor(Number(opts.getAudienceClientCount?.() ?? 0)));
       return `Client: ${onlineCount} online`;
     }
     if (node.type === 'group-frame') {
@@ -103,6 +123,37 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const buildReteNode = (instance: NodeInstance): ClassicPreset.Node => {
     const def = nodeRegistry.get(instance.type);
     const node = new ClassicPreset.Node(nodeLabel(instance));
+    (node as ClassicPreset.Node & { type?: string }).type = instance.type;
+    (node as ClassicPreset.Node & { config?: Record<string, unknown> }).config = { ...(instance.config ?? {}) };
+    const isEditorProjection = Boolean((instance.config as Record<string, unknown> | undefined)?.editorProjection);
+    const commitInputValue = (portId: string, value: unknown): boolean => {
+      if (isEditorProjection) {
+        const accepted = opts.commitProjectionValue?.({
+          nodeId: instance.id,
+          kind: 'input',
+          key: portId,
+          value,
+        });
+        if (accepted) notifyNodeActivity(instance.id, portId);
+        return accepted === true;
+      }
+      commitUserInputValue(instance.id, portId, value);
+      return true;
+    };
+    const commitConfigValue = (key: string, value: unknown): boolean => {
+      if (isEditorProjection) {
+        const accepted = opts.commitProjectionValue?.({
+          nodeId: instance.id,
+          kind: 'config',
+          key,
+          value,
+        });
+        if (accepted) notifyNodeActivity(instance.id, key);
+        return accepted === true;
+      }
+      commitUserConfigValue(instance.id, key, value);
+      return true;
+    };
     const configFields = def?.configSchema ?? [];
     const configFieldByKey = new Map<string, ConfigField>();
     for (const field of configFields) configFieldByKey.set(field.key, field);
@@ -176,11 +227,11 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               const control = new ClassicPreset.InputControl('number', {
                 initial: clamp(initial),
                 change: (value) => {
+                  if (value === initial) return;
                   const next = typeof value === 'number' ? clamp(value) : value;
-                  nodeEngine.updateNodeInputValue(instance.id, input.id, next);
-                  sendNodeOverride(instance.id, 'input', input.id, next);
-                  notifyNodeActivity(instance.id, input.id);
+                  commitInputValue(input.id, next);
                   if (
+                    !isEditorProjection &&
                     instance.type === 'client-object' &&
                     (input.id === 'index' || input.id === 'range') &&
                     typeof next === 'number'
@@ -202,6 +253,15 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               return control;
             })()
           );
+
+          if (
+            !isEditorProjection &&
+            configField &&
+            instance.config?.[input.id] === undefined &&
+            configField.defaultValue !== undefined
+          ) {
+            nodeEngine.updateNodeConfig(instance.id, { [input.id]: clamp(initial) });
+          }
         } else if (input.type === 'string') {
           const initial =
             typeof current === 'string'
@@ -212,9 +272,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           const control = new ClassicPreset.InputControl('text', {
             initial,
             change: (value) => {
-              nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-              sendNodeOverride(instance.id, 'input', input.id, value);
-              notifyNodeActivity(instance.id, input.id);
+              if (value === initial) return;
+              commitInputValue(input.id, value);
             },
           });
           control.inline = true;
@@ -231,19 +290,23 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           const control = new BooleanControl({
             initial,
             change: (value) => {
-              nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-              sendNodeOverride(instance.id, 'input', input.id, value);
-              notifyNodeActivity(instance.id, input.id);
-              if (instance.type === 'client-object' && input.id === 'random') {
+              const isCustomGate =
+                String(instance.type).startsWith(CUSTOM_NODE_TYPE_PREFIX) && input.id === 'gate';
+              if (!isCustomGate && value === initial) return;
+              commitInputValue(input.id, value);
+              if (!isEditorProjection && instance.type === 'client-object' && input.id === 'random') {
                 opts.onClientNodeRandom?.(instance.id, value);
               }
-              if (String(instance.type).startsWith(CUSTOM_NODE_TYPE_PREFIX) && input.id === 'gate') {
+              if (!isEditorProjection && isCustomGate) {
                 const state = readCustomNodeState(instance.config ?? {});
                 if (state) {
-                  nodeEngine.updateNodeConfig(
-                    instance.id,
-                    writeCustomNodeState(instance.config ?? {}, { ...state, manualGate: Boolean(value) })
-                  );
+                  const nextConfig = writeCustomNodeState(instance.config ?? {}, {
+                    ...state,
+                    manualGate: Boolean(value),
+                  });
+                  nodeEngine.updateNodeConfig(instance.id, nextConfig);
+                  opts.sendSemanticNodeParams?.(instance.id, nextConfig);
+                  notifyNodeActivity(instance.id, 'gate');
                 }
               }
             },
@@ -267,9 +330,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             const control = new ClassicPreset.InputControl('text', {
               initial,
               change: (value) => {
-                nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-                sendNodeOverride(instance.id, 'input', input.id, value);
-                notifyNodeActivity(instance.id, input.id);
+                if (value === initial) return;
+                commitInputValue(input.id, value);
               },
             });
             control.inline = true;
@@ -291,15 +353,22 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial,
           options: configField.options ?? [],
           change: (value) => {
-            nodeEngine.updateNodeInputValue(instance.id, input.id, value);
-            sendNodeOverride(instance.id, 'input', input.id, value);
-            notifyNodeActivity(instance.id, input.id);
+            if (value === initial) return;
+            commitInputValue(input.id, value);
           },
         });
         control.inline = true;
         inp.addControl(control);
         inp.showControl = true;
         inputControlKeys.add(input.id);
+
+        if (
+          !isEditorProjection &&
+          instance.config?.[input.id] === undefined &&
+          configField.defaultValue !== undefined
+        ) {
+          nodeEngine.updateNodeConfig(instance.id, { [input.id]: initial });
+        }
       }
 
       node.addInput(input.id, inp);
@@ -311,6 +380,16 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         out.control = new ClientSensorValueControl({ nodeId: instance.id, portId: output.id });
       }
       node.addOutput(output.id, out);
+    }
+
+    const configDefaultPatch: Record<string, unknown> = {};
+    for (const field of def?.configSchema ?? []) {
+      if (inputControlKeys.has(field.key)) continue;
+      if (instance.config?.[field.key] !== undefined || field.defaultValue === undefined) continue;
+      configDefaultPatch[field.key] = field.defaultValue;
+    }
+    if (!isEditorProjection && Object.keys(configDefaultPatch).length > 0) {
+      nodeEngine.updateNodeConfig(instance.id, configDefaultPatch);
     }
 
     for (const field of def?.configSchema ?? []) {
@@ -325,9 +404,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             initial: String(current ?? ''),
             options: field.options ?? [],
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              if (value === String(current ?? '')) return;
+              commitConfigValue(key, value);
             },
           })
         );
@@ -358,9 +436,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             label: field.label,
             initial,
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              if (value === initial) return;
+              commitConfigValue(key, value);
             },
           })
         );
@@ -377,10 +454,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         const control = new ClassicPreset.InputControl('number', {
           initial: clamp(Number(current ?? 0)),
           change: (value) => {
+            const initialValue = clamp(Number(current ?? 0));
+            if (value === initialValue) return;
             const next = typeof value === 'number' ? clamp(value) : value;
-            nodeEngine.updateNodeConfig(instance.id, { [key]: next });
-            sendNodeOverride(instance.id, 'config', key, next);
-            notifyNodeActivity(instance.id, key);
+            commitConfigValue(key, next);
           },
         });
         control.controlLabel = field.label;
@@ -393,7 +470,13 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           label: field.label,
           initial: String(current ?? ''),
           change: (value) => {
+            if (value === String(current ?? '')) return;
+            if (isEditorProjection) {
+              commitConfigValue(key, value);
+              return;
+            }
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
+            opts.sendSemanticNodeParams?.(instance.id, { [key]: value });
             if (instance.type === 'client-object') {
               opts.onClientNodePick?.(instance.id, value);
             }
@@ -410,9 +493,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            if (value === String(current ?? '')) return;
+            commitConfigValue(key, value);
           },
         });
         node.addControl(key, control);
@@ -423,9 +505,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial: String(current ?? ''),
           assetKind: typeof assetKindRaw === 'string' ? assetKindRaw : 'any',
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            if (value === String(current ?? '')) return;
+            commitConfigValue(key, value);
           },
         });
         node.addControl(key, control);
@@ -441,9 +522,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               label: `${p.label} (${p.path})`,
             })),
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              if (value === String(current ?? '')) return;
+              commitConfigValue(key, value);
             },
           })
         );
@@ -456,9 +536,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             accept: field.accept,
             buttonLabel: field.buttonLabel,
             change: (value) => {
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-              sendNodeOverride(instance.id, 'config', key, value);
-              notifyNodeActivity(instance.id, key);
+              if (value === current) return;
+              commitConfigValue(key, value);
             },
           })
         );
@@ -490,28 +569,20 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               const nextEnd = typeof valueRecord?.endSec === 'number' ? valueRecord.endSec : -1;
               const nextCursor = valueRecord?.cursorSec;
 
-              nodeEngine.updateNodeInputValue(instance.id, 'startSec', nextStart);
-              sendNodeOverride(instance.id, 'input', 'startSec', nextStart);
-              notifyNodeActivity(instance.id, 'startSec');
-
-              nodeEngine.updateNodeInputValue(instance.id, 'endSec', nextEnd);
-              sendNodeOverride(instance.id, 'input', 'endSec', nextEnd);
-              notifyNodeActivity(instance.id, 'endSec');
+              commitInputValue('startSec', nextStart);
+              commitInputValue('endSec', nextEnd);
 
               if (typeof nextCursor === 'number' && Number.isFinite(nextCursor)) {
-                nodeEngine.updateNodeInputValue(instance.id, 'cursorSec', nextCursor);
-                sendNodeOverride(instance.id, 'input', 'cursorSec', nextCursor);
-                notifyNodeActivity(instance.id, 'cursorSec');
+                commitInputValue('cursorSec', nextCursor);
               }
 
               // Keep config in sync for persistence/debugging (not used by runtime).
-              nodeEngine.updateNodeConfig(instance.id, { [key]: value });
+              if (isEditorProjection) commitConfigValue(key, value);
+              else nodeEngine.updateNodeConfig(instance.id, { [key]: value });
               return;
             }
 
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitConfigValue(key, value);
           },
         });
         control.nodeId = instance.id;
@@ -529,9 +600,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           initial,
           nodeId: instance.id,
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            commitConfigValue(key, value);
           },
         });
         curveControl.nodeId = instance.id;
@@ -542,9 +611,9 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           placeholder: 'Type a note…',
           initial: typeof current === 'string' ? current : String(current ?? ''),
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            const initialValue = typeof current === 'string' ? current : String(current ?? '');
+            if (value === initialValue) return;
+            commitConfigValue(key, value);
           },
         });
         noteControl.nodeId = instance.id;
@@ -553,9 +622,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         const control = new ClassicPreset.InputControl('text', {
           initial: String(current ?? ''),
           change: (value) => {
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            sendNodeOverride(instance.id, 'config', key, value);
-            notifyNodeActivity(instance.id, key);
+            if (value === String(current ?? '')) return;
+            commitConfigValue(key, value);
           },
         });
         control.controlLabel = field.label;
@@ -588,6 +656,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const getEngineNode = (nodeId: string): NodeInstance | undefined => nodeEngine.getNode?.(nodeId);
 
   const getPortDefForSocket = (socket: { nodeId: string; side: 'input' | 'output'; key: string }): NodePort | null => {
+    if (opts.isProjectionId?.(String(socket.nodeId ?? ''))) return null;
     return findPortDefForSocket(nodeRegistry, getEngineNode, socket);
   };
 
@@ -600,6 +669,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   };
 
   const inputAllowsMultiple = (nodeId: string, inputKey: string): boolean => {
+    if (opts.isProjectionId?.(String(nodeId ?? ''))) return false;
     return doesInputAllowMultiple(nodeRegistry, getEngineNode, nodeId, inputKey);
   };
 

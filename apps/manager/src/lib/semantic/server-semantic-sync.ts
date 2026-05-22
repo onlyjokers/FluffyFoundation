@@ -1,5 +1,11 @@
 // Purpose: App-level helpers for mirroring the server-owned semantic graph into Manager UI state.
-import type { SemanticGraphSnapshot, SemanticGroup, SemanticPartition } from '@shugu/node-core';
+import {
+  applySemanticCommand,
+  type SemanticCommand,
+  type SemanticGraphSnapshot,
+  type SemanticGroup,
+  type SemanticPartition,
+} from '@shugu/node-core';
 import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/protocol';
 import type { GraphState } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
@@ -11,6 +17,8 @@ export type ServerSemanticNodeEngine = {
   exportGraph?: () => GraphState;
   loadGraph: (graph: GraphState) => void;
   updateNodeConfig?: (nodeId: string, config: Record<string, unknown>) => void;
+  updateNodeInputValue?: (nodeId: string, portId: string, value: unknown) => void;
+  replaceNodeInputValues?: (nodeId: string, inputValues: Record<string, unknown>) => void;
 };
 
 export type LocalProjectForServerMigration = {
@@ -35,6 +43,10 @@ export type ServerSemanticSyncSdk = {
 export type ServerSemanticNodeGroupsSync = (groups: NodeGroup[]) => void;
 export type ServerSemanticCustomDefinitionsSync = (definitions: CustomNodeDefinition[]) => void;
 export type ServerSemanticLayoutPositions = Map<string, { x: number; y: number }>;
+
+type PendingSemanticCommandReader = () => SemanticCommand[];
+type PendingSemanticCommandSettler = (requestId: string) => void;
+type PendingSemanticCommandClearer = () => void;
 
 function snapshotFromSemanticResult(message: SemanticResultMessage): SemanticGraphSnapshot | null {
   if (!message.ok) return null;
@@ -77,8 +89,8 @@ export function graphFromServerSemanticSnapshot(
       id: String(node.id),
       type: String(node.type),
       position:
-        currentPositions.get(String(node.id)) ??
         layoutPositions?.get(String(node.id)) ??
+        currentPositions.get(String(node.id)) ??
         {
           x: nextPositionX + missingNodeIndex++ * 240,
           y: defaultY,
@@ -88,6 +100,59 @@ export function graphFromServerSemanticSnapshot(
       outputValues: { ...(node.outputValues ?? {}) },
     })),
     connections: (snapshot.connections ?? []).map((connection) => ({ ...connection })),
+  };
+}
+
+const snapshotNodeToGraphNode = (node: SemanticGraphSnapshot['nodes'][number]) => ({
+  id: String(node.id),
+  type: String(node.type),
+  position: defaultSemanticNodePosition,
+  config: { ...(node.params ?? {}) },
+  inputValues: { ...(node.inputValues ?? {}) },
+  outputValues: { ...(node.outputValues ?? {}) },
+});
+
+const graphNodeToSnapshotNode = (node: GraphState['nodes'][number]) => ({
+  id: String(node.id),
+  type: String(node.type),
+  params: { ...(node.config ?? {}) },
+  inputValues: { ...(node.inputValues ?? {}) },
+  outputValues: { ...(node.outputValues ?? {}) },
+});
+
+export function overlayPendingSemanticCommands(
+  snapshot: SemanticGraphSnapshot,
+  commands: SemanticCommand[]
+): SemanticGraphSnapshot {
+  if (commands.length === 0) return snapshot;
+  let state = {
+    graph: {
+      nodes: (snapshot.nodes ?? []).map(snapshotNodeToGraphNode),
+      connections: (snapshot.connections ?? []).map((connection) => ({ ...connection })),
+    },
+    groups: snapshot.groups ?? [],
+    partitions: snapshot.partitions ?? [],
+    customDefinitions: snapshot.customDefinitions ?? [],
+    agentCapabilities: snapshot.agentCapabilities,
+    proposals: snapshot.proposals ?? [],
+    runtimeStatus: snapshot.runtimeStatus,
+    revision: Number(snapshot.revision) || 0,
+  };
+
+  for (const command of commands) {
+    state = applySemanticCommand(state, command);
+  }
+
+  return {
+    ...snapshot,
+    nodes: state.graph.nodes.map(graphNodeToSnapshotNode),
+    connections: state.graph.connections.map((connection) => ({ ...connection })),
+    groups: state.groups.map((group) => ({ ...group })),
+    partitions: state.partitions.map((partition) => ({ ...partition })),
+    customDefinitions: state.customDefinitions.map((definition) => cloneJsonValue(definition)),
+    agentCapabilities: cloneJsonValue(state.agentCapabilities),
+    proposals: state.proposals.map((proposal) => cloneJsonValue(proposal)),
+    runtimeStatus: cloneJsonValue(state.runtimeStatus),
   };
 }
 
@@ -150,6 +215,18 @@ const shallowRecordEqual = (
   return leftKeys.every((key) => Object.is(left[key], right[key]));
 };
 
+const patchNodeInputValues = (
+  nodeId: string,
+  current: Record<string, unknown>,
+  next: Record<string, unknown>,
+  updateNodeInputValue: (nodeId: string, portId: string, value: unknown) => void
+): void => {
+  for (const [key, value] of Object.entries(next)) {
+    if (Object.is(current[key], value)) continue;
+    updateNodeInputValue(nodeId, key, value);
+  }
+};
+
 export function applyServerSemanticSnapshot(input: {
   snapshot: SemanticGraphSnapshot;
   nodeEngine: ServerSemanticNodeEngine;
@@ -180,6 +257,19 @@ export function applyServerSemanticSnapshot(input: {
       const nextConfig = nextNode.config ?? {};
       if (!shallowRecordEqual(currentNode.config ?? {}, nextConfig)) {
         input.nodeEngine.updateNodeConfig(String(nextNode.id), nextConfig);
+      }
+      const nextInputValues = nextNode.inputValues ?? {};
+      if (!shallowRecordEqual(currentNode.inputValues ?? {}, nextInputValues)) {
+        if (input.nodeEngine.replaceNodeInputValues) {
+          input.nodeEngine.replaceNodeInputValues(String(nextNode.id), nextInputValues);
+        } else if (input.nodeEngine.updateNodeInputValue) {
+          patchNodeInputValues(
+            String(nextNode.id),
+            currentNode.inputValues ?? {},
+            nextInputValues,
+            input.nodeEngine.updateNodeInputValue
+          );
+        }
       }
     }
     return;
@@ -228,17 +318,38 @@ export function bindServerSemanticSync(input: {
   setCustomNodeDefinitions?: ServerSemanticCustomDefinitionsSync;
   getLayoutPositions?: () => ServerSemanticLayoutPositions;
   onSnapshot?: (snapshot: SemanticGraphSnapshot) => void;
+  beforeApply?: () => void;
+  afterApply?: () => void;
+  getPendingCommands?: PendingSemanticCommandReader;
+  settlePendingCommand?: PendingSemanticCommandSettler;
+  clearPendingCommands?: PendingSemanticCommandClearer;
 }): () => void {
   let requestedInitialSnapshot = false;
+  let wasDisconnected = false;
+  let latestAppliedRevision = Number.NEGATIVE_INFINITY;
   const handleSnapshot = (snapshot: SemanticGraphSnapshot) => {
-    input.onSnapshot?.(snapshot);
-    applyServerSemanticSnapshot({
+    const revision = Number(snapshot.revision);
+    if (Number.isFinite(revision)) {
+      if (revision < latestAppliedRevision) return;
+      latestAppliedRevision = revision;
+    }
+    const effectiveSnapshot = overlayPendingSemanticCommands(
       snapshot,
-      nodeEngine: input.nodeEngine,
-      setNodeGroups: input.setNodeGroups,
-      setCustomNodeDefinitions: input.setCustomNodeDefinitions,
-      layoutPositions: input.getLayoutPositions?.(),
-    });
+      input.getPendingCommands?.() ?? []
+    );
+    input.onSnapshot?.(effectiveSnapshot);
+    input.beforeApply?.();
+    try {
+      applyServerSemanticSnapshot({
+        snapshot: effectiveSnapshot,
+        nodeEngine: input.nodeEngine,
+        setNodeGroups: input.setNodeGroups,
+        setCustomNodeDefinitions: input.setCustomNodeDefinitions,
+        layoutPositions: input.getLayoutPositions?.(),
+      });
+    } finally {
+      input.afterApply?.();
+    }
     input.migrationCoordinator.maybeImport(snapshot);
   };
   const unsubscribeSnapshot = input.sdk.onSemanticSnapshot((snapshot) => {
@@ -246,14 +357,31 @@ export function bindServerSemanticSync(input: {
   });
   const unsubscribeResult =
     input.sdk.onSemanticResult?.((message) => {
+      input.settlePendingCommand?.(message.requestId);
+      if (!message.ok) {
+        input.sdk.requestSemanticSnapshot(`semantic-result-rejected:${message.requestId}`);
+        return;
+      }
       const snapshot = snapshotFromSemanticResult(message);
       if (snapshot) handleSnapshot(snapshot);
     }) ?? (() => undefined);
   const unsubscribeState = input.sdk.onStateChange((state) => {
-    if (requestedInitialSnapshot) return;
-    if (state.status !== 'connected') return;
-    requestedInitialSnapshot = true;
-    input.sdk.requestSemanticSnapshot('graph-snapshot');
+    if (state.status !== 'connected') {
+      if (requestedInitialSnapshot) wasDisconnected = true;
+      return;
+    }
+
+    if (!requestedInitialSnapshot) {
+      requestedInitialSnapshot = true;
+      input.sdk.requestSemanticSnapshot('graph-snapshot');
+      return;
+    }
+
+    if (!wasDisconnected) return;
+    wasDisconnected = false;
+    input.clearPendingCommands?.();
+    latestAppliedRevision = Number.NEGATIVE_INFINITY;
+    input.sdk.requestSemanticSnapshot('graph-snapshot:reconnect');
   });
 
   return () => {

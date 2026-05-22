@@ -26,6 +26,7 @@ type GraphSyncOptions = {
   ) => Promise<void>;
   setGraphState: (state: GraphState) => void;
   setNodeCount: (count: number) => void;
+  getProjectionState?: () => GraphState;
   getSelectedNodeId: () => string;
   onAfterSync: () => void;
   isSyncingRef: { value: boolean };
@@ -129,11 +130,22 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
     try {
       opts.setGraphState(state);
       opts.setNodeCount(state.nodes.length);
+      const projection = opts.getProjectionState?.() ?? { nodes: [], connections: [] };
+      const viewState = {
+        nodes: [
+          ...(Array.isArray(state.nodes) ? state.nodes : []),
+          ...(Array.isArray(projection.nodes) ? projection.nodes : []),
+        ],
+        connections: [
+          ...(Array.isArray(state.connections) ? state.connections : []),
+          ...(Array.isArray(projection.connections) ? projection.connections : []),
+        ],
+      };
 
-      const engineNodeIds = new Set(state.nodes.map((n) => n.id));
-      const engineConnIds = new Set(state.connections.map((c) => c.id));
+      const engineNodeIds = new Set(viewState.nodes.map((n) => n.id));
+      const engineConnIds = new Set(viewState.connections.map((c) => c.id));
 
-      for (const n of state.nodes) {
+      for (const n of viewState.nodes) {
         let reteNode = opts.nodeMap.get(n.id);
         if (reteNode && shouldRebuildCustomNode(n, reteNode)) {
           try {
@@ -166,11 +178,11 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
           }
         }
 
-        await ensureCmdAggregatorInputs(n, reteNode, state.connections);
+        await ensureCmdAggregatorInputs(n, reteNode, viewState.connections);
         await opts.areaPlugin.translate(reteNode.id, { x: n.position.x, y: n.position.y });
       }
 
-      for (const c of state.connections) {
+      for (const c of viewState.connections) {
         if (opts.connectionMap.has(c.id)) continue;
         const existing = opts.editor.getConnection(c.id);
         if (existing) {
@@ -209,9 +221,9 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
       }
 
       const connectedInputs = new Set<string>();
-      for (const c of state.connections) connectedInputs.add(`${c.targetNodeId}:${c.targetPortId}`);
+      for (const c of viewState.connections) connectedInputs.add(`${c.targetNodeId}:${c.targetPortId}`);
 
-      for (const n of state.nodes) {
+      for (const n of viewState.nodes) {
         const reteNode = opts.nodeMap.get(n.id);
         if (!reteNode) continue;
         const def = opts.nodeRegistry.get(n.type);

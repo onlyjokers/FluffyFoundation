@@ -50,9 +50,46 @@ export function bindGraphStateSubscription(opts: {
   patchRuntime: any;
   syncCustomGateInputs: (state: unknown) => void;
   rehydrateExpandedCustomFrames: (state: unknown) => void;
+  isApplyingServerSemanticSnapshot?: () => boolean;
 }) {
   let lastGraphNodeCount = -1;
   let lastGraphConnKey = '';
+  let lastGraphShapeKey = '';
+  let lastCompiledTopologyAffectingKey = '';
+
+  const graphShapeKey = (state: any): string => {
+    const nodes = (state.nodes ?? [])
+      .map((node: any) => ({ id: String(node.id ?? ''), type: String(node.type ?? '') }))
+      .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
+    const connections = (state.connections ?? [])
+      .map((connection: any) => ({
+        id: String(connection.id ?? ''),
+        sourceNodeId: String(connection.sourceNodeId ?? ''),
+        sourcePortId: String(connection.sourcePortId ?? ''),
+        targetNodeId: String(connection.targetNodeId ?? ''),
+        targetPortId: String(connection.targetPortId ?? ''),
+      }))
+      .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
+    return JSON.stringify({ nodes, connections });
+  };
+
+  const compiledTopologyAffectingKey = (state: any): string => {
+    const nodes = (state.nodes ?? [])
+      .map((node: any) => {
+        const type = String(node.type ?? '');
+        if (!type.startsWith('custom:')) return null;
+        const customNode = asRecord(node.config)?.customNode;
+        const customState = asRecord(customNode);
+        return {
+          id: String(node.id ?? ''),
+          gate: node.inputValues?.gate === false ? false : true,
+          manualGate: customState.manualGate === false ? false : true,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
+    return JSON.stringify(nodes);
+  };
 
   return opts.graphStateStore?.subscribe((state: any) => {
     if ((state.nodes ?? []).some((n: any) => String(n.type).startsWith('midi-'))) {
@@ -67,6 +104,14 @@ export function bindGraphStateSubscription(opts: {
     const connectionsChanged = nextConnKey !== lastGraphConnKey;
     lastGraphConnKey = nextConnKey;
 
+    const nextShapeKey = graphShapeKey(state);
+    const shapeChanged = nextShapeKey !== lastGraphShapeKey;
+    lastGraphShapeKey = nextShapeKey;
+
+    const nextCompiledTopologyKey = compiledTopologyAffectingKey(state);
+    const compiledTopologyChanged = nextCompiledTopologyKey !== lastCompiledTopologyAffectingKey;
+    lastCompiledTopologyAffectingKey = nextCompiledTopologyKey;
+
     // Only reconcile on node removal to avoid interfering with imports (nodes are added one-by-one).
     if (prevNodeCount >= 0 && nextNodeCount < prevNodeCount) {
       const removedGroupIds = opts.groupController.reconcileGraphNodes(state);
@@ -79,11 +124,24 @@ export function bindGraphStateSubscription(opts: {
     }
 
     opts.graphSync?.schedule(state);
+    if (opts.isApplyingServerSemanticSnapshot?.()) return;
     opts.syncCustomGateInputs(state);
     if (connectionsChanged) opts.groupPortNodesController.scheduleNormalizeProxies();
-    opts.patchRuntime.onGraphStateChanged();
+    if (shapeChanged || compiledTopologyChanged) opts.patchRuntime.onGraphStateChanged();
     opts.rehydrateExpandedCustomFrames(state);
   });
+}
+
+export function bindLocalSemanticGraphChangeSubscription(opts: {
+  graphChangesStore: any;
+  canvasCommands: {
+    setNodeParams?: (nodeId: string, params: Record<string, unknown>) => boolean;
+    setNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
+  };
+  isSyncingGraph: () => boolean;
+}) {
+  void opts;
+  return () => undefined;
 }
 
 export function bindGroupUiSubscriptions(opts: {

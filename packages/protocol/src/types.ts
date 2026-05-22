@@ -208,7 +208,22 @@ export type FctTrackPalette = (typeof FCT_TRACK_PALETTES)[number];
 
 export type FctTrackBlend = 'replace' | 'over';
 
-export interface FctTrackSceneLayerItem {
+export const FCT_TRACK_AUDIO_SOURCES = ['microphone', 'playback', 'both'] as const;
+
+export type FctTrackAudioSource = (typeof FCT_TRACK_AUDIO_SOURCES)[number];
+
+export interface BaseVisualSceneLayerItem {
+  /** Background opacity from 0 (transparent) to 1 (opaque). */
+  showBackground?: number;
+  audioSource?: FctTrackAudioSource;
+}
+
+export interface BoxSceneLayerItem extends BaseVisualSceneLayerItem {
+  type: 'box';
+  color?: string;
+}
+
+export interface FctTrackSceneLayerItem extends BaseVisualSceneLayerItem {
   type: 'fctTrack';
   variant: FctTrackVariant;
   palette: FctTrackPalette;
@@ -216,6 +231,7 @@ export interface FctTrackSceneLayerItem {
   brightness?: number;
   contrast?: number;
   blend?: FctTrackBlend;
+  audioSource?: FctTrackAudioSource;
 }
 
 /**
@@ -225,8 +241,8 @@ export interface FctTrackSceneLayerItem {
  * Items are applied in array order.
  */
 export type VisualSceneLayerItem =
-  | { type: 'box' }
-  | { type: 'mel' }
+  | BoxSceneLayerItem
+  | (BaseVisualSceneLayerItem & { type: 'mel' })
   | { type: 'frontCamera' }
   | { type: 'backCamera' }
   | FctTrackSceneLayerItem;

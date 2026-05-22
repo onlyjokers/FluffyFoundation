@@ -30,6 +30,7 @@ export function validateSemanticCommandDetailed(
     case 'node.archive':
     case 'node.restore':
     case 'node.params.update':
+    case 'node.inputs.update':
     case 'node.connect':
     case 'node.disconnect':
       return validateNodeCommand(state, command, definitions);

@@ -2,8 +2,10 @@
  * Purpose: Scene chain nodes.
  */
 import {
+  FCT_TRACK_AUDIO_SOURCES,
   FCT_TRACK_PALETTES,
   FCT_TRACK_VARIANTS,
+  type FctTrackAudioSource,
   type FctTrackBlend,
   type FctTrackPalette,
   type FctTrackVariant,
@@ -43,6 +45,36 @@ const coerceFctPalette = (value: unknown): FctTrackPalette =>
 const coerceFctBlend = (value: unknown): FctTrackBlend =>
   value === 'over' ? 'over' : 'replace';
 
+const coerceFctAudioSource = (value: unknown): FctTrackAudioSource =>
+  typeof value === 'string' && FCT_TRACK_AUDIO_SOURCES.includes(value as FctTrackAudioSource)
+    ? (value as FctTrackAudioSource)
+    : 'microphone';
+
+const coerceSceneShowBackground = (inputValue: unknown, configValue: unknown, fallback = 1): number => {
+  const raw = inputValue !== undefined && inputValue !== null ? inputValue : configValue;
+  if (typeof raw === 'boolean') return raw ? 1 : 0;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return clampNumber(raw, 0, 1);
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'false' || normalized === 'off' || normalized === 'no') return 0;
+    if (normalized === 'true' || normalized === 'on' || normalized === 'yes') return 1;
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) return clampNumber(numeric, 0, 1);
+  }
+  return fallback;
+};
+
+const coerceCssColor = (inputValue: unknown, configValue: unknown, fallback: string): string => {
+  const raw = inputValue !== undefined && inputValue !== null ? inputValue : configValue;
+  if (typeof raw !== 'string') return fallback;
+  const value = raw.trim();
+  if (!value) return fallback;
+  if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) return value;
+  if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(value)) return value;
+  if (/^rgba?\(/i.test(value) || /^hsla?\(/i.test(value)) return value;
+  return fallback;
+};
+
 const coerceFctNumberParam = (
   inputValue: unknown,
   configValue: unknown,
@@ -59,12 +91,35 @@ export function createSceneBoxNode(): NodeDefinition {
     type: 'scene-box',
     label: 'Scene Box',
     category: 'Scene',
-    inputs: [{ id: 'in', label: 'In', type: 'scene' }],
+    inputs: [
+      { id: 'in', label: 'In', type: 'scene' },
+      { id: 'color', label: 'Color', type: 'color' },
+      { id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 },
+    ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
-    configSchema: [],
-    process: (inputs) => {
+    configSchema: [
+      { key: 'color', label: 'Color', type: 'color', defaultValue: '#4a90d9' },
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+          { value: 'both', label: 'Microphone + Playback' },
+        ],
+      },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
+    ],
+    process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
-      const scene: VisualSceneLayerItem = { type: 'box' };
+      const scene: VisualSceneLayerItem = {
+        type: 'box',
+        color: coerceCssColor(inputs.color, config.color, '#4a90d9'),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
+        audioSource: coerceFctAudioSource(config.audioSource),
+      };
       return { out: [...chain, scene] };
     },
   };
@@ -75,12 +130,32 @@ export function createSceneMelNode(): NodeDefinition {
     type: 'scene-mel',
     label: 'Scene Mel Spectrogram',
     category: 'Scene',
-    inputs: [{ id: 'in', label: 'In', type: 'scene' }],
+    inputs: [
+      { id: 'in', label: 'In', type: 'scene' },
+      { id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 },
+    ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
-    configSchema: [],
-    process: (inputs) => {
+    configSchema: [
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+          { value: 'both', label: 'Microphone + Playback' },
+        ],
+      },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
+    ],
+    process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
-      const scene: VisualSceneLayerItem = { type: 'mel' };
+      const scene: VisualSceneLayerItem = {
+        type: 'mel',
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
+        audioSource: coerceFctAudioSource(config.audioSource),
+      };
       return { out: [...chain, scene] };
     },
   };
@@ -96,7 +171,9 @@ export function createSceneFrontCameraNode(): NodeDefinition {
     configSchema: [],
     process: (inputs) => {
       const chain = coerceSceneChain(inputs.in);
-      const scene: VisualSceneLayerItem = { type: 'frontCamera' };
+      const scene: VisualSceneLayerItem = {
+        type: 'frontCamera',
+      };
       return { out: [...chain, scene] };
     },
   };
@@ -112,7 +189,9 @@ export function createSceneBackCameraNode(): NodeDefinition {
     configSchema: [],
     process: (inputs) => {
       const chain = coerceSceneChain(inputs.in);
-      const scene: VisualSceneLayerItem = { type: 'backCamera' };
+      const scene: VisualSceneLayerItem = {
+        type: 'backCamera',
+      };
       return { out: [...chain, scene] };
     },
   };
@@ -155,6 +234,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
       { id: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0, max: 2, step: 0.01 },
       { id: 'brightness', label: 'Brightness', type: 'number', min: 0, max: 2, step: 0.01 },
       { id: 'contrast', label: 'Contrast', type: 'number', min: 0, max: 2, step: 0.01 },
+      { id: 'showBackground', label: 'Show Background', type: 'number', min: 0, max: 1, step: 0.01 },
     ],
     outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
     configSchema: [
@@ -185,6 +265,18 @@ export function createSceneFctTrackNode(): NodeDefinition {
           { value: 'over', label: 'Over' },
         ],
       },
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+          { value: 'both', label: 'Microphone + Playback' },
+        ],
+      },
+      { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
     ],
     process: (inputs, config) => {
       const chain = coerceSceneChain(inputs.in);
@@ -196,6 +288,8 @@ export function createSceneFctTrackNode(): NodeDefinition {
         brightness: coerceFctNumberParam(inputs.brightness, config.brightness, 1, 0, 2),
         contrast: coerceFctNumberParam(inputs.contrast, config.contrast, 1, 0, 2),
         blend: coerceFctBlend(config.blend),
+        audioSource: coerceFctAudioSource(config.audioSource),
+        showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
       };
       return { out: [...chain, scene] };
     },

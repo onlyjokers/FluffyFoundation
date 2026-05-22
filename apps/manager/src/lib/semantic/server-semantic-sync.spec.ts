@@ -7,6 +7,7 @@ import {
   applyServerSemanticSnapshot,
   bindServerSemanticSync,
   createServerSemanticMigrationCoordinator,
+  overlayPendingSemanticCommands,
   SERVER_SEMANTIC_MIGRATION_KEY,
 } from './server-semantic-sync';
 import type { GraphState } from '$lib/nodes/types';
@@ -238,6 +239,99 @@ test('applyServerSemanticSnapshot restores node positions from local layout stor
   );
 });
 
+test('applyServerSemanticSnapshot prefers newer layout storage when server shape changes reload the graph', () => {
+  let loaded: GraphState | null = null;
+  const staleLocalGraph: GraphState = {
+    nodes: [
+      {
+        id: 'server-node',
+        type: 'number',
+        position: { x: 10, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'server-node',
+        type: 'number',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'new-node',
+        type: 'math',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => staleLocalGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+    layoutPositions: positions([['server-node', { x: 300, y: 400 }]]),
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(loaded.nodes[0]?.position, { x: 300, y: 400 });
+});
+
+test('applyServerSemanticSnapshot keeps layout storage after server-side node deletion reloads the graph', () => {
+  let loaded: GraphState | null = null;
+  const staleLocalGraph: GraphState = {
+    nodes: [
+      {
+        id: 'server-node',
+        type: 'number',
+        position: { x: 10, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'deleted-node',
+        type: 'math',
+        position: { x: 240, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'server-node',
+        type: 'number',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => staleLocalGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+    layoutPositions: positions([['server-node', { x: 300, y: 400 }]]),
+  });
+
+  assert.ok(loaded);
+  assert.deepEqual(loaded.nodes[0]?.position, { x: 300, y: 400 });
+});
+
 test('applyServerSemanticSnapshot patches existing node params without reloading the runtime graph', () => {
   const loaded: GraphState[] = [];
   const updates: Array<{ nodeId: string; config: Record<string, unknown> }> = [];
@@ -304,6 +398,171 @@ test('applyServerSemanticSnapshot patches existing node params without reloading
 
   assert.deepEqual(loaded, []);
   assert.deepEqual(updates, [{ nodeId: 'flash-rate', config: { value: 100 } }]);
+});
+
+test('applyServerSemanticSnapshot patches existing inline input values without reloading the runtime graph', () => {
+  const loaded: GraphState[] = [];
+  const inputUpdates: Array<{ nodeId: string; portId: string; value: unknown }> = [];
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'source',
+        type: 'number',
+        position: { x: 42, y: 64 },
+        config: { value: 1 },
+        inputValues: { value: 1 },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'source',
+        type: 'number',
+        params: { value: 1 },
+        inputValues: { value: 9 },
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded.push(graph);
+      },
+      updateNodeConfig: () => undefined,
+      updateNodeInputValue: (nodeId, portId, value) => {
+        inputUpdates.push({ nodeId, portId, value });
+      },
+    },
+  });
+
+  assert.deepEqual(loaded, []);
+  assert.deepEqual(inputUpdates, [{ nodeId: 'source', portId: 'value', value: 9 }]);
+});
+
+test('applyServerSemanticSnapshot removes stale inline input values without reloading the runtime graph', () => {
+  const loaded: GraphState[] = [];
+  const inputUpdates: Array<{ nodeId: string; values: Record<string, unknown> }> = [];
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'source',
+        type: 'number',
+        position: { x: 42, y: 64 },
+        config: { value: 9 },
+        inputValues: { value: 9 },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'source',
+        type: 'number',
+        params: { value: 9 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded.push(graph);
+      },
+      updateNodeConfig: () => undefined,
+      replaceNodeInputValues: (nodeId, values) => {
+        inputUpdates.push({ nodeId, values });
+      },
+    },
+  });
+
+  assert.deepEqual(loaded, []);
+  assert.deepEqual(inputUpdates, [{ nodeId: 'source', values: {} }]);
+});
+
+test('overlayPendingSemanticCommands keeps local graph edits over older server snapshots', () => {
+  const staleServer = snapshot([
+    {
+      id: 'kept',
+      type: 'number',
+      params: { value: 1 },
+      inputValues: { value: 1 },
+      outputValues: {},
+    },
+    {
+      id: 'removed-locally',
+      type: 'number',
+      params: {},
+      inputValues: {},
+      outputValues: {},
+    },
+  ]);
+
+  const localOnlyNode = {
+    id: 'local-new',
+    type: 'math',
+    position: { x: 500, y: 80 },
+    config: { gain: 2 },
+    inputValues: { a: 3 },
+    outputValues: {},
+  };
+
+  const overlaid = overlayPendingSemanticCommands(staleServer, [
+    { type: 'node.remove', nodeId: 'removed-locally' },
+    { type: 'node.add', node: localOnlyNode },
+    { type: 'node.params.update', nodeId: 'kept', params: { value: 9 } },
+    { type: 'node.inputs.update', nodeId: 'kept', inputValues: { value: 9 } },
+  ]);
+
+  assert.deepEqual(
+    overlaid.nodes.map((node) => [node.id, node.params, node.inputValues]),
+    [
+      ['kept', { value: 9 }, { value: 9 }],
+      ['local-new', { gain: 2 }, { a: 3 }],
+    ]
+  );
+});
+
+test('overlayPendingSemanticCommands keeps pending local disconnect over older server snapshots', () => {
+  const staleServer = snapshot(
+    [
+      {
+        id: 'source',
+        type: 'number',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'target',
+        type: 'math',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    [
+      {
+        id: 'edge-1',
+        sourceNodeId: 'source',
+        sourcePortId: 'out',
+        targetNodeId: 'target',
+        targetPortId: 'a',
+      },
+    ]
+  );
+
+  const overlaid = overlayPendingSemanticCommands(staleServer, [
+    { type: 'node.disconnect', connectionId: 'edge-1' },
+  ]);
+
+  assert.deepEqual(overlaid.connections, []);
 });
 
 test('applyServerSemanticSnapshot mirrors server groups into Node Graph UI groups', () => {
@@ -489,6 +748,35 @@ test('bindServerSemanticSync requests server snapshot when Manager SDK reaches c
   assert.deepEqual(requested, ['graph-snapshot']);
 });
 
+test('bindServerSemanticSync clears pending local commands and refreshes snapshots on reconnect', () => {
+  const requested: string[] = [];
+  let stateHandler: ((state: { status: string }) => void) | null = null;
+  let clearCount = 0;
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: () => () => undefined,
+      onStateChange: (handler) => {
+        stateHandler = handler;
+        return () => undefined;
+      },
+      requestSemanticSnapshot: (requestId?: string) => requested.push(requestId ?? ''),
+    },
+    nodeEngine: { loadGraph: () => undefined },
+    migrationCoordinator: { maybeImport: () => undefined },
+    clearPendingCommands: () => {
+      clearCount += 1;
+    },
+  });
+
+  stateHandler?.({ status: 'connected' });
+  stateHandler?.({ status: 'disconnected' });
+  stateHandler?.({ status: 'connected' });
+
+  assert.deepEqual(requested, ['graph-snapshot', 'graph-snapshot:reconnect']);
+  assert.equal(clearCount, 1);
+});
+
 test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot requests', () => {
   let resultHandler:
     | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
@@ -543,6 +831,191 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
   });
 });
 
+test('bindServerSemanticSync settles pending local commands when their semantic result arrives', () => {
+  let resultHandler:
+    | ((message: { requestId: string; ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
+    | null = null;
+  const settled: string[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: () => () => undefined,
+      onSemanticResult: (handler) => {
+        resultHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: {
+      loadGraph: () => undefined,
+    },
+    migrationCoordinator: { maybeImport: () => undefined },
+    settlePendingCommand: (requestId) => settled.push(requestId),
+  });
+
+  resultHandler?.({
+    requestId: 'canvas:node.remove:n1',
+    ok: true,
+    result: {
+      snapshot: snapshot([]),
+    },
+  });
+
+  assert.deepEqual(settled, ['canvas:node.remove:n1']);
+});
+
+test('bindServerSemanticSync overlays pending local commands before applying server snapshots', () => {
+  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  let loaded: GraphState | null = null;
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: (handler) => {
+        snapshotHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: {
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+    migrationCoordinator: { maybeImport: () => undefined },
+    getPendingCommands: () => [{ type: 'node.remove', nodeId: 'local-delete' }],
+  });
+
+  snapshotHandler?.(
+    snapshot([
+      {
+        id: 'local-delete',
+        type: 'number',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ])
+  );
+
+  assert.deepEqual(loaded, { nodes: [], connections: [] });
+});
+
+test('bindServerSemanticSync requests a fresh snapshot when a pending command is rejected', () => {
+  let resultHandler:
+    | ((message: {
+        requestId: string;
+        ok: boolean;
+        error?: { code: string; message: string };
+      }) => void)
+    | null = null;
+  const requested: string[] = [];
+  const settled: string[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: () => () => undefined,
+      onSemanticResult: (handler) => {
+        resultHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: (requestId?: string) => requested.push(requestId ?? ''),
+    },
+    nodeEngine: {
+      loadGraph: () => undefined,
+    },
+    migrationCoordinator: { maybeImport: () => undefined },
+    settlePendingCommand: (requestId) => settled.push(requestId),
+  });
+
+  resultHandler?.({
+    requestId: 'canvas:node.add:bad',
+    ok: false,
+    error: { code: 'rejected', message: 'rejected' },
+  });
+
+  assert.deepEqual(settled, ['canvas:node.add:bad']);
+  assert.deepEqual(requested, ['semantic-result-rejected:canvas:node.add:bad']);
+});
+
+test('bindServerSemanticSync ignores stale semantic snapshots after a newer revision was applied', () => {
+  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  let resultHandler:
+    | ((message: { ok: boolean; result?: { snapshot?: SemanticGraphSnapshot } }) => void)
+    | null = null;
+  const loaded: GraphState[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: (handler) => {
+        snapshotHandler = handler;
+        return () => undefined;
+      },
+      onSemanticResult: (handler) => {
+        resultHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: {
+      loadGraph: (graph) => {
+        loaded.push(graph);
+      },
+    },
+    migrationCoordinator: { maybeImport: () => undefined },
+  });
+
+  snapshotHandler?.({
+    ...snapshot([
+      {
+        id: 'server-node',
+        type: 'number',
+        params: { value: 2 },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'new-node',
+        type: 'math',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    revision: 8,
+  });
+
+  resultHandler?.({
+    ok: true,
+    result: {
+      snapshot: {
+        ...snapshot([
+          {
+            id: 'server-node',
+            type: 'number',
+            params: { value: 1 },
+            inputValues: {},
+            outputValues: {},
+          },
+        ]),
+        revision: 7,
+      },
+    },
+  });
+
+  assert.equal(loaded.length, 1);
+  assert.deepEqual(
+    loaded[0]?.nodes.map((node) => [node.id, node.config]),
+    [
+      ['server-node', { value: 2 }],
+      ['new-node', {}],
+    ]
+  );
+});
+
 test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
   let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
   const published: number[] = [];
@@ -564,6 +1037,34 @@ test('bindServerSemanticSync publishes live snapshots to subscribers', () => {
   snapshotHandler?.(snapshot([]));
 
   assert.deepEqual(published, [7]);
+});
+
+test('bindServerSemanticSync marks snapshot application boundaries', () => {
+  let snapshotHandler: ((snapshot: SemanticGraphSnapshot) => void) | null = null;
+  const markers: string[] = [];
+
+  bindServerSemanticSync({
+    sdk: {
+      onSemanticSnapshot: (handler) => {
+        snapshotHandler = handler;
+        return () => undefined;
+      },
+      onStateChange: () => () => undefined,
+      requestSemanticSnapshot: () => undefined,
+    },
+    nodeEngine: {
+      loadGraph: () => {
+        markers.push('load');
+      },
+    },
+    migrationCoordinator: { maybeImport: () => undefined },
+    beforeApply: () => markers.push('before'),
+    afterApply: () => markers.push('after'),
+  });
+
+  snapshotHandler?.(snapshot([]));
+
+  assert.deepEqual(markers, ['before', 'load', 'after']);
 });
 
 test('migration coordinator never overwrites non-empty server graph with old local project', () => {

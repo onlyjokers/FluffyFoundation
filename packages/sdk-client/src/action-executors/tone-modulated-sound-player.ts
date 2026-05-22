@@ -2,9 +2,10 @@
  * Purpose: ToneModulatedSoundPlayer implementation split from action-executors for focused client-side effects.
  */
 import type { ModulateSoundPayload } from '@shugu/protocol';
+import { setPlaybackAudioTapSource, clearPlaybackAudioTapSource } from '@shugu/multimedia-core';
 import type { LFOOptions, ToneOscillatorType } from 'tone';
 import type { ToneGainLike, ToneLfoLike, ToneModule, ToneOscillatorLike } from '../tone-adapter/types.js';
-import { unwrapDefaultExport } from '../tone-adapter/tone-guards.js';
+import { getToneRawContext, unwrapDefaultExport } from '../tone-adapter/tone-guards.js';
 
 /**
  * Tone.js-backed modulation tone player (unifies with ToneAudioEngine).
@@ -51,6 +52,7 @@ export class ToneModulatedSoundPlayer {
         carrier.connect(gain);
         this.gain = gain as unknown as ToneGainLike;
         this.carrier = carrier as unknown as ToneOscillatorLike;
+        setPlaybackAudioTapSource(gain as unknown as AudioNode, getToneRawContext(Tone));
 
         // Envelope on gain (Tone Param supports setValueAtTime/linearRampToValueAtTime).
         const g = this.gain.gain;
@@ -117,9 +119,11 @@ export class ToneModulatedSoundPlayer {
         } catch {
             // ignore
         }
+        const source = this.gain as unknown as AudioNode | null;
         this.carrier = null;
         this.lfo = null;
         this.gain = null;
+        clearPlaybackAudioTapSource(source);
     }
 
     /**

@@ -61,6 +61,8 @@ type ReteConnectionDropPipeOptions = {
     desiredSide: 'input' | 'output'
   ) => SocketData | null;
   openConnectPicker: (socket: SocketData) => void;
+  isProjectionId?: (id: string) => boolean;
+  translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
 };
 
 const validPortTypes = new Set([
@@ -84,6 +86,8 @@ const validPortTypes = new Set([
 const connectionId = () => `conn-${crypto.randomUUID?.() ?? Date.now()}`;
 
 export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOptions) {
+  const isProjectionId = options.isProjectionId ?? (() => false);
+
   const resolveTypeForSocket = (sock: SocketData) => {
     const node = options.nodeEngine.getNode(String(sock.nodeId));
     if (!node) return 'any';
@@ -111,6 +115,9 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
     const initialSide = getString(initial.side, '');
     const initialKey = getString(initial.key, '');
     const socketProvided = Object.keys(socket).length > 0;
+    if (isProjectionId(initialNodeId)) {
+      return ctx;
+    }
     if (
       !initialNodeId ||
       !initialKey ||
@@ -245,7 +252,13 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
               targetNodeId: initialSocket.nodeId,
               targetPortId: initialSocket.key,
             };
-      options.canvasCommands.connect(engineConn);
+      const connectionToCreate = isProjectionId(snapped.nodeId)
+        ? (options.translateProjectionConnection?.(engineConn) ?? null)
+        : engineConn;
+      if (!connectionToCreate) {
+        return ctx;
+      }
+      options.canvasCommands.connect(connectionToCreate);
       options.groupPortNodesController.scheduleNormalizeProxies();
     } else {
       options.openConnectPicker(initialSocket);
@@ -261,6 +274,11 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
       const nodeId = getString(sock.nodeId, '');
       const sideRaw = getString(sock.side, '');
       const key = getString(sock.key, '');
+      if (isProjectionId(nodeId)) {
+        options.setConnectDraggingSocket(null);
+        options.setGroupEdgeHighlight(null);
+        return ctx;
+      }
       if (nodeId && key && (sideRaw === 'input' || sideRaw === 'output')) {
         options.setConnectDraggingSocket({ nodeId, side: sideRaw, key });
         const pointer = options.getLastPointerClient();

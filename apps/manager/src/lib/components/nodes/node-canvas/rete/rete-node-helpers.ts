@@ -42,6 +42,12 @@ export function sortByIndex<K, I extends undefined | { index?: number }>(entries
   return entries as [K, Exclude<I, undefined>][];
 }
 
+export function resolveRenderedNodeType(instanceType: unknown, dataType: unknown): string {
+  const fromInstance = typeof instanceType === 'string' ? instanceType.trim() : '';
+  if (fromInstance) return fromInstance;
+  return typeof dataType === 'string' ? dataType.trim() : '';
+}
+
 export function formatNumber(value: number, maxDecimals = 3): string {
   if (!Number.isFinite(value)) return '--';
   const fixed = value.toFixed(maxDecimals);

@@ -79,6 +79,39 @@ test('resolvePatchDeploymentPlan routes a single patch root to a connected clien
   assert.equal(result.planKey, 'client-a=root');
 });
 
+test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch graph', () => {
+  errors.length = 0;
+  const editorGraph: GraphState = {
+    nodes: [node('custom-1', 'custom:def-1')],
+    connections: [],
+  };
+  const compiledGraph: GraphState = {
+    nodes: [
+      node('cn:custom-1:root', 'image-out'),
+      node('cn:custom-1:client-node', 'client-object', {}, { clientId: 'client-a' }),
+    ],
+    connections: [
+      connection(
+        'compiled-cmd',
+        'cn:custom-1:root',
+        'cmd',
+        'cn:custom-1:client-node',
+        'in'
+      ),
+    ],
+  };
+
+  const result = plan(editorGraph, {
+    compiledGraph,
+    getRuntimeNode: (id) => editorGraph.nodes.find((candidate) => candidate.id === id),
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['client-a']);
+  assert.deepEqual(result.rootIdsByClientId.get('client-a'), ['cn:custom-1:root']);
+  assert.equal(result.planKey, 'client-a=cn:custom-1:root');
+});
+
 test('resolvePatchDeploymentPlan routes display-object to local display before remote display clients', () => {
   errors.length = 0;
   const graph: GraphState = {

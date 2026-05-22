@@ -23,6 +23,7 @@ export const validateRuntimeCommand = (
     | { type: 'node.archive' }
     | { type: 'node.restore' }
     | { type: 'node.params.update' }
+    | { type: 'node.inputs.update' }
     | { type: 'node.connect' }
     | { type: 'node.disconnect' }
     | { type: 'graph.snapshot' }

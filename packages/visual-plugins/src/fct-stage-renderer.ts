@@ -30,6 +30,7 @@ export type MirroredStageRenderer = {
   setItem: (item: StageItem) => void;
   setMode: (mode: StageMode) => void;
   setTheme: (theme: ThemeName) => void;
+  setShowBackground: (showBackground: number) => void;
   destroy: () => void;
 };
 
@@ -53,6 +54,8 @@ type IntroUniforms = {
 
 type BlurUniforms = {
   iChannel0: WebGLUniformLocation;
+  uShowBackground: WebGLUniformLocation | null;
+  uColorBg: WebGLUniformLocation | null;
 };
 
 type TrackUniforms = {
@@ -61,6 +64,7 @@ type TrackUniforms = {
   uFrequencyData: WebGLUniformLocation;
   uColorBg: WebGLUniformLocation;
   uColorText: WebGLUniformLocation;
+  uShowBackground: WebGLUniformLocation | null;
 };
 
 type IlCrolloDelCieloUniforms = Omit<TrackUniforms, 'uResolution'> & {
@@ -81,6 +85,8 @@ type AcabBufferBUniforms = Omit<TrackUniforms, 'uFrequencyData'> & {
 type FantasmiBlurUniforms = {
   uTime: WebGLUniformLocation | null;
   iChannel1: WebGLUniformLocation;
+  uShowBackground: WebGLUniformLocation | null;
+  uColorBg: WebGLUniformLocation | null;
 };
 
 type StrategiaBufferBUniforms = {
@@ -88,12 +94,15 @@ type StrategiaBufferBUniforms = {
   uResolution: WebGLUniformLocation | null;
   uColorBg: WebGLUniformLocation;
   uColorText: WebGLUniformLocation;
+  uShowBackground: WebGLUniformLocation | null;
   uFft: WebGLUniformLocation;
 };
 
 type StrategiaBlurUniforms = {
   uTime: WebGLUniformLocation | null;
   iChannel0: WebGLUniformLocation;
+  uShowBackground: WebGLUniformLocation | null;
+  uColorBg: WebGLUniformLocation | null;
 };
 
 type AliceBufferDUniforms = {
@@ -108,6 +117,7 @@ type AliceBufferBUniforms = {
   iChannel1: WebGLUniformLocation | null;
   uColorBg: WebGLUniformLocation;
   uColorText: WebGLUniformLocation;
+  uShowBackground: WebGLUniformLocation | null;
 };
 
 type StageWebGlContext = WebGLRenderingContext | WebGL2RenderingContext;
@@ -1273,6 +1283,45 @@ function createProgram(
   return program;
 }
 
+function withBackgroundAlphaUniform(fragmentSource: string): string {
+  const header = `
+uniform float uShowBackground;
+
+vec4 shuguApplyBackgroundAlpha(vec3 color, vec3 backgroundColor) {
+  if (uShowBackground >= 1.0) return vec4(color, 1.0);
+  float foreground = smoothstep(0.03, 0.22, distance(color, backgroundColor));
+  return vec4(color, max(uShowBackground, foreground));
+}
+`;
+
+  return fragmentSource
+    .replace(/void main\s*\(\)\s*\{/, `${header}\nvoid main() {`)
+    .replace(
+      /gl_FragColor\s*=\s*vec4\(([^;]+?),\s*1\.0\);/g,
+      'gl_FragColor = shuguApplyBackgroundAlpha(($1), uColorBg);'
+    );
+}
+
+function withTextureBackgroundAlphaUniform(fragmentSource: string): string {
+  const header = `
+uniform float uShowBackground;
+uniform vec3 uColorBg;
+
+vec4 shuguApplyBackgroundAlpha(vec3 color) {
+  if (uShowBackground >= 1.0) return vec4(color, 1.0);
+  float foreground = smoothstep(0.03, 0.22, distance(color, uColorBg));
+  return vec4(color, max(uShowBackground, foreground));
+}
+`;
+
+  return fragmentSource
+    .replace(/void main\s*\(\)\s*\{/, `${header}\nvoid main() {`)
+    .replace(
+      /gl_FragColor\s*=\s*vec4\(([^;]+?),\s*1\.0\);/g,
+      'gl_FragColor = shuguApplyBackgroundAlpha(($1));'
+    );
+}
+
 function getUniform(
   gl: StageWebGlContext,
   program: WebGLProgram,
@@ -1425,6 +1474,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
   private currentItem: StageItem = 'intro';
   private stageMode: StageMode = 'intro';
   private theme: ThemeName = 'red';
+  private showBackground = -1;
   private destroyed = false;
   private frequencyBands: FrequencyBands = { low: 0, mid: 0, high: 0 };
   private flagAnimationStart = 0;
@@ -1441,12 +1491,12 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.shatteredRealityProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      SHATTERED_REALITY_FRAGMENT_SHADER
+      withBackgroundAlphaUniform(SHATTERED_REALITY_FRAGMENT_SHADER)
     );
     this.ilCrolloDelCieloProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      IL_CROLLO_DEL_CIELO_FRAGMENT_SHADER
+      withBackgroundAlphaUniform(IL_CROLLO_DEL_CIELO_FRAGMENT_SHADER)
     );
     this.acabBufferCProgram = createProgram(
       this.gl,
@@ -1456,28 +1506,28 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.acabBufferBProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      ACAB_BUFFER_B_FRAGMENT_SHADER
+      withBackgroundAlphaUniform(ACAB_BUFFER_B_FRAGMENT_SHADER)
     );
-    this.acabBlurProgram = createProgram(this.gl, INTRO_VERTEX_SHADER, ACAB_BLUR_FRAGMENT_SHADER);
+    this.acabBlurProgram = createProgram(this.gl, INTRO_VERTEX_SHADER, withTextureBackgroundAlphaUniform(ACAB_BLUR_FRAGMENT_SHADER));
     this.fantasmiBufferBProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      FANTASMI_BUFFER_B_FRAGMENT_SHADER
+      withBackgroundAlphaUniform(FANTASMI_BUFFER_B_FRAGMENT_SHADER)
     );
     this.fantasmiBlurProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      FANTASMI_BLUR_FRAGMENT_SHADER
+      withTextureBackgroundAlphaUniform(FANTASMI_BLUR_FRAGMENT_SHADER)
     );
     this.strategiaBufferBProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      STRATEGIA_BUFFER_B_FRAGMENT_SHADER
+      withBackgroundAlphaUniform(STRATEGIA_BUFFER_B_FRAGMENT_SHADER)
     );
     this.strategiaBlurProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      STRATEGIA_BLUR_FRAGMENT_SHADER
+      withTextureBackgroundAlphaUniform(STRATEGIA_BLUR_FRAGMENT_SHADER)
     );
     this.aliceBufferDProgram = createProgram(
       this.gl,
@@ -1492,9 +1542,9 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.aliceBufferBProgram = createProgram(
       this.gl,
       INTRO_VERTEX_SHADER,
-      ALICE_BUFFER_B_FRAGMENT_SHADER
+      withBackgroundAlphaUniform(ALICE_BUFFER_B_FRAGMENT_SHADER)
     );
-    this.aliceBlurProgram = createProgram(this.gl, INTRO_VERTEX_SHADER, ALICE_BLUR_FRAGMENT_SHADER);
+    this.aliceBlurProgram = createProgram(this.gl, INTRO_VERTEX_SHADER, withTextureBackgroundAlphaUniform(ALICE_BLUR_FRAGMENT_SHADER));
     this.quadBuffer = this.createQuadBuffer();
     this.introTexture = this.createIntroTexture();
     this.fftTexture = this.createFftTexture();
@@ -1524,14 +1574,17 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       uFlagVisibility: getUniform(this.gl, this.introProgram, 'uFlagVisibility')
     };
     this.blurUniforms = {
-      iChannel0: getUniform(this.gl, this.blurProgram, 'iChannel0')
+      iChannel0: getUniform(this.gl, this.blurProgram, 'iChannel0'),
+      uShowBackground: null,
+      uColorBg: null,
     };
     this.shatteredRealityUniforms = {
       uTime: getUniform(this.gl, this.shatteredRealityProgram, 'uTime'),
       uResolution: getUniform(this.gl, this.shatteredRealityProgram, 'uResolution'),
       uFrequencyData: getUniform(this.gl, this.shatteredRealityProgram, 'uFrequencyData'),
       uColorBg: getUniform(this.gl, this.shatteredRealityProgram, 'uColorBg'),
-      uColorText: getUniform(this.gl, this.shatteredRealityProgram, 'uColorText')
+      uColorText: getUniform(this.gl, this.shatteredRealityProgram, 'uColorText'),
+      uShowBackground: getOptionalUniform(this.gl, this.shatteredRealityProgram, 'uShowBackground')
     };
     this.ilCrolloDelCieloUniforms = {
       uTime: getUniform(this.gl, this.ilCrolloDelCieloProgram, 'uTime'),
@@ -1539,6 +1592,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       uFrequencyData: getUniform(this.gl, this.ilCrolloDelCieloProgram, 'uFrequencyData'),
       uColorBg: getUniform(this.gl, this.ilCrolloDelCieloProgram, 'uColorBg'),
       uColorText: getUniform(this.gl, this.ilCrolloDelCieloProgram, 'uColorText'),
+      uShowBackground: getOptionalUniform(this.gl, this.ilCrolloDelCieloProgram, 'uShowBackground'),
       flag01: getUniform(this.gl, this.ilCrolloDelCieloProgram, 'flag01')
     };
     this.acabBufferCUniforms = {
@@ -1551,32 +1605,41 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       uFrequencyData: getOptionalUniform(this.gl, this.acabBufferBProgram, 'uFrequencyData'),
       uColorBg: getUniform(this.gl, this.acabBufferBProgram, 'uColorBg'),
       uColorText: getUniform(this.gl, this.acabBufferBProgram, 'uColorText'),
+      uShowBackground: getOptionalUniform(this.gl, this.acabBufferBProgram, 'uShowBackground'),
       iChannel0: getUniform(this.gl, this.acabBufferBProgram, 'iChannel0')
     };
     this.acabBlurUniforms = {
-      iChannel0: getUniform(this.gl, this.acabBlurProgram, 'iChannel0')
+      iChannel0: getUniform(this.gl, this.acabBlurProgram, 'iChannel0'),
+      uShowBackground: getOptionalUniform(this.gl, this.acabBlurProgram, 'uShowBackground'),
+      uColorBg: getOptionalUniform(this.gl, this.acabBlurProgram, 'uColorBg')
     };
     this.fantasmiBufferBUniforms = {
       uTime: getUniform(this.gl, this.fantasmiBufferBProgram, 'uTime'),
       uResolution: getUniform(this.gl, this.fantasmiBufferBProgram, 'uResolution'),
       uFrequencyData: getUniform(this.gl, this.fantasmiBufferBProgram, 'uFrequencyData'),
       uColorBg: getUniform(this.gl, this.fantasmiBufferBProgram, 'uColorBg'),
-      uColorText: getUniform(this.gl, this.fantasmiBufferBProgram, 'uColorText')
+      uColorText: getUniform(this.gl, this.fantasmiBufferBProgram, 'uColorText'),
+      uShowBackground: getOptionalUniform(this.gl, this.fantasmiBufferBProgram, 'uShowBackground')
     };
     this.fantasmiBlurUniforms = {
       uTime: getOptionalUniform(this.gl, this.fantasmiBlurProgram, 'uTime'),
-      iChannel1: getUniform(this.gl, this.fantasmiBlurProgram, 'iChannel1')
+      iChannel1: getUniform(this.gl, this.fantasmiBlurProgram, 'iChannel1'),
+      uShowBackground: getOptionalUniform(this.gl, this.fantasmiBlurProgram, 'uShowBackground'),
+      uColorBg: getOptionalUniform(this.gl, this.fantasmiBlurProgram, 'uColorBg')
     };
     this.strategiaBufferBUniforms = {
       uTime: getUniform(this.gl, this.strategiaBufferBProgram, 'uTime'),
       uResolution: getOptionalUniform(this.gl, this.strategiaBufferBProgram, 'uResolution'),
       uColorBg: getUniform(this.gl, this.strategiaBufferBProgram, 'uColorBg'),
       uColorText: getUniform(this.gl, this.strategiaBufferBProgram, 'uColorText'),
+      uShowBackground: getOptionalUniform(this.gl, this.strategiaBufferBProgram, 'uShowBackground'),
       uFft: getUniform(this.gl, this.strategiaBufferBProgram, 'uFft')
     };
     this.strategiaBlurUniforms = {
       uTime: getOptionalUniform(this.gl, this.strategiaBlurProgram, 'uTime'),
-      iChannel0: getUniform(this.gl, this.strategiaBlurProgram, 'iChannel0')
+      iChannel0: getUniform(this.gl, this.strategiaBlurProgram, 'iChannel0'),
+      uShowBackground: getOptionalUniform(this.gl, this.strategiaBlurProgram, 'uShowBackground'),
+      uColorBg: getOptionalUniform(this.gl, this.strategiaBlurProgram, 'uColorBg')
     };
     this.aliceBufferDUniforms = {
       uTime: getOptionalUniform(this.gl, this.aliceBufferDProgram, 'uTime'),
@@ -1585,20 +1648,27 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       uFft: getUniform(this.gl, this.aliceBufferDProgram, 'uFft')
     };
     this.aliceBufferCUniforms = {
-      iChannel0: getUniform(this.gl, this.aliceBufferCProgram, 'iChannel0')
+      iChannel0: getUniform(this.gl, this.aliceBufferCProgram, 'iChannel0'),
+      uShowBackground: null,
+      uColorBg: null
     };
     this.aliceBufferBUniforms = {
       iChannel0: getUniform(this.gl, this.aliceBufferBProgram, 'iChannel0'),
       iChannel1: getOptionalUniform(this.gl, this.aliceBufferBProgram, 'iChannel1'),
       uColorBg: getUniform(this.gl, this.aliceBufferBProgram, 'uColorBg'),
-      uColorText: getUniform(this.gl, this.aliceBufferBProgram, 'uColorText')
+      uColorText: getUniform(this.gl, this.aliceBufferBProgram, 'uColorText'),
+      uShowBackground: getOptionalUniform(this.gl, this.aliceBufferBProgram, 'uShowBackground')
     };
     this.aliceBlurUniforms = {
-      iChannel0: getUniform(this.gl, this.aliceBlurProgram, 'iChannel0')
+      iChannel0: getUniform(this.gl, this.aliceBlurProgram, 'iChannel0'),
+      uShowBackground: getOptionalUniform(this.gl, this.aliceBlurProgram, 'uShowBackground'),
+      uColorBg: getOptionalUniform(this.gl, this.aliceBlurProgram, 'uColorBg')
     };
 
     this.gl.disable(this.gl.DEPTH_TEST);
     this.gl.disable(this.gl.CULL_FACE);
+    this.gl.enable(this.gl.BLEND);
+    this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
     this.gl.clearColor(1, 1, 1, 0);
     this.resize();
     this.loadIntroTexture();
@@ -1695,6 +1765,14 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.requestFrame();
   }
 
+  setShowBackground(showBackground: number) {
+    const next = Math.max(0, Math.min(1, Number.isFinite(showBackground) ? showBackground : 0));
+    if (this.destroyed || this.showBackground === next) return;
+
+    this.showBackground = next;
+    this.requestFrame();
+  }
+
   private getStageColors(): StageColors {
     if (this.stageMode === 'intro-invert') {
       return { bg: WHITE, text: RED };
@@ -1725,6 +1803,35 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     const { bg, text } = this.getStageColors();
     this.gl.uniform3f(uniforms.uColorBg, bg[0], bg[1], bg[2]);
     this.gl.uniform3f(uniforms.uColorText, text[0], text[1], text[2]);
+  }
+
+  private setTrackBackgroundAlphaUniforms(
+    uniforms: Pick<TrackUniforms, 'uColorBg' | 'uShowBackground'>
+  ) {
+    if (!uniforms.uShowBackground) return;
+    const { bg } = this.getStageColors();
+    this.gl.uniform1f(uniforms.uShowBackground, this.showBackground);
+    this.gl.uniform3f(uniforms.uColorBg, bg[0], bg[1], bg[2]);
+  }
+
+  private setTextureBackgroundAlphaUniforms(
+    uniforms: {
+      uShowBackground?: WebGLUniformLocation | null;
+      uColorBg?: WebGLUniformLocation | null;
+    }
+  ) {
+    if (!uniforms.uShowBackground) return;
+    const { bg } = this.getStageColors();
+    this.gl.uniform1f(uniforms.uShowBackground, this.showBackground);
+    if (uniforms.uColorBg) this.gl.uniform3f(uniforms.uColorBg, bg[0], bg[1], bg[2]);
+  }
+
+  private beginScreenPass() {
+    this.gl.colorMask(true, true, true, true);
+  }
+
+  private endScreenPass() {
+    this.gl.colorMask(true, true, true, true);
   }
 
   destroy() {
@@ -2036,7 +2143,10 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.gl.activeTexture(this.gl.TEXTURE0);
     this.gl.bindTexture(this.gl.TEXTURE_2D, this.introPassTexture);
     this.gl.uniform1i(this.blurUniforms.iChannel0, 0);
+    this.setTextureBackgroundAlphaUniforms(this.blurUniforms);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 
   private renderShatteredRealityPass(elapsed: number) {
@@ -2055,7 +2165,10 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       this.frequencyBands.high
     );
     this.setColorUniforms(this.shatteredRealityUniforms);
+    this.setTrackBackgroundAlphaUniforms(this.shatteredRealityUniforms);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 
   private renderIlCrolloDelCieloPass(elapsed: number) {
@@ -2080,8 +2193,11 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       this.frequencyBands.high
     );
     this.setColorUniforms(this.ilCrolloDelCieloUniforms);
+    this.setTrackBackgroundAlphaUniforms(this.ilCrolloDelCieloUniforms);
     this.gl.uniform1f(this.ilCrolloDelCieloUniforms.flag01, 0.1);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 
   private renderAcabPass(elapsed: number) {
@@ -2120,6 +2236,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       );
     }
     this.setColorUniforms(this.acabBufferBUniforms);
+    this.setTrackBackgroundAlphaUniforms(this.acabBufferBUniforms);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -2131,7 +2248,10 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.gl.activeTexture(this.gl.TEXTURE0);
     this.gl.bindTexture(this.gl.TEXTURE_2D, this.acabBufferBTexture);
     this.gl.uniform1i(this.acabBlurUniforms.iChannel0, 0);
+    this.setTextureBackgroundAlphaUniforms(this.acabBlurUniforms);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 
   private renderFantasmiInterrottiPass(elapsed: number) {
@@ -2150,6 +2270,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       this.frequencyBands.high
     );
     this.setColorUniforms(this.fantasmiBufferBUniforms);
+    this.setTrackBackgroundAlphaUniforms(this.fantasmiBufferBUniforms);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -2164,7 +2285,10 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     if (this.fantasmiBlurUniforms.uTime) {
       this.gl.uniform1f(this.fantasmiBlurUniforms.uTime, elapsed);
     }
+    this.setTextureBackgroundAlphaUniforms(this.fantasmiBlurUniforms);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 
   private updateFftTexture() {
@@ -2204,6 +2328,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       );
     }
     this.setColorUniforms(this.strategiaBufferBUniforms);
+    this.setTrackBackgroundAlphaUniforms(this.strategiaBufferBUniforms);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -2218,7 +2343,10 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     if (this.strategiaBlurUniforms.uTime) {
       this.gl.uniform1f(this.strategiaBlurUniforms.uTime, elapsed);
     }
+    this.setTextureBackgroundAlphaUniforms(this.strategiaBlurUniforms);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 
   private renderAliceELeOndeEterneDellaFinePass(elapsed: number) {
@@ -2275,6 +2403,7 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
       this.gl.uniform1i(this.aliceBufferBUniforms.iChannel1, 1);
     }
     this.setColorUniforms(this.aliceBufferBUniforms);
+    this.setTrackBackgroundAlphaUniforms(this.aliceBufferBUniforms);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -2286,7 +2415,10 @@ class WebGlMirroredStageRenderer implements MirroredStageRenderer {
     this.gl.activeTexture(this.gl.TEXTURE0);
     this.gl.bindTexture(this.gl.TEXTURE_2D, this.aliceBufferBTexture);
     this.gl.uniform1i(this.aliceBlurUniforms.iChannel0, 0);
+    this.setTextureBackgroundAlphaUniforms(this.aliceBlurUniforms);
+    this.beginScreenPass();
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.endScreenPass();
   }
 }
 

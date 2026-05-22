@@ -145,6 +145,8 @@ test('validateMessage accepts configured FCT visual scenes', () => {
           brightness: 0.85,
           contrast: 1.1,
           blend: 'over',
+          audioSource: 'both',
+          showBackground: 0.35,
         },
       ],
     }
@@ -152,6 +154,69 @@ test('validateMessage accepts configured FCT visual scenes', () => {
 
   assert.equal(validateMessage(message).ok, true);
   assert.equal(isValidMessage(message), true);
+});
+
+test('validateMessage accepts box scene color and camera scenes without background controls', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        { type: 'box', color: '#ff3366', showBackground: 0.8, audioSource: 'playback' },
+        { type: 'mel', showBackground: 0.25, audioSource: 'both' },
+        { type: 'frontCamera' },
+      ],
+    }
+  );
+
+  assert.equal(validateMessage(message).ok, true);
+  assert.equal(isValidMessage(message), true);
+});
+
+test('validateMessage accepts legacy boolean background controls for visual scenes', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        { type: 'box', showBackground: false },
+        { type: 'mel', showBackground: true },
+        {
+          type: 'fctTrack',
+          variant: 'acab',
+          palette: 'red-black',
+          showBackground: false,
+        },
+      ],
+    }
+  );
+
+  assert.equal(validateMessage(message).ok, true);
+  assert.equal(isValidMessage(message), true);
+});
+
+test('validateMessage rejects camera scene background controls and malformed box colors', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'all' },
+    'visualScenes',
+    {
+      scenes: [
+        { type: 'box', color: '' },
+        { type: 'backCamera', showBackground: true },
+      ],
+    }
+  );
+
+  const result = validateMessage(message);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.reasons.map((reason) => reason.path),
+    ['payload.scenes[0].color', 'payload.scenes[1].showBackground']
+  );
 });
 
 test('validateMessage rejects invalid FCT visual scene configuration', () => {
@@ -169,6 +234,8 @@ test('validateMessage rejects invalid FCT visual scene configuration', () => {
           brightness: 3,
           contrast: Number.NaN,
           blend: 'multiply',
+          audioSource: 'airplay',
+          showBackground: 'yes',
         },
       ],
     }
@@ -186,6 +253,8 @@ test('validateMessage rejects invalid FCT visual scene configuration', () => {
       'payload.scenes[0].brightness',
       'payload.scenes[0].contrast',
       'payload.scenes[0].blend',
+      'payload.scenes[0].audioSource',
+      'payload.scenes[0].showBackground',
     ]
   );
 });

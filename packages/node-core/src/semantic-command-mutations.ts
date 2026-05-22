@@ -126,6 +126,19 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
         ),
       };
       break;
+    case 'node.inputs.update':
+      next.graph = {
+        ...next.graph,
+        nodes: next.graph.nodes.map((node) =>
+          String(node.id) === String(command.nodeId)
+            ? {
+                ...node,
+                inputValues: { ...(node.inputValues ?? {}), ...command.inputValues },
+              }
+            : node
+        ),
+      };
+      break;
     case 'node.archive':
       next.graph.nodes = next.graph.nodes.map((node) =>
         String(node.id) === String(command.nodeId)

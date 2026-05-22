@@ -10,6 +10,7 @@ import {
   cloneAgentCapabilities,
   cloneCustomDefinitions,
   createCustomNodeDefinitionNode,
+  compileGraphForPatch,
   createSemanticCommandBus,
   cloneGroups,
   cloneGraph,
@@ -81,6 +82,13 @@ export class SemanticGraphAuthorityService {
     return this.createBus().getHistory();
   }
 
+  getCompiledGraphForPatchPlanning(): GraphState {
+    return compileGraphForPatch(
+      cloneGraph(this.persisted.graph),
+      cloneCustomDefinitions(this.persisted.customDefinitions)
+    );
+  }
+
   dispatch(input: {
     actor: SemanticActor;
     command: SemanticCommand;
@@ -143,11 +151,11 @@ export class SemanticGraphAuthorityService {
       permissions: [
         {
           actorId: 'cli',
-          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+          operations: ['node.add', 'node.connect', 'node.disconnect', 'node.params.update', 'node.inputs.update', 'node.remove', 'graph.replace'],
         },
         {
           actorId: 'canvas',
-          operations: ['node.add', 'node.connect', 'node.params.update', 'node.remove', 'graph.replace'],
+          operations: ['node.add', 'node.connect', 'node.disconnect', 'node.params.update', 'node.inputs.update', 'node.remove', 'graph.replace'],
         },
       ],
       revision: this.persisted.revision,
