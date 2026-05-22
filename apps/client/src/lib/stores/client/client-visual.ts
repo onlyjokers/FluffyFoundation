@@ -54,13 +54,13 @@ const normalizeFctAudioSource = (value: unknown): FctTrackAudioSource =>
 
 const normalizeShowBackground = (value: unknown, fallback: number): number => {
   if (typeof value === 'boolean') return value ? 1 : 0;
-  if (typeof value === 'number' && Number.isFinite(value)) return clampNumber(value, 0, 1);
+  if (typeof value === 'number' && Number.isFinite(value)) return clampNumber(value, fallback, 0, 1);
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'false' || normalized === 'off' || normalized === 'no') return 0;
     if (normalized === 'true' || normalized === 'on' || normalized === 'yes') return 1;
     const numeric = Number(normalized);
-    if (Number.isFinite(numeric)) return clampNumber(numeric, 0, 1);
+    if (Number.isFinite(numeric)) return clampNumber(numeric, fallback, 0, 1);
   }
   return fallback;
 };

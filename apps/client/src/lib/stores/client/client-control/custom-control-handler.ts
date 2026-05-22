@@ -4,11 +4,17 @@
 import { handleClientControlTransferPayload } from '../client-transfer-handler';
 import { handlePushImageUpload, type PushImageUploadPayload } from '../client-screenshot';
 import type { ClientControlDeps } from './types';
+import type { ControlPayload } from '@shugu/protocol';
+
+const isControlPayload = (payload: unknown): payload is ControlPayload =>
+  payload !== null && typeof payload === 'object';
 
 export function executeCustomControl(deps: ClientControlDeps, action: string, payload: unknown): boolean {
   switch (action) {
     case 'clientControlTransfer':
-      handleClientControlTransferPayload(payload);
+      if (isControlPayload(payload)) {
+        handleClientControlTransferPayload(payload);
+      }
       return true;
     case 'custom': {
       const raw = payload as Partial<PushImageUploadPayload> | null;

@@ -44,6 +44,16 @@ let multimediaCore: MultimediaCore | null = null;
 let mediaUnsub: (() => void) | null = null;
 
 const ASSET_READ_TOKEN_STORAGE_KEY = 'shugu-asset-read-token';
+type AudioContextCtor = new (...args: never[]) => AudioContext;
+
+const hasAudioContextCtor = (win: Window | null): boolean => {
+  if (!win) return false;
+  const typed = win as Window & {
+    AudioContext?: AudioContextCtor;
+    webkitAudioContext?: AudioContextCtor;
+  };
+  return Boolean(typed.AudioContext ?? typed.webkitAudioContext);
+};
 
 const controlHandlers = createClientControlHandlers({
   getSDK: () => sdk,
@@ -214,18 +224,19 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
     {
       canRunCapability: (capability) => {
         const p = get(permissions);
-        const win =
-          typeof window !== 'undefined'
-            ? (window as Window & {
-                webkitAudioContext?: typeof AudioContext;
-                __SHUGU_E2E?: boolean;
-                __SHUGU_E2E_FLASHLIGHT_PROOF?: boolean;
-              })
-            : null;
+        const win = typeof window !== 'undefined' ? window : null;
+        const e2eWindow = win as
+          | (Window & {
+              __SHUGU_E2E?: boolean;
+              __SHUGU_E2E_FLASHLIGHT_PROOF?: boolean;
+            })
+          | null;
         return canRunClientRuntimeCapability(capability, {
           permissions: p,
-          hasAudioContext: Boolean(win?.AudioContext || win?.webkitAudioContext),
-          e2eFlashlightProof: import.meta.env.DEV && Boolean(win?.__SHUGU_E2E && win.__SHUGU_E2E_FLASHLIGHT_PROOF),
+          hasAudioContext: hasAudioContextCtor(win),
+          e2eFlashlightProof:
+            import.meta.env.DEV &&
+            Boolean(e2eWindow?.__SHUGU_E2E && e2eWindow.__SHUGU_E2E_FLASHLIGHT_PROOF),
         });
       },
       resolveAssetRef: (ref: string) => multimediaCore?.resolveAssetRef(ref) ?? ref,

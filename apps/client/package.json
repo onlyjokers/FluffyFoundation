@@ -27,6 +27,7 @@
     "dependencies": {
         "@shugu/audio-plugins": "workspace:*",
         "@shugu/multimedia-core": "workspace:*",
+        "@shugu/node-core": "workspace:*",
         "@shugu/protocol": "workspace:*",
         "@shugu/sdk-client": "workspace:*",
         "@shugu/ui-kit": "workspace:*",
