@@ -12,7 +12,6 @@ import type { ExpandedCustomNodeFrame } from './custom-node-expansion';
 import { createCustomNodeExpansion } from './custom-node-expansion';
 import { createCustomNodeHandlers } from './custom-node-handlers';
 import { createCustomNodeActions } from './custom-node-actions';
-import { createCustomNodeInstanceSync } from './custom-node-instance-sync';
 
 type CustomNodeCompositionOptions = {
   nodeEngine: typeof managerNodeEngine;
@@ -33,49 +32,21 @@ type CustomNodeCompositionOptions = {
   removeCustomNodeDefinitionCommand?: (definitionId: string) => void;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
   upsertCustomNodeDefinition: (def: CustomNodeDefinition) => void;
-  customNodeDefinitions: Readable<CustomNodeDefinition[]>;
   readCustomNodeState: (config: Record<string, unknown>) => CustomNodeInstanceState | null;
   writeCustomNodeState: (
     config: Record<string, unknown>,
     state: CustomNodeInstanceState
   ) => Record<string, unknown>;
-  syncCustomNodeInternalGraph: (input: {
-    current: GraphState;
-    template: GraphState;
-    instanceGroupId?: string;
-  }) => GraphState;
-  syncNestedCustomNodesToDefinition: (input: {
-    graph: GraphState;
-    definitionId: string;
-    definitionTemplate: GraphState;
-  }) => { changed: boolean; graph: GraphState };
-  definitionsInCycles: (defs: CustomNodeDefinition[]) => Set<string>;
   buildGroupPortIndex: (
     state: GraphState
   ) => Map<string, { gateId?: string; proxyIds?: string[]; legacyActivateIds?: string[] }>;
   groupIdFromNode: (node: GraphState['nodes'][number]) => string | null;
-  isGroupPortNodeType: (type: string) => boolean;
-  deepestGroupIdContainingNode: (nodeId: string, groups: NodeGroup[]) => string | null;
-  materializeInternalNodeId: (customNodeId: string, internalNodeId: string) => string;
-  isMaterializedInternalNodeId: (customNodeId: string, nodeId: string) => boolean;
-  internalNodeIdFromMaterialized: (customNodeId: string, nodeId: string) => string;
-  customNodeIdFromMaterializedNodeId: (nodeId: string) => string | null;
   requestFramesUpdate: () => void;
   setSelectedNode: (nodeId: string) => void;
 };
 
 export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) {
   let customNodeActions: ReturnType<typeof createCustomNodeActions> | null = null;
-
-  const syncCoupledCustomNodesForDefinition = createCustomNodeInstanceSync({
-    nodeEngine: opts.nodeEngine,
-    customNodeType: opts.customNodeType,
-    getCustomNodeDefinition: opts.getCustomNodeDefinition,
-    readCustomNodeState: opts.readCustomNodeState,
-    writeCustomNodeState: opts.writeCustomNodeState,
-    syncCustomNodeInternalGraph: opts.syncCustomNodeInternalGraph,
-    syncNestedCustomNodesToDefinition: opts.syncNestedCustomNodesToDefinition,
-  });
 
   const customNodeHandlers = createCustomNodeHandlers({
     groupController: opts.groupController,
@@ -122,28 +93,11 @@ export function createCustomNodeComposition(opts: CustomNodeCompositionOptions) 
     expandedCustomByGroupId: opts.expandedCustomByGroupId,
     onExpandedGroupIdsChange: opts.setExpandedCustomGroupIds,
     syncEditorProjection: opts.syncEditorProjection,
-    forcedHiddenNodeIds: opts.forcedHiddenNodeIds,
     nodeEngine: opts.nodeEngine,
     groupController: opts.groupController,
-    groupPortNodesController: opts.groupPortNodesController,
-    groupFrames: opts.groupFrames,
-    nodeRegistry: opts.nodeRegistry,
     requestFramesUpdate: opts.requestFramesUpdate,
     readCustomNodeState: opts.readCustomNodeState,
-    writeCustomNodeState: opts.writeCustomNodeState,
     getCustomNodeDefinition: opts.getCustomNodeDefinition,
-    upsertCustomNodeDefinition: opts.upsertCustomNodeDefinition,
-    customNodeDefinitions: opts.customNodeDefinitions,
-    definitionsInCycles: opts.definitionsInCycles,
-    buildGroupPortIndex: opts.buildGroupPortIndex,
-    groupIdFromNode: opts.groupIdFromNode,
-    isGroupPortNodeType: opts.isGroupPortNodeType,
-    deepestGroupIdContainingNode: opts.deepestGroupIdContainingNode,
-    syncCoupledCustomNodesForDefinition,
-    materializeInternalNodeId: opts.materializeInternalNodeId,
-    isMaterializedInternalNodeId: opts.isMaterializedInternalNodeId,
-    internalNodeIdFromMaterialized: opts.internalNodeIdFromMaterialized,
-    customNodeIdFromMaterializedNodeId: opts.customNodeIdFromMaterializedNodeId,
   });
 
   opts.setExpandedCustomGroupIds(customNodeExpansion.getExpandedGroupIds());

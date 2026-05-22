@@ -25,10 +25,6 @@
     readCustomNodeState,
     writeCustomNodeState,
   } from '$lib/nodes/custom-nodes/instance';
-  import {
-    syncCustomNodeInternalGraph,
-    syncNestedCustomNodesToDefinition,
-  } from '$lib/nodes/custom-nodes/sync';
   import { definitionsInCycles, wouldCreateCycle } from '$lib/nodes/custom-nodes/deps';
   import { parameterRegistry } from '$lib/parameters/registry';
   import { nodeGroupsState } from '$lib/project/nodeGraphUiState';
@@ -74,12 +70,8 @@
   import { createReteSockets } from './node-canvas/rete/rete-sockets';
   import { readAreaTransform } from './node-canvas/utils/view-utils';
   import {
-    customNodeIdFromMaterializedNodeId,
-    internalNodeIdFromMaterialized,
-    isMaterializedInternalNodeId,
-    materializeInternalNodeId,
-  } from './node-canvas/custom-nodes/custom-node-ids';
-  import type { ExpandedCustomNodeFrame } from './node-canvas/custom-nodes/custom-node-expansion';
+    type ExpandedCustomNodeFrame,
+  } from './node-canvas/custom-nodes/custom-node-expansion';
   import {
     buildCustomNodeProjectionGraph,
     isCustomNodeProjectionId,
@@ -88,7 +80,6 @@
   import { createCustomNodeComposition } from './node-canvas/custom-nodes/custom-node-composition';
   import { createNodeAdder } from './node-canvas/custom-nodes/node-addition';
   import { createDeleteNodeWithRules } from './node-canvas/custom-nodes/custom-node-delete';
-  import { deepestGroupIdContainingNode } from './node-canvas/groups/group-tree';
   import { createGroupEdgeFinder } from './node-canvas/groups/group-edge-finder';
   import { createGroupFrameHeaderHandlers } from './node-canvas/groups/group-frame-header';
   import {
@@ -98,7 +89,6 @@
   import {
     buildGroupPortIndex,
     groupIdFromNode,
-    isGroupPortNodeType,
   } from './node-canvas/utils/group-port-utils';
   import { createMinimapProjection } from './node-canvas/utils/minimap-projection';
   import { initNodeCanvasRuntime } from './node-canvas/runtime/runtime-init';
@@ -538,7 +528,6 @@
     viewAdapter,
     buildGroupPortIndex,
     groupIdFromNode,
-    isGroupPortNodeType,
     customNodeType,
     addCustomNodeDefinition,
     upsertCustomNodeDefinitionCommand: (definition) =>
@@ -557,17 +546,8 @@
       }),
     getCustomNodeDefinition,
     upsertCustomNodeDefinition,
-    customNodeDefinitions,
     readCustomNodeState,
     writeCustomNodeState,
-    syncCustomNodeInternalGraph,
-    syncNestedCustomNodesToDefinition,
-    definitionsInCycles,
-    deepestGroupIdContainingNode,
-    materializeInternalNodeId,
-    isMaterializedInternalNodeId,
-    internalNodeIdFromMaterialized,
-    customNodeIdFromMaterializedNodeId,
     expandedCustomByGroupId,
     forcedHiddenNodeIds,
     setExpandedCustomGroupIds: (next) => {

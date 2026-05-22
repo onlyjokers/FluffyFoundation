@@ -1,10 +1,7 @@
 // Purpose: Custom node expansion/collapse logic for Group Frames.
-import type { Readable } from 'svelte/store';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { CustomNodeInstanceState } from '$lib/nodes/custom-nodes/instance';
-import type { NodeRegistry } from '@shugu/node-core';
-import type { GroupFrame, NodeGroup } from '../controllers/group-controller';
 
 export type ExpandedCustomNodeFrame = {
   groupId: string;
@@ -12,52 +9,22 @@ export type ExpandedCustomNodeFrame = {
 };
 
 type GroupController = {
-  nodeGroups: Readable<NodeGroup[]>;
-  setGroups: (groups: NodeGroup[]) => void;
   scheduleHighlight: () => void;
-};
-
-type GroupPortNodesController = {
-  ensureGroupPortNodes: () => void;
-  scheduleAlign: () => void;
-  scheduleNormalizeProxies: () => void;
 };
 
 type NodeEngine = {
   getNode: (nodeId: string) => NodeInstance | null;
-  exportGraph: () => GraphState;
-  lastError?: { set?: (msg: string) => void };
 };
 
 type CustomNodeExpansionOptions = {
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;
   onExpandedGroupIdsChange?: (next: Set<string>) => void;
   syncEditorProjection?: () => void;
-  forcedHiddenNodeIds: Set<string>;
   nodeEngine: NodeEngine;
   groupController: GroupController;
-  groupPortNodesController: GroupPortNodesController;
-  groupFrames: Readable<GroupFrame[]>;
-  nodeRegistry: NodeRegistry;
   requestFramesUpdate: () => void;
   readCustomNodeState: (config: Record<string, unknown>) => CustomNodeInstanceState | null;
-  writeCustomNodeState: (
-    config: Record<string, unknown>,
-    state: CustomNodeInstanceState
-  ) => Record<string, unknown>;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | null;
-  upsertCustomNodeDefinition: (def: CustomNodeDefinition) => void;
-  customNodeDefinitions: Readable<CustomNodeDefinition[]>;
-  definitionsInCycles: (defs: CustomNodeDefinition[]) => Set<string>;
-  buildGroupPortIndex: (state: GraphState) => Map<string, { gateId?: string }>;
-  groupIdFromNode: (node: NodeInstance) => string | null;
-  isGroupPortNodeType: (type: string) => boolean;
-  deepestGroupIdContainingNode: (nodeId: string, groups: NodeGroup[]) => string | null;
-  syncCoupledCustomNodesForDefinition: (definitionId: string) => void;
-  materializeInternalNodeId: (customNodeId: string, internalNodeId: string) => string;
-  isMaterializedInternalNodeId: (customNodeId: string, nodeId: string) => boolean;
-  internalNodeIdFromMaterialized: (customNodeId: string, nodeId: string) => string;
-  customNodeIdFromMaterializedNodeId: (nodeId: string) => string | null;
 };
 
 export const createCustomNodeExpansion = (opts: CustomNodeExpansionOptions) => {
