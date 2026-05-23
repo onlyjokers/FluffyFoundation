@@ -88,6 +88,27 @@ test('MessageRouterService drops volatile telemetry under backpressure and recor
   assert.equal(router.getDeliveryMetrics().dropped, 1);
 });
 
+test('MessageRouterService forwards ClientUI interaction sensor events to managers', () => {
+  const { router, reliableMessages } = createRouter(1, 1);
+
+  router.routeMessage(
+    createSensorDataMessage('client-1', 'custom', {
+      kind: 'client-ui-interaction',
+      nodeId: 'client-button-1',
+      uiKind: 'button',
+      pressed: true,
+      inputContent: '',
+      firstInputed: false,
+    }),
+    'socket-client-1'
+  );
+
+  assert.equal(reliableMessages.length, 1);
+  assert.equal(reliableMessages[0]?.type, 'data');
+  assert.equal((reliableMessages[0] as { payload?: { kind?: string } }).payload?.kind, 'client-ui-interaction');
+  assert.equal(router.getDeliveryMetrics().rejected, 0);
+});
+
 test('MessageRouterService routes semantic graph commands only to manager sockets', () => {
   const { router, reliableMessages } = createRouter(3, 2);
 

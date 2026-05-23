@@ -187,6 +187,7 @@ export class MessageRouterService {
         'node-executor', // NodeExecutor status (deploy/stop/errors)
         'display', // Display readiness
         'agent-text', // AI Agent text input event
+        'client-ui-interaction', // ClientUI button/input interaction outputs
       ];
 
       if (typeof kind !== 'string' || !allowedKinds.includes(kind)) {
