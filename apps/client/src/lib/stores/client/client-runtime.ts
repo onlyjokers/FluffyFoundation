@@ -279,6 +279,7 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
       resolveAssetRef: (ref: string) => multimediaCore?.resolveAssetRef(ref) ?? ref,
       prioritizeFetch: (url: string) => multimediaCore?.prioritizeFetch(url) ?? fetch(url),
       clientUi: clientUiRuntime,
+      serverUrl: config.serverUrl,
     }
   );
 

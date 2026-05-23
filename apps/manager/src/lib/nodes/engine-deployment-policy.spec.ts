@@ -7,3 +7,7 @@ import { assertPatchDeployableNodeType } from './engine-deployment-policy';
 test('patch deployment policy allows FCT track scene chain nodes', () => {
   assert.doesNotThrow(() => assertPatchDeployableNodeType('scene-fct-track'));
 });
+
+test('patch deployment policy allows Aliyun TTS audio source nodes', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('aliyun-tts'));
+});

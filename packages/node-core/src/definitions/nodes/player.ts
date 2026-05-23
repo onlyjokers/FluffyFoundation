@@ -96,6 +96,65 @@ export function createAudioOutNode(): NodeDefinition {
   };
 }
 
+export function createAliyunTtsNode(): NodeDefinition {
+  return {
+    type: 'aliyun-tts',
+    label: 'Aliyun TTS',
+    category: 'AI',
+    inputs: [
+      { id: 'text', label: 'Text', type: 'string', defaultValue: '' },
+      { id: 'play', label: 'Play', type: 'boolean', defaultValue: true },
+      { id: 'volume', label: 'Volume', type: 'number', defaultValue: 0, min: -1, max: 100, step: 0.01 },
+    ],
+    outputs: [{ id: 'ref', label: 'Audio Out', type: 'audio', kind: 'sink' }],
+    configSchema: [
+      { key: 'model', label: 'Model', type: 'string', defaultValue: 'qwen3-tts-flash' },
+      { key: 'voice', label: 'Voice', type: 'string', defaultValue: 'Cherry' },
+      { key: 'languageType', label: 'Language', type: 'string', defaultValue: 'Chinese' },
+      { key: 'instructions', label: 'Instructions', type: 'string', defaultValue: '' },
+    ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['client', 'manager', 'display'],
+      sideEffectClass: 'media-playback',
+      permissions: [],
+      compatibility: [
+        {
+          target: 'audio-out',
+          rule: 'Connects directly to Static Audio Player as an audio source.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Chinese TTS playback',
+          summary: 'Synthesize Chinese speech and route it to audio-out.',
+          config: { model: 'qwen3-tts-flash', voice: 'Cherry', languageType: 'Chinese' },
+          inputs: { text: '你好，世界' },
+        },
+      ],
+      risks: [
+        'Requires a server-side DashScope API key. Do not place API credentials in client bundles.',
+      ],
+      description:
+        'Aliyun Qwen/CosyVoice text-to-speech source node. It synthesizes speech on the server and emits audio for the Static Audio Player chain.',
+      repairHints: [
+        'Route the node into audio-out, not a command sink.',
+        'Configure DASHSCOPE_API_KEY on the server and keep it out of browser env files.',
+      ],
+    },
+    process: (inputs, config) => {
+      const text =
+        typeof inputs.text === 'string'
+          ? inputs.text.trim()
+          : typeof config.text === 'string'
+            ? String(config.text).trim()
+            : '';
+      const play = coerceBooleanOr(inputs.play ?? config.play, true);
+      return { ref: play && text ? 1 : 0 };
+    },
+  };
+}
+
 export function createImageOutNode(deps: ClientObjectDeps): NodeDefinition {
   const resolveUrl = (raw: unknown): string => {
     if (typeof raw === 'string') return raw.trim();

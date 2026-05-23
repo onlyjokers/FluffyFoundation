@@ -71,6 +71,7 @@ import {
   createImgXYOffsetNode,
 } from './nodes/image.js';
 import {
+  createAliyunTtsNode,
   createAudioOutNode,
   createEffectOutNode,
   createImageOutNode,
@@ -165,6 +166,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createLoadVideoFromLocalNode,
     createPlayMediaNode,
     // Patch root sinks (Max/MSP style).
+    createAliyunTtsNode,
     createAudioOutNode,
     () => createImageOutNode(deps),
     () => createVideoOutNode(deps),

@@ -27,6 +27,10 @@ export type ToneAdapterDeps = {
    * If provided, audio loading will use this to check cache and prioritize downloads.
    */
   prioritizeFetch?: (url: string) => Promise<Response>;
+  /**
+   * Server origin used by client-side nodes that call server-only proxy endpoints.
+   */
+  serverUrl?: string;
 };
 
 export type ToneAdapterHandle = {
@@ -161,7 +165,8 @@ export type ToneNodeKind =
   | 'audio-data'
   | 'tone-granular'
   | 'load-audio-from-assets'
-  | 'load-audio-from-local';
+  | 'load-audio-from-local'
+  | 'aliyun-tts';
 
 export type ToneEffectInstance = {
   nodeId: string;

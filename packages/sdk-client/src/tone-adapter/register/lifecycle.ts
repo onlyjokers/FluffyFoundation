@@ -7,14 +7,17 @@ import type { ToneAdapterHandle } from '../types.js';
 import { audioDataInstances, effectInstances, granularInstances, latestAudioConnections, latestGraphNodesById, latestToneLfoActiveTargets, latestToneLfoConnections, latestToneLfoDesiredTargets, lfoInstances, oscInstances, playerInstances } from '../state.js';
 import { maybeStopTransport, scheduleGraphWiring, updateAudioGraphSnapshot } from '../engine-host.js';
 import { disposeAudioDataInstance, disposeEffectInstance, disposeGranularInstance, disposeNodeById, disposeOscInstance, disposePlayerInstance, disposeToneLfoInstance } from '../nodes.js';
+import { disposeAliyunTtsNodeById, disposeAliyunTtsNodesExcept, disposeAllAliyunTtsNodes } from './aliyun-tts-node.js';
 import { pruneVideoFinishStates, videoFinishStates } from './video-finish.js';
 
 export function createToneAdapterHandle(registry: NodeRegistry): ToneAdapterHandle {
   return {
     disposeNode: (nodeId: string) => {
+      disposeAliyunTtsNodeById(nodeId);
       disposeNodeById(nodeId);
     },
     disposeAll: () => {
+      disposeAllAliyunTtsNodes();
       for (const nodeId of Array.from(oscInstances.keys())) disposeOscInstance(nodeId);
       for (const nodeId of Array.from(audioDataInstances.keys())) disposeAudioDataInstance(nodeId);
       for (const nodeId of Array.from(effectInstances.keys())) disposeEffectInstance(nodeId);
@@ -77,6 +80,7 @@ export function createToneAdapterHandle(registry: NodeRegistry): ToneAdapterHand
       for (const nodeId of Array.from(lfoInstances.keys())) {
         if (!activeNodeIds.has(nodeId)) disposeToneLfoInstance(nodeId);
       }
+      disposeAliyunTtsNodesExcept(activeNodeIds);
 
       scheduleGraphWiring();
     },

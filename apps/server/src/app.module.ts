@@ -8,6 +8,7 @@ import { AssetsModule } from './assets/assets.module.js';
 import { LocalMediaModule } from './local-media/local-media.module.js';
 import { SemanticModule } from './semantic/semantic.module.js';
 import { AiModule } from './ai/ai.module.js';
+import { AliyunTtsModule } from './tts/aliyun-tts.module.js';
 
 @Module({
     imports: [
@@ -19,6 +20,7 @@ import { AiModule } from './ai/ai.module.js';
         LocalMediaModule,
         SemanticModule,
         AiModule,
+        AliyunTtsModule,
     ],
     controllers: [AppController],
 })

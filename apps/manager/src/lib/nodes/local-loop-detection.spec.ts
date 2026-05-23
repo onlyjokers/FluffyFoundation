@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { Connection, GraphState } from './types';
-import { detectLocalClientLoops, shouldComputeWhileOffloaded } from './local-loop-detection';
+import {
+  capabilityForNodeType,
+  detectLocalClientLoops,
+  shouldComputeWhileOffloaded,
+} from './local-loop-detection';
 
 const node = (id: string, type: string) => ({
   id,
@@ -75,4 +79,8 @@ test('shouldComputeWhileOffloaded keeps ClientUI interaction output nodes live f
   assert.equal(shouldComputeWhileOffloaded('client-button'), true);
   assert.equal(shouldComputeWhileOffloaded('client-input-box'), true);
   assert.equal(shouldComputeWhileOffloaded('ui-out'), false);
+});
+
+test('capabilityForNodeType treats Aliyun TTS as a sound node', () => {
+  assert.equal(capabilityForNodeType('aliyun-tts'), 'sound');
 });

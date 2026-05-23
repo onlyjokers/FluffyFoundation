@@ -50,6 +50,10 @@ export type NodeExecutorOptions = {
    * Optional local UI bridge for ClientUI nodes. Omitted by Display and non-UI runtimes.
    */
   clientUi?: ClientUiDeps;
+  /**
+   * Server origin for client-side nodes that call server proxy endpoints.
+   */
+  serverUrl?: string;
   limits?: {
     maxNodes?: number;
     minTickIntervalMs?: number;
@@ -143,6 +147,7 @@ export class NodeExecutor {
       sdk: this.sdk,
       resolveAssetRef: options?.resolveAssetRef,
       prioritizeFetch: options?.prioritizeFetch,
+      serverUrl: options?.serverUrl,
     });
 
     this.runtime = new NodeRuntime(this.registry, {
@@ -284,6 +289,7 @@ export class NodeExecutor {
             'tone-reverb',
             'tone-granular',
             'tone-lfo',
+            'aliyun-tts',
           ].includes(node.type)
         )
         .map((node) => node.id)
@@ -374,6 +380,7 @@ export class NodeExecutor {
             'tone-reverb',
             'tone-granular',
             'tone-lfo',
+            'aliyun-tts',
           ].includes(node.type)
         )
         .map((node) => node.id)
