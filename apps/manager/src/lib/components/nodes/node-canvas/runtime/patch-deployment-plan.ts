@@ -42,6 +42,7 @@ const PATCH_ROOT_TYPES = new Set([
   'video-out',
   'effect-out',
   'scene-out',
+  'ui-out',
 ]);
 
 const asRecord = (value: unknown): AnyRecord | null =>

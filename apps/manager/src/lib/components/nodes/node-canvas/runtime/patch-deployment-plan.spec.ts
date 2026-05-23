@@ -88,6 +88,30 @@ test('resolvePatchDeploymentPlan routes a single patch root to a connected clien
   assert.equal(result.planKey, 'client-a=root');
 });
 
+test('resolvePatchDeploymentPlan routes Static UI Player to a connected client-executor', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [
+      node('button', 'client-button'),
+      node('root', 'ui-out'),
+      node('loader-node', 'client-loader', {}, { clientId: 'client-a' }),
+      node('client-node', 'client-executor'),
+    ],
+    connections: [
+      connection('c1', 'button', 'out', 'root', 'in'),
+      connection('c2', 'root', 'cmd', 'client-node', 'in'),
+      connection('c3', 'loader-node', 'client', 'client-node', 'client'),
+    ],
+  };
+
+  const result = plan(graph);
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['client-a']);
+  assert.deepEqual(result.rootIdsByClientId.get('client-a'), ['root']);
+  assert.equal(result.planKey, 'client-a=root');
+});
+
 test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch graph', () => {
   errors.length = 0;
   const editorGraph: GraphState = {
@@ -289,6 +313,26 @@ definitions.set('video-out', {
   category: 'Scene',
   inputs: [],
   outputs: [port('cmd', 'command')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('ui-out', {
+  type: 'ui-out',
+  label: 'Static UI Player',
+  category: 'Player',
+  inputs: [port('in', 'ui')],
+  outputs: [port('cmd', 'command')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('client-button', {
+  type: 'client-button',
+  label: 'Client Button',
+  category: 'ClientUI',
+  inputs: [port('in', 'ui')],
+  outputs: [port('out', 'ui')],
   configSchema: [],
   process: () => ({}),
 });
