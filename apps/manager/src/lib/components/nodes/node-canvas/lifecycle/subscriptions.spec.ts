@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { writable } from 'svelte/store';
 
-import { bindGraphStateSubscription, bindLocalSemanticGraphChangeSubscription } from './subscriptions';
+import {
+  bindGraphStateSubscription,
+  bindLocalSemanticGraphChangeSubscription,
+  bindManagerClientSubscription,
+} from './subscriptions';
 
 test('bindLocalSemanticGraphChangeSubscription does not mirror graph-change echoes into semantic commands', () => {
   const graphChanges = writable<unknown[]>([]);
@@ -222,4 +226,56 @@ test('bindGraphStateSubscription reconciles patch runtime when custom node gate 
 
   unsubscribe?.();
   assert.deepEqual(patchRuntimeCalls, ['patch']);
+});
+
+test('bindManagerClientSubscription refreshes graph runtime when client permissions change', () => {
+  const managerState = writable({
+    clients: [
+      {
+        clientId: 'client-a',
+        group: 'audience',
+        connected: true,
+        permissions: { camera: 'denied' },
+      },
+    ],
+  });
+  const graphState = writable({ nodes: [], connections: [] });
+  const graphSyncCalls: unknown[] = [];
+  const reconcileCalls: string[] = [];
+  let syncClientNodeCalls = 0;
+
+  const unsubscribe = bindManagerClientSubscription({
+    managerState,
+    graphStateStore: graphState,
+    graphSync: { schedule: (state: unknown) => graphSyncCalls.push(state) },
+    nodeEngine: {
+      getNode: () => null,
+      updateNodeConfig: () => undefined,
+      tickTime: { set: () => undefined },
+    },
+    schedulePatchReconcile: (reason: string) => reconcileCalls.push(reason),
+    syncClientNodesFromInputs: () => {
+      syncClientNodeCalls += 1;
+    },
+  });
+
+  graphSyncCalls.length = 0;
+  reconcileCalls.length = 0;
+  syncClientNodeCalls = 0;
+
+  managerState.set({
+    clients: [
+      {
+        clientId: 'client-a',
+        group: 'audience',
+        connected: true,
+        permissions: { camera: 'granted' },
+      },
+    ],
+  });
+
+  unsubscribe?.();
+  assert.deepEqual(reconcileCalls, ['manager-state']);
+  assert.equal(graphSyncCalls.length, 1);
+  assert.equal(syncClientNodeCalls, 1);
 });

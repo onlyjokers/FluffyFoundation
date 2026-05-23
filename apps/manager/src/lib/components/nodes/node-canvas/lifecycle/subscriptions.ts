@@ -200,6 +200,14 @@ export function bindManagerClientSubscription(opts: {
   syncClientNodesFromInputs: () => void;
 }) {
   let lastClientKey = '';
+  const permissionsKey = (value: unknown): string => {
+    const permissions = asRecord(value);
+    if (!permissions) return '';
+    return Object.keys(permissions)
+      .sort()
+      .map((key) => `${key}:${String(permissions[key])}`)
+      .join(',');
+  };
 
   return opts.managerState.subscribe(($state: any) => {
     const clients = Array.isArray($state.clients) ? $state.clients : [];
@@ -210,10 +218,15 @@ export function bindManagerClientSubscription(opts: {
           connected: getBoolean(record.connected, true),
           id: getString(record.clientId, ''),
           group: getString(record.group, ''),
+          permissions: permissionsKey(record.permissions),
         };
       })
       .filter((c: { connected: boolean }) => c.connected)
-      .map(({ id, group }: { id: string; group: string }) => ({ id, group }))
+      .map(({ id, group, permissions }: { id: string; group: string; permissions: string }) => ({
+        id,
+        group,
+        permissions,
+      }))
       .filter((c: { id: string }) => Boolean(c.id));
 
     const audience = clientsWithGroups
@@ -226,7 +239,12 @@ export function bindManagerClientSubscription(opts: {
         .map((c: { id: string }) => String(c.id))
     );
 
-    const nextClientKey = clientsWithGroups.map((c: { id: string; group: string }) => `${c.id}:${c.group}`).join('|');
+    const nextClientKey = clientsWithGroups
+      .map(
+        (c: { id: string; group: string; permissions: string }) =>
+          `${c.id}:${c.group}:${c.permissions}`
+      )
+      .join('|');
     if (nextClientKey === lastClientKey) return;
     lastClientKey = nextClientKey;
 
