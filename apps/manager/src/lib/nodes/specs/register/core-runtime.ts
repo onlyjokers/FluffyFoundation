@@ -47,7 +47,8 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
   return new Map<string, CoreRuntimeImpl>([
     ['client-object', pick('client-object')],
     ['proc-client-sensors', pick('proc-client-sensors')],
-    ['number', pick('number')],
+    ['float', pick('float')],
+    ['int', pick('int')],
     ['number-stabilizer', pick('number-stabilizer')],
     ['math', pick('math')],
     ['logic-add', pick('logic-add')],

@@ -37,6 +37,10 @@
   function emitAny(props: unknown): void {
     emit(props as SvelteArea2D<ClassicScheme>);
   }
+
+  function shouldReserveOutputValue(portType: string): boolean {
+    return portType === 'number' || portType === 'fuzzy';
+  }
 </script>
 
 {#if !isCollapsed}
@@ -109,6 +113,8 @@
     {#if outputs.length}
       <div class="outputs">
         {#each outputs as [key, output]}
+          {@const outputPortType = portTypeFor('output', String(key))}
+          {@const outputValueText = portValueText.outputs[String(key)]}
           <div
             class="port-row output {activeOutputs.has(String(key)) ? 'active' : ''}"
             data-testid={'output-' + key}
@@ -119,9 +125,13 @@
             <div class="port-body">
               <div class="output-line">
                 <div class="port-label" data-testid="output-title">{output.label || ''}</div>
-                {#if portValueText.outputs[String(key)] && !any(output).control}
-                  <div class="port-value output" data-testid={'output-value-' + key}>
-                    {portValueText.outputs[String(key)]}
+                {#if (outputValueText || shouldReserveOutputValue(outputPortType)) && !any(output).control}
+                  <div
+                    class="port-value output"
+                    class:placeholder={!outputValueText}
+                    data-testid={'output-value-' + key}
+                  >
+                    {outputValueText ?? '--'}
                   </div>
                 {/if}
                 {#if any(output).control}
@@ -143,7 +153,7 @@
               </div>
             </div>
             <Ref
-              class={`output-socket port-${portTypeFor('output', String(key))} ${any(output).disabled ? 'socket-disabled' : ''}`}
+              class={`output-socket port-${outputPortType} ${any(output).disabled ? 'socket-disabled' : ''}`}
               data-testid="output-socket"
               data-port-id={key}
               init={(element) =>
@@ -489,6 +499,13 @@
 
   .port-value.output {
     color: rgba(99, 102, 241, 0.95);
+    justify-content: flex-end;
+    min-width: 48px;
+    text-align: right;
+  }
+
+  .port-value.placeholder {
+    visibility: hidden;
   }
 
   :global(.port-control) {

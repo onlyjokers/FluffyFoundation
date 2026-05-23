@@ -1,0 +1,32 @@
+{
+  "__purpose": "Manager node spec for editable integer numeric constants.",
+  "type": "int",
+  "label": "Int",
+  "category": "Values",
+  "metadata": {
+    "version": "2.0.0",
+    "platformTargets": ["manager", "client"],
+    "sideEffectClass": "none",
+    "permissions": [],
+    "description": "Produces a whole-number value from config or a connected numeric input.",
+    "compatibility": [
+      {
+        "target": "integer-like number inputs",
+        "rule": "Use Int for index, range, counts, and other discrete numeric controls.",
+        "repairHint": "Use Float when fractional values are required."
+      }
+    ],
+    "examples": [
+      {
+        "title": "Index value",
+        "summary": "Set value=1 to drive a downstream Index or Range input."
+      }
+    ],
+    "risks": [],
+    "repairHints": ["Int rounds incoming numeric input to the nearest whole number."]
+  },
+  "inputs": [],
+  "outputs": [{ "id": "value", "label": "Value", "type": "number" }],
+  "configSchema": [{ "key": "value", "label": "Value", "type": "number", "defaultValue": 0, "step": 1 }],
+  "runtime": { "kind": "int" }
+}

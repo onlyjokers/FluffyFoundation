@@ -40,6 +40,23 @@ type PersistedSemanticGraph = {
 
 const defaultStoragePath = fileURLToPath(new URL('../../data/semantic-graph.json', import.meta.url));
 const emptyGraph: GraphState = { nodes: [], connections: [] };
+const legacyNodeTypeAliases: Record<string, string> = { number: 'float' };
+
+const migrateLegacyNodeTypes = (graph: GraphState): GraphState => ({
+  nodes: (graph.nodes ?? []).map((node) => ({
+    ...node,
+    type: legacyNodeTypeAliases[String(node.type)] ?? node.type,
+  })),
+  connections: (graph.connections ?? []).map((connection) => ({ ...connection })),
+});
+
+const migrateLegacyCustomDefinitions = (
+  definitions: CustomNodeDefinition[]
+): CustomNodeDefinition[] =>
+  definitions.map((definition) => ({
+    ...definition,
+    template: migrateLegacyNodeTypes(definition.template),
+  }));
 
 @Injectable()
 export class SemanticGraphAuthorityService {
@@ -175,14 +192,15 @@ export class SemanticGraphAuthorityService {
     }
 
     const raw = JSON.parse(readFileSync(this.storagePath, 'utf8')) as Partial<PersistedSemanticGraph>;
+    const customDefinitions = cloneCustomDefinitions(
+      Array.isArray(raw.customDefinitions) ? raw.customDefinitions : []
+    );
     return {
       revision: Number.isFinite(raw.revision) ? Number(raw.revision) : 0,
-      graph: raw.graph ?? emptyGraph,
+      graph: migrateLegacyNodeTypes(raw.graph ?? emptyGraph),
       groups: Array.isArray(raw.groups) ? raw.groups : [],
       partitions: Array.isArray(raw.partitions) ? raw.partitions : [],
-      customDefinitions: cloneCustomDefinitions(
-        Array.isArray(raw.customDefinitions) ? raw.customDefinitions : []
-      ),
+      customDefinitions: migrateLegacyCustomDefinitions(customDefinitions),
       agentCapabilities: cloneAgentCapabilities(raw.agentCapabilities),
     };
   }

@@ -138,6 +138,9 @@ importers:
       '@shugu/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+      '@shugu/visual-effects':
+        specifier: workspace:*
+        version: link:../../packages/visual-effects
       '@shugu/visual-plugins':
         specifier: workspace:*
         version: link:../../packages/visual-plugins

@@ -14,6 +14,10 @@ import {
   normalizeSelectFieldValue,
 } from './semantic-command-validation-helpers.js';
 
+const LEGACY_NODE_TYPE_ALIASES: Record<string, string> = {
+  number: 'float',
+};
+
 export type NormalizedSemanticCommand = {
   command: SemanticCommand;
   warnings: SemanticWarning[];
@@ -76,6 +80,54 @@ const normalizeNodeConfig = (
   return { config: params, warnings };
 };
 
+const normalizeNodeType = (
+  node: NodeInstance,
+  definitions: NormalizableDefinition[]
+): { node: NodeInstance; warnings: SemanticWarning[] } => {
+  const type = String(node.type ?? '');
+  const normalizedType = LEGACY_NODE_TYPE_ALIASES[type] ?? type;
+  if (normalizedType === type || !definitions.some((definition) => definition.type === normalizedType)) {
+    return { node, warnings: [] };
+  }
+  return {
+    node: { ...node, type: normalizedType },
+    warnings: [
+      {
+        code: 'SEMANTIC.NODE_TYPE_NORMALIZED',
+        path: `nodes.${node.id}.type`,
+        message: `Node type ${type} was normalized to ${normalizedType}.`,
+      },
+    ],
+  };
+};
+
+const normalizeCustomDefinitionNodeTypes = (
+  definition: Extract<SemanticCommand, { type: 'definition.custom.upsert' }>['definition'],
+  definitions: NormalizableDefinition[]
+): {
+  definition: Extract<SemanticCommand, { type: 'definition.custom.upsert' }>['definition'];
+  warnings: SemanticWarning[];
+} => {
+  const warnings: SemanticWarning[] = [];
+  const nodes = definition.template.nodes.map((node) => {
+    const normalized = normalizeNodeType(node, definitions);
+    warnings.push(...normalized.warnings);
+    return normalized.node;
+  });
+  if (warnings.length === 0) return { definition, warnings };
+  return {
+    definition: {
+      ...definition,
+      template: {
+        ...definition.template,
+        nodes,
+        connections: definition.template.connections.map((connection) => ({ ...connection })),
+      },
+    },
+    warnings,
+  };
+};
+
 export const normalizeNodeConfigForDefinition = (
   type: string,
   config: Record<string, unknown>,
@@ -91,9 +143,10 @@ const normalizeGraphReplaceGraph = (
   return {
     graph: {
       nodes: graph.nodes.map((node) => {
-        const normalized = normalizeNodeConfig(node, definitions);
-        warnings.push(...normalized.warnings);
-        return { ...node, config: normalized.config };
+        const normalizedType = normalizeNodeType(node, definitions);
+        const normalizedConfig = normalizeNodeConfig(normalizedType.node, definitions);
+        warnings.push(...normalizedType.warnings, ...normalizedConfig.warnings);
+        return { ...normalizedType.node, config: normalizedConfig.config };
       }),
       connections: graph.connections.map((connection) => ({ ...connection })),
     },
@@ -128,17 +181,26 @@ export const normalizeSemanticCommand = (
     };
   }
 
+  if (command.type === 'definition.custom.upsert') {
+    const normalizedDefinition = normalizeCustomDefinitionNodeTypes(command.definition, definitions);
+    return {
+      command: { ...command, definition: normalizedDefinition.definition },
+      warnings: normalizedDefinition.warnings,
+    };
+  }
+
   if (command.type === 'node.add') {
-    const normalizedNode = normalizeNodeConfig(command.node, definitions);
+    const normalizedType = normalizeNodeType(command.node, definitions);
+    const normalizedConfig = normalizeNodeConfig(normalizedType.node, definitions);
     return {
       command: {
         ...command,
         node: {
-          ...command.node,
-          config: normalizedNode.config,
+          ...normalizedType.node,
+          config: normalizedConfig.config,
         },
       },
-      warnings: normalizedNode.warnings,
+      warnings: [...normalizedType.warnings, ...normalizedConfig.warnings],
     };
   }
 

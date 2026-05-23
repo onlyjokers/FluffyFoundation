@@ -22,6 +22,7 @@ test('resolveDisplayNodeTargets selects multiple connected displays from index a
     nodeId: 'display-node',
     clients,
     node: { inputValues: { index: 1, range: 2, random: false } },
+    computedInputs: { index: 1, range: 2, random: false },
     graph: { connections: [] },
   });
 
@@ -32,11 +33,30 @@ test('resolveDisplayNodeTargets switches to the configured display id', () => {
   const result = resolveDisplayNodeTargets({
     nodeId: 'display-node',
     clients,
-    node: { config: { displayId: 'display-2' }, inputValues: { index: 1, range: 2 } },
+    node: { config: { displayId: 'display-2' }, inputValues: {} },
     graph: { connections: [] },
   });
 
   assert.deepEqual(result, { explicit: true, ids: ['display-2'] });
+});
+
+test('resolveDisplayNodeTargets lets explicit routing inputs override the configured display id', () => {
+  const result = resolveDisplayNodeTargets({
+    nodeId: 'display-node',
+    clients,
+    node: { config: { displayId: 'display-2' }, inputValues: { index: 1, range: 1 } },
+    computedInputs: { index: 1 },
+    graph: {
+      connections: [
+        {
+          targetNodeId: 'display-node',
+          targetPortId: 'index',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(result, { explicit: true, ids: ['display-1'] });
 });
 
 test('resolveDisplayNodeTargets falls back to every connected display when no routing input is set', () => {
@@ -79,6 +99,7 @@ test('sendDisplayNodeCommand routes range-based display selection to multiple di
     payload: { text: 'hello' },
     clients,
     node: { inputValues: { index: 1, range: 2, random: false } },
+    computedInputs: { index: 1, range: 2, random: false },
     graph: { connections: [] },
     sendLocalControl: () => emitted.push('local'),
     sendDisplayOperation: (operation) => emitted.push(operation),
@@ -128,6 +149,7 @@ test('sendDisplayNodeCommand clears displays removed from an explicit showText r
     payload: { text: 'first' },
     clients,
     node: { inputValues: { index: 1, range: 1, random: false } },
+    computedInputs: { index: 1, range: 1, random: false },
     graph: { connections: [] },
     sendLocalControl: () => emitted.push({ action: 'local' }),
     sendDisplayOperation: (operation) => emitted.push(operation),
@@ -139,6 +161,7 @@ test('sendDisplayNodeCommand clears displays removed from an explicit showText r
     payload: { text: 'second' },
     clients,
     node: { inputValues: { index: 2, range: 1, random: false } },
+    computedInputs: { index: 2, range: 1, random: false },
     graph: { connections: [] },
     sendLocalControl: () => emitted.push({ action: 'local' }),
     sendDisplayOperation: (operation) => emitted.push(operation),

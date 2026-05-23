@@ -499,6 +499,81 @@ test('input and config control changes dispatch explicit semantic commands', () 
   assert.deepEqual(params, [{ nodeId: 'param-1', patch: { gain: 2 } }]);
 });
 
+test('display-object routing inputs render inline controls and dispatch semantic input commands', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'display-object',
+    label: 'Display',
+    category: 'Objects',
+    inputs: [
+      { id: 'index', label: 'Index', type: 'number', min: 1, step: 1 },
+      { id: 'range', label: 'Range', type: 'number', min: 1, step: 1 },
+      { id: 'random', label: 'Random', type: 'boolean' },
+      { id: 'in', label: 'In', type: 'command', kind: 'sink' },
+    ],
+    outputs: [],
+    configSchema: [{ key: 'displayId', label: 'Displays', type: 'client-picker', defaultValue: '' }],
+    process: () => ({}),
+  });
+  const inputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'display-1',
+        type: 'display-object',
+        config: {},
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      command: new ClassicPreset.Socket('command'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'display-1',
+    type: 'display-object',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const indexControl = node.inputs.index?.control as ClassicPreset.InputControl<'number'>;
+  const rangeControl = node.inputs.range?.control as ClassicPreset.InputControl<'number'>;
+  const randomControl = node.inputs.random?.control as { setValue: (value: boolean) => void };
+
+  assert.ok(indexControl);
+  assert.ok(rangeControl);
+  assert.ok(randomControl);
+  assert.equal((indexControl as unknown as { step?: number }).step, 1);
+  assert.equal((indexControl as unknown as { integer?: boolean }).integer, true);
+
+  indexControl.setValue(2);
+  rangeControl.setValue(3);
+  randomControl.setValue(true);
+
+  assert.deepEqual(inputs, [
+    { nodeId: 'display-1', patch: { index: 2 } },
+    { nodeId: 'display-1', patch: { range: 3 } },
+    { nodeId: 'display-1', patch: { random: true } },
+  ]);
+});
+
 test('inline config-backed controls sync their default config before first graph run', () => {
   const { builder, configUpdates } = createBuilderWithSyncedInlineConfigSpy();
   builder.buildReteNode({

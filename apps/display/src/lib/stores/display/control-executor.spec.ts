@@ -12,12 +12,14 @@ import { createDisplayControlExecutor } from './control-executor';
 test('Display executor applies showText and hideText controls to the text overlay', () => {
   const textOverlay = writable(createClearedDisplayTextOverlayState());
   const visualScenes = writable([]);
+  const visualEffects = writable([]);
   const executor = createDisplayControlExecutor({
     getMultimediaCore: () => null,
     getNodeExecutor: () => null,
     screenOverlay: writable(createClearedDisplayScreenOverlayState()),
     textOverlay,
     visualScenes,
+    visualEffects,
     isDev: false,
   });
 
@@ -38,12 +40,14 @@ test('Display executor expands custom control-batch payloads', () => {
   const textOverlay = writable(createClearedDisplayTextOverlayState());
   const screenOverlay = writable(createClearedDisplayScreenOverlayState());
   const visualScenes = writable([]);
+  const visualEffects = writable([]);
   const executor = createDisplayControlExecutor({
     getMultimediaCore: () => null,
     getNodeExecutor: () => null,
     screenOverlay,
     textOverlay,
     visualScenes,
+    visualEffects,
     isDev: false,
   });
 
@@ -60,5 +64,31 @@ test('Display executor expands custom control-batch payloads', () => {
   assert.equal(get(screenOverlay).color, '#112233');
   assert.deepEqual(get(visualScenes), [
     { type: 'box', color: '#445566', showBackground: 0, audioSource: 'microphone' },
+  ]);
+});
+
+test('Display executor applies visualEffects controls for post-processing effects', () => {
+  const visualScenes = writable([]);
+  const visualEffects = writable([]);
+  const executor = createDisplayControlExecutor({
+    getMultimediaCore: () => null,
+    getNodeExecutor: () => null,
+    screenOverlay: writable(createClearedDisplayScreenOverlayState()),
+    textOverlay: writable(createClearedDisplayTextOverlayState()),
+    visualScenes,
+    visualEffects,
+    isDev: false,
+  });
+
+  executor.executeControl('visualEffects', {
+    effects: [
+      { type: 'ascii', cellSize: 9.6 },
+      { type: 'convolution', preset: 'sharpen', mix: 2, bias: -2, scale: 0.05, normalize: false },
+    ],
+  });
+
+  assert.deepEqual(get(visualEffects), [
+    { type: 'ascii', cellSize: 10 },
+    { type: 'convolution', preset: 'sharpen', mix: 1, bias: -1, normalize: false, scale: 0.1 },
   ]);
 });

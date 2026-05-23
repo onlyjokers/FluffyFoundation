@@ -79,7 +79,8 @@ export type NodeRuntime =
   | { kind: 'proc-client-sensors' }
   | { kind: 'param-get' }
   | { kind: 'param-set' }
-  | { kind: 'number' }
+  | { kind: 'float' }
+  | { kind: 'int' }
   | { kind: 'number-stabilizer' }
   | { kind: 'math' }
   | { kind: 'logic-add' }

@@ -35,8 +35,9 @@ import {
 import { createGroupGateNode, createGroupProxyNode } from './nodes/group.js';
 import {
   createBoolNode,
+  createFloatNode,
+  createIntNode,
   createNoteNode,
-  createNumberNode,
   createShowAnythingNode,
   createStringNode,
 } from './nodes/values.js';
@@ -123,7 +124,8 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createNumberScriptNode,
     createShowAnythingNode,
     createNoteNode,
-    createNumberNode,
+    createIntNode,
+    createFloatNode,
     createStringNode,
     createBoolNode,
     createNumberStabilizerNode,

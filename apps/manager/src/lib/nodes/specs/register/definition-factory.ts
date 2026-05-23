@@ -210,7 +210,8 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
       };
     }
     case 'proc-client-sensors':
-    case 'number':
+    case 'float':
+    case 'int':
     case 'number-stabilizer':
     case 'math':
     case 'logic-add':

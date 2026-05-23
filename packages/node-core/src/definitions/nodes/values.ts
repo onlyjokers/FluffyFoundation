@@ -28,20 +28,42 @@ export function createNoteNode(): NodeDefinition {
   };
 }
 
+const finiteNumber = (value: unknown, fallback = 0): number => {
+  const next = typeof value === 'number' ? value : Number(value ?? fallback);
+  return Number.isFinite(next) ? next : fallback;
+};
+
 // Value-box style nodes: editable constants that also pass through connected inputs.
-export function createNumberNode(): NodeDefinition {
+export function createFloatNode(): NodeDefinition {
   return {
-    type: 'number',
-    label: 'Number',
+    type: 'float',
+    label: 'Float',
     category: 'Values',
     inputs: [{ id: 'value', label: 'Value', type: 'number' }],
     outputs: [{ id: 'value', label: 'Value', type: 'number' }],
-    configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 0 }],
+    configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 0, step: 0.01 }],
     process: (inputs, config) => {
       const fromInput = inputs.value;
       if (typeof fromInput === 'number' && Number.isFinite(fromInput)) return { value: fromInput };
-      const fallback = Number(config.value ?? 0);
-      return { value: Number.isFinite(fallback) ? fallback : 0 };
+      return { value: finiteNumber(config.value, 0) };
+    },
+  };
+}
+
+export function createIntNode(): NodeDefinition {
+  return {
+    type: 'int',
+    label: 'Int',
+    category: 'Values',
+    inputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    configSchema: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 0, step: 1 }],
+    process: (inputs, config) => {
+      const fromInput = inputs.value;
+      if (typeof fromInput === 'number' && Number.isFinite(fromInput)) {
+        return { value: Math.round(fromInput) };
+      }
+      return { value: Math.round(finiteNumber(config.value, 0)) };
     },
   };
 }

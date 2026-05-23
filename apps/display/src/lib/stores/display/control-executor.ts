@@ -7,6 +7,7 @@ import type {
   ControlAction,
   ControlBatchPayload,
   ControlPayload,
+  ConvolutionPreset,
   FctTrackAudioSource,
   FctTrackPalette,
   FctTrackVariant,
@@ -14,6 +15,8 @@ import type {
   ScreenColorPayload,
   ShowImagePayload,
   ShowTextPayload,
+  VisualEffect,
+  VisualEffectsPayload,
   VisualSceneLayerItem,
   VisualScenesPayload,
 } from '@shugu/protocol';
@@ -51,8 +54,29 @@ export type DisplayControlExecutorDeps = {
   screenOverlay: Writable<ScreenOverlayState>;
   textOverlay: Writable<TextOverlayState>;
   visualScenes: Writable<VisualSceneLayerItem[]>;
+  visualEffects: Writable<VisualEffect[]>;
   isDev: boolean;
 };
+
+const convolutionPresets: ConvolutionPreset[] = [
+  'blur',
+  'gaussianBlur',
+  'sharpen',
+  'edge',
+  'emboss',
+  'sobelX',
+  'sobelY',
+  'custom',
+];
+
+const clampNumber = (value: unknown, fallback: number, min: number, max: number): number => {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+};
+
+const isConvolutionPreset = (value: string): value is ConvolutionPreset =>
+  convolutionPresets.includes(value as ConvolutionPreset);
 
 function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] {
   const record = payload && typeof payload === 'object' ? (payload as VisualScenesPayload) : null;
@@ -139,6 +163,51 @@ function normalizeVisualScenes(payload: ControlPayload): VisualSceneLayerItem[] 
   return out.filter((scene) =>
     scene.type === 'frontCamera' || scene.type === 'backCamera' ? scene.type === keep : true
   );
+}
+
+function normalizeVisualEffects(payload: ControlPayload): VisualEffect[] {
+  const record = payload && typeof payload === 'object' ? (payload as VisualEffectsPayload) : null;
+  const raw = Array.isArray(record?.effects) ? record.effects.slice(0, 12) : [];
+  const out: VisualEffect[] = [];
+
+  for (const item of raw) {
+    const itemRecord = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+    if (!itemRecord) continue;
+    const type = typeof itemRecord.type === 'string' ? itemRecord.type : '';
+
+    if (type === 'ascii') {
+      out.push({
+        type: 'ascii',
+        cellSize: Math.round(clampNumber(itemRecord.cellSize, 11, 1, 100)),
+      });
+      continue;
+    }
+
+    if (type === 'convolution') {
+      const presetRaw =
+        typeof itemRecord.preset === 'string' ? String(itemRecord.preset) : undefined;
+      const preset = presetRaw && isConvolutionPreset(presetRaw) ? presetRaw : undefined;
+      const kernelRaw = Array.isArray(itemRecord.kernel) ? itemRecord.kernel : undefined;
+      const kernel = kernelRaw
+        ? kernelRaw
+            .map((n: unknown) => (typeof n === 'number' ? n : Number(n)))
+            .filter((n: number) => Number.isFinite(n))
+            .slice(0, 9)
+        : undefined;
+
+      out.push({
+        type: 'convolution',
+        ...(preset ? { preset } : {}),
+        ...(kernel && kernel.length === 9 ? { kernel } : {}),
+        mix: clampNumber(itemRecord.mix, 1, 0, 1),
+        bias: clampNumber(itemRecord.bias, 0, -1, 1),
+        normalize: typeof itemRecord.normalize === 'boolean' ? itemRecord.normalize : true,
+        scale: clampNumber(itemRecord.scale, 0.5, 0.1, 1),
+      });
+    }
+  }
+
+  return out;
 }
 
 export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): {
@@ -305,6 +374,10 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
         deps.visualScenes.set(normalizeVisualScenes(payload));
         return;
 
+      case 'visualEffects':
+        deps.visualEffects.set(normalizeVisualEffects(payload));
+        return;
+
       case 'shutdown': {
         const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
         if (record?.reason !== 'root-stop-all' && record?.kind !== 'stop-all') return;
@@ -317,6 +390,7 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
         });
         clearText();
         deps.visualScenes.set([]);
+        deps.visualEffects.set([]);
         return;
       }
 

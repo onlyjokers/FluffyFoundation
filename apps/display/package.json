@@ -30,6 +30,7 @@
     "@shugu/protocol": "workspace:*",
     "@shugu/sdk-client": "workspace:*",
     "@shugu/ui-kit": "workspace:*",
+    "@shugu/visual-effects": "workspace:*",
     "@shugu/visual-plugins": "workspace:*",
     "socket.io-client": "^4.7.2"
   },

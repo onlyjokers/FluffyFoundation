@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { NestFactory } from '@nestjs/core';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
 import { test } from 'node:test';
@@ -11,9 +11,9 @@ import { test } from 'node:test';
 import { SemanticGraphAuthorityService } from './semantic-graph-authority.service.js';
 import { SemanticModule } from './semantic.module.js';
 
-const numberNode = {
+const floatNode = {
   id: 'n1',
-  type: 'number',
+  type: 'float',
   position: { x: 10, y: 20 },
   config: { value: 1 },
   inputValues: {},
@@ -31,7 +31,7 @@ test('SemanticGraphAuthorityService persists accepted graph mutations and restor
 
   const added = service.dispatch({
     actor: { id: 'cli', role: 'operator' },
-    command: { type: 'node.add', node: numberNode },
+    command: { type: 'node.add', node: floatNode },
   });
 
   assert.equal(added.ok, true);
@@ -50,7 +50,7 @@ test('SemanticGraphAuthorityService accepts canvas node.remove and persists dele
   assert.equal(
     service.dispatch({
       actor: { id: 'canvas', role: 'operator' },
-      command: { type: 'node.add', node: numberNode },
+      command: { type: 'node.add', node: floatNode },
     }).ok,
     true
   );
@@ -88,7 +88,7 @@ test('SemanticGraphAuthorityService accepts canvas node.disconnect and persists 
       actor: { id: 'canvas', role: 'operator' },
       command: {
         type: 'graph.replace',
-        graph: { nodes: [numberNode, mathNode], connections: [connection] },
+        graph: { nodes: [floatNode, mathNode], connections: [connection] },
       },
     }).ok,
     true
@@ -104,6 +104,31 @@ test('SemanticGraphAuthorityService accepts canvas node.disconnect and persists 
   assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')).graph.connections, []);
 });
 
+test('SemanticGraphAuthorityService migrates persisted legacy number nodes to float', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'shugu-semantic-'));
+  const path = join(dir, 'semantic-graph.json');
+  writeFileSync(
+    path,
+    JSON.stringify({
+      revision: 2,
+      graph: {
+        nodes: [{ ...floatNode, type: 'number' }],
+        connections: [],
+      },
+      groups: [],
+      partitions: [],
+      customDefinitions: [],
+      agentCapabilities: { version: 1, nodes: [] },
+    }),
+    'utf8'
+  );
+
+  const service = SemanticGraphAuthorityService.withStoragePath(path);
+
+  assert.equal(service.getSnapshot().nodes[0]?.type, 'float');
+  assert.equal(service.getCompiledGraphForPatchPlanning().nodes[0]?.type, 'float');
+});
+
 test('SemanticGraphAuthorityService rejects invalid commands without modifying persisted state', () => {
   const { path, service } = createService();
 
@@ -111,7 +136,7 @@ test('SemanticGraphAuthorityService rejects invalid commands without modifying p
     actor: { id: 'cli', role: 'operator' },
     command: {
       type: 'node.add',
-      node: { ...numberNode, type: 'missing-node-type' },
+      node: { ...floatNode, type: 'missing-node-type' },
     },
   });
 
@@ -178,7 +203,7 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
       nodes: [
         {
           id: 'inner-number',
-          type: 'number',
+          type: 'float',
           position: { x: 0, y: 0 },
           config: { value: 3 },
           inputValues: {},
@@ -233,7 +258,7 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
   assert.equal(snapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
   assert.deepEqual(
     snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.ports.outputs,
-    [{ id: 'value', label: 'Value', type: 'number', defaultValue: 0 }]
+    [{ id: 'value', label: 'Value', type: 'number', defaultValue: 0, step: 0.01 }]
   );
   assert.match(
     snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.aiSummary
@@ -272,7 +297,7 @@ test('SemanticGraphAuthorityService compiles Custom Nodes on the server authorit
       nodes: [
         {
           id: 'inner-number',
-          type: 'number',
+          type: 'float',
           position: { x: 0, y: 0 },
           config: { value: 5 },
           inputValues: {},
@@ -334,7 +359,7 @@ test('SemanticGraphAuthorityService compiles Custom Nodes on the server authorit
 
   assert.deepEqual(
     compiled.nodes.map((node) => [node.id, node.type]),
-    [['cn:custom-1:inner-number', 'number']]
+    [['cn:custom-1:inner-number', 'float']]
   );
   assert.deepEqual(compiled.connections, []);
 });
@@ -348,7 +373,7 @@ test('SemanticGraphAuthorityService accepts custom Active gate input updates bef
       nodes: [
         {
           id: 'inner-number',
-          type: 'number',
+          type: 'float',
           position: { x: 0, y: 0 },
           config: { value: 5 },
           inputValues: {},
@@ -409,7 +434,7 @@ test('SemanticGraphAuthorityService accepts custom Active gate input updates bef
   assert.deepEqual(service.getSnapshot().nodes[0]?.inputValues, { gate: true });
   assert.deepEqual(
     service.getCompiledGraphForPatchPlanning().nodes.map((node) => [node.id, node.type]),
-    [['cn:custom-1:inner-number', 'number']]
+    [['cn:custom-1:inner-number', 'float']]
   );
 });
 
@@ -430,7 +455,7 @@ test('SemanticGraphAuthorityService compiles custom public input updates into in
         },
         {
           id: 'inner-number',
-          type: 'number',
+          type: 'float',
           position: { x: 100, y: 0 },
           config: { value: 5 },
           inputValues: {},

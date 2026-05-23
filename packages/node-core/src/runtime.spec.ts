@@ -7,6 +7,7 @@ import { NodeRegistry } from './registry.js';
 import { NodeRuntime } from './runtime.js';
 import type { GraphState } from './types.js';
 import type { NodeCommand } from './definitions/types.js';
+import { createSemanticCommandBus } from './semantic-command-bus.js';
 
 const createCommandRuntime = (commands: Array<{ clientId: string; cmd: NodeCommand }>) => {
   const registry = new NodeRegistry();
@@ -159,7 +160,7 @@ test('configured client-object target receives command sink effects', async () =
   assert.equal(commands[0].clientId, 'client-b');
 });
 
-test('default registry exposes display-object for server semantic authority', () => {
+test('default registry exposes int, float, and display-object for server semantic authority', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
     getClientId: () => null,
@@ -169,9 +170,52 @@ test('default registry exposes display-object for server semantic authority', ()
   });
 
   const display = registry.get('display-object');
+  const intNode = registry.get('int');
+  const floatNode = registry.get('float');
 
   assert.equal(display?.label, 'Display');
   assert.equal(display?.metadata?.platformTargets.includes('display'), true);
   assert.equal(display?.inputs.some((input) => input.id === 'in' && input.type === 'command'), true);
   assert.equal(display?.configSchema.some((field) => field.key === 'displayId'), true);
+  assert.equal(registry.get('number'), undefined);
+  assert.equal(intNode?.label, 'Int');
+  assert.equal(intNode?.configSchema.find((field) => field.key === 'value')?.step, 1);
+  assert.equal(floatNode?.label, 'Float');
+  assert.equal(floatNode?.configSchema.find((field) => field.key === 'value')?.step, 0.01);
+});
+
+test('semantic command normalization migrates legacy number source nodes to float', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const bus = createSemanticCommandBus({
+    graph: { nodes: [], connections: [] },
+    definitions: registry.list(),
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    revision: 0,
+  });
+
+  const added = bus.dispatch({
+    actor: { id: 'cli', role: 'operator' },
+    command: {
+      type: 'node.add',
+      node: {
+        id: 'legacy-number',
+        type: 'number',
+        position: { x: 0, y: 0 },
+        config: { value: 1 },
+        inputValues: {},
+        outputValues: {},
+      },
+    },
+  });
+
+  assert.equal(added.ok, true);
+  assert.equal(added.command.type, 'node.add');
+  assert.equal(added.command.type === 'node.add' ? added.command.node.type : null, 'float');
+  assert.equal(bus.getSnapshot().nodes[0]?.type, 'float');
 });

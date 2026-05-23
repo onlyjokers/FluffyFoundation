@@ -206,8 +206,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       const configValue = instance.config?.[input.id];
       const current = instance.inputValues?.[input.id];
       const derivedDefault = hasDefault ? input.defaultValue : configField?.defaultValue;
+      const isSelectableTargetNode =
+        instance.type === 'client-object' || instance.type === 'display-object';
       const forceInlineInput =
-        instance.type === 'client-object' && (input.id === 'index' || input.id === 'range' || input.id === 'random');
+        isSelectableTargetNode && (input.id === 'index' || input.id === 'range' || input.id === 'random');
       const hasInitial =
         forceInlineInput || current !== undefined || configValue !== undefined || derivedDefault !== undefined;
       if (hasInitial && isPrimitive && !isSink && !isSelectConfig) {
@@ -257,7 +259,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                   commitInputValue(input.id, next);
                   if (
                     !isEditorProjection &&
-                    instance.type === 'client-object' &&
+                    isSelectableTargetNode &&
                     (input.id === 'index' || input.id === 'range') &&
                     typeof next === 'number'
                   ) {
@@ -274,7 +276,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 nodeType: instance.type,
                 portId: input.id,
               });
-              if (instance.type === 'client-object' && (input.id === 'index' || input.id === 'range')) {
+              if (isSelectableTargetNode && (input.id === 'index' || input.id === 'range')) {
                 withControlMeta(control, { integer: true });
               }
               return control;
@@ -321,7 +323,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 String(instance.type).startsWith(CUSTOM_NODE_TYPE_PREFIX) && input.id === 'gate';
               if (!isCustomGate && value === initial) return;
               commitInputValue(input.id, value);
-              if (!isEditorProjection && instance.type === 'client-object' && input.id === 'random') {
+              if (!isEditorProjection && isSelectableTargetNode && input.id === 'random') {
                 opts.onClientNodeRandom?.(instance.id, value);
               }
               if (!isEditorProjection && isCustomGate) {

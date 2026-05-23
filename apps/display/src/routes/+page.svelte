@@ -8,6 +8,7 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
   import { VideoPlayer } from '@shugu/ui-kit';
   import ImageDisplay from '$components/ImageDisplay.svelte';
   import DisplayVisualScenes from '$components/DisplayVisualScenes.svelte';
+  import DisplayVisualEffects from '$components/DisplayVisualEffects.svelte';
   import { toneAudioEngine } from '@shugu/multimedia-core';
   import {
     audioState,
@@ -16,6 +17,7 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     videoState,
     imageState,
     visualScenes,
+    visualEffects,
     screenOverlay,
     textOverlay,
     initializeDisplay,
@@ -106,6 +108,14 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     />
   {/if}
 
+  {#if isConnected}
+    <DisplayVisualEffects
+      effects={$visualEffects}
+      videoState={$videoState}
+      imageState={$imageState}
+    />
+  {/if}
+
   {#if isConnected && sampledScreenOverlay.visible}
     <div
       class="screen-overlay"
@@ -140,14 +150,14 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
   .screen-overlay {
     position: fixed;
     inset: 0;
-    z-index: 2;
+    z-index: 3;
     pointer-events: none;
   }
 
   .text-overlay {
     position: fixed;
     inset: 0;
-    z-index: 3;
+    z-index: 4;
     display: flex;
     align-items: center;
     justify-content: center;
