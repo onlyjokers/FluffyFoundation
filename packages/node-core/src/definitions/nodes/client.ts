@@ -14,7 +14,6 @@ import type {
 import { selectClientIdsForNode } from '../client-selection.js';
 import {
   asRecord,
-  getArrayValue,
   getBooleanValue,
   getNumberValue,
   getStringValue,
@@ -123,8 +122,9 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
     type: 'client-permission-filter',
     label: 'Client Filter for Permissions',
     category: 'Objects',
-    inputs: [{ id: 'loadIndexs', label: 'Load Indexs', type: 'array' }],
+    inputs: [{ id: 'client', label: 'Client', type: 'client' }],
     outputs: [
+      { id: 'client', label: 'Client', type: 'client' },
       { id: 'indexs', label: 'Indexs', type: 'array' },
       { id: 'number', label: 'Number', type: 'number' },
       { id: 'rejectedIndexs', label: 'Rejected Indexs', type: 'array' },
@@ -151,14 +151,19 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
       const audienceClients = deps.isAudienceClient
         ? allClients.filter((clientId) => deps.isAudienceClient?.(clientId) !== false)
         : allClients;
-      const loaded = getArrayValue(inputs.loadIndexs);
-      const candidates = loaded
-        ? loaded.map(String).filter((clientId) => audienceClients.includes(clientId))
+      const inputClientIds = resolveTargetsFromClientInput(inputs.client);
+      const candidates = inputClientIds.length > 0
+        ? inputClientIds.filter((clientId) => audienceClients.includes(clientId))
         : audienceClients;
       const required = selectedPermissionKeys(config);
 
       if (required.length === 0) {
-        return { indexs: candidates, number: candidates.length, rejectedIndexs: [] };
+        return {
+          client: createClientObjectForSelection(candidates[0] ?? '', candidates, deps),
+          indexs: candidates,
+          number: candidates.length,
+          rejectedIndexs: [],
+        };
       }
 
       const matchAny = config.matchMode === 'any';
@@ -173,7 +178,12 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
         else rejectedIndexs.push(clientId);
       }
 
-      return { indexs, number: indexs.length, rejectedIndexs };
+      return {
+        client: createClientObjectForSelection(indexs[0] ?? '', indexs, deps),
+        indexs,
+        number: indexs.length,
+        rejectedIndexs,
+      };
     },
   };
 }
@@ -290,6 +300,7 @@ export function createClientLoaderNode(deps: ClientObjectDeps): NodeDefinition {
     category: 'Objects',
     inputs: [
       { id: 'loadIndexs', label: 'Load Indexs', type: 'array' },
+      { id: 'loadAll', label: 'Load All', type: 'boolean', defaultValue: false },
       { id: 'index', label: 'Index', type: 'number', defaultValue: 1, min: 1, step: 1 },
       { id: 'range', label: 'Range', type: 'number', defaultValue: 1, min: 1, step: 1 },
       { id: 'random', label: 'Random', type: 'boolean', defaultValue: false },
@@ -302,6 +313,11 @@ export function createClientLoaderNode(deps: ClientObjectDeps): NodeDefinition {
     configSchema: [{ key: 'clientId', label: 'Clients', type: 'client-picker', defaultValue: '' }],
     process: (inputs, _config, context) => {
       const available = deps.getAllClientIds?.() ?? [];
+      if (getBooleanValue(inputs.loadAll) === true) {
+        const client = createClientObjectForSelection(available[0] ?? '', available, deps);
+        return { client, indexs: available, number: available.length };
+      }
+
       const loadInds = inputs.loadIndexs;
       const loadedIds = Array.isArray(loadInds)
         ? loadInds.map(String).filter((id) => available.includes(id))

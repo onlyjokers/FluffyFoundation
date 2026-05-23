@@ -316,6 +316,92 @@ test('client-loader applies index, range, and random to loaded client ids', () =
   assert.ok(randomB.indexs.every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
 });
 
+test('client-loader load all bypasses index, range, random, and loaded subsets', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c', 'client-d'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const loader = registry.get('client-loader');
+  assert.ok(loader);
+
+  const selected = loader.process(
+    {
+      loadAll: true,
+      loadIndexs: ['client-b'],
+      index: 3,
+      range: 1,
+      random: true,
+    },
+    {},
+    { nodeId: 'loader-load-all', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(selected.indexs, ['client-a', 'client-b', 'client-c', 'client-d']);
+  assert.equal(selected.number, 4);
+  assert.equal(selected.client.clientId, 'client-a');
+  assert.deepEqual(selected.client.clientIds, ['client-a', 'client-b', 'client-c', 'client-d']);
+});
+
+test('client-permission-filter narrows a client collection and outputs rejected ids', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c', 'client-d'],
+    getSelectedClientIds: () => [],
+    getClientPermissions: (clientId) =>
+      ({
+        'client-a': { microphone: 'granted', camera: 'granted' },
+        'client-b': { microphone: 'denied', camera: 'granted' },
+        'client-c': { microphone: 'granted', camera: 'denied' },
+        'client-d': { microphone: 'granted', camera: 'granted' },
+      })[clientId] ?? null,
+    executeCommand: () => {},
+  });
+  const filter = registry.get('client-permission-filter');
+  assert.ok(filter);
+
+  const selected = filter.process(
+    {
+      client: { clientId: 'client-b', clientIds: ['client-b', 'client-c', 'client-d'] },
+    },
+    { matchMode: 'all', microphone: true, camera: true },
+    { nodeId: 'permission-filter', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(selected.indexs, ['client-d']);
+  assert.equal(selected.number, 1);
+  assert.deepEqual(selected.rejectedIndexs, ['client-b', 'client-c']);
+  assert.equal(selected.client.clientId, 'client-d');
+  assert.deepEqual(selected.client.clientIds, ['client-d']);
+});
+
+test('client-permission-filter treats missing requirements as pass-through client collection', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b'],
+    getSelectedClientIds: () => [],
+    getClientPermissions: () => null,
+    executeCommand: () => {},
+  });
+  const filter = registry.get('client-permission-filter');
+  assert.ok(filter);
+
+  const selected = filter.process(
+    { client: { clientId: 'client-b', clientIds: ['client-b'] } },
+    { matchMode: 'all' },
+    { nodeId: 'permission-filter-pass', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(selected.indexs, ['client-b']);
+  assert.equal(selected.client.clientId, 'client-b');
+  assert.deepEqual(selected.client.clientIds, ['client-b']);
+  assert.deepEqual(selected.rejectedIndexs, []);
+});
+
 test('input override TTL expires and restores base values', (t) => {
   const clock = withFakeNow(t, 0);
 

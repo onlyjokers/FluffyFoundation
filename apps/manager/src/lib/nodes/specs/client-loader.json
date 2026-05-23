@@ -12,12 +12,13 @@
       {
         "target": "client-executor",
         "rule": "Connect Client output to Client Executor Client input before routing command nodes.",
-        "repairHint": "Use Client Filter for Permissions or Load Indexs before this node when the target clients must be narrowed."
+        "repairHint": "Use Load All for every client, or place Client Filter for Permissions after this node when permissions must narrow the target clients."
       }
     ]
   },
   "inputs": [
     { "id": "loadIndexs", "label": "Load Indexs", "type": "array" },
+    { "id": "loadAll", "label": "Load All", "type": "boolean" },
     { "id": "index", "label": "Index", "type": "number", "min": 1, "step": 1 },
     { "id": "range", "label": "Range", "type": "number", "min": 1, "step": 1 },
     { "id": "random", "label": "Random", "type": "boolean" }

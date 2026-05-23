@@ -7,17 +7,18 @@
     "platformTargets": ["manager"],
     "sideEffectClass": "none",
     "permissions": [],
-    "description": "Filters client ids by the permission snapshots reported by connected clients.",
+    "description": "Filters a client collection by the permission snapshots reported by connected clients.",
     "compatibility": [
       {
-        "target": "client-loader",
-        "rule": "Connect indexs output to Client Loader Load Indexs to route later commands only to clients matching the selected permissions.",
+        "target": "client-executor",
+        "rule": "Connect Client Loader Client output into this node, then connect this node's Client output to Client Executor.",
         "repairHint": "If no clients pass, confirm the target clients have granted the selected permissions after entering the client app."
       }
     ]
   },
-  "inputs": [{ "id": "loadIndexs", "label": "Load Indexs", "type": "array" }],
+  "inputs": [{ "id": "client", "label": "Client", "type": "client" }],
   "outputs": [
+    { "id": "client", "label": "Client", "type": "client" },
     { "id": "indexs", "label": "Indexs", "type": "array" },
     { "id": "number", "label": "Number", "type": "number" },
     { "id": "rejectedIndexs", "label": "Rejected Indexs", "type": "array" }

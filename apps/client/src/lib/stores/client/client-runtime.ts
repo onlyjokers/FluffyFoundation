@@ -31,6 +31,10 @@ import { getOrCreateClientIdentity, persistAssignedClientId } from './client-ide
 import { stopAllClientSideEffects } from './client-stop-all';
 import { canRunClientRuntimeCapability } from './client-runtime-capabilities';
 import { clientUiRuntime } from './client-ui-runtime';
+import {
+  observeBrowserPermissionChanges,
+  refreshBrowserPermissionSnapshot,
+} from './client-permission-observer';
 
 // SDK and controller instances
 let sdk: ClientSDK | null = null;
@@ -45,6 +49,7 @@ let nodeExecutor: NodeExecutor | null = null;
 let multimediaCore: MultimediaCore | null = null;
 let mediaUnsub: (() => void) | null = null;
 let permissionsUnsub: (() => void) | null = null;
+let browserPermissionsUnsub: (() => void) | null = null;
 let lastReportedPermissions = '';
 
 const ASSET_READ_TOKEN_STORAGE_KEY = 'shugu-asset-read-token';
@@ -81,6 +86,14 @@ function reportClientPermissions(snapshot: ClientPermissions): void {
   if (signature === lastReportedPermissions) return;
   sdk?.sendClientPermissions(snapshot);
   lastReportedPermissions = signature;
+}
+
+function attachMicrophoneTrackEndReporting(stream: MediaStream): void {
+  for (const track of stream.getAudioTracks()) {
+    track.addEventListener?.('ended', () => {
+      permissions.update((p) => ({ ...p, microphone: 'denied' }));
+    });
+  }
 }
 
 /**
@@ -171,6 +184,9 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
   permissionsUnsub = permissions.subscribe((snapshot) => {
     reportClientPermissions(snapshot);
   });
+  browserPermissionsUnsub?.();
+  browserPermissionsUnsub = observeBrowserPermissionChanges(permissions);
+  void refreshBrowserPermissionSnapshot(permissions);
 
   // Subscribe to control messages
   sdk.onControl(controlHandlers.handleControlMessage);
@@ -334,6 +350,7 @@ export async function requestPermissions(): Promise<void> {
   // Handle microphone
   if (microphoneResult.status === 'fulfilled') {
     audioStream.set(microphoneResult.value);
+    attachMicrophoneTrackEndReporting(microphoneResult.value);
     permissions.update((p) => ({ ...p, microphone: 'granted' }));
   } else {
     console.warn('[Permissions] Microphone denied:', microphoneResult.reason);
@@ -394,6 +411,8 @@ export function disconnect(): void {
 
   permissionsUnsub?.();
   permissionsUnsub = null;
+  browserPermissionsUnsub?.();
+  browserPermissionsUnsub = null;
   lastReportedPermissions = '';
 
   mediaUnsub?.();

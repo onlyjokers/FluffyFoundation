@@ -95,9 +95,28 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
         String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
     );
 
-  const computeClientSlice = (nodeId: string, indexRaw: number, rangeRaw: number, randomRaw: unknown) => {
+  const computeClientSlice = (
+    nodeId: string,
+    indexRaw: number,
+    rangeRaw: number,
+    randomRaw: unknown,
+    loadAllRaw?: unknown
+  ) => {
     const clients = audienceClientIdsInOrder();
     if (clients.length === 0) return null;
+
+    if (coerceBoolean(loadAllRaw, false)) {
+      const firstId = clients[0] ?? '';
+      return {
+        index: 1,
+        range: clients.length,
+        total: clients.length,
+        maxIndex: clients.length,
+        ids: clients,
+        firstId,
+        random: false,
+      };
+    }
 
     const total = clients.length;
     const range = clampInt(rangeRaw, 1, total);
@@ -221,7 +240,7 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     if (!node || node.type !== 'client-loader') return;
 
     const computed = nodeEngine.getLastComputedInputs(nodeId);
-    const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
+    const getEffectiveInput = (portId: 'index' | 'range' | 'random' | 'loadAll'): unknown => {
       const connected = isInputConnected(nodeId, portId);
       if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
         return computed[portId];
@@ -233,6 +252,9 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     const currentIndexRaw = toFiniteNumber(getEffectiveInput('index'), 1);
     const currentRangeRaw = toFiniteNumber(getEffectiveInput('range'), 1);
     const currentRandomRaw = getEffectiveInput('random');
+    const currentLoadAllRaw = getEffectiveInput('loadAll');
+
+    if (coerceBoolean(currentLoadAllRaw, false)) return;
 
     const desiredRandom = typeof next.random === 'boolean' ? next.random : coerceBoolean(currentRandomRaw, false);
 
@@ -295,7 +317,7 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
       }
     }
 
-    const slice = computeClientSlice(nodeId, desiredIndex, desiredRange, desiredRandom);
+    const slice = computeClientSlice(nodeId, desiredIndex, desiredRange, desiredRandom, currentLoadAllRaw);
     if (!slice) return;
 
     // When the picker drives index/range, also forward overrides to any deployed loop/patch runtime.
@@ -349,6 +371,7 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
       const useComputedIndex = isInputConnected(nodeId, 'index');
       const useComputedRange = isInputConnected(nodeId, 'range');
       const useComputedRandom = isInputConnected(nodeId, 'random');
+      const useComputedLoadAll = isInputConnected(nodeId, 'loadAll');
       const indexRaw = toFiniteNumber(
         useComputedIndex && computed && Object.prototype.hasOwnProperty.call(computed, 'index')
           ? computed.index
@@ -365,7 +388,11 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
         useComputedRandom && computed && Object.prototype.hasOwnProperty.call(computed, 'random')
           ? computed.random
           : (nodeInstance?.inputValues as Record<string, unknown> | undefined)?.random;
-      const slice = computeClientSlice(nodeId, indexRaw, rangeRaw, randomRaw);
+      const loadAllRaw =
+        useComputedLoadAll && computed && Object.prototype.hasOwnProperty.call(computed, 'loadAll')
+          ? computed.loadAll
+          : (nodeInstance?.inputValues as Record<string, unknown> | undefined)?.loadAll;
+      const slice = computeClientSlice(nodeId, indexRaw, rangeRaw, randomRaw, loadAllRaw);
       if (!slice) continue;
       void syncClientNodeUi(nodeId, slice);
     }

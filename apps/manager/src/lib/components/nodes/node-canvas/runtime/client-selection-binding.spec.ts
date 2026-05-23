@@ -83,3 +83,44 @@ test('client picker user selection immediately reconciles patch routing', async 
 
   assert.deepEqual(reconcileCalls, ['client-selection']);
 });
+
+test('client loader loadAll input syncs output values to every audience client', () => {
+  const node = clientNode();
+  node.inputValues = { loadAll: true, index: 2, range: 1, random: false };
+  const graph: GraphState = { nodes: [node], connections: [] };
+  const bindingWithLoadAll = createClientSelectionBinding({
+    nodeEngine: {
+      getNode: () => node,
+      getLastComputedInputs: () => null,
+      updateNodeConfig: (_nodeId, patch) => {
+        node.config = { ...(node.config ?? {}), ...patch };
+      },
+      updateNodeInputValue: (_nodeId, portId, value) => {
+        node.inputValues = { ...(node.inputValues ?? {}), [portId]: value };
+      },
+      tickTime: { set: () => undefined },
+    },
+    graphStateStore: readable(graph),
+    getGraphState: () => graph,
+    managerState: readable({
+      clients: [
+        { clientId: 'client-a', group: 'audience', connected: true },
+        { clientId: 'client-b', group: 'audience', connected: true },
+      ],
+    }),
+    sensorData: readable(new Map()),
+    getAreaPlugin: () => null,
+    getNodeMap: () => new Map(),
+    sendNodeOverride: () => undefined,
+  });
+
+  bindingWithLoadAll.syncClientNodesFromInputs();
+
+  assert.deepEqual(node.outputValues.indexs, ['client-a', 'client-b']);
+  assert.equal(node.outputValues.number, 2);
+  assert.deepEqual(node.outputValues.client, {
+    clientId: 'client-a',
+    clientIds: ['client-a', 'client-b'],
+    sensors: null,
+  });
+});
