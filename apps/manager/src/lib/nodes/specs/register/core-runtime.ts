@@ -4,7 +4,7 @@
 import { get } from 'svelte/store';
 import { NodeRegistry as CoreNodeRegistry, registerDefaultNodeDefinitions, type LatestSensorDataLike } from '@shugu/node-core';
 import type { NodeDefinition } from '../../types';
-import { getSDK, sensorData } from '$lib/stores/manager';
+import { getSDK, sensorData, state } from '$lib/stores/manager';
 import { targetManagedClient } from './client-target';
 
 export type CoreRuntimeImpl = Pick<NodeDefinition, 'process' | 'onSink'>;
@@ -23,6 +23,19 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
         ...data,
         clientTimestamp: data.clientTimestamp ?? data.serverTimestamp,
       } satisfies LatestSensorDataLike;
+    },
+    getAllClientIds: () =>
+      (get(state).clients ?? [])
+        .filter((client) => client.group !== 'display')
+        .map((client) => String(client.clientId ?? ''))
+        .filter(Boolean),
+    getClientPermissions: (clientId) => {
+      const client = (get(state).clients ?? []).find((entry) => String(entry.clientId ?? '') === clientId);
+      return client?.permissions ?? null;
+    },
+    isAudienceClient: (clientId) => {
+      const client = (get(state).clients ?? []).find((entry) => String(entry.clientId ?? '') === clientId);
+      return client?.group !== 'display';
     },
     executeCommand: () => {
       // Manager always routes via executeCommandForClientId.
@@ -46,6 +59,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
 
   return new Map<string, CoreRuntimeImpl>([
     ['client-object', pick('client-object')],
+    ['client-permission-filter', pick('client-permission-filter')],
     ['proc-client-sensors', pick('proc-client-sensors')],
     ['float', pick('float')],
     ['int', pick('int')],

@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
+      "$app/environment": ["src/lib/test-shims/app-environment.ts"],
       "$lib/*": ["src/lib/*"]
     }
   }

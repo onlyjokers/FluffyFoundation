@@ -107,6 +107,59 @@ test('validateMessage accepts media and plugin messages when optional object fie
   assert.equal(isValidMessage(plugin), true);
 });
 
+test('validateMessage accepts client permission snapshots in client lists and updates', () => {
+  const clientList = createSystemMessage('clientList', {
+    clients: [
+      {
+        clientId: 'client-1',
+        connectedAt: 1000,
+        selected: true,
+        permissions: {
+          microphone: 'granted',
+          motion: 'denied',
+          camera: 'pending',
+          wakeLock: 'unsupported',
+          geolocation: 'unavailable',
+        },
+      },
+    ],
+  });
+  const clientPermissions = createSystemMessage('clientPermissions', {
+    permissions: {
+      microphone: 'granted',
+      motion: 'granted',
+      camera: 'denied',
+      wakeLock: 'pending',
+      geolocation: 'unsupported',
+    },
+  });
+
+  assert.equal(validateMessage(clientList).ok, true);
+  assert.equal(validateMessage(clientPermissions).ok, true);
+});
+
+test('validateMessage rejects malformed client permission snapshots', () => {
+  const badKey = validateMessage(
+    createSystemMessage('clientPermissions', {
+      permissions: { bluetooth: 'granted' } as never,
+    })
+  );
+  const badStatus = validateMessage(
+    createSystemMessage('clientList', {
+      clients: [
+        {
+          clientId: 'client-1',
+          connectedAt: 1000,
+          permissions: { microphone: 'allowed' },
+        },
+      ],
+    } as never)
+  );
+
+  assert.equal(badKey.ok, false);
+  assert.equal(badStatus.ok, false);
+});
+
 test('validateMessage accepts display operation plugin commands', () => {
   const plugin = createPluginControlMessage(
     createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),

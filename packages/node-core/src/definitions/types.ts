@@ -1,7 +1,7 @@
 /**
  * Purpose: Shared types for node definitions and command routing.
  */
-import type { ControlAction, ControlPayload, SensorPayload, SensorType } from '@shugu/protocol';
+import type { ClientPermissions, ControlAction, ControlPayload, SensorPayload, SensorType } from '@shugu/protocol';
 
 export type NodeCommand = {
   action: ControlAction;
@@ -52,6 +52,14 @@ export type ClientObjectDeps = {
    * Manager-side lookup for per-client uploaded images (e.g. screenshots).
    */
   getImageForClientId?: (clientId: string) => unknown;
+  /**
+   * Manager-side lookup for the latest permission snapshot reported by a client.
+   */
+  getClientPermissions?: (clientId: string) => ClientPermissions | null;
+  /**
+   * Manager-side audience filter. Display clients should normally be excluded from client filters.
+   */
+  isAudienceClient?: (clientId: string) => boolean;
   /**
    * Client-side convenience (single local client).
    * Prefer `executeCommandForClientId` when available.

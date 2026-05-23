@@ -210,6 +210,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
       };
     }
     case 'proc-client-sensors':
+    case 'client-permission-filter':
     case 'float':
     case 'int':
     case 'number-stabilizer':

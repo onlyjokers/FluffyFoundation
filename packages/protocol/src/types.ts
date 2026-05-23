@@ -581,10 +581,15 @@ export type SystemAction =
   | 'clientList'
   | 'clientJoined'
   | 'clientLeft'
+  | 'clientPermissions'
   | 'semanticSnapshot'
   | 'error'
   | 'ping'
   | 'pong';
+
+export type ClientPermissionName = 'microphone' | 'motion' | 'camera' | 'wakeLock' | 'geolocation';
+export type ClientPermissionStatus = 'pending' | 'granted' | 'denied' | 'unavailable' | 'unsupported';
+export type ClientPermissions = Partial<Record<ClientPermissionName, ClientPermissionStatus>>;
 
 /**
  * Client info for client list
@@ -597,6 +602,7 @@ export interface ClientInfo {
   selected?: boolean;
   connected?: boolean;
   lastSeenAt?: number;
+  permissions?: ClientPermissions;
 }
 
 /**
@@ -608,6 +614,7 @@ export interface SystemMessage extends BaseMessage {
   payload: {
     clientId?: string;
     clients?: ClientInfo[];
+    permissions?: ClientPermissions;
     error?: string;
     serverTimestamp?: number;
     clientTimestamp?: number;

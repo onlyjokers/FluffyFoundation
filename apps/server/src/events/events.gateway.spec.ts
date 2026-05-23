@@ -122,6 +122,53 @@ test('handleMessage rejects schema-invalid messages before routing and logs stru
   });
 });
 
+test('handleMessage records client permission snapshots by socket identity', () => {
+  const permissionUpdates: unknown[] = [];
+  let broadcastCount = 0;
+  const clientRegistry = {
+    onClientExpired: () => () => undefined,
+    isManager: () => false,
+    getClientIdBySocketId: (socketId: string) => (socketId === 'socket-client-1' ? 'client-1' : undefined),
+    setClientPermissions: (clientId: string, permissions: unknown) => {
+      permissionUpdates.push({ clientId, permissions });
+    },
+  };
+  const messageRouter = {
+    routeMessage: () => undefined,
+    broadcastClientListUpdate: () => {
+      broadcastCount += 1;
+    },
+  };
+  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
+
+  gateway.handleMessage(
+    {
+      type: 'system',
+      version: 1,
+      action: 'clientPermissions',
+      payload: {
+        clientId: 'spoofed-client',
+        permissions: {
+          microphone: 'granted',
+          motion: 'denied',
+        },
+      },
+    },
+    { id: 'socket-client-1' } as never
+  );
+
+  assert.deepEqual(permissionUpdates, [
+    {
+      clientId: 'client-1',
+      permissions: {
+        microphone: 'granted',
+        motion: 'denied',
+      },
+    },
+  ]);
+  assert.equal(broadcastCount, 1);
+});
+
 test('handleMessage rejects unauthorized routing with structured policy metadata', () => {
   const { gateway, routed } = createGateway({ isManager: false });
   const warnings: unknown[][] = [];

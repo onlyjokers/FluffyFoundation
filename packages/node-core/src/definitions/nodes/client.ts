@@ -1,7 +1,7 @@
 /**
  * Purpose: Client selection, routing, and sensor processing node definitions.
  */
-import type { ControlAction, ControlPayload } from '@shugu/protocol';
+import type { ClientPermissionName, ClientPermissions, ControlAction, ControlPayload } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
 import type { ClientObject, ClientObjectDeps, ClientSensorMessage, NodeCommand } from '../types.js';
@@ -32,6 +32,16 @@ function resolveClientSelection(
   });
 }
 
+const permissionConfigKeys: ClientPermissionName[] = ['microphone', 'motion', 'camera', 'wakeLock', 'geolocation'];
+
+function selectedPermissionKeys(config: Record<string, unknown>): ClientPermissionName[] {
+  return permissionConfigKeys.filter((key) => config[key] === true);
+}
+
+function hasGrantedPermission(permissions: ClientPermissions | null | undefined, key: ClientPermissionName): boolean {
+  return permissions?.[key] === 'granted';
+}
+
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
   return {
     type: 'client-count',
@@ -46,6 +56,66 @@ export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
     process: () => {
       const clients = deps.getAllClientIds?.() ?? [];
       return { allIndexs: clients, number: clients.length };
+    },
+  };
+}
+
+export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'client-permission-filter',
+    label: 'Client Filter for Permissions',
+    category: 'Objects',
+    inputs: [{ id: 'loadIndexs', label: 'Load Indexs', type: 'array' }],
+    outputs: [
+      { id: 'indexs', label: 'Indexs', type: 'array' },
+      { id: 'number', label: 'Number', type: 'number' },
+      { id: 'rejectedIndexs', label: 'Rejected Indexs', type: 'array' },
+    ],
+    configSchema: [
+      {
+        key: 'matchMode',
+        label: 'Match Mode',
+        type: 'select',
+        defaultValue: 'all',
+        options: [
+          { value: 'all', label: 'All' },
+          { value: 'any', label: 'Any' },
+        ],
+      },
+      { key: 'microphone', label: 'Microphone', type: 'boolean', defaultValue: false },
+      { key: 'motion', label: 'Motion', type: 'boolean', defaultValue: false },
+      { key: 'camera', label: 'Camera', type: 'boolean', defaultValue: false },
+      { key: 'wakeLock', label: 'Wake Lock', type: 'boolean', defaultValue: false },
+      { key: 'geolocation', label: 'Geolocation', type: 'boolean', defaultValue: false },
+    ],
+    process: (inputs, config) => {
+      const allClients = deps.getAllClientIds?.() ?? [];
+      const audienceClients = deps.isAudienceClient
+        ? allClients.filter((clientId) => deps.isAudienceClient?.(clientId) !== false)
+        : allClients;
+      const loaded = getArrayValue(inputs.loadIndexs);
+      const candidates = loaded
+        ? loaded.map(String).filter((clientId) => audienceClients.includes(clientId))
+        : audienceClients;
+      const required = selectedPermissionKeys(config);
+
+      if (required.length === 0) {
+        return { indexs: candidates, number: candidates.length, rejectedIndexs: [] };
+      }
+
+      const matchAny = config.matchMode === 'any';
+      const indexs: string[] = [];
+      const rejectedIndexs: string[] = [];
+
+      for (const clientId of candidates) {
+        const permissions = deps.getClientPermissions?.(clientId) ?? null;
+        const granted = required.map((key) => hasGrantedPermission(permissions, key));
+        const accepted = matchAny ? granted.some(Boolean) : granted.every(Boolean);
+        if (accepted) indexs.push(clientId);
+        else rejectedIndexs.push(clientId);
+      }
+
+      return { indexs, number: indexs.length, rejectedIndexs };
     },
   };
 }

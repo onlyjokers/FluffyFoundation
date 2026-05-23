@@ -15,6 +15,7 @@ import { createClient, type RedisClientType } from 'redis';
 import { ClientRegistryService } from '../client-registry/client-registry.service.js';
 import { MessageRouterService } from '../message-router/message-router.service.js';
 import type {
+  ClientPermissions,
   ConnectionRole,
   MessageWithoutServerTimestamp,
   TargetSelector,
@@ -51,6 +52,25 @@ function sanitizeGroup(value: unknown): string | null {
 
 function managedClientGroupId(clientId: string): string {
   return `client:${clientId}`;
+}
+
+function sanitizeClientPermissions(value: unknown): ClientPermissions | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out: ClientPermissions = {};
+  const input = value as Record<string, unknown>;
+  for (const key of ['microphone', 'motion', 'camera', 'wakeLock', 'geolocation'] as const) {
+    const status = input[key];
+    if (
+      status === 'pending' ||
+      status === 'granted' ||
+      status === 'denied' ||
+      status === 'unavailable' ||
+      status === 'unsupported'
+    ) {
+      out[key] = status;
+    }
+  }
+  return out;
 }
 
 @WebSocketGateway({
@@ -227,6 +247,16 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
 
     const validatedMessage = validation.message;
+
+    if (validatedMessage.type === 'system' && validatedMessage.action === 'clientPermissions') {
+      const clientId = this.clientRegistry.getClientIdBySocketId(client.id);
+      if (!clientId || this.clientRegistry.isManager(client.id)) return;
+      const permissions = sanitizeClientPermissions(validatedMessage.payload.permissions);
+      if (!permissions) return;
+      this.clientRegistry.setClientPermissions(clientId, permissions);
+      this.messageRouter.broadcastClientListUpdate();
+      return;
+    }
 
     // Check authorization for control messages
     if (

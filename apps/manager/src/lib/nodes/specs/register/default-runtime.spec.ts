@@ -102,3 +102,50 @@ test('manager default runtime sends updated synth commands through managed clien
   assert.deepEqual(updated.target, { mode: 'group', groupId: 'client:client-a' });
   assert.equal(updated.action, 'modulateSoundUpdate');
 });
+
+test('manager default runtime filters clients by permission snapshots', () => {
+  const previousState = get(state);
+  state.set({
+    ...previousState,
+    status: 'connected',
+    clients: [
+      {
+        clientId: 'client-a',
+        connected: true,
+        group: 'client:client-a',
+        connectedAt: 1,
+        permissions: { microphone: 'granted', motion: 'granted' },
+      },
+      {
+        clientId: 'client-b',
+        connected: true,
+        group: 'client:client-b',
+        connectedAt: 2,
+        permissions: { microphone: 'granted', motion: 'denied' },
+      },
+      {
+        clientId: 'display-1',
+        connected: true,
+        group: 'display',
+        connectedAt: 3,
+        permissions: { microphone: 'granted', motion: 'granted' },
+      },
+    ],
+    selectedClientIds: [],
+  });
+
+  try {
+    const def = nodeRegistry.get('client-permission-filter');
+    assert.ok(def);
+    assert.deepEqual(
+      def.process(
+        {},
+        { microphone: true, motion: true, matchMode: 'all' },
+        { nodeId: 'filter', time: 0, deltaTime: 0 }
+      ),
+      { indexs: ['client-a'], number: 1, rejectedIndexs: ['client-b'] }
+    );
+  } finally {
+    state.set(previousState);
+  }
+});

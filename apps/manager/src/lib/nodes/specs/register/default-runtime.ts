@@ -34,6 +34,15 @@ export function registerDefaultRuntimeNodes(): void {
     if (!clientId) return null;
     return get(clientScreenshotUploads).get(clientId)?.dataUrl ?? null;
   },
+  getClientPermissions: (clientId: string) => {
+    if (!clientId) return null;
+    const client = (get(state).clients ?? []).find((entry) => String(entry?.clientId ?? '') === clientId);
+    return client?.permissions ?? null;
+  },
+  isAudienceClient: (clientId: string) => {
+    const client = (get(state).clients ?? []).find((entry) => String(entry?.clientId ?? '') === clientId);
+    return String(client?.group ?? '') !== 'display';
+  },
   executeCommand: () => {
     // Manager always routes via executeCommandForClientId.
   },

@@ -1,7 +1,13 @@
 /**
  * Purpose: Runtime schema validation for media, plugin, and system protocol messages.
  */
-import { MEDIA_TYPES, PLUGIN_COMMANDS, SYSTEM_ACTIONS } from './constants.js';
+import {
+  CLIENT_PERMISSION_NAMES,
+  CLIENT_PERMISSION_STATUSES,
+  MEDIA_TYPES,
+  PLUGIN_COMMANDS,
+  SYSTEM_ACTIONS,
+} from './constants.js';
 import {
   addReason,
   fieldCode,
@@ -94,6 +100,7 @@ export function validateSystemMessage(input: ObjectRecord, ctx: MutableValidatio
   validateStateStrategy(input.payload.stateStrategy, ctx);
   validateControlPlaneSnapshot(input.payload.controlPlane, ctx);
   validateSemanticSnapshotPayload(input.payload.semanticSnapshot, ctx);
+  validateClientPermissions(input.payload.permissions, ctx, 'payload.permissions');
   validateClientListPayload(input.payload, ctx);
 }
 
@@ -185,6 +192,24 @@ function validateClientInfo(client: unknown, ctx: MutableValidationContext, path
   optionalBoolean(client, ctx, 'selected', `${path}.selected`, 'message.system.payload.clients.selected');
   optionalBoolean(client, ctx, 'connected', `${path}.connected`, 'message.system.payload.clients.connected');
   optionalNumber(client, ctx, 'lastSeenAt', `${path}.lastSeenAt`, 'message.system.payload.clients.lastSeenAt');
+  validateClientPermissions(client.permissions, ctx, `${path}.permissions`);
+}
+
+function validateClientPermissions(value: unknown, ctx: MutableValidationContext, path: string): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.permissions', path, `${path} must be an object`);
+    return;
+  }
+  for (const [key, status] of Object.entries(value)) {
+    if (!isOneOf(key, CLIENT_PERMISSION_NAMES)) {
+      addReason(ctx, 'protocol.field.invalid', 'message.system.payload.permissions', `${path}.${key}`, `${path}.${key} is not a supported client permission`);
+      continue;
+    }
+    if (!isOneOf(status, CLIENT_PERMISSION_STATUSES)) {
+      addReason(ctx, 'protocol.field.invalid', 'message.system.payload.permissions', `${path}.${key}`, `${path}.${key} must be a supported permission status`);
+    }
+  }
 }
 
 function validateStateStrategy(value: unknown, ctx: MutableValidationContext): void {

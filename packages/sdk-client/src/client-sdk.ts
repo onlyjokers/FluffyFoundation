@@ -21,6 +21,7 @@ import {
     SensorType,
     SensorPayload,
     type ClientControlCapability,
+    type ClientPermissions,
     type ControlAction,
     type ControlPayload,
     type TargetSelector,
@@ -272,6 +273,23 @@ export class ClientSDK {
             payload
         );
         this.socket.emit(SOCKET_EVENTS.MSG, message);
+    }
+
+    /**
+     * Send the current browser permission snapshot to the server for manager-side client filtering.
+     */
+    sendClientPermissions(permissions: ClientPermissions): void {
+        if (!this.socket?.connected || !this.state.clientId) return;
+        this.socket.emit(
+            SOCKET_EVENTS.MSG,
+            {
+                type: 'system' as const,
+                version: 1 as const,
+                action: 'clientPermissions' as const,
+                payload: { permissions: { ...permissions } },
+                clientTimestamp: Date.now(),
+            }
+        );
     }
 
     /**

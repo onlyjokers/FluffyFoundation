@@ -28,6 +28,8 @@ export const CONTROL_ACTIONS = [
 
 export const SENSOR_TYPES = ['gyro', 'accel', 'orientation', 'mic', 'camera', 'custom'] as const;
 export const MEDIA_TYPES = ['audio', 'video'] as const;
+export const CLIENT_PERMISSION_NAMES = ['microphone', 'motion', 'camera', 'wakeLock', 'geolocation'] as const;
+export const CLIENT_PERMISSION_STATUSES = ['pending', 'granted', 'denied', 'unavailable', 'unsupported'] as const;
 
 export const PLUGIN_COMMANDS = [
   'init',
@@ -51,6 +53,7 @@ export const SYSTEM_ACTIONS = [
   'clientList',
   'clientJoined',
   'clientLeft',
+  'clientPermissions',
   'semanticSnapshot',
   'error',
   'ping',

@@ -121,3 +121,36 @@ test('ManagerSDK applies incremental client presence while full list update is d
 
   assert.deepEqual(managerState(sdk).clients, []);
 });
+
+test('ManagerSDK preserves client permission snapshots from client list updates', () => {
+  const sdk = new ManagerSDK({ serverUrl: 'http://localhost:3001' });
+
+  (
+    sdk as unknown as {
+      handleSystemMessage: (message: unknown) => void;
+    }
+  ).handleSystemMessage({
+    type: 'system',
+    version: 1,
+    serverTimestamp: 123,
+    action: 'clientList',
+    payload: {
+      clients: [
+        {
+          clientId: 'client-1',
+          connectedAt: 10,
+          selected: false,
+          permissions: {
+            microphone: 'granted',
+            motion: 'denied',
+          },
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(managerState(sdk).clients[0]?.permissions, {
+    microphone: 'granted',
+    motion: 'denied',
+  });
+});

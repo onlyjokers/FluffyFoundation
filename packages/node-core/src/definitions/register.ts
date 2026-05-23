@@ -7,6 +7,7 @@ import type { NodeDefinition } from '../types.js';
 
 import {
   createClientCountNode,
+  createClientPermissionFilterNode,
   createDisplayObjectNode,
   createClientObjectNode,
   createClientSensorsProcessorNode,
@@ -103,6 +104,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     () => createClientObjectNode(deps),
     createDisplayObjectNode,
     () => createClientCountNode(deps),
+    () => createClientPermissionFilterNode(deps),
     createArrayFilterNode,
     createCmdAggregatorNode,
     createClientSensorsProcessorNode,

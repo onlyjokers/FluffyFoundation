@@ -18,6 +18,7 @@ import {
   type NodeCommand,
   type ClientSDKConfig,
 } from '@shugu/sdk-client';
+import type { ClientPermissions } from '@shugu/protocol';
 import { MultimediaCore, toneAudioEngine, type MediaEngineState } from '@shugu/multimedia-core';
 import { permissions, state, latency } from './client-state';
 import { clientControlTransfer } from './client-transfer';
@@ -42,6 +43,8 @@ let wakeLockController: WakeLockController | null = null;
 let nodeExecutor: NodeExecutor | null = null;
 let multimediaCore: MultimediaCore | null = null;
 let mediaUnsub: (() => void) | null = null;
+let permissionsUnsub: (() => void) | null = null;
+let lastReportedPermissions = '';
 
 const ASSET_READ_TOKEN_STORAGE_KEY = 'shugu-asset-read-token';
 type AudioContextCtor = new (...args: never[]) => AudioContext;
@@ -69,6 +72,15 @@ const controlHandlers = createClientControlHandlers({
   stopAllCleanup: () =>
     stopAllClientSideEffects({ multimediaCore, toneSoundPlayer, toneModulatedSoundPlayer, screenController, nodeExecutor }),
 });
+
+function reportClientPermissions(snapshot: ClientPermissions): void {
+  const signature = JSON.stringify(snapshot);
+  const connected = Boolean(sdk?.getState?.().clientId) && sdk?.getState?.().status === 'connected';
+  if (!connected) return;
+  if (signature === lastReportedPermissions) return;
+  sdk?.sendClientPermissions(snapshot);
+  lastReportedPermissions = signature;
+}
 
 /**
  * Start asset preloading early, before the user clicks Enter.
@@ -122,6 +134,9 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
     // Ensure readiness is reported after the socket becomes ready (covers the case where
     // MultimediaCore finishes preload before clientId is assigned).
     if (newState.status === 'connected' && newState.clientId) {
+      lastReportedPermissions = '';
+      reportClientPermissions(get(permissions));
+
       const snapshot = multimediaCore?.getState?.();
       try {
         const tonePayload =
@@ -149,6 +164,11 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
         // ignore
       }
     }
+  });
+
+  permissionsUnsub?.();
+  permissionsUnsub = permissions.subscribe((snapshot) => {
+    reportClientPermissions(snapshot);
   });
 
   // Subscribe to control messages
@@ -369,6 +389,10 @@ export function disconnect(): void {
 
   nodeExecutor?.destroy();
   nodeExecutor = null;
+
+  permissionsUnsub?.();
+  permissionsUnsub = null;
+  lastReportedPermissions = '';
 
   mediaUnsub?.();
   mediaUnsub = null;

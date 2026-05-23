@@ -58,3 +58,23 @@ test('getClientsByGroup resolves managed client aliases even when a client has a
     ['display-1']
   );
 });
+
+test('client registry stores permission snapshots on client info', () => {
+  const registry = new ClientRegistryService();
+  registry.registerConnection('socket-1', 'client', undefined, {
+    deviceId: 'client-1',
+    instanceId: 'tab-1',
+  });
+
+  registry.setClientPermissions('client-1', {
+    microphone: 'granted',
+    motion: 'denied',
+    camera: 'pending',
+  });
+
+  assert.deepEqual(registry.getAllClients()[0]?.permissions, {
+    microphone: 'granted',
+    motion: 'denied',
+    camera: 'pending',
+  });
+});

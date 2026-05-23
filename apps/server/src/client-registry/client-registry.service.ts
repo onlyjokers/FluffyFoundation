@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
     ClientInfo,
+    ClientPermissions,
     ConnectionRole,
     ControlPlaneActor,
     DisplayDescriptor,
@@ -21,6 +22,7 @@ interface ConnectionInfo {
     connected: boolean;
     deviceId?: string;
     instanceId?: string;
+    permissions?: ClientPermissions;
 }
 
 type ClientIdentity = { deviceId?: string; instanceId?: string; clientId?: string };
@@ -299,6 +301,7 @@ export class ClientRegistryService {
             group: c.group,
             selected: c.selected,
             connected: c.connected,
+            permissions: c.permissions ? { ...c.permissions } : undefined,
         }));
     }
     getAllManagers(): { clientId: string; connectedAt: number }[] {
@@ -325,6 +328,11 @@ export class ClientRegistryService {
         if (client && client.selected !== selected) {
             client.selected = selected;
         }
+    }
+    setClientPermissions(clientId: string, permissions: ClientPermissions): void {
+        const client = this.clients.get(clientId);
+        if (!client) return;
+        client.permissions = { ...permissions };
     }
     getClientsByGroup(groupId: string): ConnectionInfo[] {
         if (groupId.startsWith('client:')) {

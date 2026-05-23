@@ -184,6 +184,64 @@ test('default registry exposes int, float, and display-object for server semanti
   assert.equal(floatNode?.configSchema.find((field) => field.key === 'value')?.step, 0.01);
 });
 
+test('client permission filter supports all and any permission matching', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'display-1'],
+    getSelectedClientIds: () => [],
+    getClientPermissions: (clientId) => {
+      if (clientId === 'client-a') return { microphone: 'granted', motion: 'granted' };
+      if (clientId === 'client-b') return { microphone: 'granted', motion: 'denied' };
+      return { microphone: 'granted', motion: 'granted' };
+    },
+    isAudienceClient: (clientId) => clientId !== 'display-1',
+    executeCommand: () => {},
+  });
+  const node = registry.get('client-permission-filter');
+  assert.ok(node);
+
+  assert.deepEqual(
+    node.process({}, { microphone: true, motion: true, matchMode: 'all' }, { nodeId: 'filter', time: 0, deltaTime: 0 }),
+    { indexs: ['client-a'], number: 1, rejectedIndexs: ['client-b'] }
+  );
+  assert.deepEqual(
+    node.process({}, { microphone: true, motion: true, matchMode: 'any' }, { nodeId: 'filter', time: 0, deltaTime: 0 }),
+    { indexs: ['client-a', 'client-b'], number: 2, rejectedIndexs: [] }
+  );
+});
+
+test('client permission filter pass-throughs empty requirements and filters loaded indexes', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c'],
+    getSelectedClientIds: () => [],
+    getClientPermissions: (clientId) =>
+      clientId === 'client-b' ? { camera: 'granted' } : { camera: 'pending' },
+    executeCommand: () => {},
+  });
+  const node = registry.get('client-permission-filter');
+  assert.ok(node);
+
+  assert.deepEqual(
+    node.process(
+      { loadIndexs: ['client-a', 'client-b'] },
+      { camera: true, matchMode: 'all' },
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    ),
+    { indexs: ['client-b'], number: 1, rejectedIndexs: ['client-a'] }
+  );
+  assert.deepEqual(
+    node.process(
+      { loadIndexs: ['client-a', 'client-b'] },
+      { matchMode: 'all' },
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    ),
+    { indexs: ['client-a', 'client-b'], number: 2, rejectedIndexs: [] }
+  );
+});
+
 test('semantic command normalization migrates legacy number source nodes to float', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
