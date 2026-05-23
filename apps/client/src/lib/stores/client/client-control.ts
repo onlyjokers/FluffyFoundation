@@ -13,6 +13,7 @@ import type {
   PluginControlMessage,
 } from '@shugu/protocol';
 import { executeCustomControl } from './client-control/custom-control-handler';
+import { executeClientUiControl } from './client-control/client-ui-control-handler';
 import { executeDeviceControl } from './client-control/device-control-handler';
 import { recordE2ECommand } from './client-control/e2e-recorder';
 import { executeMediaControl } from './client-control/media-control-handler';
@@ -69,6 +70,7 @@ export function createClientControlHandlers(deps: ClientControlDeps): {
       if (executeMediaControl(deps, action, payload, delaySeconds)) return;
       if (deps.textOverlay && executeTextControl({ textOverlay: deps.textOverlay }, action, payload)) return;
       if (executeVisualControl(action, payload)) return;
+      if (executeClientUiControl(action, payload)) return;
       if (action === 'shutdown') {
         deps.stopAllCleanup?.();
         return;

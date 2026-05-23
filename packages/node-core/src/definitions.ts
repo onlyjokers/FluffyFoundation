@@ -8,6 +8,7 @@ export type {
   ClientObjectDeps,
   ClientUiDeps,
   ClientUiKind,
+  ClientUiLayerItem,
   ClientUiState,
   ClientSensorMessage,
   LatestSensorDataLike,

@@ -3,8 +3,12 @@
   "type": "client-input-box",
   "label": "Client Input Box",
   "category": "ClientUI",
-  "inputs": [{ "id": "display", "label": "Display", "type": "boolean" }],
+  "inputs": [
+    { "id": "in", "label": "In", "type": "ui" },
+    { "id": "display", "label": "Display", "type": "boolean" }
+  ],
   "outputs": [
+    { "id": "out", "label": "Out", "type": "ui" },
     { "id": "inputContent", "label": "Input Content", "type": "string" },
     { "id": "firstInputed", "label": "First Inputed", "type": "boolean" }
   ],

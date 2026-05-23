@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { NodeRegistry, registerDefaultNodeDefinitions } from '../dist-node-core/index.js';
 
-function buildRegistry(clientUi = {}) {
+function buildRegistry(clientUi = {}, executeCommand = () => {}) {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
     getClientId: () => null,
@@ -14,32 +14,29 @@ function buildRegistry(clientUi = {}) {
     getSelectedClientIds: () => [],
     getLatestSensor: () => null,
     getSensorForClientId: () => null,
-    executeCommand: () => {},
+    executeCommand,
     executeCommandForClientId: () => {},
     clientUi,
   });
   return registry;
 }
 
-test('client-button hides when display is false and exposes no pressed pulse', () => {
-  const displays = [];
+test('client-button passes through ui chain when display is false and exposes no pressed pulse', () => {
   const registry = buildRegistry({
-    setClientUiDisplay: (nodeId, visible, kind) => displays.push({ nodeId, visible, kind }),
     consumeClientButtonPressed: () => true,
   });
   const def = registry.get('client-button');
   assert.ok(def, 'expected client-button definition');
 
-  const out = def.process({ display: false }, {}, { nodeId: 'button-1', time: 0, deltaTime: 0 });
+  const inputChain = [{ type: 'input', nodeId: 'input-0' }];
+  const out = def.process({ in: inputChain, display: false }, {}, { nodeId: 'button-1', time: 0, deltaTime: 0 });
 
-  assert.deepEqual(out, { pressed: false });
-  assert.deepEqual(displays, [{ nodeId: 'button-1', visible: false, kind: 'button' }]);
+  assert.deepEqual(out, { out: inputChain, pressed: false });
 });
 
-test('client-button consumes a pressed pulse once while visible', () => {
+test('client-button appends to ui chain and consumes a pressed pulse once while visible', () => {
   let pressed = true;
   const registry = buildRegistry({
-    setClientUiDisplay: () => {},
     consumeClientButtonPressed: () => {
       const next = pressed;
       pressed = false;
@@ -50,13 +47,18 @@ test('client-button consumes a pressed pulse once while visible', () => {
   assert.ok(def, 'expected client-button definition');
   const context = { nodeId: 'button-1', time: 0, deltaTime: 0 };
 
-  assert.deepEqual(def.process({ display: true }, {}, context), { pressed: true });
-  assert.deepEqual(def.process({ display: true }, {}, context), { pressed: false });
+  assert.deepEqual(def.process({ in: [], display: true }, {}, context), {
+    out: [{ type: 'button', nodeId: 'button-1' }],
+    pressed: true,
+  });
+  assert.deepEqual(def.process({ in: [], display: true }, {}, context), {
+    out: [{ type: 'button', nodeId: 'button-1' }],
+    pressed: false,
+  });
 });
 
 test('client-input-box outputs submitted content and latches firstInputed', () => {
   const registry = buildRegistry({
-    setClientUiDisplay: () => {},
     getClientUiState: () => ({
       displayed: true,
       pressed: false,
@@ -67,15 +69,17 @@ test('client-input-box outputs submitted content and latches firstInputed', () =
   const def = registry.get('client-input-box');
   assert.ok(def, 'expected client-input-box definition');
 
-  const out = def.process({ display: true }, {}, { nodeId: 'input-1', time: 0, deltaTime: 0 });
+  const out = def.process({ in: [], display: true }, {}, { nodeId: 'input-1', time: 0, deltaTime: 0 });
 
-  assert.deepEqual(out, { inputContent: 'hello client', firstInputed: true });
+  assert.deepEqual(out, {
+    out: [{ type: 'input', nodeId: 'input-1' }],
+    inputContent: 'hello client',
+    firstInputed: true,
+  });
 });
 
-test('client-input-box hides and returns empty outputs when display is false', () => {
-  const displays = [];
+test('client-input-box passes through ui chain and returns empty outputs when display is false', () => {
   const registry = buildRegistry({
-    setClientUiDisplay: (nodeId, visible, kind) => displays.push({ nodeId, visible, kind }),
     getClientUiState: () => ({
       displayed: true,
       pressed: false,
@@ -86,8 +90,24 @@ test('client-input-box hides and returns empty outputs when display is false', (
   const def = registry.get('client-input-box');
   assert.ok(def, 'expected client-input-box definition');
 
-  const out = def.process({ display: false }, {}, { nodeId: 'input-1', time: 0, deltaTime: 0 });
+  const inputChain = [{ type: 'button', nodeId: 'button-0' }];
+  const out = def.process({ in: inputChain, display: false }, {}, { nodeId: 'input-1', time: 0, deltaTime: 0 });
 
-  assert.deepEqual(out, { inputContent: '', firstInputed: false });
-  assert.deepEqual(displays, [{ nodeId: 'input-1', visible: false, kind: 'input' }]);
+  assert.deepEqual(out, { out: inputChain, inputContent: '', firstInputed: false });
+});
+
+test('ui-out sends clientUi commands and clears on disable', () => {
+  const commands = [];
+  const registry = buildRegistry({}, (cmd) => commands.push(cmd));
+  const def = registry.get('ui-out');
+  assert.ok(def, 'expected ui-out definition');
+
+  const items = [{ type: 'button', nodeId: 'button-1' }, { type: 'input', nodeId: 'input-1' }];
+  def.onSink?.({ in: items }, {}, { nodeId: 'ui-out-1', time: 0, deltaTime: 0 });
+  def.onDisable?.({}, {}, { nodeId: 'ui-out-1', time: 0, deltaTime: 0 });
+
+  assert.deepEqual(commands, [
+    { action: 'clientUi', payload: { items } },
+    { action: 'clientUi', payload: { items: [] } },
+  ]);
 });

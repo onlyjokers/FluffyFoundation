@@ -57,6 +57,7 @@ export type ControlAction =
   | 'shutdown'
   | 'visualScenes'
   | 'visualEffects'
+  | 'clientUi'
   | 'setDataReportingRate'
   | 'setSensorState'
   /** Legacy compile compatibility only; runtime validation rejects this retired action. */
@@ -304,6 +305,14 @@ export interface VisualEffectsPayload {
   effects: VisualEffect[];
 }
 
+export type ClientUiLayerItem =
+  | { type: 'button'; nodeId: string }
+  | { type: 'input'; nodeId: string };
+
+export interface ClientUiPayload {
+  items: ClientUiLayerItem[];
+}
+
 /**
  * Data reporting rate configuration
  */
@@ -330,6 +339,7 @@ export type BaseControlPayload =
   | ShowTextPayload
   | VisualScenesPayload
   | VisualEffectsPayload
+  | ClientUiPayload
   | DataReportingRatePayload
   | import('./control-plane.js').ClientControlTransferOffer
   | Record<string, unknown>;

@@ -9,6 +9,10 @@ export type NodeCommand = {
   executeAt?: number;
 };
 
+export type ClientUiLayerItem =
+  | { type: 'button'; nodeId: string }
+  | { type: 'input'; nodeId: string };
+
 export type LatestSensorDataLike = {
   sensorType: SensorType;
   payload: SensorPayload;
@@ -40,7 +44,6 @@ export type ClientUiState = {
 
 export type ClientUiDeps = {
   getClientUiState?: (nodeId: string) => ClientUiState | null;
-  setClientUiDisplay?: (nodeId: string, visible: boolean, kind: ClientUiKind) => void;
   consumeClientButtonPressed?: (nodeId: string) => boolean;
   clearClientUiNode?: (nodeId: string) => void;
   clearClientUi?: () => void;

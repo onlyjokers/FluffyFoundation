@@ -209,6 +209,23 @@ test('validateMessage accepts configured FCT visual scenes', () => {
   assert.equal(isValidMessage(message), true);
 });
 
+test('validateMessage accepts client UI payloads', () => {
+  const message = createControlMessage(
+    createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),
+    { mode: 'clientIds', ids: ['client-1'] },
+    'clientUi',
+    {
+      items: [
+        { type: 'button', nodeId: 'button-1' },
+        { type: 'input', nodeId: 'input-1' },
+      ],
+    }
+  );
+
+  assert.equal(validateMessage(message).ok, true);
+  assert.equal(isValidMessage(message), true);
+});
+
 test('validateMessage accepts box scene color and camera scenes without background controls', () => {
   const message = createControlMessage(
     createCommandEnvelope({ actor: 'manager', role: 'manager', scopeGroupId: 'stage-left' }),

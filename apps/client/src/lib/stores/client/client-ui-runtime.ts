@@ -1,4 +1,5 @@
 // Purpose: Client-side runtime state for ClientUI nodes rendered by the Client app.
+import type { ClientUiPayload } from '@shugu/protocol';
 import { get, writable } from 'svelte/store';
 
 export type ClientUiKind = 'button' | 'input';
@@ -39,14 +40,31 @@ const updateNode = (
 export const clientUiRuntime = {
   subscribe: clientUiNodes.subscribe,
 
+  applyPayload(payload: ClientUiPayload): void {
+    const rawItems = Array.isArray(payload?.items) ? payload.items : [];
+    clientUiNodes.update((prev) => {
+      const next = new Map<string, ClientUiNodeState>(
+        Array.from(prev.entries()).map(([nodeId, state]) => [nodeId, { ...state, displayed: false }])
+      );
+      for (const item of rawItems) {
+        const nodeId = typeof item?.nodeId === 'string' ? item.nodeId.trim() : '';
+        if (!nodeId) continue;
+        if (item.type !== 'button' && item.type !== 'input') continue;
+        const previous = prev.get(nodeId);
+        next.set(nodeId, {
+          ...(previous ?? createDefaultState(item.type)),
+          kind: item.type,
+          displayed: true,
+        });
+      }
+      return next;
+    });
+  },
+
   getClientUiState(nodeId: string): ClientUiNodeState | null {
     const id = String(nodeId ?? '').trim();
     if (!id) return null;
     return get(clientUiNodes).get(id) ?? null;
-  },
-
-  setClientUiDisplay(nodeId: string, visible: boolean, kind: ClientUiKind): void {
-    updateNode(nodeId, kind, (state) => ({ ...state, displayed: Boolean(visible), kind }));
   },
 
   pressButton(nodeId: string): void {

@@ -27,6 +27,7 @@ const VALID_PORT_TYPES = new Set<string>([
   'video',
   'scene',
   'effect',
+  'ui',
   'client',
   'command',
   'fuzzy',
@@ -34,7 +35,7 @@ const VALID_PORT_TYPES = new Set<string>([
   'any',
 ]);
 
-const PATCH_ROOT_TYPES = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out']);
+const PATCH_ROOT_TYPES = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out', 'ui-out']);
 const LOCAL_ONLY_NODE_TYPES = new Set(['load-audio-from-local', 'load-image-from-local', 'load-video-from-local']);
 
 const resolveProxyPortType = (node: NodeInstance): PortType => {

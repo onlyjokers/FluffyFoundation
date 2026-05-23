@@ -211,7 +211,7 @@ export function exportGraphForPatch(
       const portType = String(inPort?.type ?? '');
       // Some port types are explicitly designed to allow "empty chain" semantics when upstream is missing.
       // For these, a disabled chain head should be removed so downstream nodes can still run.
-      return portType === 'scene' || portType === 'effect';
+      return portType === 'scene' || portType === 'effect' || portType === 'ui';
     };
 
     for (const node of keptNodes) {

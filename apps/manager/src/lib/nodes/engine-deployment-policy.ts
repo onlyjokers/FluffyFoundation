@@ -6,8 +6,6 @@ import { capabilityForNodeType, hashString } from './local-loop-detection';
 
 const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'client-object',
-  'client-button',
-  'client-input-box',
   'proc-client-sensors',
   'math',
   'ai-model-ref',
@@ -22,8 +20,6 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'number',
   'string',
   'bool',
-  'client-button',
-  'client-input-box',
   'number-stabilizer',
   'proc-flashlight',
   'proc-screen-color',
@@ -38,7 +34,7 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'play-media',
 ]);
 
-const PATCH_ROOT_TYPES = ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out'] as const;
+const PATCH_ROOT_TYPES = ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out', 'ui-out'] as const;
 const PATCH_ROOT_TYPE_SET = new Set<string>(PATCH_ROOT_TYPES);
 
 const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
@@ -84,6 +80,9 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'scene-fct-track',
   'scene-front-camera',
   'scene-back-camera',
+  // Client UI chain
+  'client-button',
+  'client-input-box',
   'tone-osc',
   'tone-delay',
   'tone-resonator',

@@ -10,7 +10,7 @@ import {
 describe('clientUiRuntime', () => {
   it('consumes button presses as one-shot pulses', () => {
     resetClientUiRuntime();
-    clientUiRuntime.setClientUiDisplay('button-1', true, 'button');
+    clientUiRuntime.applyPayload({ items: [{ type: 'button', nodeId: 'button-1' }] });
     clientUiRuntime.pressButton('button-1');
 
     assert.equal(clientUiRuntime.consumeClientButtonPressed('button-1'), true);
@@ -19,7 +19,7 @@ describe('clientUiRuntime', () => {
 
   it('latches firstInputed when input content is submitted', () => {
     resetClientUiRuntime();
-    clientUiRuntime.setClientUiDisplay('input-1', true, 'input');
+    clientUiRuntime.applyPayload({ items: [{ type: 'input', nodeId: 'input-1' }] });
     clientUiRuntime.submitInput('input-1', 'hello');
 
     assert.deepEqual(clientUiRuntime.getClientUiState('input-1'), {
@@ -33,11 +33,24 @@ describe('clientUiRuntime', () => {
 
   it('clears hidden or removed nodes from the render snapshot', () => {
     resetClientUiRuntime();
-    clientUiRuntime.setClientUiDisplay('button-1', true, 'button');
-    clientUiRuntime.setClientUiDisplay('input-1', true, 'input');
-    clientUiRuntime.setClientUiDisplay('button-1', false, 'button');
-    clientUiRuntime.clearClientUiNode('input-1');
+    clientUiRuntime.applyPayload({
+      items: [
+        { type: 'button', nodeId: 'button-1' },
+        { type: 'input', nodeId: 'input-1' },
+      ],
+    });
+    clientUiRuntime.applyPayload({ items: [] });
 
     assert.deepEqual(getClientUiSnapshot(), []);
+  });
+
+  it('keeps submitted input state when the same input remains in the next payload', () => {
+    resetClientUiRuntime();
+    clientUiRuntime.applyPayload({ items: [{ type: 'input', nodeId: 'input-1' }] });
+    clientUiRuntime.submitInput('input-1', 'hello');
+    clientUiRuntime.applyPayload({ items: [{ type: 'input', nodeId: 'input-1' }] });
+
+    assert.equal(clientUiRuntime.getClientUiState('input-1')?.inputContent, 'hello');
+    assert.equal(clientUiRuntime.getClientUiState('input-1')?.firstInputed, true);
   });
 });

@@ -16,6 +16,7 @@ export type PortType =
   | 'video'
   | 'scene'
   | 'effect'
+  | 'ui'
   | 'client'
   | 'command'
   | 'fuzzy'

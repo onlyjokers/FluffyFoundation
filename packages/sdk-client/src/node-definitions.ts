@@ -4,6 +4,7 @@ export {
   type ClientObjectDeps,
   type ClientUiDeps,
   type ClientUiKind,
+  type ClientUiLayerItem,
   type ClientUiState,
   type ClientSensorMessage,
   type LatestSensorDataLike,

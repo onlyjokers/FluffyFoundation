@@ -48,8 +48,18 @@ function deployGraph(executor: NodeExecutor): void {
             inputValues: { display: true },
             outputValues: {},
           },
+          {
+            id: 'ui-out-1',
+            type: 'ui-out',
+            position: { x: 120, y: 0 },
+            config: {},
+            inputValues: {},
+            outputValues: {},
+          },
         ],
-        connections: [],
+        connections: [
+          { id: 'c1', sourceNodeId: 'button-1', sourcePortId: 'out', targetNodeId: 'ui-out-1', targetPortId: 'in' },
+        ],
       },
       meta: { loopId: 'loop-client-ui', tickIntervalMs: 33 },
     }),
@@ -58,14 +68,11 @@ function deployGraph(executor: NodeExecutor): void {
 
 describe('NodeExecutor ClientUI wiring', () => {
   function createOptions(
-    displays: Array<{ nodeId: string; visible: boolean; kind: string }>,
     cleared: string[],
     maxTickDurationMs = 200
   ): NodeExecutorOptions {
     return {
       clientUi: {
-        setClientUiDisplay: (nodeId: string, visible: boolean, kind: 'button' | 'input') =>
-          displays.push({ nodeId, visible, kind }),
         getClientUiState: () => ({ displayed: true, pressed: false, inputContent: '', firstInputed: false }),
         consumeClientButtonPressed: () => false,
         clearClientUiNode: (nodeId: string) => cleared.push(nodeId),
@@ -80,27 +87,21 @@ describe('NodeExecutor ClientUI wiring', () => {
     };
   }
 
-  it('registers ClientUI deps and clears rendered UI on stop and remove', async () => {
-    const displays: Array<{ nodeId: string; visible: boolean; kind: string }> = [];
+  it('registers ClientUI deps and clears rendered UI on stop and remove', () => {
     const cleared: string[] = [];
-    const options = createOptions(displays, cleared);
+    const options = createOptions(cleared);
     const executor = new NodeExecutor(createSdk() as never, () => {}, options);
 
     try {
       deployGraph(executor);
-      await waitFor(() =>
-        displays.some((entry) => entry.nodeId === 'button-1' && entry.kind === 'button')
-      );
       executor.handlePluginControl(pluginMessage('stop', { loopId: 'loop-client-ui' }));
 
       assert.equal(cleared.includes('*'), true);
 
       cleared.length = 0;
       deployGraph(executor);
-      await waitFor(() => cleared.length === 0 && displays.length >= 2);
       executor.handlePluginControl(pluginMessage('remove', { loopId: 'loop-client-ui' }));
 
-      assert.equal(displays.some((entry) => entry.nodeId === 'button-1' && entry.kind === 'button'), true);
       assert.equal(cleared.includes('*'), true);
     } finally {
       executor.destroy();
@@ -108,9 +109,8 @@ describe('NodeExecutor ClientUI wiring', () => {
   });
 
   it('clears rendered UI when the runtime watchdog stops execution', async () => {
-    const displays: Array<{ nodeId: string; visible: boolean; kind: string }> = [];
     const cleared: string[] = [];
-    const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(displays, cleared, 0));
+    const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(cleared, 0));
 
     try {
       deployGraph(executor);
@@ -124,15 +124,11 @@ describe('NodeExecutor ClientUI wiring', () => {
   });
 
   it('clears ClientUI nodes removed by graph changes', async () => {
-    const displays: Array<{ nodeId: string; visible: boolean; kind: string }> = [];
     const cleared: string[] = [];
-    const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(displays, cleared));
+    const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(cleared));
 
     try {
       deployGraph(executor);
-      await waitFor(() =>
-        displays.some((entry) => entry.nodeId === 'button-1' && entry.kind === 'button')
-      );
       executor.handlePluginControl(
         pluginMessage('graph-changes', {
           changes: [{ type: 'remove-node', nodeId: 'button-1' }],

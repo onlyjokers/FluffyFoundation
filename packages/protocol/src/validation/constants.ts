@@ -21,6 +21,7 @@ export const CONTROL_ACTIONS = [
   'shutdown',
   'visualScenes',
   'visualEffects',
+  'clientUi',
   'setDataReportingRate',
   'setSensorState',
   'custom',

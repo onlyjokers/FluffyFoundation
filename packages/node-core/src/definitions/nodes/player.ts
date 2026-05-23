@@ -15,7 +15,7 @@ import type {
 import { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
-import type { ClientObjectDeps, NodeCommand } from '../types.js';
+import type { ClientObjectDeps, ClientUiLayerItem, NodeCommand } from '../types.js';
 import { clampInt, clampNumber, coerceBooleanOr, coerceNumber } from '../utils.js';
 import {
   asRecord,
@@ -384,6 +384,46 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
     },
     onDisable: () => {
       clear();
+    },
+  };
+}
+
+export function createUiOutNode(deps: ClientObjectDeps): NodeDefinition {
+  const coerceUiChain = (raw: unknown): ClientUiLayerItem[] => {
+    if (!Array.isArray(raw)) return [];
+    const items: ClientUiLayerItem[] = [];
+    for (const item of raw.slice(0, 24)) {
+      const record = asRecord(item);
+      if (!record) continue;
+      const nodeId = getStringValue(record.nodeId);
+      if (!nodeId) continue;
+      const type = getStringValue(record.type);
+      if (type === 'button') items.push({ type: 'button', nodeId });
+      if (type === 'input') items.push({ type: 'input', nodeId });
+    }
+    return items;
+  };
+
+  const send = (items: ClientUiLayerItem[]) => {
+    deps.executeCommand({ action: 'clientUi', payload: { items } });
+  };
+
+  return {
+    type: 'ui-out',
+    label: 'Static UI Player',
+    category: 'Player',
+    inputs: [{ id: 'in', label: 'In', type: 'ui', kind: 'sink' }],
+    outputs: [
+      // Manager-only routing: connect to `client-object(in)` to route the UI command to clients.
+      { id: 'cmd', label: 'Deploy', type: 'command' },
+    ],
+    configSchema: [],
+    process: () => ({}),
+    onSink: (inputs) => {
+      send(coerceUiChain(inputs.in));
+    },
+    onDisable: () => {
+      send([]);
     },
   };
 }

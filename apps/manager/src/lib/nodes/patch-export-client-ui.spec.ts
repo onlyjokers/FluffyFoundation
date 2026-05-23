@@ -22,22 +22,16 @@ registerDefaultNodeDefinitions(registry, {
   executeCommand: () => {},
 });
 
-test('exportGraphForPatch includes ClientUI nodes when they feed a patch root', () => {
+test('exportGraphForPatch includes ClientUI chain nodes when they feed ui-out patch root', () => {
   const graph: GraphState = {
     nodes: [
       node('button', 'client-button', { display: true }),
-      node('gate', 'logic-if'),
-      node('value-a', 'number', { value: 1 }),
-      node('value-b', 'number', { value: 0 }),
-      node('scale', 'img-scale'),
-      node('out', 'image-out'),
+      node('input', 'client-input-box', { display: true }),
+      node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'c1', sourceNodeId: 'button', sourcePortId: 'pressed', targetNodeId: 'gate', targetPortId: 'condition' },
-      { id: 'c2', sourceNodeId: 'value-a', sourcePortId: 'value', targetNodeId: 'gate', targetPortId: 'whenTrue' },
-      { id: 'c3', sourceNodeId: 'value-b', sourcePortId: 'value', targetNodeId: 'gate', targetPortId: 'whenFalse' },
-      { id: 'c4', sourceNodeId: 'gate', sourcePortId: 'out', targetNodeId: 'scale', targetPortId: 'scale' },
-      { id: 'c5', sourceNodeId: 'scale', sourcePortId: 'image', targetNodeId: 'out', targetPortId: 'image' },
+      { id: 'c1', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'input', targetPortId: 'in' },
+      { id: 'c2', sourceNodeId: 'input', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
     ],
   };
 
@@ -45,6 +39,6 @@ test('exportGraphForPatch includes ClientUI nodes when they feed a patch root', 
 
   assert.deepEqual(
     result.graph.nodes.map((item) => item.type).sort(),
-    ['client-button', 'image-out', 'img-scale', 'logic-if', 'number', 'number'].sort()
+    ['client-button', 'client-input-box', 'ui-out'].sort()
   );
 });

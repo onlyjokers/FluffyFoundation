@@ -1,0 +1,9 @@
+{
+  "__purpose": "Manager UI overlay for the Static UI Player node that routes ClientUI chains to Client command sinks.",
+  "type": "ui-out",
+  "label": "Static UI Player",
+  "category": "Player",
+  "inputs": [{ "id": "in", "label": "In", "type": "ui", "kind": "sink" }],
+  "outputs": [{ "id": "cmd", "label": "Deploy", "type": "command" }],
+  "configSchema": []
+}

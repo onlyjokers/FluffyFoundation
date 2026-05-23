@@ -3,7 +3,13 @@
   "type": "client-button",
   "label": "Client Button",
   "category": "ClientUI",
-  "inputs": [{ "id": "display", "label": "Display", "type": "boolean" }],
-  "outputs": [{ "id": "pressed", "label": "Pressed", "type": "boolean" }],
+  "inputs": [
+    { "id": "in", "label": "In", "type": "ui" },
+    { "id": "display", "label": "Display", "type": "boolean" }
+  ],
+  "outputs": [
+    { "id": "out", "label": "Out", "type": "ui" },
+    { "id": "pressed", "label": "Pressed", "type": "boolean" }
+  ],
   "configSchema": []
 }

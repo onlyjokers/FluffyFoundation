@@ -81,6 +81,9 @@ function validateControlPayload(action: unknown, payload: unknown, ctx: MutableV
     case 'visualEffects':
       validateVisualEffects(payload, ctx, path);
       break;
+    case 'clientUi':
+      validateClientUi(payload, ctx, path);
+      break;
   }
 }
 
@@ -153,6 +156,23 @@ function validateVisualScenes(payload: ObjectRecord, ctx: MutableValidationConte
       return;
     }
     addReason(ctx, 'protocol.field.invalid', 'message.control.payload.scenes', `${path}.scenes[${index}].type`, `${path}.scenes[${index}].type is unsupported`);
+  });
+}
+
+function validateClientUi(payload: ObjectRecord, ctx: MutableValidationContext, path: string): void {
+  if (!Array.isArray(payload.items)) {
+    addReason(ctx, fieldCode(payload, 'items'), 'message.control.payload.items', `${path}.items`, `${path}.items must be an array`);
+    return;
+  }
+  payload.items.forEach((item, index) => {
+    if (!isRecord(item)) {
+      addReason(ctx, 'protocol.field.invalid', 'message.control.payload.items', `${path}.items[${index}]`, `${path}.items[${index}] must be an object`);
+      return;
+    }
+    if (!isOneOf(item.type, ['button', 'input'] as const)) {
+      addReason(ctx, fieldCode(item, 'type'), 'message.control.payload.items.type', `${path}.items[${index}].type`, `${path}.items[${index}].type is unsupported`);
+    }
+    requireNonEmptyString(item, ctx, 'nodeId', 'message.control.payload.items.nodeId', `${path}.items[${index}].nodeId`);
   });
 }
 

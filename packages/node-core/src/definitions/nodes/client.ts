@@ -4,7 +4,13 @@
 import type { ClientPermissionName, ClientPermissions, ControlAction, ControlPayload } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
-import type { ClientObject, ClientObjectDeps, ClientSensorMessage, NodeCommand } from '../types.js';
+import type {
+  ClientObject,
+  ClientObjectDeps,
+  ClientSensorMessage,
+  ClientUiLayerItem,
+  NodeCommand,
+} from '../types.js';
 import { selectClientIdsForNode } from '../client-selection.js';
 import {
   asRecord,
@@ -46,6 +52,21 @@ function selectedPermissionKeys(config: Record<string, unknown>): ClientPermissi
 
 function hasGrantedPermission(permissions: ClientPermissions | null | undefined, key: ClientPermissionName): boolean {
   return permissions?.[key] === 'granted';
+}
+
+function coerceUiChain(raw: unknown): ClientUiLayerItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ClientUiLayerItem[] = [];
+  for (const item of raw) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const nodeId = getStringValue(record.nodeId);
+    if (!nodeId) continue;
+    const type = getStringValue(record.type);
+    if (type === 'button') out.push({ type: 'button', nodeId });
+    if (type === 'input') out.push({ type: 'input', nodeId });
+  }
+  return out;
 }
 
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
@@ -153,14 +174,23 @@ export function createClientButtonNode(deps: ClientObjectDeps): NodeDefinition {
       risks: [],
       repairHints: ['Verify the Display input is true if the button is not visible.'],
     },
-    inputs: [{ id: 'display', label: 'Display', type: 'boolean', defaultValue: true }],
-    outputs: [{ id: 'pressed', label: 'Pressed', type: 'boolean' }],
+    inputs: [
+      { id: 'in', label: 'In', type: 'ui' },
+      { id: 'display', label: 'Display', type: 'boolean', defaultValue: true },
+    ],
+    outputs: [
+      { id: 'out', label: 'Out', type: 'ui' },
+      { id: 'pressed', label: 'Pressed', type: 'boolean' },
+    ],
     configSchema: [],
     process: (inputs, _config, context) => {
       const display = getBooleanValue(inputs.display) ?? true;
-      deps.clientUi?.setClientUiDisplay?.(context.nodeId, display, 'button');
-      if (!display) return { pressed: false };
-      return { pressed: deps.clientUi?.consumeClientButtonPressed?.(context.nodeId) ?? false };
+      const chain = coerceUiChain(inputs.in);
+      if (!display) return { out: chain, pressed: false };
+      return {
+        out: [...chain, { type: 'button', nodeId: context.nodeId }],
+        pressed: deps.clientUi?.consumeClientButtonPressed?.(context.nodeId) ?? false,
+      };
     },
     onDisable: (_inputs, _config, context) => {
       deps.clientUi?.clearClientUiNode?.(context.nodeId);
@@ -195,18 +225,23 @@ export function createClientInputBoxNode(deps: ClientObjectDeps): NodeDefinition
       risks: [],
       repairHints: ['Verify the Display input is true if the input box is not visible.'],
     },
-    inputs: [{ id: 'display', label: 'Display', type: 'boolean', defaultValue: true }],
+    inputs: [
+      { id: 'in', label: 'In', type: 'ui' },
+      { id: 'display', label: 'Display', type: 'boolean', defaultValue: true },
+    ],
     outputs: [
+      { id: 'out', label: 'Out', type: 'ui' },
       { id: 'inputContent', label: 'Input Content', type: 'string' },
       { id: 'firstInputed', label: 'First Inputed', type: 'boolean' },
     ],
     configSchema: [],
     process: (inputs, _config, context) => {
       const display = getBooleanValue(inputs.display) ?? true;
-      deps.clientUi?.setClientUiDisplay?.(context.nodeId, display, 'input');
-      if (!display) return { inputContent: '', firstInputed: false };
+      const chain = coerceUiChain(inputs.in);
+      if (!display) return { out: chain, inputContent: '', firstInputed: false };
       const state = deps.clientUi?.getClientUiState?.(context.nodeId) ?? null;
       return {
+        out: [...chain, { type: 'input', nodeId: context.nodeId }],
         inputContent: typeof state?.inputContent === 'string' ? state.inputContent : '',
         firstInputed: Boolean(state?.firstInputed),
       };

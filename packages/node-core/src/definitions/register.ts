@@ -75,6 +75,7 @@ import {
   createImageOutNode,
   createPlayMediaNode,
   createSceneOutNode,
+  createUiOutNode,
   createVideoOutNode,
 } from './nodes/player.js';
 import {
@@ -167,6 +168,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     () => createVideoOutNode(deps),
     () => createEffectOutNode(deps),
     () => createSceneOutNode(deps),
+    () => createUiOutNode(deps),
     createFlashlightProcessorNode,
     createShowImageProcessorNode,
     createPushImageUploadNode,
