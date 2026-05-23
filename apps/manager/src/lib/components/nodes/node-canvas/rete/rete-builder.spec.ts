@@ -633,6 +633,183 @@ test('select config control can be switched back to its initial value', () => {
   ]);
 });
 
+test('color input control can be switched back to its initial value', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-box',
+    label: 'Scene Box',
+    category: 'Scene',
+    inputs: [{ id: 'color', label: 'Color', type: 'color' }],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const inputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-box',
+        config: {},
+        inputValues: { color: '#ff0000' },
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      string: new ClassicPreset.Socket('string'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-box',
+    config: {},
+    inputValues: { color: '#ff0000' },
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const control = node.inputs.color?.control as { setValue(value: string): void };
+  control.setValue('#00ff00');
+  control.setValue('#ff0000');
+
+  assert.deepEqual(inputs, [
+    { nodeId: 'scene-1', patch: { color: '#00ff00' } },
+    { nodeId: 'scene-1', patch: { color: '#ff0000' } },
+  ]);
+});
+
+test('non-select config controls can be switched back to their initial values', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'control-node',
+    label: 'Control Node',
+    category: 'Values',
+    inputs: [],
+    outputs: [],
+    configSchema: [
+      { key: 'gain', label: 'Gain', type: 'number', defaultValue: 1, min: 0, max: 2, step: 0.1 },
+      { key: 'clientId', label: 'Client', type: 'client-picker', defaultValue: '' },
+      { key: 'asset', label: 'Asset', type: 'asset-picker', defaultValue: '' },
+      { key: 'localAsset', label: 'Local Asset', type: 'local-asset-picker', defaultValue: '' },
+      { key: 'paramPath', label: 'Param Path', type: 'param-path', defaultValue: '' },
+      { key: 'file', label: 'File', type: 'file', defaultValue: '' },
+      { key: 'textValue', label: 'Text Value', type: 'string', defaultValue: '' },
+    ],
+    process: () => ({}),
+  });
+  const configUpdates: unknown[] = [];
+  const params: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'control-1',
+        type: 'control-node',
+        config: {
+          gain: 1,
+          clientId: '',
+          asset: '',
+          localAsset: '',
+          paramPath: '',
+          file: '',
+          textValue: '',
+        },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (nodeId, patch) => configUpdates.push({ nodeId, patch }),
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+    },
+    getNumberParamOptions: () => [{ path: 'osc.freq', label: 'Osc Freq' }],
+    sendNodeOverride: () => {},
+    sendSemanticNodeParams: (nodeId, patch) => {
+      params.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'control-1',
+    type: 'control-node',
+    config: {
+      gain: 1,
+      clientId: '',
+      asset: '',
+      localAsset: '',
+      paramPath: '',
+      file: '',
+      textValue: '',
+    },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  (node.controls.gain as { setValue(value: number): void }).setValue(1.5);
+  (node.controls.gain as { setValue(value: number): void }).setValue(1);
+  (node.controls.clientId as { setValue(value: string): void }).setValue('client-a');
+  (node.controls.clientId as { setValue(value: string): void }).setValue('');
+  (node.controls.asset as { setValue(value: string): void }).setValue('asset-a');
+  (node.controls.asset as { setValue(value: string): void }).setValue('');
+  (node.controls.localAsset as { setValue(value: string): void }).setValue('local-a');
+  (node.controls.localAsset as { setValue(value: string): void }).setValue('');
+  (node.controls.paramPath as { setValue(value: string): void }).setValue('osc.freq');
+  (node.controls.paramPath as { setValue(value: string): void }).setValue('');
+  (node.controls.file as { setValue(value: string): void }).setValue('/tmp/demo.txt');
+  (node.controls.file as { setValue(value: string): void }).setValue('');
+  (node.controls.textValue as { setValue(value: string): void }).setValue('hello');
+  (node.controls.textValue as { setValue(value: string): void }).setValue('');
+
+  assert.deepEqual(configUpdates, [
+    { nodeId: 'control-1', patch: { gain: 1.5 } },
+    { nodeId: 'control-1', patch: { gain: 1 } },
+    { nodeId: 'control-1', patch: { clientId: 'client-a' } },
+    { nodeId: 'control-1', patch: { clientId: '' } },
+    { nodeId: 'control-1', patch: { asset: 'asset-a' } },
+    { nodeId: 'control-1', patch: { asset: '' } },
+    { nodeId: 'control-1', patch: { localAsset: 'local-a' } },
+    { nodeId: 'control-1', patch: { localAsset: '' } },
+    { nodeId: 'control-1', patch: { paramPath: 'osc.freq' } },
+    { nodeId: 'control-1', patch: { paramPath: '' } },
+    { nodeId: 'control-1', patch: { file: '/tmp/demo.txt' } },
+    { nodeId: 'control-1', patch: { file: '' } },
+    { nodeId: 'control-1', patch: { textValue: 'hello' } },
+    { nodeId: 'control-1', patch: { textValue: '' } },
+  ]);
+  assert.deepEqual(params, [
+    { nodeId: 'control-1', patch: { gain: 1.5 } },
+    { nodeId: 'control-1', patch: { gain: 1 } },
+    { nodeId: 'control-1', patch: { clientId: 'client-a' } },
+    { nodeId: 'control-1', patch: { clientId: '' } },
+    { nodeId: 'control-1', patch: { asset: 'asset-a' } },
+    { nodeId: 'control-1', patch: { asset: '' } },
+    { nodeId: 'control-1', patch: { localAsset: 'local-a' } },
+    { nodeId: 'control-1', patch: { localAsset: '' } },
+    { nodeId: 'control-1', patch: { paramPath: 'osc.freq' } },
+    { nodeId: 'control-1', patch: { paramPath: '' } },
+    { nodeId: 'control-1', patch: { file: '/tmp/demo.txt' } },
+    { nodeId: 'control-1', patch: { file: '' } },
+    { nodeId: 'control-1', patch: { textValue: 'hello' } },
+    { nodeId: 'control-1', patch: { textValue: '' } },
+  ]);
+});
+
 test('inline select config-backed input can be switched back to its initial value', () => {
   const nodeRegistry = new NodeRegistry();
   nodeRegistry.register({
@@ -699,6 +876,67 @@ test('inline select config-backed input can be switched back to its initial valu
   assert.deepEqual(inputs, [
     { nodeId: 'scene-1', patch: { audioSource: 'playback' } },
     { nodeId: 'scene-1', patch: { audioSource: 'microphone' } },
+  ]);
+});
+
+test('note text control can be switched back to its initial value', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'note',
+    label: 'Note',
+    category: 'Values',
+    inputs: [],
+    outputs: [],
+    configSchema: [{ key: 'text', label: 'Text', type: 'string', defaultValue: 'hello' }],
+    process: () => ({}),
+  });
+  const configUpdates: unknown[] = [];
+  const params: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'note-1',
+        type: 'note',
+        config: { text: 'hello' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (nodeId, patch) => configUpdates.push({ nodeId, patch }),
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeParams: (nodeId, patch) => {
+      params.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'note-1',
+    type: 'note',
+    config: { text: 'hello' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const control = node.controls.text as { setValue(value: string): void };
+  control.setValue('bye');
+  control.setValue('hello');
+
+  assert.deepEqual(configUpdates, [
+    { nodeId: 'note-1', patch: { text: 'bye' } },
+    { nodeId: 'note-1', patch: { text: 'hello' } },
+  ]);
+  assert.deepEqual(params, [
+    { nodeId: 'note-1', patch: { text: 'bye' } },
+    { nodeId: 'note-1', patch: { text: 'hello' } },
   ]);
 });
 

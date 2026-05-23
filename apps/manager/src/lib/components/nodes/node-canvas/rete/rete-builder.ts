@@ -112,6 +112,16 @@ export type ReteBuilder = {
 export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   const { nodeRegistry, nodeEngine, sockets, sendNodeOverride, getNumberParamOptions } = opts;
 
+  const createLastCommittedTracker = <T>(initial: T) => {
+    let lastValue = initial;
+    return {
+      shouldSkip: (value: T) => value === lastValue,
+      accept: (value: T) => {
+        lastValue = value;
+      },
+    };
+  };
+
   const notifyNodeActivity = (nodeId: string, portId: string) => {
     opts.onNodeActivity?.(nodeId, portId);
   };
@@ -372,13 +382,15 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             : typeof instance.config?.[input.id] === 'string'
               ? String(instance.config[input.id])
               : String(derivedDefault ?? '#ffffff');
+        const tracker = createLastCommittedTracker(initial);
         inp.addControl(
           (() => {
             const control = new ClassicPreset.InputControl('text', {
               initial,
               change: (value) => {
-                if (value === initial) return;
-                commitInputValue(input.id, value);
+                if (tracker.shouldSkip(value)) return;
+                const accepted = commitInputValue(input.id, value);
+                if (accepted) tracker.accept(value);
               },
             });
             withControlMeta(control, { inline: true });
@@ -504,14 +516,15 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           if (typeof max === 'number' && Number.isFinite(max)) next = Math.min(max, next);
           return next;
         };
+        let lastValue = clamp(Number(current ?? 0));
 
         const control = new ClassicPreset.InputControl('number', {
-          initial: clamp(Number(current ?? 0)),
+          initial: lastValue,
           change: (value) => {
-            const initialValue = clamp(Number(current ?? 0));
-            if (value === initialValue) return;
             const next = typeof value === 'number' ? clamp(value) : value;
-            commitConfigValue(key, next);
+            if (next === lastValue) return;
+            const accepted = commitConfigValue(key, next);
+            if (accepted && typeof next === 'number') lastValue = next;
           },
         });
         withControlMeta(control, {
@@ -522,48 +535,50 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         });
         node.addControl(key, control);
       } else if (field.type === 'client-picker') {
+        const tracker = createLastCommittedTracker(String(current ?? ''));
         const control = new ClientPickerControl({
           label: field.label,
           initial: String(current ?? ''),
           change: (value) => {
-            if (value === String(current ?? '')) return;
-            if (isEditorProjection) {
-              commitConfigValue(key, value);
-              return;
-            }
-            nodeEngine.updateNodeConfig(instance.id, { [key]: value });
-            opts.sendSemanticNodeParams?.(instance.id, { [key]: value });
-            if (instance.type === 'client-loader') {
+            if (tracker.shouldSkip(value)) return;
+            const accepted = commitConfigValue(key, value);
+            if (!accepted) return;
+            tracker.accept(value);
+            if (!isEditorProjection && instance.type === 'client-loader') {
               opts.onClientNodePick?.(instance.id, value);
             }
-            notifyNodeActivity(instance.id, key);
           },
         });
         withControlMeta(control, { nodeId: instance.id, nodeType: instance.type });
         node.addControl(key, control);
       } else if (field.type === 'asset-picker') {
+        const tracker = createLastCommittedTracker(String(current ?? ''));
         const control = new AssetPickerControl({
           label: field.label,
           initial: String(current ?? ''),
           assetKind: assetKindFromField(field),
           change: (value) => {
-            if (value === String(current ?? '')) return;
-            commitConfigValue(key, value);
+            if (tracker.shouldSkip(value)) return;
+            const accepted = commitConfigValue(key, value);
+            if (accepted) tracker.accept(value);
           },
         });
         node.addControl(key, control);
       } else if (field.type === 'local-asset-picker') {
+        const tracker = createLastCommittedTracker(String(current ?? ''));
         const control = new LocalAssetPickerControl({
           label: field.label,
           initial: String(current ?? ''),
           assetKind: assetKindFromField(field),
           change: (value) => {
-            if (value === String(current ?? '')) return;
-            commitConfigValue(key, value);
+            if (tracker.shouldSkip(value)) return;
+            const accepted = commitConfigValue(key, value);
+            if (accepted) tracker.accept(value);
           },
         });
         node.addControl(key, control);
       } else if (field.type === 'param-path') {
+        const tracker = createLastCommittedTracker(String(current ?? ''));
         node.addControl(
           key,
           new SelectControl({
@@ -575,12 +590,14 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               label: `${p.label} (${p.path})`,
             })),
             change: (value) => {
-              if (value === String(current ?? '')) return;
-              commitConfigValue(key, value);
+              if (tracker.shouldSkip(value)) return;
+              const accepted = commitConfigValue(key, value);
+              if (accepted) tracker.accept(value);
             },
           })
         );
       } else if (field.type === 'file') {
+        const tracker = createLastCommittedTracker(typeof current === 'string' ? current : '');
         node.addControl(
           key,
           new FilePickerControl({
@@ -589,8 +606,9 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             accept: field.accept,
             buttonLabel: field.buttonLabel,
             change: (value) => {
-              if (value === current) return;
-              commitConfigValue(key, value);
+              if (tracker.shouldSkip(value)) return;
+              const accepted = commitConfigValue(key, value);
+              if (accepted) tracker.accept(value);
             },
           })
         );
@@ -659,23 +677,26 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         withControlMeta(curveControl, { nodeId: instance.id, nodeType: instance.type });
         node.addControl(key, curveControl);
       } else if (instance.type === 'note' && key === 'text') {
+        const tracker = createLastCommittedTracker(typeof current === 'string' ? current : String(current ?? ''));
         const noteControl = new NoteControl({
           placeholder: 'Type a note…',
           initial: typeof current === 'string' ? current : String(current ?? ''),
           change: (value) => {
-            const initialValue = typeof current === 'string' ? current : String(current ?? '');
-            if (value === initialValue) return;
-            commitConfigValue(key, value);
+            if (tracker.shouldSkip(value)) return;
+            const accepted = commitConfigValue(key, value);
+            if (accepted) tracker.accept(value);
           },
         });
         noteControl.nodeId = instance.id;
         node.addControl(key, noteControl);
       } else {
+        const tracker = createLastCommittedTracker(String(current ?? ''));
         const control = new ClassicPreset.InputControl('text', {
           initial: String(current ?? ''),
           change: (value) => {
-            if (value === String(current ?? '')) return;
-            commitConfigValue(key, value);
+            if (tracker.shouldSkip(value)) return;
+            const accepted = commitConfigValue(key, value);
+            if (accepted) tracker.accept(value);
           },
         });
         withControlMeta(control, { controlLabel: field.label });
