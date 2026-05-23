@@ -37,8 +37,7 @@ export type SendDisplayNodeCommandOptions = ResolveDisplayNodeTargetsOptions & {
 };
 
 type DisplayRouteState = {
-  ids: string[];
-  action: ControlAction;
+  activeByAction: Map<ControlAction, string[]>;
 };
 
 const displayRouteStateByNode = new Map<string, DisplayRouteState>();
@@ -154,6 +153,10 @@ function cleanupActionFor(action: ControlAction): { action: ControlAction; paylo
       return { action: 'stopMedia', payload: {} };
     case 'screenColor':
       return { action: 'screenColor', payload: { color: '#000000', opacity: 0, mode: 'solid' } };
+    case 'visualScenes':
+      return { action: 'visualScenes', payload: { scenes: [] } };
+    case 'visualEffects':
+      return { action: 'visualEffects', payload: { effects: [] } };
     default:
       return null;
   }
@@ -176,6 +179,30 @@ function sendDisplayOperationToId(
   );
 }
 
+function cleanupRouteState(
+  options: SendDisplayNodeCommandOptions,
+  previous: DisplayRouteState | undefined,
+  keepIds: Set<string>
+): void {
+  if (!previous) return;
+
+  for (const [action, ids] of previous.activeByAction.entries()) {
+    const cleanup = cleanupActionFor(action);
+    const kept = ids.filter((displayId) => keepIds.has(displayId));
+    if (!cleanup) continue;
+    ids
+      .filter((displayId) => !keepIds.has(displayId))
+      .forEach((displayId, index) =>
+        sendDisplayOperationToId(options, displayId, cleanup.action, cleanup.payload, index)
+      );
+    if (kept.length > 0) {
+      previous.activeByAction.set(action, kept);
+    } else {
+      previous.activeByAction.delete(action);
+    }
+  }
+}
+
 export function resetDisplayNodeRouteStateForTests(): void {
   displayRouteStateByNode.clear();
 }
@@ -187,29 +214,32 @@ export function sendDisplayNodeCommand(options: SendDisplayNodeCommandOptions): 
 } {
   const resolved = resolveDisplayNodeTargets(options);
   if (resolved.explicit) {
-    if (!options.sendDisplayOperation || resolved.ids.length === 0) {
+    if (!options.sendDisplayOperation) {
       return { route: 'none', explicit: true, ids: resolved.ids };
     }
 
     const previous = displayRouteStateByNode.get(options.nodeId);
-    const cleanup = previous ? cleanupActionFor(previous.action) : null;
-    if (previous && cleanup) {
-      const nextIds = new Set(resolved.ids);
-      previous.ids
-        .filter((displayId) => !nextIds.has(displayId))
-        .forEach((displayId, index) =>
-          sendDisplayOperationToId(options, displayId, cleanup.action, cleanup.payload, index)
-        );
+    if (resolved.ids.length === 0) {
+      cleanupRouteState(options, previous, new Set());
+      displayRouteStateByNode.delete(options.nodeId);
+      return { route: 'none', explicit: true, ids: resolved.ids };
     }
+
+    const nextIds = new Set(resolved.ids);
+    cleanupRouteState(options, previous, nextIds);
 
     resolved.ids.forEach((displayId, index) => {
       sendDisplayOperationToId(options, displayId, options.action, options.payload, index);
     });
-    displayRouteStateByNode.set(options.nodeId, { ids: resolved.ids, action: options.action });
+    const nextState: DisplayRouteState = previous ?? { activeByAction: new Map() };
+    nextState.activeByAction.set(options.action, resolved.ids);
+    displayRouteStateByNode.set(options.nodeId, nextState);
 
     return { route: 'remote', explicit: true, ids: resolved.ids };
   }
 
+  const previous = displayRouteStateByNode.get(options.nodeId);
+  cleanupRouteState(options, previous, new Set());
   displayRouteStateByNode.delete(options.nodeId);
   options.sendLocalControl(options.action, options.payload, options.executeAt);
   return { route: 'local', explicit: false, ids: resolved.ids };

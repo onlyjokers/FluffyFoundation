@@ -201,3 +201,129 @@ test('sendDisplayNodeCommand clears displays removed from an explicit showText r
     ]
   );
 });
+
+test('sendDisplayNodeCommand clears each long-lived Display action when the route moves', () => {
+  resetDisplayNodeRouteStateForTests();
+  const emitted: Array<{ action?: string; payload?: unknown; target?: { displayId?: string } }> = [];
+
+  const base = {
+    nodeId: 'display-node',
+    clients,
+    graph: { connections: [] },
+    sendLocalControl: () => emitted.push({ action: 'local' }),
+    sendDisplayOperation: (operation: (typeof emitted)[number]) => emitted.push(operation),
+  };
+
+  sendDisplayNodeCommand({
+    ...base,
+    action: 'visualScenes',
+    payload: { scenes: [{ type: 'box', color: '#ffffff' }] },
+    node: { inputValues: { index: 1, range: 1, random: false } },
+    computedInputs: { index: 1, range: 1, random: false },
+  });
+
+  sendDisplayNodeCommand({
+    ...base,
+    action: 'visualEffects',
+    payload: { effects: [{ type: 'ascii', cellSize: 11 }] },
+    node: { inputValues: { index: 1, range: 1, random: false } },
+    computedInputs: { index: 1, range: 1, random: false },
+  });
+
+  sendDisplayNodeCommand({
+    ...base,
+    action: 'visualScenes',
+    payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
+    node: { inputValues: { index: 2, range: 1, random: false } },
+    computedInputs: { index: 2, range: 1, random: false },
+  });
+
+  sendDisplayNodeCommand({
+    ...base,
+    action: 'visualEffects',
+    payload: { effects: [{ type: 'ascii', cellSize: 11 }] },
+    node: { inputValues: { index: 2, range: 1, random: false } },
+    computedInputs: { index: 2, range: 1, random: false },
+  });
+
+  assert.deepEqual(
+    emitted.map((operation) => ({
+      action: operation.action,
+      payload: operation.payload,
+      displayId: operation.target?.displayId,
+    })),
+    [
+      {
+        action: 'visualScenes',
+        payload: { scenes: [{ type: 'box', color: '#ffffff' }] },
+        displayId: 'display-1',
+      },
+      {
+        action: 'visualEffects',
+        payload: { effects: [{ type: 'ascii', cellSize: 11 }] },
+        displayId: 'display-1',
+      },
+      { action: 'visualScenes', payload: { scenes: [] }, displayId: 'display-1' },
+      { action: 'visualEffects', payload: { effects: [] }, displayId: 'display-1' },
+      {
+        action: 'visualScenes',
+        payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
+        displayId: 'display-2',
+      },
+      {
+        action: 'visualEffects',
+        payload: { effects: [{ type: 'ascii', cellSize: 11 }] },
+        displayId: 'display-2',
+      },
+    ]
+  );
+});
+
+test('sendDisplayNodeCommand clears prior explicit Display actions before returning to local routing', () => {
+  resetDisplayNodeRouteStateForTests();
+  const emitted: Array<{ action?: string; payload?: unknown; target?: { displayId?: string } }> = [];
+
+  sendDisplayNodeCommand({
+    nodeId: 'display-node',
+    action: 'visualScenes',
+    payload: { scenes: [{ type: 'box', color: '#ffffff' }] },
+    clients,
+    node: { inputValues: { index: 1, range: 1, random: false } },
+    computedInputs: { index: 1, range: 1, random: false },
+    graph: { connections: [] },
+    sendLocalControl: () => emitted.push({ action: 'local' }),
+    sendDisplayOperation: (operation) => emitted.push(operation),
+  });
+
+  sendDisplayNodeCommand({
+    nodeId: 'display-node',
+    action: 'visualScenes',
+    payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
+    clients,
+    node: { inputValues: {} },
+    graph: { connections: [] },
+    sendLocalControl: (action, payload) => emitted.push({ action, payload }),
+    sendDisplayOperation: (operation) => emitted.push(operation),
+  });
+
+  assert.deepEqual(
+    emitted.map((operation) => ({
+      action: operation.action,
+      payload: operation.payload,
+      displayId: operation.target?.displayId,
+    })),
+    [
+      {
+        action: 'visualScenes',
+        payload: { scenes: [{ type: 'box', color: '#ffffff' }] },
+        displayId: 'display-1',
+      },
+      { action: 'visualScenes', payload: { scenes: [] }, displayId: 'display-1' },
+      {
+        action: 'visualScenes',
+        payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
+        displayId: undefined,
+      },
+    ]
+  );
+});
