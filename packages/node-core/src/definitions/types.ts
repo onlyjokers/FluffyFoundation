@@ -28,6 +28,24 @@ export type ClientObject = {
   sensors?: ClientSensorMessage | null;
 };
 
+export type ClientUiKind = 'button' | 'input';
+
+export type ClientUiState = {
+  displayed: boolean;
+  kind?: ClientUiKind;
+  pressed: boolean;
+  inputContent: string;
+  firstInputed: boolean;
+};
+
+export type ClientUiDeps = {
+  getClientUiState?: (nodeId: string) => ClientUiState | null;
+  setClientUiDisplay?: (nodeId: string, visible: boolean, kind: ClientUiKind) => void;
+  consumeClientButtonPressed?: (nodeId: string) => boolean;
+  clearClientUiNode?: (nodeId: string) => void;
+  clearClientUi?: () => void;
+};
+
 export type ClientObjectDeps = {
   getClientId: () => string | null;
   /**
@@ -69,4 +87,8 @@ export type ClientObjectDeps = {
    * Manager-side (or multi-client) routing.
    */
   executeCommandForClientId?: (clientId: string, cmd: NodeCommand) => void;
+  /**
+   * Client-side rendered UI bridge for ClientUI nodes.
+   */
+  clientUi?: ClientUiDeps;
 };

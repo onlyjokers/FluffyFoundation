@@ -1,0 +1,9 @@
+{
+  "__purpose": "Manager UI overlay for the Client Button node rendered on deployed Clients.",
+  "type": "client-button",
+  "label": "Client Button",
+  "category": "ClientUI",
+  "inputs": [{ "id": "display", "label": "Display", "type": "boolean" }],
+  "outputs": [{ "id": "pressed", "label": "Pressed", "type": "boolean" }],
+  "configSchema": []
+}

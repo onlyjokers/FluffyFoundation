@@ -6,7 +6,13 @@ import type { ClientPermissionName, ClientPermissions, ControlAction, ControlPay
 import type { NodeDefinition } from '../../types.js';
 import type { ClientObject, ClientObjectDeps, ClientSensorMessage, NodeCommand } from '../types.js';
 import { selectClientIdsForNode } from '../client-selection.js';
-import { asRecord, getArrayValue, getNumberValue, getStringValue } from './node-definition-utils.js';
+import {
+  asRecord,
+  getArrayValue,
+  getBooleanValue,
+  getNumberValue,
+  getStringValue,
+} from './node-definition-utils.js';
 
 function resolveConfiguredClientId(configured: string, available: string[]): string {
   const clientId = configured.trim();
@@ -116,6 +122,97 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
       }
 
       return { indexs, number: indexs.length, rejectedIndexs };
+    },
+  };
+}
+
+export function createClientButtonNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'client-button',
+    label: 'Client Button',
+    category: 'ClientUI',
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['client'],
+      sideEffectClass: 'local-state',
+      permissions: [],
+      description: 'Renders a button on the Client and emits a one-tick pressed pulse.',
+      compatibility: [
+        {
+          target: 'client runtime',
+          rule: 'Only renders when deployed to a Client node-executor graph.',
+          repairHint: 'Connect the ClientUI node into a deployed patch subgraph.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Trigger logic from Client',
+          summary: 'Connect Pressed to boolean logic that controls a Client patch.',
+        },
+      ],
+      risks: [],
+      repairHints: ['Verify the Display input is true if the button is not visible.'],
+    },
+    inputs: [{ id: 'display', label: 'Display', type: 'boolean', defaultValue: true }],
+    outputs: [{ id: 'pressed', label: 'Pressed', type: 'boolean' }],
+    configSchema: [],
+    process: (inputs, _config, context) => {
+      const display = getBooleanValue(inputs.display) ?? true;
+      deps.clientUi?.setClientUiDisplay?.(context.nodeId, display, 'button');
+      if (!display) return { pressed: false };
+      return { pressed: deps.clientUi?.consumeClientButtonPressed?.(context.nodeId) ?? false };
+    },
+    onDisable: (_inputs, _config, context) => {
+      deps.clientUi?.clearClientUiNode?.(context.nodeId);
+    },
+  };
+}
+
+export function createClientInputBoxNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'client-input-box',
+    label: 'Client Input Box',
+    category: 'ClientUI',
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['client'],
+      sideEffectClass: 'local-state',
+      permissions: [],
+      description: 'Renders a submit-style text input on the Client and outputs submitted text.',
+      compatibility: [
+        {
+          target: 'client runtime',
+          rule: 'Input Content updates only when the Client submits text.',
+          repairHint: 'Submit from the Client input box before expecting output text.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Use Client text in a patch',
+          summary: 'Connect Input Content to string-processing nodes after a Client submits text.',
+        },
+      ],
+      risks: [],
+      repairHints: ['Verify the Display input is true if the input box is not visible.'],
+    },
+    inputs: [{ id: 'display', label: 'Display', type: 'boolean', defaultValue: true }],
+    outputs: [
+      { id: 'inputContent', label: 'Input Content', type: 'string' },
+      { id: 'firstInputed', label: 'First Inputed', type: 'boolean' },
+    ],
+    configSchema: [],
+    process: (inputs, _config, context) => {
+      const display = getBooleanValue(inputs.display) ?? true;
+      deps.clientUi?.setClientUiDisplay?.(context.nodeId, display, 'input');
+      if (!display) return { inputContent: '', firstInputed: false };
+      const state = deps.clientUi?.getClientUiState?.(context.nodeId) ?? null;
+      return {
+        inputContent: typeof state?.inputContent === 'string' ? state.inputContent : '',
+        firstInputed: Boolean(state?.firstInputed),
+      };
+    },
+    onDisable: (_inputs, _config, context) => {
+      deps.clientUi?.clearClientUiNode?.(context.nodeId);
     },
   };
 }

@@ -24,6 +24,7 @@ export {
 } from './client/client-visual';
 export { audioStream, videoState, imageState, audioPlaybackState } from './client/client-media';
 export { textOverlay } from './client/client-text-overlay';
+export { clientUiRuntime } from './client/client-ui-runtime';
 export { audioEnabled } from './client/client-tone';
 export {
   startEarlyPreload,

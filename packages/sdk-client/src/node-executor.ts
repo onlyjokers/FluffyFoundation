@@ -2,7 +2,11 @@ import { PROTOCOL_VERSION, type PluginControlMessage } from '@shugu/protocol';
 import type { ClientSDK } from './client-sdk.js';
 import { applyGraphChanges, type GraphChange, NodeRegistry, NodeRuntime } from '@shugu/node-core';
 import { createAiRuntime, type AiRuntime } from '@shugu/ai-core';
-import { registerDefaultNodeDefinitions, type NodeCommand } from './node-definitions.js';
+import {
+  registerDefaultNodeDefinitions,
+  type ClientUiDeps,
+  type NodeCommand,
+} from './node-definitions.js';
 import type { GraphState } from './node-types.js';
 import { registerToneClientDefinitions, type ToneAdapterHandle } from './tone-adapter.js';
 import { getBrowserAudioContextCtor } from './browser/audio-context.js';
@@ -42,6 +46,10 @@ export type NodeExecutorOptions = {
    * Audio loading will use this to check cache and prioritize downloads.
    */
   prioritizeFetch?: (url: string) => Promise<Response>;
+  /**
+   * Optional local UI bridge for ClientUI nodes. Omitted by Display and non-UI runtimes.
+   */
+  clientUi?: ClientUiDeps;
   limits?: {
     maxNodes?: number;
     minTickIntervalMs?: number;
@@ -65,6 +73,7 @@ export class NodeExecutor {
   private running = false;
   private consecutiveSlowTicks = 0;
   private recentTickDurationsMs: number[] = [];
+  private clientUi: ClientUiDeps | null = null;
 
   private options: {
     isEnabled: () => boolean;
@@ -113,6 +122,7 @@ export class NodeExecutor {
         maxTickDurationMs: options?.limits?.maxTickDurationMs ?? 120,
       },
     };
+    this.clientUi = options?.clientUi ?? null;
 
     registerDefaultNodeDefinitions(this.registry, {
       getClientId: () => this.sdk.getState().clientId,
@@ -126,6 +136,7 @@ export class NodeExecutor {
       },
       getLatestSensor: () => this.sdk.getLatestSensorData(),
       executeCommand: (cmd) => this.executeCommand(cmd),
+      clientUi: this.clientUi ?? undefined,
     });
     // Client-only Tone.js implementations override the shared node-core definitions.
     this.toneAdapter = registerToneClientDefinitions(this.registry, {
@@ -158,6 +169,7 @@ export class NodeExecutor {
         this.lastError = `tick exceeded budget (${next.toFixed(1)}ms) x${this.consecutiveSlowTicks}`;
         console.warn('[node-executor] stopping due to slow tick', this.lastError);
         this.runtime.stop();
+        this.clientUi?.clearClientUi?.();
         this.running = false;
         this.report('stopped', {
           loopId: this.loopId,
@@ -175,6 +187,7 @@ export class NodeExecutor {
           typeof info?.message === 'string' && info.message ? info.message : 'watchdog triggered';
         this.lastError = message;
         this.runtime.stop();
+        this.clientUi?.clearClientUi?.();
         this.running = false;
         this.report('stopped', {
           loopId: this.loopId,
@@ -197,6 +210,7 @@ export class NodeExecutor {
   destroy(): void {
     this.runtime.stop();
     this.runtime.clear();
+    this.clientUi?.clearClientUi?.();
     void this.disableAiRuntime();
     this.clearToneNodes();
     this.loopId = null;
@@ -276,7 +290,21 @@ export class NodeExecutor {
     );
     this.toneAdapter?.syncActiveNodes(toneNodeIds, next.nodes, next.connections);
     this.runtime.loadGraph(next);
+    this.clearRemovedClientUiNodes(prev, next);
     void this.syncAiRuntimeForGraph(next);
+  }
+
+  private clearRemovedClientUiNodes(
+    prev: Pick<GraphState, 'nodes'>,
+    next: Pick<GraphState, 'nodes'>
+  ): void {
+    if (!this.clientUi?.clearClientUiNode) return;
+    const nextIds = new Set(next.nodes.map((node) => String(node.id)));
+    for (const node of prev.nodes) {
+      if ((node.type === 'client-button' || node.type === 'client-input-box') && !nextIds.has(String(node.id))) {
+        this.clientUi.clearClientUiNode(String(node.id));
+      }
+    }
   }
 
   private deploy(payload: unknown): void {
@@ -392,6 +420,7 @@ export class NodeExecutor {
     const loopId = this.readLoopId(payload);
     if (loopId && this.loopId && loopId !== this.loopId) return;
     this.runtime.stop();
+    this.clientUi?.clearClientUi?.();
     void this.disableAiRuntime();
     this.running = false;
     this.report('stopped', { loopId: this.loopId });
@@ -403,6 +432,7 @@ export class NodeExecutor {
     this.runtime.stop();
     this.runtime.clear();
     this.runtime.clearOverrides();
+    this.clientUi?.clearClientUi?.();
     void this.disableAiRuntime();
     this.clearToneNodes();
     this.loopId = null;

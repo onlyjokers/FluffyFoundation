@@ -17,6 +17,7 @@
   } from '$lib/stores/client';
   import StartScreen from '$lib/components/StartScreen.svelte';
   import VisualCanvas from '$lib/components/VisualCanvas.svelte';
+  import ClientUiLayer from '$lib/components/ClientUiLayer.svelte';
   import PermissionWarning from '$lib/components/PermissionWarning.svelte';
   import GeoGateOverlay from '$lib/components/GeoGateOverlay.svelte';
   import ClientControlTransferStatus from '$lib/components/ClientControlTransferStatus.svelte';
@@ -25,13 +26,11 @@
   import { sendTransferResponse as sendClientTransferResponse } from '$lib/stores/client/client-transfer-command';
   import { handleWheelNavigationGuard, tryFullscreen } from '$lib/client-page/browser-shell';
   import { formatMeters, haversineDistanceM } from '$lib/client-page/geo-gate';
-  import { createAgentTextPayload } from '$lib/client-page/agent-text';
   import { getClientConnectionLifecycleAction } from '$lib/client-page/connection-lifecycle';
 
   let hasStarted = false;
   let serverUrl = 'https://localhost:3001';
   let e2eSensorTimer: ReturnType<typeof setInterval> | null = null;
-  let agentText = '';
 
   type GeoFenceConfig = {
     center: { lat: number; lng: number };
@@ -64,15 +63,6 @@
   function sendTransferResponse(action: 'accept' | 'deny'): void {
     const next = sendClientTransferResponse(getSDK(), $clientControlTransfer, action);
     if (next) applyClientControlTransferStatus(next);
-  }
-
-  function submitAgentText(): void {
-    const payload = createAgentTextPayload(agentText);
-    if (!payload) return;
-    const sdk = getSDK();
-    if (!sdk) return;
-    sdk.sendSensorData('custom', payload, { trackLatest: false });
-    agentText = '';
   }
 
   onMount(() => {
@@ -481,16 +471,7 @@
     {/if}
   {:else}
     <VisualCanvas />
-    <form class="agent-text-form" on:submit|preventDefault={submitAgentText}>
-      <input
-        class="agent-text-input"
-        bind:value={agentText}
-        autocomplete="off"
-        inputmode="text"
-        aria-label="AI Agent text"
-      />
-      <button class="agent-text-submit" type="submit" disabled={!agentText.trim()}> 发送 </button>
-    </form>
+    <ClientUiLayer />
     {#if $textOverlay.visible}
       <div class="text-overlay">
         <div
@@ -525,45 +506,6 @@
     height: 100vh;
     overflow: hidden;
     background: #0a0a0f;
-  }
-
-  .agent-text-form {
-    position: fixed;
-    left: 50%;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-    z-index: 30;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    width: min(520px, calc(100vw - 32px));
-    transform: translateX(-50%);
-  }
-
-  .agent-text-input,
-  .agent-text-submit {
-    min-height: 44px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(10, 10, 15, 0.72);
-    color: #f7f5ef;
-    font: inherit;
-    font-size: 16px;
-    backdrop-filter: blur(12px);
-  }
-
-  .agent-text-input {
-    min-width: 0;
-    border-radius: 8px;
-    padding: 0 14px;
-  }
-
-  .agent-text-submit {
-    border-radius: 8px;
-    padding: 0 16px;
-  }
-
-  .agent-text-submit:disabled {
-    cursor: default;
-    opacity: 0.45;
   }
 
   .text-overlay {

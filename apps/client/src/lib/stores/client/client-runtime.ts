@@ -30,6 +30,7 @@ import { enableToneAudio, getLastToneReadyPayload, reportToneReady, type ToneRea
 import { getOrCreateClientIdentity, persistAssignedClientId } from './client-identity';
 import { stopAllClientSideEffects } from './client-stop-all';
 import { canRunClientRuntimeCapability } from './client-runtime-capabilities';
+import { clientUiRuntime } from './client-ui-runtime';
 
 // SDK and controller instances
 let sdk: ClientSDK | null = null;
@@ -261,6 +262,7 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
       },
       resolveAssetRef: (ref: string) => multimediaCore?.resolveAssetRef(ref) ?? ref,
       prioritizeFetch: (url: string) => multimediaCore?.prioritizeFetch(url) ?? fetch(url),
+      clientUi: clientUiRuntime,
     }
   );
 

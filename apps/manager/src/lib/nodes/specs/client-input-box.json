@@ -1,0 +1,12 @@
+{
+  "__purpose": "Manager UI overlay for the Client Input Box node rendered on deployed Clients.",
+  "type": "client-input-box",
+  "label": "Client Input Box",
+  "category": "ClientUI",
+  "inputs": [{ "id": "display", "label": "Display", "type": "boolean" }],
+  "outputs": [
+    { "id": "inputContent", "label": "Input Content", "type": "string" },
+    { "id": "firstInputed", "label": "First Inputed", "type": "boolean" }
+  ],
+  "configSchema": []
+}

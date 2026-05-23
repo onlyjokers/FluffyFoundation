@@ -6,6 +6,8 @@ import { capabilityForNodeType, hashString } from './local-loop-detection';
 
 const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'client-object',
+  'client-button',
+  'client-input-box',
   'proc-client-sensors',
   'math',
   'ai-model-ref',
@@ -20,6 +22,8 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'number',
   'string',
   'bool',
+  'client-button',
+  'client-input-box',
   'number-stabilizer',
   'proc-flashlight',
   'proc-screen-color',

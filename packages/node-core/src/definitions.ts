@@ -6,6 +6,9 @@ export { registerDefaultNodeDefinitions } from './definitions/register.js';
 export type {
   ClientObject,
   ClientObjectDeps,
+  ClientUiDeps,
+  ClientUiKind,
+  ClientUiState,
   ClientSensorMessage,
   LatestSensorDataLike,
   NodeCommand,
