@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { NodeRegistry, NodeRuntime } from '../dist-node-core/index.js';
+import { NodeRegistry, NodeRuntime, registerDefaultNodeDefinitions } from '../dist-node-core/index.js';
 
 function nodeInstance(id, type, overrides = {}) {
   return {
@@ -244,6 +244,76 @@ test('disabled nodes with matching in/out act as a wire', () => {
   runtime.tick();
   assert.equal(runtime.getNode('b').outputValues.out, 1);
   assert.equal(runtime.getNode('c').outputValues.out, 1);
+});
+
+test('client-loader applies index, range, and random to loaded client ids', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c', 'client-d'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const loader = registry.get('client-loader');
+  assert.ok(loader);
+
+  const context = { nodeId: 'loader-loaded-subset', time: 0, deltaTime: 0 };
+  const selected = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 2,
+      range: 2,
+      random: false,
+    },
+    {},
+    context
+  );
+
+  assert.deepEqual(selected.indexs, ['client-b', 'client-c']);
+  assert.equal(selected.number, 2);
+  assert.equal(selected.client.clientId, 'client-b');
+  assert.deepEqual(selected.client.clientIds, ['client-b', 'client-c']);
+
+  const selectedWithCachedClientId = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 3,
+      range: 1,
+      random: false,
+    },
+    { clientId: 'client-a' },
+    context
+  );
+
+  assert.deepEqual(selectedWithCachedClientId.indexs, ['client-c']);
+  assert.equal(selectedWithCachedClientId.client.clientId, 'client-c');
+
+  const randomA = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 1,
+      range: 2,
+      random: true,
+    },
+    {},
+    { ...context, nodeId: 'loader-random-subset' }
+  );
+  const randomB = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 2,
+      range: 2,
+      random: true,
+    },
+    {},
+    { ...context, nodeId: 'loader-random-subset' }
+  );
+
+  assert.equal(randomA.indexs.length, 2);
+  assert.equal(randomB.indexs.length, 2);
+  assert.notDeepEqual(randomA.indexs, randomB.indexs);
+  assert.ok(randomA.indexs.every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
+  assert.ok(randomB.indexs.every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
 });
 
 test('input override TTL expires and restores base values', (t) => {

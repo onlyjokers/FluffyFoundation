@@ -20,24 +20,14 @@ import {
   getStringValue,
 } from './node-definition-utils.js';
 
-function resolveConfiguredClientId(configured: string, available: string[]): string {
-  const clientId = configured.trim();
-  if (!clientId) return '';
-  if (available.length > 0 && !available.includes(clientId)) return '';
-  return clientId;
-}
-
 function resolveClientSelection(
   nodeId: string,
   available: string[],
   loadedIds: string[],
-  inputs: Record<string, unknown>,
-  configured: string
+  inputs: Record<string, unknown>
 ): { index: number; selectedIds: string[] } {
-  const configuredClientId = resolveConfiguredClientId(configured, available);
-  if (configuredClientId) return { index: 1, selectedIds: [configuredClientId] };
-  if (loadedIds.length > 0) return { index: 1, selectedIds: loadedIds };
-  return selectClientIdsForNode(nodeId, available, {
+  const candidates = loadedIds.length > 0 ? loadedIds : available;
+  return selectClientIdsForNode(nodeId, candidates, {
     index: inputs.index,
     range: inputs.range,
     random: inputs.random,
@@ -310,20 +300,17 @@ export function createClientLoaderNode(deps: ClientObjectDeps): NodeDefinition {
       { id: 'number', label: 'Number', type: 'number' },
     ],
     configSchema: [{ key: 'clientId', label: 'Clients', type: 'client-picker', defaultValue: '' }],
-    process: (inputs, config, context) => {
-      const configured = typeof config.clientId === 'string' ? String(config.clientId) : '';
-
+    process: (inputs, _config, context) => {
       const available = deps.getAllClientIds?.() ?? [];
       const loadInds = inputs.loadIndexs;
       const loadedIds = Array.isArray(loadInds)
         ? loadInds.map(String).filter((id) => available.includes(id))
         : [];
 
-      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs, configured);
+      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs);
 
       const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
-      const primaryClientId =
-        selection.selectedIds[0] ?? fallbackSelected[0] ?? deps.getClientId() ?? configured;
+      const primaryClientId = selection.selectedIds[0] ?? fallbackSelected[0] ?? deps.getClientId();
 
       const client = createClientObjectForSelection(primaryClientId, selection.selectedIds, deps);
 

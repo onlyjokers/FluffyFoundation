@@ -202,6 +202,76 @@ test('client loader selects client collections and executor routes command sink 
   assert.deepEqual((loaderOutput.client as { clientIds?: string[] }).clientIds, ['client-a', 'client-b']);
 });
 
+test('client loader applies index range and random to loaded client ids', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c', 'client-d'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const loader = registry.get('client-loader');
+  assert.ok(loader);
+
+  const context = { nodeId: 'loader-loaded-subset', time: 0, deltaTime: 0 };
+  const selected = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 2,
+      range: 2,
+      random: false,
+    },
+    {},
+    context
+  );
+
+  assert.deepEqual(selected.indexs, ['client-b', 'client-c']);
+  assert.equal(selected.number, 2);
+  assert.equal((selected.client as { clientId?: string }).clientId, 'client-b');
+  assert.deepEqual((selected.client as { clientIds?: string[] }).clientIds, ['client-b', 'client-c']);
+
+  const selectedWithCachedClientId = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 3,
+      range: 1,
+      random: false,
+    },
+    { clientId: 'client-a' },
+    context
+  );
+
+  assert.deepEqual(selectedWithCachedClientId.indexs, ['client-c']);
+  assert.equal((selectedWithCachedClientId.client as { clientId?: string }).clientId, 'client-c');
+
+  const randomA = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 1,
+      range: 2,
+      random: true,
+    },
+    {},
+    { ...context, nodeId: 'loader-random-subset' }
+  );
+  const randomB = loader.process(
+    {
+      loadIndexs: ['client-a', 'client-b', 'client-c'],
+      index: 2,
+      range: 2,
+      random: true,
+    },
+    {},
+    { ...context, nodeId: 'loader-random-subset' }
+  );
+
+  assert.equal((randomA.indexs as string[]).length, 2);
+  assert.equal((randomB.indexs as string[]).length, 2);
+  assert.notDeepEqual(randomA.indexs, randomB.indexs);
+  assert.ok((randomA.indexs as string[]).every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
+  assert.ok((randomB.indexs as string[]).every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
+});
+
 test('default registry replaces legacy client-object with loader and executor nodes', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
