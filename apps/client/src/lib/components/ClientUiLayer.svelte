@@ -1,9 +1,11 @@
 <!-- Purpose: Render ClientUI nodes deployed into the Client runtime. -->
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { getSDK } from '$lib/stores/client';
   import { createAgentTextPayload } from '$lib/client-page/agent-text';
   import {
     clientUiRuntime,
+    type ClientUiInteractionEvent,
     type ClientUiNodeState,
   } from '$lib/stores/client/client-ui-runtime';
 
@@ -29,6 +31,24 @@
       .map(([nodeId, node]) => ({ ...node, nodeId }))
       .filter((node) => node.displayed)
       .sort((a, b) => String(a.nodeId).localeCompare(String(b.nodeId)));
+
+  const sendInteraction = (event: ClientUiInteractionEvent): void => {
+    getSDK()?.sendSensorData(
+      'custom',
+      {
+        kind: 'client-ui-interaction',
+        nodeId: event.nodeId,
+        uiKind: event.kind,
+        pressed: event.pressed,
+        inputContent: event.inputContent,
+        firstInputed: event.firstInputed,
+      },
+      { trackLatest: false }
+    );
+  };
+
+  const unsubscribeInteraction = clientUiRuntime.onInteraction(sendInteraction);
+  onDestroy(unsubscribeInteraction);
 </script>
 
 {#if visibleNodes($clientUiRuntime).length > 0}

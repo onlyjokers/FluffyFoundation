@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import {
   applyClientPresence,
   applyClientScreenshotPayload,
+  applyClientUiInteractionPayload,
   applyNodeMediaEvent,
   applyReadinessPayload,
+  type ClientUiInteractionState,
   type ClientReadiness,
   type ClientScreenshotUpload,
   type NodeMediaSignal,
@@ -25,6 +27,51 @@ test('applyClientPresence seeds new clients and removes vanished client metadata
   assert.equal(next.has('stale'), false);
   assert.equal(next.get('client-1')?.status, 'assets-ready');
   assert.deepEqual(next.get('client-2'), { status: 'connected', manifestId: undefined, updatedAt: 123 });
+});
+
+test('applyClientUiInteractionPayload stores ClientUI node interaction outputs', () => {
+  const interactions = new Map<string, ClientUiInteractionState>();
+
+  const pressed = applyClientUiInteractionPayload(
+    interactions,
+    'client-1',
+    {
+      kind: 'client-ui-interaction',
+      nodeId: 'button-1',
+      uiKind: 'button',
+      pressed: true,
+    },
+    600
+  );
+  const submitted = applyClientUiInteractionPayload(
+    pressed,
+    'client-1',
+    {
+      kind: 'client-ui-interaction',
+      nodeId: 'input-1',
+      uiKind: 'input',
+      inputContent: 'hello',
+      firstInputed: true,
+    },
+    700
+  );
+
+  assert.deepEqual(pressed.get('button-1'), {
+    clientId: 'client-1',
+    kind: 'button',
+    pressed: true,
+    inputContent: '',
+    firstInputed: false,
+    updatedAt: 600,
+  });
+  assert.deepEqual(submitted.get('input-1'), {
+    clientId: 'client-1',
+    kind: 'input',
+    pressed: false,
+    inputContent: 'hello',
+    firstInputed: true,
+    updatedAt: 700,
+  });
 });
 
 test('sensor event helpers preserve screenshot, node-media, and readiness semantics', () => {

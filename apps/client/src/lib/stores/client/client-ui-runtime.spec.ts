@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   clientUiRuntime,
+  type ClientUiInteractionEvent,
   getClientUiSnapshot,
   resetClientUiRuntime,
 } from './client-ui-runtime';
@@ -52,5 +53,51 @@ describe('clientUiRuntime', () => {
 
     assert.equal(clientUiRuntime.getClientUiState('input-1')?.inputContent, 'hello');
     assert.equal(clientUiRuntime.getClientUiState('input-1')?.firstInputed, true);
+  });
+
+  it('notifies subscribers when ClientUI controls are used', () => {
+    resetClientUiRuntime();
+    const events: ClientUiInteractionEvent[] = [];
+    const unsubscribe = clientUiRuntime.onInteraction((event) => events.push(event));
+
+    try {
+      clientUiRuntime.applyPayload({
+        items: [
+          { type: 'button', nodeId: 'button-1' },
+          { type: 'input', nodeId: 'input-1' },
+        ],
+      });
+
+      clientUiRuntime.pressButton('button-1');
+      clientUiRuntime.submitInput('input-1', 'hello');
+    } finally {
+      unsubscribe();
+    }
+
+    assert.deepEqual(
+      events.map(({ nodeId, kind, pressed, inputContent, firstInputed }) => ({
+        nodeId,
+        kind,
+        pressed,
+        inputContent,
+        firstInputed,
+      })),
+      [
+        {
+          nodeId: 'button-1',
+          kind: 'button',
+          pressed: true,
+          inputContent: '',
+          firstInputed: false,
+        },
+        {
+          nodeId: 'input-1',
+          kind: 'input',
+          pressed: false,
+          inputContent: 'hello',
+          firstInputed: true,
+        },
+      ]
+    );
   });
 });

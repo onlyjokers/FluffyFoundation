@@ -37,6 +37,7 @@ import { createDisplayTransport } from '$lib/display/display-transport';
 import { getManagerSDK, setManagerSDK } from './manager-sdk-access';
 import {
     applyAiReadinessPayload,
+    applyClientUiInteractionPayload,
     applyClientPresence,
     applyClientScreenshotPayload,
     applyNodeMediaEvent,
@@ -47,6 +48,7 @@ import {
     type ClientReadiness,
     type ClientReadinessStatus,
     type ClientScreenshotUpload,
+    type ClientUiInteractionState,
     type ClientToneReadiness,
     type NodeMediaSignal,
 } from './manager-sensor-events';
@@ -106,6 +108,9 @@ export const semanticSnapshot = writable<SemanticGraphSnapshot | null>(null);
 
 // Per-client uploaded screenshots (drives `client-executor.imageOut`).
 export const clientScreenshotUploads = writable<Map<string, ClientScreenshotUpload>>(new Map());
+
+// Per-ClientUI node interaction state reported by target clients.
+export const clientUiInteractions = writable<Map<string, ClientUiInteractionState>>(new Map());
 
 // Derived stores
 export const connectionStatus = derived(state, ($state) => $state.status);
@@ -277,6 +282,15 @@ export function connect(config: ManagerSDKConfig): void {
             return removeVanishedClients(prev, ids);
         });
 
+        clientUiInteractions.update((prev) => {
+            const activeIds = new Set(ids.map(String).filter(Boolean));
+            const next = new Map(prev);
+            for (const [nodeId, value] of next.entries()) {
+                if (!activeIds.has(value.clientId)) next.delete(nodeId);
+            }
+            return next;
+        });
+
         sensorData.update((prev) => {
             return removeVanishedClients(prev, ids);
         });
@@ -332,6 +346,13 @@ export function connect(config: ManagerSDKConfig): void {
                 clientAiReadiness.update((prev) => applyAiReadinessPayload(prev, data.clientId, payload, now) ?? prev);
             }
 
+            if (payload?.kind === 'client-ui-interaction') {
+                const now = Date.now();
+                clientUiInteractions.update((prev) =>
+                    applyClientUiInteractionPayload(prev, data.clientId, payload, now)
+                );
+            }
+
             if (payload?.kind === 'node-media') {
                 const event = typeof payload.event === 'string' ? payload.event : '';
                 const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId : '';
@@ -376,6 +397,7 @@ export function disconnect(): void {
     clientToneReadiness.set(new Map());
     clientAiReadiness.set(new Map());
     clientScreenshotUploads.set(new Map());
+    clientUiInteractions.set(new Map());
     nodeMediaSignals.set(new Map());
     parameterRegistry.clear();
 }

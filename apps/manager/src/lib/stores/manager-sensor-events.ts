@@ -45,6 +45,15 @@ export type ClientScreenshotUpload = {
     updatedAt: number;
 };
 
+export type ClientUiInteractionState = {
+    clientId: string;
+    kind: 'button' | 'input';
+    pressed: boolean;
+    inputContent: string;
+    firstInputed: boolean;
+    updatedAt: number;
+};
+
 export function applyClientPresence<T>(
     prev: Map<string, T>,
     clientIds: Iterable<string>,
@@ -96,6 +105,36 @@ export function applyClientScreenshotPayload(
 
     const next = new Map(prev);
     next.set(clientId, { dataUrl, mime, width, height, createdAt, updatedAt: now });
+    return next;
+}
+
+export function applyClientUiInteractionPayload(
+    prev: Map<string, ClientUiInteractionState>,
+    clientId: string,
+    payload: Record<string, unknown>,
+    now: number
+): Map<string, ClientUiInteractionState> {
+    if (payload?.kind !== 'client-ui-interaction') return prev;
+    const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId.trim() : '';
+    if (!nodeId) return prev;
+
+    const rawKind = typeof payload.uiKind === 'string' ? payload.uiKind : '';
+    const kind = rawKind === 'button' || rawKind === 'input' ? rawKind : null;
+    if (!kind) return prev;
+
+    const current = prev.get(nodeId);
+    const next = new Map(prev);
+    next.set(nodeId, {
+        clientId,
+        kind,
+        pressed: Boolean(payload.pressed),
+        inputContent:
+            typeof payload.inputContent === 'string'
+                ? payload.inputContent
+                : current?.inputContent ?? '',
+        firstInputed: Boolean(payload.firstInputed ?? current?.firstInputed ?? false),
+        updatedAt: now,
+    });
     return next;
 }
 

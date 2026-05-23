@@ -12,6 +12,8 @@ export type ClientUiNodeState = {
   firstInputed: boolean;
 };
 
+export type ClientUiInteractionEvent = ClientUiNodeState & { nodeId: string };
+
 const createDefaultState = (kind: ClientUiKind): ClientUiNodeState => ({
   displayed: false,
   kind,
@@ -21,20 +23,31 @@ const createDefaultState = (kind: ClientUiKind): ClientUiNodeState => ({
 });
 
 const clientUiNodes = writable<Map<string, ClientUiNodeState>>(new Map());
+const interactionListeners = new Set<(event: ClientUiInteractionEvent) => void>();
+
+const emitInteraction = (nodeId: string, state: ClientUiNodeState): void => {
+  const event: ClientUiInteractionEvent = { ...state, nodeId };
+  for (const listener of interactionListeners) {
+    listener(event);
+  }
+};
 
 const updateNode = (
   nodeId: string,
   kind: ClientUiKind,
   updater: (state: ClientUiNodeState) => ClientUiNodeState
-): void => {
+): ClientUiNodeState | null => {
   const id = String(nodeId ?? '').trim();
-  if (!id) return;
+  if (!id) return null;
+  let updatedState: ClientUiNodeState | null = null;
   clientUiNodes.update((prev) => {
     const next = new Map(prev);
     const current = next.get(id) ?? createDefaultState(kind);
-    next.set(id, updater({ ...current, kind }));
+    updatedState = updater({ ...current, kind });
+    next.set(id, updatedState);
     return next;
   });
+  return updatedState;
 };
 
 export const clientUiRuntime = {
@@ -67,8 +80,15 @@ export const clientUiRuntime = {
     return get(clientUiNodes).get(id) ?? null;
   },
 
+  onInteraction(listener: (event: ClientUiInteractionEvent) => void): () => void {
+    interactionListeners.add(listener);
+    return () => interactionListeners.delete(listener);
+  },
+
   pressButton(nodeId: string): void {
-    updateNode(nodeId, 'button', (state) => ({ ...state, displayed: true, pressed: true }));
+    const id = String(nodeId ?? '').trim();
+    const state = updateNode(id, 'button', (current) => ({ ...current, displayed: true, pressed: true }));
+    if (id && state) emitInteraction(id, state);
   },
 
   consumeClientButtonPressed(nodeId: string): boolean {
@@ -88,12 +108,14 @@ export const clientUiRuntime = {
   },
 
   submitInput(nodeId: string, value: string): void {
-    updateNode(nodeId, 'input', (state) => ({
-      ...state,
+    const id = String(nodeId ?? '').trim();
+    const state = updateNode(id, 'input', (current) => ({
+      ...current,
       displayed: true,
       inputContent: String(value ?? ''),
       firstInputed: true,
     }));
+    if (id && state) emitInteraction(id, state);
   },
 
   clearClientUiNode(nodeId: string): void {

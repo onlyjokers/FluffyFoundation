@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
 import { registerDefaultNodeDefinitions, type LatestSensorDataLike, type NodeCommand } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
-import { clientScreenshotUploads, getSDK, sensorData, state } from '$lib/stores/manager';
+import { clientScreenshotUploads, clientUiInteractions, getSDK, sensorData, state } from '$lib/stores/manager';
 import { targetManagedClient } from './client-target';
 
 export function registerDefaultRuntimeNodes(): void {
@@ -52,6 +52,33 @@ export function registerDefaultRuntimeNodes(): void {
     const sdk = getSDK();
     if (!sdk) return;
     sdk.sendControl(target, cmd.action, cmd.payload ?? {}, cmd.executeAt);
+  },
+  clientUi: {
+    getClientUiState: (nodeId: string) => {
+      const state = get(clientUiInteractions).get(String(nodeId));
+      if (!state) return null;
+      return {
+        displayed: true,
+        kind: state.kind,
+        pressed: state.pressed,
+        inputContent: state.inputContent,
+        firstInputed: state.firstInputed,
+      };
+    },
+    consumeClientButtonPressed: (nodeId: string) => {
+      const id = String(nodeId ?? '').trim();
+      if (!id) return false;
+      let pressed = false;
+      clientUiInteractions.update((prev) => {
+        const current = prev.get(id);
+        pressed = Boolean(current?.pressed);
+        if (!current || !pressed) return prev;
+        const next = new Map(prev);
+        next.set(id, { ...current, pressed: false });
+        return next;
+      });
+      return pressed;
+    },
   },
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {

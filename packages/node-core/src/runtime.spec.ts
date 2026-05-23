@@ -202,6 +202,76 @@ test('client loader selects client collections and executor routes command sink 
   assert.deepEqual((loaderOutput.client as { clientIds?: string[] }).clientIds, ['client-a', 'client-b']);
 });
 
+test('client UI nodes expose interaction state through runtime dependencies', () => {
+  let buttonPressed = true;
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    clientUi: {
+      consumeClientButtonPressed: (nodeId) => {
+        assert.equal(nodeId, 'button');
+        const current = buttonPressed;
+        buttonPressed = false;
+        return current;
+      },
+      getClientUiState: (nodeId) => {
+        assert.equal(nodeId, 'input');
+        return {
+          displayed: true,
+          kind: 'input',
+          pressed: false,
+          inputContent: 'hello',
+          firstInputed: true,
+        };
+      },
+    },
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      {
+        id: 'input',
+        type: 'client-input-box',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { display: true },
+        outputValues: {},
+      },
+      {
+        id: 'button',
+        type: 'client-button',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { display: true },
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'c1',
+        sourceNodeId: 'input',
+        sourcePortId: 'out',
+        targetNodeId: 'button',
+        targetPortId: 'in',
+      },
+    ],
+  });
+
+  runtime.step();
+
+  assert.equal(runtime.getNode('input')?.outputValues.inputContent, 'hello');
+  assert.equal(runtime.getNode('input')?.outputValues.firstInputed, true);
+  assert.equal(runtime.getNode('button')?.outputValues.pressed, true);
+
+  runtime.step();
+
+  assert.equal(runtime.getNode('button')?.outputValues.pressed, false);
+});
+
 test('client loader applies index range and random to loaded client ids', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
