@@ -7,6 +7,7 @@ import { createPickerController } from './picker-controller';
 
 function createHarness() {
   const addedConnections: unknown[] = [];
+  const addedNodes: unknown[] = [];
   const controller = createPickerController({
     nodeRegistry: {
       list: () => [],
@@ -23,13 +24,16 @@ function createHarness() {
         : ({ id: socket.key, label: socket.key, type: 'number' } as never),
     bestMatchingPort: () => null,
     addNode: () => 'new-node',
+    onNodeAdded: (nodeId, item) => {
+      addedNodes.push({ nodeId, type: item.type });
+    },
     addConnection: (connection) => {
       addedConnections.push(connection);
     },
     graphStateStore: readable({ nodes: [], connections: [] }),
   });
 
-  return { controller, addedConnections };
+  return { controller, addedConnections, addedNodes };
 }
 
 test('connect picker never creates a semantic connection when the initial socket is editor-only', () => {
@@ -49,4 +53,17 @@ test('connect picker never creates a semantic connection when the initial socket
   });
 
   assert.deepEqual(addedConnections, []);
+});
+
+test('picker reports successfully added nodes so the canvas can select and focus them', () => {
+  const { controller, addedNodes } = createHarness();
+
+  controller.openPicker({ clientX: 100, clientY: 120, mode: 'add' });
+  controller.handlePick({
+    type: 'display-object',
+    label: 'Display',
+    category: 'Objects',
+  });
+
+  assert.deepEqual(addedNodes, [{ nodeId: 'new-node', type: 'display-object' }]);
 });

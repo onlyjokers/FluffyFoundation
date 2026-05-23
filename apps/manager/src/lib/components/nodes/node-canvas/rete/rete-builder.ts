@@ -77,6 +77,7 @@ type ReteBuilderOptions = {
   sendSemanticNodeInputs?: (nodeId: string, inputValues: Record<string, unknown>) => boolean;
   onNodeActivity?: (nodeId: string, portId: string) => void;
   getAudienceClientCount?: () => number;
+  getDisplayClientCount?: () => number;
   onClientNodePick?: (nodeId: string, clientId: string) => void;
   onClientNodeSelectInput?: (nodeId: string, portId: 'index' | 'range', value: number) => void;
   onClientNodeRandom?: (nodeId: string, value: boolean) => void;
@@ -221,7 +222,16 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 ? configField.min
                 : undefined;
           const max =
-            typeof input.max === 'number'
+            isSelectableTargetNode && (input.id === 'index' || input.id === 'range')
+              ? (() => {
+                  const raw =
+                    instance.type === 'display-object'
+                      ? opts.getDisplayClientCount?.()
+                      : opts.getAudienceClientCount?.();
+                  const count = Math.floor(Number(raw));
+                  return Number.isFinite(count) && count > 0 ? count : undefined;
+                })()
+              : typeof input.max === 'number'
               ? input.max
               : typeof configField?.max === 'number'
                 ? configField.max

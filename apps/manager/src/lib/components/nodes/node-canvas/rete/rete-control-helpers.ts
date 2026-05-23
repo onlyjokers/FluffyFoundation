@@ -172,12 +172,32 @@ export const buildClientPickerView = (args: {
     (args.graphState?.connections ?? []).some(
       (c) => String(c.targetNodeId) === nodeId && String(c.targetPortId) === String(portId)
     );
+  const inputValues = asRecord(node.inputValues);
+  const hasRoutingInput = (['index', 'range', 'random'] as const).some(
+    (portId) =>
+      isPortConnected(portId) ||
+      (computed && Object.prototype.hasOwnProperty.call(computed, portId)) ||
+      Object.prototype.hasOwnProperty.call(inputValues, portId)
+  );
+  const config = asRecord(node.config);
+  const configuredId =
+    typeof config.displayId === 'string' ? String(config.displayId).trim() : '';
+  if (!hasRoutingInput && configuredId && clientById.has(configuredId)) {
+    const orderedClients = clients
+      .map((id) => clientById.get(id))
+      .filter(Boolean) as ClientInfo[];
+    return orderedClients.map((c) => {
+      const clientId = String(asRecord(c).clientId ?? '');
+      const selected = clientId === configuredId;
+      return { client: c, selected, primary: selected };
+    });
+  }
   const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
     const connected = isPortConnected(portId);
     if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
       return (computed as AnyRecord)[portId];
     }
-    return (node.inputValues as AnyRecord)?.[portId];
+    return inputValues[portId];
   };
 
   const total = clients.length;

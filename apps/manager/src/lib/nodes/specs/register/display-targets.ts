@@ -62,6 +62,9 @@ const coerceBoolean = (value: unknown, fallback = false): boolean => {
   return fallback;
 };
 
+const hasOwn = (record: AnyRecord, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(record, key);
+
 const hashStringDjb2 = (value: string): number => {
   let hash = 5381;
   for (let i = 0; i < value.length; i += 1) {
@@ -103,8 +106,9 @@ export function resolveDisplayNodeTargets(
   const inputValues = asRecord(node.inputValues) ?? {};
   const hasComputedInput = (portId: 'index' | 'range' | 'random'): boolean =>
     Boolean(options.computedInputs && Object.prototype.hasOwnProperty.call(options.computedInputs, portId));
+  const hasLocalInput = (portId: 'index' | 'range' | 'random'): boolean => hasOwn(inputValues, portId);
   const hasExplicitRoutingInput = (['index', 'range', 'random'] as const).some(
-    (portId) => isPortConnected(portId) || hasComputedInput(portId)
+    (portId) => isPortConnected(portId) || hasComputedInput(portId) || hasLocalInput(portId)
   );
   const config = asRecord(node.config);
   const configDisplayId =

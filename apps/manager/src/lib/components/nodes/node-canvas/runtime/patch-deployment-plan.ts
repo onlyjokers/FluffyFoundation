@@ -224,16 +224,6 @@ export function resolvePatchDeploymentPlan(
     const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
     if (!runtimeNode) return { explicit: false, ids: displayIds };
 
-    const config = asRecord(runtimeNode.config);
-    const configDisplayId =
-      typeof config?.displayId === 'string' ? String(config.displayId).trim() : '';
-    if (configDisplayId) {
-      return {
-        explicit: true,
-        ids: displayIds.includes(configDisplayId) ? [configDisplayId] : [],
-      };
-    }
-
     const computed = getLastComputedInputs(nodeId);
     const isPortConnected = (portId: string) =>
       connections.some(
@@ -243,10 +233,23 @@ export function resolvePatchDeploymentPlan(
     const inputValues = (runtimeNode.inputValues ?? {}) as Record<string, unknown>;
     const hasInputValue = (portId: 'index' | 'range' | 'random') =>
       Object.prototype.hasOwnProperty.call(inputValues, portId);
+    const hasComputedInput = (portId: 'index' | 'range' | 'random') =>
+      Boolean(computed && Object.prototype.hasOwnProperty.call(computed, portId));
     const hasExplicitRoutingInput = (['index', 'range', 'random'] as const).some(
-      (portId) => isPortConnected(portId) || hasInputValue(portId)
+      (portId) => isPortConnected(portId) || hasComputedInput(portId) || hasInputValue(portId)
     );
-    if (!hasExplicitRoutingInput) return { explicit: false, ids: displayIds };
+    const config = asRecord(runtimeNode.config);
+    const configDisplayId =
+      typeof config?.displayId === 'string' ? String(config.displayId).trim() : '';
+    if (!hasExplicitRoutingInput) {
+      if (configDisplayId) {
+        return {
+          explicit: true,
+          ids: displayIds.includes(configDisplayId) ? [configDisplayId] : [],
+        };
+      }
+      return { explicit: false, ids: displayIds };
+    }
 
     const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
       const connected = isPortConnected(portId);

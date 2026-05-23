@@ -336,6 +336,10 @@
       canvasCommands.setNodeInputs(nodeId, inputValues),
     onNodeActivity: (nodeId, portId) => midiController.showNodeActivity(nodeId, portId),
     getAudienceClientCount: () => get(audienceClients).length,
+    getDisplayClientCount: () =>
+      (get(managerState).clients ?? []).filter(
+        (client) => client?.group === 'display' && client?.connected !== false
+      ).length,
     onClientNodePick: (nodeId, clientId) => void applyClientNodeSelection(nodeId, { clientId }),
     onClientNodeSelectInput: (nodeId, portId, value) =>
       void applyClientNodeSelection(nodeId, { [portId]: value }),
@@ -389,6 +393,12 @@
       }
 
       return nodeId;
+    },
+    onNodeAdded: (nodeId) => {
+      setSelectedNode(nodeId);
+      focusController.setPendingFocusNodeIds([nodeId]);
+      requestFramesUpdate();
+      minimapController.requestUpdate();
     },
     addConnection: (conn) => {
       canvasCommands.connect(conn);

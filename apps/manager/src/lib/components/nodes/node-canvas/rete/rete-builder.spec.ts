@@ -574,6 +574,112 @@ test('display-object routing inputs render inline controls and dispatch semantic
   ]);
 });
 
+test('display-object index and range controls use connected display count as their max', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'display-object',
+    label: 'Display',
+    category: 'Objects',
+    inputs: [
+      { id: 'index', label: 'Index', type: 'number', min: 1, step: 1 },
+      { id: 'range', label: 'Range', type: 'number', min: 1, step: 1 },
+    ],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const inputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      command: new ClassicPreset.Socket('command'),
+    },
+    getNumberParamOptions: () => [],
+    getDisplayClientCount: () => 2,
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'display-1',
+    type: 'display-object',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const indexControl = node.inputs.index?.control as ClassicPreset.InputControl<'number'>;
+  const rangeControl = node.inputs.range?.control as ClassicPreset.InputControl<'number'>;
+
+  assert.equal((indexControl as unknown as { max?: number }).max, 2);
+  assert.equal((rangeControl as unknown as { max?: number }).max, 2);
+
+  indexControl.setValue(99);
+  rangeControl.setValue(99);
+
+  assert.deepEqual(inputs, [
+    { nodeId: 'display-1', patch: { index: 2 } },
+    { nodeId: 'display-1', patch: { range: 2 } },
+  ]);
+});
+
+test('display-object index and range controls ignore invalid display count providers', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'display-object',
+    label: 'Display',
+    category: 'Objects',
+    inputs: [
+      { id: 'index', label: 'Index', type: 'number', min: 1, step: 1 },
+      { id: 'range', label: 'Range', type: 'number', min: 1, step: 1 },
+    ],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      command: new ClassicPreset.Socket('command'),
+    },
+    getNumberParamOptions: () => [],
+    getDisplayClientCount: () => NaN,
+    sendNodeOverride: () => {},
+  });
+
+  const node = builder.buildReteNode({
+    id: 'display-1',
+    type: 'display-object',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  assert.equal((node.inputs.index?.control as unknown as { max?: number }).max, undefined);
+  assert.equal((node.inputs.range?.control as unknown as { max?: number }).max, undefined);
+});
+
 test('inline config-backed controls sync their default config before first graph run', () => {
   const { builder, configUpdates } = createBuilderWithSyncedInlineConfigSpy();
   builder.buildReteNode({

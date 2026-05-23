@@ -29,6 +29,7 @@ type PickerControllerOptions = {
   getPortDefForSocket: (socket: SocketData) => NodePort | null;
   bestMatchingPort: (ports: NodePort[], requiredType: PortType, side: 'input' | 'output') => NodePort | null;
   addNode: (type: string, position?: { x: number; y: number }) => string | undefined;
+  onNodeAdded?: (nodeId: string, item: PickerItem) => void;
   addConnection: (conn: EngineConnection) => void;
   graphStateStore: Readable<GraphState>;
 };
@@ -260,6 +261,7 @@ export function createPickerController(opts: PickerControllerOptions) {
   const handlePick = (item: PickerItem) => {
     const nodeId = opts.addNode(item.type, get(graphPos));
     if (!nodeId) return;
+    opts.onNodeAdded?.(nodeId, item);
 
     const currentUsage = get(usageMap);
     const prev = currentUsage[item.type] ?? { count: 0, lastUsed: 0 };

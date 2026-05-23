@@ -59,6 +59,28 @@ test('resolveDisplayNodeTargets lets explicit routing inputs override the config
   assert.deepEqual(result, { explicit: true, ids: ['display-1'] });
 });
 
+test('resolveDisplayNodeTargets lets local index and range inputs override the configured display id', () => {
+  const result = resolveDisplayNodeTargets({
+    nodeId: 'display-node',
+    clients,
+    node: { config: { displayId: 'display-2' }, inputValues: { index: 1, range: 2 } },
+    graph: { connections: [] },
+  });
+
+  assert.deepEqual(result, { explicit: true, ids: ['display-1', 'display-2'] });
+});
+
+test('resolveDisplayNodeTargets clamps local index and range to connected display count', () => {
+  const result = resolveDisplayNodeTargets({
+    nodeId: 'display-node',
+    clients,
+    node: { inputValues: { index: 99, range: 99 } },
+    graph: { connections: [] },
+  });
+
+  assert.deepEqual(result, { explicit: true, ids: ['display-2', 'display-1'] });
+});
+
 test('resolveDisplayNodeTargets falls back to every connected display when no routing input is set', () => {
   const result = resolveDisplayNodeTargets({
     nodeId: 'display-node',

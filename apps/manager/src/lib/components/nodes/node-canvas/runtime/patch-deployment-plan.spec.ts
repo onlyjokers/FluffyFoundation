@@ -222,6 +222,26 @@ test('resolvePatchDeploymentPlan routes display-object to the selected display c
   assert.equal(result.planKey, 'display-2=root');
 });
 
+test('resolvePatchDeploymentPlan lets display-object index and range override the selected display client', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [
+      node('root', 'video-out'),
+      node('display-node', 'display-object', { index: 1, range: 2 }, { displayId: 'display-2' }),
+    ],
+    connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
+  };
+
+  const result = plan(graph);
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['display-1', 'display-2']);
+  assert.equal(result.rootIdsByClientId.has('local:display'), false);
+  assert.deepEqual(result.rootIdsByClientId.get('display-1'), ['root']);
+  assert.deepEqual(result.rootIdsByClientId.get('display-2'), ['root']);
+  assert.equal(result.planKey, 'display-1=root|display-2=root');
+});
+
 test('resolvePatchDeploymentPlan reports multiple enabled roots without active deploy routing', () => {
   errors.length = 0;
   const graph: GraphState = {
