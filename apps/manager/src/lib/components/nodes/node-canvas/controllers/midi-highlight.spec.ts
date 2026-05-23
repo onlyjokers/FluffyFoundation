@@ -9,7 +9,7 @@ const graph = {
   nodes: [
     { id: 'source', type: 'number', position: { x: 0, y: 0 }, config: {}, inputValues: {}, outputValues: {} },
     { id: 'scale', type: 'math-scale', position: { x: 0, y: 0 }, config: {}, inputValues: {}, outputValues: {} },
-    { id: 'sink', type: 'client-object', position: { x: 0, y: 0 }, config: {}, inputValues: {}, outputValues: {} },
+    { id: 'sink', type: 'client-executor', position: { x: 0, y: 0 }, config: {}, inputValues: {}, outputValues: {} },
   ],
   connections: [
     {
@@ -35,7 +35,7 @@ test('node activity highlight uses MIDI visual state for downstream graph change
     disabledNodeIds: new Set(),
     sourceNodeId: 'source',
     sourcePortId: 'out',
-    traversalStopNodeTypes: new Set(['client-object']),
+    traversalStopNodeTypes: new Set(['client-executor']),
   });
 
   assert.ok(result);
@@ -113,7 +113,7 @@ test('node activity highlight follows custom-node expanded projection connection
     disabledNodeIds: new Set(),
     sourceNodeId: 'source',
     sourcePortId: 'value',
-    traversalStopNodeTypes: new Set(['client-object']),
+    traversalStopNodeTypes: new Set(['client-executor']),
   });
 
   assert.ok(result);

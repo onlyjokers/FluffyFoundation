@@ -14,7 +14,8 @@ const LOOP_ID = 'loop_e2e_offline';
 
 function loopGraph({ primary }) {
   const ids = {
-    client: 'node-client-offline',
+    loader: 'node-client-loader-offline',
+    executor: 'node-client-executor-offline',
     lfo: 'node-lfo-offline',
     screen: 'node-screen-offline',
   };
@@ -22,10 +23,18 @@ function loopGraph({ primary }) {
   return {
     nodes: [
       {
-        id: ids.client,
-        type: 'client-object',
+        id: ids.loader,
+        type: 'client-loader',
         position: { x: 60, y: 140 },
         config: { clientId: CLIENT_ID },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: ids.executor,
+        type: 'client-executor',
+        position: { x: 900, y: 140 },
+        config: {},
         inputValues: {},
         outputValues: {},
       },
@@ -65,8 +74,15 @@ function loopGraph({ primary }) {
         id: 'conn-offline-screen-to-client',
         sourceNodeId: ids.screen,
         sourcePortId: 'cmd',
-        targetNodeId: ids.client,
+        targetNodeId: ids.executor,
         targetPortId: 'in',
+      },
+      {
+        id: 'conn-offline-loader-to-executor',
+        sourceNodeId: ids.loader,
+        sourcePortId: 'client',
+        targetNodeId: ids.executor,
+        targetPortId: 'client',
       },
     ],
   };

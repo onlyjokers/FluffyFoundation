@@ -25,7 +25,7 @@ const connection = (
 test('detectLocalClientLoops returns client-sensor cycles with stable ids and capabilities', () => {
   const graph: GraphState = {
     nodes: [
-      node('client-a', 'client-object'),
+      node('client-a', 'client-loader'),
       node('sensors-a', 'proc-client-sensors'),
       node('screen-a', 'proc-screen-color'),
       node('loose-number', 'number'),
@@ -50,8 +50,8 @@ test('detectLocalClientLoops returns client-sensor cycles with stable ids and ca
 test('detectLocalClientLoops ignores cycles without exactly one client and sensor node', () => {
   const graph: GraphState = {
     nodes: [
-      node('client-a', 'client-object'),
-      node('client-b', 'client-object'),
+      node('client-a', 'client-loader'),
+      node('client-b', 'client-loader'),
       node('n1', 'number'),
       node('n2', 'number'),
       node('sensors-a', 'proc-client-sensors'),

@@ -208,7 +208,7 @@ export function getLocalOnlyPatchRoutingError({
     return Boolean(port) && String(port?.type) === 'command';
   };
 
-  const rootRoutesToClientObject = (rootNodeId: string): boolean => {
+  const rootRoutesToClientExecutor = (rootNodeId: string): boolean => {
     const rootType = String(typeById.get(rootNodeId) ?? '');
     if (!rootType) return false;
 
@@ -233,7 +233,7 @@ export function getLocalOnlyPatchRoutingError({
         if (!targetType) continue;
         if (!isCommandInputPort(targetType, targetPortId)) continue;
 
-        if (targetType === 'client-object') return true;
+        if (targetType === 'client-executor') return true;
         if (targetType === 'display-object') continue;
 
         for (const outPortId of getCommandOutputPorts(targetType)) {
@@ -249,8 +249,8 @@ export function getLocalOnlyPatchRoutingError({
     const rootId = String(root.id);
     if (!rootId) continue;
     if (!rootContainsLocalOnlyNodes(rootId)) continue;
-    if (rootRoutesToClientObject(rootId)) {
-      return 'Load * From Local(Display) can only connect Deploy to Display (not Client).';
+    if (rootRoutesToClientExecutor(rootId)) {
+      return 'Load * From Local(Display) can only connect Deploy to Display (not Client Executor).';
     }
   }
 

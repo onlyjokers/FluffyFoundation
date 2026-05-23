@@ -1,5 +1,5 @@
 /**
- * Purpose: Track graph-driven client selection state for client-object nodes.
+ * Purpose: Track graph-driven client selection state for client-loader nodes.
  */
 import { get } from 'svelte/store';
 import { state, selectClients } from '$lib/stores/manager';

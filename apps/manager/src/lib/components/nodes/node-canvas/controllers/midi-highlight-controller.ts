@@ -27,7 +27,7 @@ type MidiHighlightControllerOptions = {
 
 const MIDI_HIGHLIGHT_TTL_MS = 180;
 const midiSourceNodeTypes = new Set(['midi-fuzzy', 'midi-boolean']);
-const midiTraversalStopNodeTypes = new Set(['client-object']);
+const midiTraversalStopNodeTypes = new Set(['client-executor']);
 const sourceMatchesMidiEvent = (
   source: unknown,
   event: unknown,

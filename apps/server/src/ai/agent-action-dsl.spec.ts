@@ -50,9 +50,9 @@ const snapshot: SemanticGraphSnapshot = {
       params: [{ key: 'value', label: 'Value', type: 'number', defaultValue: 0 }],
     },
     {
-      type: 'client-object',
-      label: 'Client',
-      category: 'Client',
+      type: 'client-loader',
+      label: 'Client Loader',
+      category: 'Client Loader',
       ports: {
         inputs: [{ id: 'range', label: 'Range', type: 'number' }],
         outputs: [],
@@ -77,7 +77,7 @@ test('AI action DSL accepts addNode/connect aliases emitted by models', () => {
       version: 1,
       id: 'turn-create-client',
       actions: [
-        { op: 'addNode', nodeId: 'client-new', type: 'client-object' },
+        { op: 'addNode', nodeId: 'client-new', type: 'client-loader' },
         {
           op: 'connect',
           from: { nodeId: 'source-a', portId: 'value' },
@@ -108,7 +108,7 @@ test('AI action DSL accepts addNode/connect aliases emitted by models', () => {
     scopeGroupId: 'ai-space:test',
     node: {
       id: 'client-new',
-      type: 'client-object',
+      type: 'client-loader',
       position: { x: 0, y: 0 },
       config: {},
       inputValues: {},

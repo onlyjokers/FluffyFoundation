@@ -129,9 +129,9 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
   };
 
   const nodeLabel = (node: NodeInstance): string => {
-    if (node.type === 'client-object') {
+    if (node.type === 'client-loader') {
       const onlineCount = Math.max(0, Math.floor(Number(opts.getAudienceClientCount?.() ?? 0)));
-      return `Client: ${onlineCount} online`;
+      return `Client Loader: ${onlineCount} online`;
     }
     if (node.type === 'group-frame') {
       const raw = (node.config as Record<string, unknown>)?.name;
@@ -208,7 +208,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       const current = instance.inputValues?.[input.id];
       const derivedDefault = hasDefault ? input.defaultValue : configField?.defaultValue;
       const isSelectableTargetNode =
-        instance.type === 'client-object' || instance.type === 'display-object';
+        instance.type === 'client-loader' || instance.type === 'display-object';
       const forceInlineInput =
         isSelectableTargetNode && (input.id === 'index' || input.id === 'range' || input.id === 'random');
       const hasInitial =
@@ -526,7 +526,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             }
             nodeEngine.updateNodeConfig(instance.id, { [key]: value });
             opts.sendSemanticNodeParams?.(instance.id, { [key]: value });
-            if (instance.type === 'client-object') {
+            if (instance.type === 'client-loader') {
               opts.onClientNodePick?.(instance.id, value);
             }
             notifyNodeActivity(instance.id, key);

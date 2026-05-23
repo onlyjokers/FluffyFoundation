@@ -36,13 +36,16 @@ const waitFor = async (predicate: () => boolean, timeoutMs = 600): Promise<void>
   }
 };
 
-test('manager default runtime sends updated synth commands through managed client group target', async () => {
+test('manager client loader selects a client collection and executor routes commands', async () => {
   const sent: SentControl[] = [];
   const previousState = get(state);
   state.set({
     ...previousState,
     status: 'connected',
-    clients: [{ clientId: 'client-a', connected: true, group: 'client:client-a' }],
+    clients: [
+      { clientId: 'client-a', connected: true, group: 'client:client-a' },
+      { clientId: 'client-b', connected: true, group: 'client:client-b' },
+    ],
     selectedClientIds: [],
   });
   setManagerSDK({
@@ -63,11 +66,19 @@ test('manager default runtime sends updated synth commands through managed clien
         outputValues: {},
       },
       {
-        id: 'client',
-        type: 'client-object',
+        id: 'loader',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
-        config: { clientId: 'client-a' },
-        inputValues: { index: 1, range: 1, random: false },
+        config: {},
+        inputValues: { index: 1, range: 2, random: false },
+        outputValues: {},
+      },
+      {
+        id: 'executor',
+        type: 'client-executor',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
         outputValues: {},
       },
     ],
@@ -76,75 +87,58 @@ test('manager default runtime sends updated synth commands through managed clien
         id: 'c1',
         sourceNodeId: 'synth',
         sourcePortId: 'cmd',
-        targetNodeId: 'client',
+        targetNodeId: 'executor',
         targetPortId: 'in',
+      },
+      {
+        id: 'c2',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
       },
     ],
   });
 
   try {
     runtime.start();
-    await waitFor(() => sent.some((entry) => entry.payload.frequency === 440));
+    await waitFor(() => sent.filter((entry) => entry.payload.frequency === 440).length >= 2);
 
     const synth = runtime.getNode('synth');
     assert.ok(synth);
     synth.inputValues.frequency = 880;
 
-    await waitFor(() => sent.some((entry) => entry.payload.frequency === 880));
+    await waitFor(() => sent.filter((entry) => entry.payload.frequency === 880).length >= 2);
   } finally {
     runtime.stop();
     setManagerSDK(null);
     state.set(previousState);
   }
 
-  const updated = sent.find((entry) => entry.payload.frequency === 880);
-  assert.ok(updated);
-  assert.deepEqual(updated.target, { mode: 'group', groupId: 'client:client-a' });
-  assert.equal(updated.action, 'modulateSoundUpdate');
+  const updated = sent.filter((entry) => entry.payload.frequency === 880);
+  assert.equal(updated.length, 2);
+  assert.deepEqual(
+    updated.map((entry) => entry.target),
+    [{ mode: 'group', groupId: 'client:client-a' }, { mode: 'group', groupId: 'client:client-b' }]
+  );
+  assert.ok(updated.every((entry) => entry.action === 'modulateSoundUpdate'));
 });
 
-test('manager default runtime filters clients by permission snapshots', () => {
+test('manager default runtime registers client loader and executor nodes', () => {
   const previousState = get(state);
   state.set({
     ...previousState,
     status: 'connected',
     clients: [
-      {
-        clientId: 'client-a',
-        connected: true,
-        group: 'client:client-a',
-        connectedAt: 1,
-        permissions: { microphone: 'granted', motion: 'granted' },
-      },
-      {
-        clientId: 'client-b',
-        connected: true,
-        group: 'client:client-b',
-        connectedAt: 2,
-        permissions: { microphone: 'granted', motion: 'denied' },
-      },
-      {
-        clientId: 'display-1',
-        connected: true,
-        group: 'display',
-        connectedAt: 3,
-        permissions: { microphone: 'granted', motion: 'granted' },
-      },
+      { clientId: 'client-a', connected: true, group: 'client:client-a', connectedAt: 1 },
     ],
     selectedClientIds: [],
   });
 
   try {
-    const def = nodeRegistry.get('client-permission-filter');
-    assert.ok(def);
-    assert.deepEqual(
-      def.process(
-        {},
-        { microphone: true, motion: true, matchMode: 'all' },
-        { nodeId: 'filter', time: 0, deltaTime: 0 }
-      ),
-      { indexs: ['client-a'], number: 1, rejectedIndexs: ['client-b'] }
-    );
+    assert.equal(nodeRegistry.get('client-object'), undefined);
+    assert.equal(nodeRegistry.get('client-loader')?.label, 'Client Loader');
+    assert.equal(nodeRegistry.get('client-executor')?.label, 'Client Executor');
   } finally {
     state.set(previousState);
   }

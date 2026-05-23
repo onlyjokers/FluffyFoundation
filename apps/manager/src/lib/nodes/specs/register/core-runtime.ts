@@ -58,7 +58,8 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
   };
 
   return new Map<string, CoreRuntimeImpl>([
-    ['client-object', pick('client-object')],
+    ['client-loader', pick('client-loader')],
+    ['client-executor', pick('client-executor')],
     ['client-permission-filter', pick('client-permission-filter')],
     ['proc-client-sensors', pick('proc-client-sensors')],
     ['float', pick('float')],

@@ -99,12 +99,12 @@ test('getConnectionValidationError resolves logic-sleep output type from input c
   assert.equal(error, 'Type mismatch: number -> string (sleep:output → target:in)');
 });
 
-test('getLocalOnlyPatchRoutingError blocks local-only patch roots routed to client-object', () => {
+test('getLocalOnlyPatchRoutingError blocks local-only patch roots routed to client-executor', () => {
   const graph: GraphState = {
     nodes: [
       node('asset', 'load-image-from-local'),
       node('root', 'image-out'),
-      node('client', 'client-object'),
+      node('client', 'client-executor'),
     ],
     connections: [
       connection('c1', 'asset', 'image', 'root', 'image'),
@@ -114,7 +114,7 @@ test('getLocalOnlyPatchRoutingError blocks local-only patch roots routed to clie
 
   assert.equal(
     getLocalOnlyPatchRoutingError({ graph, getNodeDefinition: def }),
-    'Load * From Local(Display) can only connect Deploy to Display (not Client).'
+    'Load * From Local(Display) can only connect Deploy to Display (not Client Executor).'
   );
 });
 
@@ -224,9 +224,9 @@ registry.set('video-out', nodeDef({
   process: () => ({}),
 }));
 
-registry.set('client-object', nodeDef({
-  type: 'client-object',
-  label: 'Client',
+registry.set('client-executor', nodeDef({
+  type: 'client-executor',
+  label: 'Client Executor',
   category: 'Objects',
   inputs: [port('in', 'command')],
   outputs: [],

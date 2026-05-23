@@ -21,7 +21,7 @@ function createHarness() {
     nodes: [
       {
         id: 'client-node',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
         config: { clientId: 'client-1' },
         inputValues: {},
@@ -104,7 +104,7 @@ test('deployLoop records pending state before dispatching deploy command', () =>
     nodes: [
       {
         id: 'client-node',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
         config: { clientId: 'client-1' },
         inputValues: {},

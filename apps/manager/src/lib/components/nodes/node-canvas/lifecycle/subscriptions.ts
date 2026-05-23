@@ -231,21 +231,23 @@ export function bindManagerClientSubscription(opts: {
     lastClientKey = nextClientKey;
 
     opts.schedulePatchReconcile('manager-state');
-    // Client node titles depend on online client count; refresh labels when client list changes.
+    // Client Loader titles depend on online client count; refresh labels when client list changes.
     void opts.graphSync?.schedule(get(opts.graphStateStore));
 
     const engineState = get(opts.graphStateStore) as GraphState;
-    // If a project ever ended up with a Display clientId inside a Client node, clear it.
+    // If a project ever ended up with a Display clientId inside a Client Loader, clear it.
     if (displayIdSet.size > 0) {
       for (const node of engineState.nodes ?? []) {
-        if (String(node.type) !== 'client-object') continue;
+        if (String(node.type) !== 'client-loader') continue;
         const nodeId = String(node.id);
         const nodeInstance = opts.nodeEngine.getNode(nodeId);
         const configuredClientId = getString(asRecord(nodeInstance?.config).clientId, '');
         if (configuredClientId && displayIdSet.has(configuredClientId)) {
           opts.nodeEngine.updateNodeConfig(nodeId, { clientId: '' });
           if (nodeInstance?.outputValues) {
-            nodeInstance.outputValues.out = { clientId: '', sensors: null };
+            nodeInstance.outputValues.client = { clientId: '', clientIds: [], sensors: null };
+            nodeInstance.outputValues.indexs = [];
+            nodeInstance.outputValues.number = 0;
             opts.nodeEngine.tickTime.set(Date.now());
           }
         }

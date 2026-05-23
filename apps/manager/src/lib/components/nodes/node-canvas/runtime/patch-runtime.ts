@@ -518,7 +518,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const node = (state.nodes ?? []).find((n) => String(n.id) === String(nodeId));
     if (
       node &&
-      String(node.type ?? '') === 'client-object' &&
+      String(node.type ?? '') === 'client-loader' &&
       kind === 'config' &&
       portId === 'clientId'
     )
@@ -528,7 +528,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (loop) {
       const loopId = String(loop?.id ?? '');
       // Important: once a loop is deployed, the executor client is the "source of truth" for where to send overrides.
-      // Using the current `client-object.config.clientId` is incorrect because Index/Range changes can retarget the
+      // Using the current `client-loader.config.clientId` is incorrect because Index/Range changes can retarget the
       // picker selection without redeploying the loop.
       const deployedClientId = resolveDeployedLoopClientId(get(executorStatusByClient), loopId);
 

@@ -10,8 +10,8 @@
     "description": "Filters client ids by the permission snapshots reported by connected clients.",
     "compatibility": [
       {
-        "target": "client-object",
-        "rule": "Connect indexs output to Client Load Indexs to route later commands only to clients matching the selected permissions.",
+        "target": "client-loader",
+        "rule": "Connect indexs output to Client Loader Load Indexs to route later commands only to clients matching the selected permissions.",
         "repairHint": "If no clients pass, confirm the target clients have granted the selected permissions after entering the client app."
       }
     ]

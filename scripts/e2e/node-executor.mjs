@@ -134,7 +134,8 @@ async function findAvailablePort(startPort, reservedPorts, { host = '127.0.0.1',
 
 function loopGraph({ clientId, primary }) {
   const ids = {
-    client: 'node-client-e2e',
+    loader: 'node-client-loader-e2e',
+    executor: 'node-client-executor-e2e',
     sensors: 'node-sensors-e2e',
     screen: 'node-screen-e2e',
   };
@@ -142,10 +143,18 @@ function loopGraph({ clientId, primary }) {
   return {
     nodes: [
       {
-        id: ids.client,
-        type: 'client-object',
+        id: ids.loader,
+        type: 'client-loader',
         position: { x: 60, y: 140 },
         config: { clientId },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: ids.executor,
+        type: 'client-executor',
+        position: { x: 960, y: 140 },
+        config: {},
         inputValues: {},
         outputValues: {},
       },
@@ -176,9 +185,16 @@ function loopGraph({ clientId, primary }) {
     connections: [
       {
         id: 'conn-e2e-client-to-sensors',
-        sourceNodeId: ids.client,
-        sourcePortId: 'out',
+        sourceNodeId: ids.loader,
+        sourcePortId: 'client',
         targetNodeId: ids.sensors,
+        targetPortId: 'client',
+      },
+      {
+        id: 'conn-e2e-loader-to-executor',
+        sourceNodeId: ids.loader,
+        sourcePortId: 'client',
+        targetNodeId: ids.executor,
         targetPortId: 'client',
       },
       {
@@ -192,7 +208,7 @@ function loopGraph({ clientId, primary }) {
         id: 'conn-e2e-screen-to-client',
         sourceNodeId: ids.screen,
         sourcePortId: 'cmd',
-        targetNodeId: ids.client,
+        targetNodeId: ids.executor,
         targetPortId: 'in',
       },
     ],

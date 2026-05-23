@@ -29,6 +29,7 @@ export type ClientSensorMessage = {
 
 export type ClientObject = {
   clientId: string;
+  clientIds?: string[];
   sensors?: ClientSensorMessage | null;
 };
 

@@ -58,14 +58,23 @@ const basePayload = (): PatchPayload => ({
 
 function createHarness() {
   const graph: GraphState = {
-    nodes: [node('scene', 'scene-fct-track'), node('out', 'scene-out'), node('client', 'client-object')],
-    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+    nodes: [
+      node('scene', 'scene-fct-track'),
+      node('out', 'scene-out'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
   };
   const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
   const definitions = new Map<string, NodeDefinition>([
     ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
     ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
-    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
   ]);
   const visualStates = new Map<string, Record<string, unknown>>();
   const payload = basePayload();
@@ -79,7 +88,10 @@ function createHarness() {
   const opts: CreatePatchRuntimeOptions = {
     nodeEngine: {
       getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
-      getLastComputedInputs: () => null,
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' || String(nodeId).endsWith(':client')
+          ? { client: { clientId: 'client-1', clientIds: ['client-1'] } }
+          : null,
       exportGraphForPatchFromRootNodeIds: () => payload,
       lastError: Object.assign(writable<string | null>(null), { set: () => undefined }),
       setPatchOffloadedNodeIds: () => undefined,
@@ -120,21 +132,33 @@ function createHarness() {
 
 function createImmediateHarness() {
   let graph: GraphState = {
-    nodes: [node('scene', 'scene-fct-track'), node('out', 'scene-out'), node('client', 'client-object')],
-    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+    nodes: [
+      node('scene', 'scene-fct-track'),
+      node('out', 'scene-out'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
   };
   const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
   const definitions = new Map<string, NodeDefinition>([
     ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
     ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
-    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
   ]);
   const payload = basePayload();
 
   const opts: CreatePatchRuntimeOptions = {
     nodeEngine: {
       getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
-      getLastComputedInputs: () => null,
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' || String(nodeId).endsWith(':client')
+          ? { client: { clientId: 'client-1', clientIds: ['client-1'] } }
+          : null,
       exportGraphForPatchFromRootNodeIds: () => payload,
       lastError: writable<string | null>(null),
       setPatchOffloadedNodeIds: () => undefined,
@@ -200,7 +224,8 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
     nodes: [
       node('cn:custom-1:scene', 'scene-fct-track'),
       node('cn:custom-1:out', 'scene-out'),
-      node('cn:custom-1:client', 'client-object'),
+      node('cn:custom-1:loader', 'client-loader'),
+      node('cn:custom-1:client', 'client-executor'),
     ],
     connections: [
       {
@@ -209,6 +234,13 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
         sourcePortId: 'cmd',
         targetNodeId: 'cn:custom-1:client',
         targetPortId: 'in',
+      },
+      {
+        id: 'compiled-client',
+        sourceNodeId: 'cn:custom-1:loader',
+        sourcePortId: 'client',
+        targetNodeId: 'cn:custom-1:client',
+        targetPortId: 'client',
       },
     ],
   };
@@ -224,7 +256,8 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
   const definitions = new Map<string, NodeDefinition>([
     ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
     ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
-    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
   ]);
   const collapsedGraph: GraphState = {
     nodes: [node('custom-1', 'custom:def-1')],
@@ -240,7 +273,10 @@ test('patch runtime deploys a compiled custom-node patch from a collapsed editor
   const compiledRuntime = createPatchRuntime({
     nodeEngine: {
       getNode: (nodeId) => collapsedGraph.nodes.find((candidate) => candidate.id === nodeId),
-      getLastComputedInputs: () => null,
+      getLastComputedInputs: (nodeId) =>
+        String(nodeId).endsWith(':client')
+          ? { client: { clientId: 'client-1', clientIds: ['client-1'] } }
+          : null,
       exportCompiledGraphForPatchPlanning: () => compiledGraph,
       exportGraphForPatchFromRootNodeIds: () => payload,
       lastError: writable<string | null>(null),
@@ -293,9 +329,13 @@ test('patch runtime does not redeploy when graph changes keep the same topology'
     nodes: [
       { ...node('scene', 'scene-fct-track'), config: { intensity: 0.7 } },
       node('out', 'scene-out'),
-      node('client', 'client-object'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
     ],
-    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
   });
 
   runtime.onGraphStateChanged();
@@ -314,10 +354,14 @@ test('patch runtime does not redeploy when unrelated canvas topology changes out
     nodes: [
       node('scene', 'scene-fct-track'),
       node('out', 'scene-out'),
-      node('client', 'client-object'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
       node('note-1', 'note'),
     ],
-    connections: [{ id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' }],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
   });
 
   runtime.onGraphStateChanged();
@@ -344,14 +388,16 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
     ['number', definition('number', 'Number', [port('value', 'number')], [port('value', 'number')])],
     ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
     ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('amount', 'number')], [port('out', 'scene')])],
-    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
   ]);
   const compiledGraph: GraphState = {
     nodes: [
       node('number-1', 'number'),
       node('cn:custom-1:scene', 'scene-fct-track'),
       node('cn:custom-1:out', 'scene-out'),
-      node('cn:custom-1:client', 'client-object'),
+      node('cn:custom-1:loader', 'client-loader'),
+      node('cn:custom-1:client', 'client-executor'),
     ],
     connections: [
       {
@@ -368,6 +414,13 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
         targetNodeId: 'cn:custom-1:client',
         targetPortId: 'in',
       },
+      {
+        id: 'compiled-client',
+        sourceNodeId: 'cn:custom-1:loader',
+        sourcePortId: 'client',
+        targetNodeId: 'cn:custom-1:client',
+        targetPortId: 'client',
+      },
     ],
   };
   const payload = basePayload();
@@ -377,7 +430,10 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
   const runtime = createPatchRuntime({
     nodeEngine: {
       getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
-      getLastComputedInputs: () => null,
+      getLastComputedInputs: (nodeId) =>
+        String(nodeId).endsWith(':client')
+          ? { client: { clientId: 'client-1', clientIds: ['client-1'] } }
+          : null,
       exportCompiledGraphForPatchPlanning: () => compiledGraph,
       exportGraphForPatchFromRootNodeIds: () => payload,
       lastError: writable<string | null>(null),
@@ -448,13 +504,17 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
     ['number', definition('number', 'Number', [port('value', 'number')], [port('value', 'number')])],
     ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
     ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('brightness', 'number')], [port('out', 'scene')])],
-    ['client-object', definition('client-object', 'Client', [port('in', 'command')], [port('out', 'client')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
   ]);
 
   const runtime = createPatchRuntime({
     nodeEngine: {
       getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
-      getLastComputedInputs: () => null,
+      getLastComputedInputs: (nodeId) =>
+        String(nodeId).endsWith(':client')
+          ? { client: { clientId: 'client-1', clientIds: ['client-1'] } }
+          : null,
       exportCompiledGraphForPatchPlanning: () => compiledGraph,
       exportGraphForPatchFromRootNodeIds: () => ({
         ...basePayload(),
@@ -504,7 +564,8 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
       node('number-1', 'number'),
       node('cn:custom-1:scene', 'scene-fct-track'),
       node('cn:custom-1:out', 'scene-out'),
-      node('cn:custom-1:client', 'client-object'),
+      node('cn:custom-1:loader', 'client-loader'),
+      node('cn:custom-1:client', 'client-executor'),
     ],
     connections: [
       {
@@ -521,6 +582,13 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
         targetNodeId: 'cn:custom-1:client',
         targetPortId: 'in',
       },
+      {
+        id: 'compiled-client',
+        sourceNodeId: 'cn:custom-1:loader',
+        sourcePortId: 'client',
+        targetNodeId: 'cn:custom-1:client',
+        targetPortId: 'client',
+      },
     ],
   };
   payloadGraph = compiledGraph;
@@ -532,7 +600,7 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
     (sent[0]?.payload as PatchPayload | undefined)?.graph.nodes
       .map((n) => n.id)
       .sort((a, b) => String(a).localeCompare(String(b))),
-    ['cn:custom-1:client', 'cn:custom-1:out', 'cn:custom-1:scene', 'number-1']
+    ['cn:custom-1:client', 'cn:custom-1:loader', 'cn:custom-1:out', 'cn:custom-1:scene', 'number-1']
   );
   runtime.destroy();
 });

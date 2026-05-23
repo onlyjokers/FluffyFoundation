@@ -55,7 +55,10 @@ const plan = (
     }),
     getNodeDefinition: (type) => definitions.get(type),
     getRuntimeNode: (id) => graph.nodes.find((candidate) => candidate.id === id),
-    getLastComputedInputs: () => null,
+    getLastComputedInputs: (nodeId) =>
+      String(nodeId).includes('client-node')
+        ? { client: { clientId: 'client-a', clientIds: ['client-a'] } }
+        : null,
     setLastError: (message) => {
       if (message) errors.push(message);
     },
@@ -63,14 +66,18 @@ const plan = (
     ...opts,
   });
 
-test('resolvePatchDeploymentPlan routes a single patch root to a connected client-object', () => {
+test('resolvePatchDeploymentPlan routes a single patch root to a connected client-executor', () => {
   errors.length = 0;
   const graph: GraphState = {
     nodes: [
       node('root', 'image-out'),
-      node('client-node', 'client-object', {}, { clientId: 'client-a' }),
+      node('loader-node', 'client-loader', {}, { clientId: 'client-a' }),
+      node('client-node', 'client-executor'),
     ],
-    connections: [connection('c1', 'root', 'cmd', 'client-node', 'in')],
+    connections: [
+      connection('c1', 'root', 'cmd', 'client-node', 'in'),
+      connection('c2', 'loader-node', 'client', 'client-node', 'client'),
+    ],
   };
 
   const result = plan(graph);
@@ -90,7 +97,8 @@ test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch grap
   const compiledGraph: GraphState = {
     nodes: [
       node('cn:custom-1:root', 'image-out'),
-      node('cn:custom-1:client-node', 'client-object', {}, { clientId: 'client-a' }),
+      node('cn:custom-1:loader-node', 'client-loader', {}, { clientId: 'client-a' }),
+      node('cn:custom-1:client-node', 'client-executor'),
     ],
     connections: [
       connection(
@@ -99,6 +107,13 @@ test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch grap
         'cmd',
         'cn:custom-1:client-node',
         'in'
+      ),
+      connection(
+        'compiled-client',
+        'cn:custom-1:loader-node',
+        'client',
+        'cn:custom-1:client-node',
+        'client'
       ),
     ],
   };
@@ -278,12 +293,22 @@ definitions.set('video-out', {
   process: () => ({}),
 });
 
-definitions.set('client-object', {
-  type: 'client-object',
-  label: 'Client',
+definitions.set('client-loader', {
+  type: 'client-loader',
+  label: 'Client Loader',
   category: 'Objects',
-  inputs: [port('in', 'command')],
-  outputs: [port('out', 'client')],
+  inputs: [port('index', 'number')],
+  outputs: [port('client', 'client')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('client-executor', {
+  type: 'client-executor',
+  label: 'Client Executor',
+  category: 'Objects',
+  inputs: [port('client', 'client'), port('in', 'command')],
+  outputs: [port('imageOut', 'image')],
   configSchema: [],
   process: () => ({}),
 });

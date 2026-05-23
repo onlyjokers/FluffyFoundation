@@ -348,7 +348,7 @@ export class NodeExecutor {
 
     // Best-effort: ensure the deployed graph targets this client.
     const selfClientId = this.sdk.getState().clientId;
-    const clientNodes = parsed.graph.nodes.filter((n) => n.type === 'client-object');
+    const clientNodes = parsed.graph.nodes.filter((n) => n.type === 'client-loader');
     const configuredClientId =
       typeof clientNodes[0]?.config?.clientId === 'string'
         ? String(clientNodes[0]?.config?.clientId)

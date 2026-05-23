@@ -131,9 +131,9 @@ function scanGraphForAssetRefs(graph: GraphState): string[] {
   };
 
   // Prefer a traversal rooted at sinks (Max/MSP style): start from patch roots / client routing and walk upstream.
-  // Order matters for preload priority: audio-out first, then client-object, then fallback to all nodes.
+  // Order matters for preload priority: audio-out first, then client-executor, then fallback to all nodes.
   const audioOutRoots = nodes.filter((n) => n.type === 'audio-out').map((n) => String(n.id)).sort();
-  const clientRoots = nodes.filter((n) => n.type === 'client-object').map((n) => String(n.id)).sort();
+  const clientRoots = nodes.filter((n) => n.type === 'client-executor').map((n) => String(n.id)).sort();
   const roots = [...audioOutRoots, ...clientRoots];
   const startIds = roots.length > 0 ? roots : nodes.map((n) => String(n.id));
 

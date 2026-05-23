@@ -80,9 +80,9 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   let framesRaf = 0;
 
   const nodeLabel = (node: NodeInstance): string => {
-    if (node.type === 'client-object') {
+    if (node.type === 'client-loader') {
       const onlineCount = get(audienceClients).length;
-      return `Client: ${onlineCount} online`;
+      return `Client Loader: ${onlineCount} online`;
     }
     return nodeRegistry.get(node.type)?.label ?? node.type;
   };

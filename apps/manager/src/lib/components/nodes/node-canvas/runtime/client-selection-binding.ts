@@ -1,5 +1,5 @@
 /**
- * Purpose: Sync `client-object` node UI + config based on index/range/random selection and picker clicks.
+ * Purpose: Sync `client-loader` node UI + config based on index/range/random selection and picker clicks.
  */
 
 import { get } from 'svelte/store';
@@ -128,7 +128,7 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
   ) => {
     if (!slice) return;
     const node = nodeEngine.getNode(nodeId);
-    if (!node || node.type !== 'client-object') return;
+    if (!node || node.type !== 'client-loader') return;
     const updateInputs = opts?.updateInputs !== false;
     const updateControls = opts?.updateControls !== false;
     const updateConfig = opts?.updateConfig !== false;
@@ -165,9 +165,9 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
 
     // Keep live display outputs usable even when the engine is stopped.
     const outputValues = (node.outputValues as AnyRecord) ?? {};
-    outputValues.indexOut = slice.index;
-    outputValues.out = {
+    outputValues.client = {
       clientId: slice.firstId,
+      clientIds: slice.ids,
       sensors: (() => {
         const latest = slice.firstId ? get(sensorData)?.get?.(slice.firstId) ?? null : null;
         if (!latest) return null;
@@ -182,6 +182,8 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
           : null;
       })(),
     };
+    outputValues.indexs = slice.ids;
+    outputValues.number = slice.ids.length;
     node.outputValues = outputValues;
     nodeEngine.tickTime.set(Date.now());
 
@@ -216,7 +218,7 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     if (clients.length === 0) return;
 
     const node = nodeEngine.getNode(nodeId);
-    if (!node || node.type !== 'client-object') return;
+    if (!node || node.type !== 'client-loader') return;
 
     const computed = nodeEngine.getLastComputedInputs(nodeId);
     const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
@@ -321,7 +323,7 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
     const clients = audienceClientIdsInOrder();
     const engineState = get(graphStateStore);
     for (const node of engineState.nodes ?? []) {
-      if (String(node.type ?? '') !== 'client-object') continue;
+      if (String(node.type ?? '') !== 'client-loader') continue;
       const nodeId = String(node.id ?? '');
       const nodeInstance = nodeEngine.getNode(nodeId);
       if (!nodeInstance) continue;
@@ -335,7 +337,9 @@ export function createClientSelectionBinding(opts: CreateClientSelectionBindingO
         }
         if (nodeInstance?.outputValues) {
           const outputValues = (nodeInstance.outputValues as AnyRecord) ?? {};
-          outputValues.out = { clientId: '', sensors: null };
+          outputValues.client = { clientId: '', clientIds: [], sensors: null };
+          outputValues.indexs = [];
+          outputValues.number = 0;
           nodeInstance.outputValues = outputValues;
           nodeEngine.tickTime.set(Date.now());
         }

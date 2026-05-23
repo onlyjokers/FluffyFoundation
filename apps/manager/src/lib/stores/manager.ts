@@ -104,7 +104,7 @@ export const clientAiReadiness = writable<Map<string, ClientAiReadiness>>(new Ma
 
 export const semanticSnapshot = writable<SemanticGraphSnapshot | null>(null);
 
-// Per-client uploaded screenshots (drives `client-object.imageOut`).
+// Per-client uploaded screenshots (drives `client-executor.imageOut`).
 export const clientScreenshotUploads = writable<Map<string, ClientScreenshotUpload>>(new Map());
 
 // Derived stores

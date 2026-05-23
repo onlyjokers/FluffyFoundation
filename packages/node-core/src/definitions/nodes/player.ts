@@ -87,7 +87,7 @@ export function createAudioOutNode(): NodeDefinition {
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'audio', kind: 'sink' }],
     outputs: [
-      // Manager-only routing: connect to `client-object(in)` to indicate patch target(s).
+      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
@@ -124,7 +124,7 @@ export function createImageOutNode(deps: ClientObjectDeps): NodeDefinition {
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'image', kind: 'sink' }],
     outputs: [
-      // Manager-only routing: connect to `client-object(in)` to indicate patch target(s).
+      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
@@ -206,7 +206,7 @@ export function createVideoOutNode(deps: ClientObjectDeps): NodeDefinition {
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'video', kind: 'sink' }],
     outputs: [
-      // Manager-only routing: connect to `client-object(in)` to indicate patch target(s).
+      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
@@ -290,7 +290,7 @@ export function createEffectOutNode(deps: ClientObjectDeps): NodeDefinition {
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'effect', kind: 'sink' }],
     outputs: [
-      // Manager-only routing: connect to `client-object(in)` to indicate patch target(s).
+      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
@@ -371,7 +371,7 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'scene', kind: 'sink' }],
     outputs: [
-      // Manager-only routing: connect to `client-object(in)` to indicate patch target(s).
+      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],

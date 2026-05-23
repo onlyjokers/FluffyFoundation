@@ -9,10 +9,9 @@ import { displayTransport, getSDK, state } from '$lib/stores/manager';
 import { nodeEngine } from '$lib/nodes/engine';
 import { midiNodeBridge, type MidiSource } from '$lib/features/midi/midi-node-bridge';
 import { mapRangeWithOptions } from '$lib/features/midi/midi-math';
-import { applyClientSelectionFromInputs, clientSelectionState, displayObjectLogLastAt, getSelectedClientIndexOut, midiBooleanState, midiSourceKey } from './client-selection';
+import { displayObjectLogLastAt, midiBooleanState, midiSourceKey } from './client-selection';
 import { createCommandProcess } from './command-mapping';
 import { coreRuntimeImplByKind } from './core-runtime';
-import { targetManagedClient } from './client-target';
 import { sendDisplayNodeCommand } from './display-targets';
 import { asRecord, coerceBoolean, isFiniteNumber } from './helpers';
 import type { MidiBooleanState, NodeRuntime, NodeSpec } from './types';
@@ -29,61 +28,13 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
   };
 
   switch (spec.runtime.kind) {
-    case 'client-object': {
+    case 'client-loader':
+    case 'client-executor': {
       const impl = coreRuntimeImplByKind.get(spec.runtime.kind);
       if (!impl) {
         throw new Error(`[node-specs] missing core runtime kind: ${spec.runtime.kind}`);
       }
-      return {
-        ...base,
-        process: (inputs, config, context) => {
-          applyClientSelectionFromInputs(context.nodeId, inputs);
-          const out = impl.process(inputs, config, context);
-          const selection = clientSelectionState.get(context.nodeId);
-          const indexOut = selection ? selection.index : getSelectedClientIndexOut();
-          return { ...out, indexOut };
-        },
-        onSink: (inputs, config, context) => {
-          applyClientSelectionFromInputs(context.nodeId, inputs);
-
-          const clients = (get(state).clients ?? []).map((c) => String(c.clientId ?? '')).filter(Boolean);
-          if (clients.length === 0) return;
-
-          const selection = clientSelectionState.get(context.nodeId);
-          const selectedIds =
-            selection && selection.selectedIds.length > 0
-              ? selection.selectedIds
-              : get(state).selectedClientIds.map(String).filter(Boolean);
-
-          const fallbackClientId = typeof config.clientId === 'string' ? String(config.clientId) : '';
-          const targets = selectedIds.length > 0 ? selectedIds : fallbackClientId ? [fallbackClientId] : [];
-          if (targets.length === 0) return;
-
-          const raw = inputs.in;
-          const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
-          if (commands.length === 0) return;
-
-          const sdk = getSDK();
-          if (!sdk) return;
-
-          for (const cmd of commands) {
-            const cmdRecord = asRecord(cmd);
-            if (!cmdRecord) continue;
-            const actionRaw = cmdRecord.action;
-            if (typeof actionRaw !== 'string') continue;
-            const action = actionRaw as ControlAction;
-            const payloadRecord = asRecord(cmdRecord.payload) ?? {};
-            const payload = payloadRecord as ControlPayload;
-            const executeAt = typeof cmdRecord.executeAt === 'number' ? cmdRecord.executeAt : undefined;
-
-            for (const clientId of targets) {
-              const target = targetManagedClient(clientId);
-              if (!target) continue;
-              sdk.sendControl(target, action, payload, executeAt);
-            }
-          }
-        },
-      };
+      return { ...base, ...impl };
     }
     case 'display-object': {
       return {

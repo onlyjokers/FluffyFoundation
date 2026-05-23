@@ -72,7 +72,7 @@ export function detectLocalClientLoops(graph: Pick<GraphState, 'nodes' | 'connec
     adj.set(conn.sourceNodeId, outs);
   }
 
-  const isClient = (id: string) => nodeById.get(id)?.type === 'client-object';
+  const isClient = (id: string) => nodeById.get(id)?.type === 'client-loader';
   const isClientSensors = (id: string) => nodeById.get(id)?.type === 'proc-client-sensors';
 
   const indexById = new Map<string, number>();

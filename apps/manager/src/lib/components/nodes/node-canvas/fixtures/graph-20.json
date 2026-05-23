@@ -18,7 +18,7 @@
       {"id": "number-2", "type": "number", "position": {"x": 0, "y": 720}, "config": {"value": 1.0}, "inputValues": {}, "outputValues": {}},
       {"id": "param-set-1", "type": "param-set", "position": {"x": 500, "y": 0}, "config": {"path": "", "mode": "REMOTE"}, "inputValues": {"value": 0, "bypass": false}, "outputValues": {}},
       {"id": "param-set-2", "type": "param-set", "position": {"x": 500, "y": 120}, "config": {"path": "", "mode": "MODULATION"}, "inputValues": {"value": 0, "bypass": false}, "outputValues": {}},
-      {"id": "client-1", "type": "client-object", "position": {"x": 750, "y": 200}, "config": {"clientId": ""}, "inputValues": {"index": 1, "range": 1, "random": false}, "outputValues": {}},
+      {"id": "client-1", "type": "client-loader", "position": {"x": 750, "y": 200}, "config": {"clientId": ""}, "inputValues": {"index": 1, "range": 1, "random": false}, "outputValues": {}},
       {"id": "proc-scene-1", "type": "proc-scene-switch", "position": {"x": 500, "y": 300}, "config": {"sceneId": "box-scene"}, "inputValues": {"index": 0}, "outputValues": {}},
       {"id": "color-map-1", "type": "midi-color-map", "position": {"x": 250, "y": 240}, "config": {"from": "#6366f1", "to": "#ffffff", "invert": false}, "inputValues": {}, "outputValues": {}},
       {"id": "stabilizer-1", "type": "number-stabilizer", "position": {"x": 250, "y": 640}, "config": {"smoothing": 0.2}, "inputValues": {"in": 0}, "outputValues": {}},

@@ -68,9 +68,17 @@
       },
       {
         "id": "n-client",
-        "type": "client-object",
+        "type": "client-loader",
         "position": { "x": 640, "y": 380 },
         "config": { "clientId": "" },
+        "inputValues": {},
+        "outputValues": {}
+      },
+      {
+        "id": "n-client-executor",
+        "type": "client-executor",
+        "position": { "x": 940, "y": 380 },
+        "config": {},
         "inputValues": {},
         "outputValues": {}
       },
@@ -190,8 +198,15 @@
         "id": "c-flash-cmd",
         "sourceNodeId": "n-flashlight",
         "sourcePortId": "cmd",
-        "targetNodeId": "n-client",
+        "targetNodeId": "n-client-executor",
         "targetPortId": "in"
+      },
+      {
+        "id": "c-client-to-executor",
+        "sourceNodeId": "n-client",
+        "sourcePortId": "client",
+        "targetNodeId": "n-client-executor",
+        "targetPortId": "client"
       },
       {
         "id": "c-screen-cmd",
@@ -230,6 +245,7 @@
         "n-client-count",
         "n-client-range",
         "n-client",
+        "n-client-executor",
         "n-flashlight",
         "n-rate",
         "n-duty",

@@ -12,7 +12,7 @@ Purpose: 说明如何导入和验证 AI Space Demo 模板。
 - 一个绿色的 `AI Space - Traveler Greeting` 框，序列化字段是 `kind: "ai-space"`。
 - `agentInterface` 事件绑定：`client.joined`、`client.text.final`、`display.ready`。
 - `agentPolicy` 权限边界：server 侧 AI Orchestrator 只能在这个 AI Space 内更新、添加、连接节点。
-- Client 反应节点：`client-object`、`proc-flashlight`，以及 client 选择辅助节点。
+- Client 反应节点：`client-loader`、`client-executor`、`proc-flashlight`，以及 client 选择辅助节点。
 - Display 反应节点：`proc-display-text`、`proc-screen-color`、`display-object`。
 - 一个 `string` + `show-anything` 的消息预览节点，AI 可以更新它，用来在 Manager 里看到对话文本状态；`proc-display-text` 会把回答输出到 Display。
 

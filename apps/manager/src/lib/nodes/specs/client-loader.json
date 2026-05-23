@@ -1,0 +1,32 @@
+{
+  "type": "client-loader",
+  "label": "Client Loader",
+  "category": "Objects",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager"],
+    "sideEffectClass": "none",
+    "permissions": [],
+    "description": "Selects audience clients and outputs a client collection for Client Executor.",
+    "compatibility": [
+      {
+        "target": "client-executor",
+        "rule": "Connect Client output to Client Executor Client input before routing command nodes.",
+        "repairHint": "Use Client Filter for Permissions or Load Indexs before this node when the target clients must be narrowed."
+      }
+    ]
+  },
+  "inputs": [
+    { "id": "loadIndexs", "label": "Load Indexs", "type": "array" },
+    { "id": "index", "label": "Index", "type": "number", "min": 1, "step": 1 },
+    { "id": "range", "label": "Range", "type": "number", "min": 1, "step": 1 },
+    { "id": "random", "label": "Random", "type": "boolean" }
+  ],
+  "outputs": [
+    { "id": "client", "label": "Client", "type": "client" },
+    { "id": "indexs", "label": "Indexs", "type": "array" },
+    { "id": "number", "label": "Number", "type": "number" }
+  ],
+  "configSchema": [{ "key": "clientId", "label": "Clients", "type": "client-picker", "defaultValue": "" }],
+  "runtime": { "kind": "client-loader" }
+}

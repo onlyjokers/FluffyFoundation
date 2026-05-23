@@ -8,10 +8,11 @@ import type { NodeDefinition } from '../types.js';
 import {
   createClientCountNode,
   createClientButtonNode,
+  createClientExecutorNode,
+  createClientInputBoxNode,
+  createClientLoaderNode,
   createClientPermissionFilterNode,
   createDisplayObjectNode,
-  createClientInputBoxNode,
-  createClientObjectNode,
   createClientSensorsProcessorNode,
   createCmdAggregatorNode,
 } from './nodes/client.js';
@@ -104,7 +105,8 @@ export function registerDefaultNodeDefinitions(
 
 function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() => NodeDefinition> {
   return [
-    () => createClientObjectNode(deps),
+    () => createClientLoaderNode(deps),
+    () => createClientExecutorNode(deps),
     () => createClientButtonNode(deps),
     () => createClientInputBoxNode(deps),
     createDisplayObjectNode,

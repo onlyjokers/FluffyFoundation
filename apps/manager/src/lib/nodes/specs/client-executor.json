@@ -1,0 +1,26 @@
+{
+  "type": "client-executor",
+  "label": "Client Executor",
+  "category": "Objects",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager"],
+    "sideEffectClass": "remote-control",
+    "permissions": [],
+    "description": "Executes command inputs against the client collection selected by Client Loader.",
+    "compatibility": [
+      {
+        "target": "client-loader",
+        "rule": "Connect Client Loader Client output into this node before sending commands.",
+        "repairHint": "If commands do not reach devices, make sure the Client input is connected and the selected clients are online."
+      }
+    ]
+  },
+  "inputs": [
+    { "id": "client", "label": "Client", "type": "client" },
+    { "id": "in", "label": "In", "type": "command", "kind": "sink" }
+  ],
+  "outputs": [{ "id": "imageOut", "label": "Image Out", "type": "image" }],
+  "configSchema": [],
+  "runtime": { "kind": "client-executor" }
+}

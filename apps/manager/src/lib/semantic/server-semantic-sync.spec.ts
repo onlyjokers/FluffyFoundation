@@ -78,8 +78,8 @@ test('applyServerSemanticSnapshot mirrors server graph into the Manager NodeEngi
       [
         {
           id: 'client-a',
-          type: 'client-object',
-          params: { label: 'Client A' },
+          type: 'client-loader',
+          params: { label: 'Client Loader A' },
           inputValues: { active: true },
           outputValues: { ready: false },
         },
@@ -105,9 +105,9 @@ test('applyServerSemanticSnapshot mirrors server graph into the Manager NodeEngi
     nodes: [
       {
         id: 'client-a',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
-        config: { label: 'Client A' },
+        config: { label: 'Client Loader A' },
         inputValues: { active: true },
         outputValues: { ready: false },
       },
@@ -130,7 +130,7 @@ test('applyServerSemanticSnapshot preserves local positions while applying seman
     nodes: [
       {
         id: 'client-a',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 321, y: 654 },
         config: { label: 'Old label' },
         inputValues: {},
@@ -144,8 +144,8 @@ test('applyServerSemanticSnapshot preserves local positions while applying seman
     snapshot: snapshot([
       {
         id: 'client-a',
-        type: 'client-object',
-        params: { label: 'Client A' },
+        type: 'client-loader',
+        params: { label: 'Client Loader A' },
         inputValues: { active: true },
         outputValues: { ready: false },
       },
@@ -168,9 +168,9 @@ test('applyServerSemanticSnapshot preserves local positions while applying seman
   assert.deepEqual(requireLoaded(loaded).nodes, [
     {
       id: 'client-a',
-      type: 'client-object',
+      type: 'client-loader',
       position: { x: 321, y: 654 },
-      config: { label: 'Client A' },
+      config: { label: 'Client Loader A' },
       inputValues: { active: true },
       outputValues: { ready: false },
     },
@@ -191,7 +191,7 @@ test('applyServerSemanticSnapshot places newly added server nodes away from exis
     nodes: [
       {
         id: 'client-a',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 321, y: 654 },
         config: {},
         inputValues: {},
@@ -205,14 +205,14 @@ test('applyServerSemanticSnapshot places newly added server nodes away from exis
     snapshot: snapshot([
       {
         id: 'client-a',
-        type: 'client-object',
+        type: 'client-loader',
         params: {},
         inputValues: {},
         outputValues: {},
       },
       {
         id: 'client-b',
-        type: 'client-object',
+        type: 'client-loader',
         params: {},
         inputValues: {},
         outputValues: {},
@@ -242,7 +242,7 @@ test('applyServerSemanticSnapshot restores node positions from local layout stor
     snapshot: snapshot([
       {
         id: 'client-a',
-        type: 'client-object',
+        type: 'client-loader',
         params: {},
         inputValues: {},
         outputValues: {},
@@ -840,7 +840,7 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
       snapshot: snapshot([
         {
           id: 'cli-client-c',
-          type: 'client-object',
+          type: 'client-loader',
           params: {},
           inputValues: {},
           outputValues: {},
@@ -853,7 +853,7 @@ test('bindServerSemanticSync mirrors snapshot replies from graph.snapshot reques
     nodes: [
       {
         id: 'cli-client-c',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
         config: {},
         inputValues: {},

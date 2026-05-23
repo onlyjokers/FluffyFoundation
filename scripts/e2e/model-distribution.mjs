@@ -144,7 +144,8 @@ async function assert(condition, message) {
 
 function loopGraphWithAi({ clientId, modelRef }) {
   const ids = {
-    client: 'node-client-e2e',
+    loader: 'node-client-loader-e2e',
+    executor: 'node-client-executor-e2e',
     sensors: 'node-sensors-e2e',
     screen: 'node-screen-e2e',
     ai: 'node-ai-e2e',
@@ -153,10 +154,18 @@ function loopGraphWithAi({ clientId, modelRef }) {
   return {
     nodes: [
       {
-        id: ids.client,
-        type: 'client-object',
+        id: ids.loader,
+        type: 'client-loader',
         position: { x: 60, y: 140 },
         config: { clientId },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: ids.executor,
+        type: 'client-executor',
+        position: { x: 960, y: 140 },
+        config: {},
         inputValues: {},
         outputValues: {},
       },
@@ -198,9 +207,16 @@ function loopGraphWithAi({ clientId, modelRef }) {
     connections: [
       {
         id: 'conn-e2e-client-to-sensors',
-        sourceNodeId: ids.client,
-        sourcePortId: 'out',
+        sourceNodeId: ids.loader,
+        sourcePortId: 'client',
         targetNodeId: ids.sensors,
+        targetPortId: 'client',
+      },
+      {
+        id: 'conn-e2e-loader-to-executor',
+        sourceNodeId: ids.loader,
+        sourcePortId: 'client',
+        targetNodeId: ids.executor,
         targetPortId: 'client',
       },
       {
@@ -214,7 +230,7 @@ function loopGraphWithAi({ clientId, modelRef }) {
         id: 'conn-e2e-screen-to-client',
         sourceNodeId: ids.screen,
         sourcePortId: 'cmd',
-        targetNodeId: ids.client,
+        targetNodeId: ids.executor,
         targetPortId: 'in',
       },
     ],

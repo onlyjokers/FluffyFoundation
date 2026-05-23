@@ -5,7 +5,8 @@ import type { GraphState, NodeInstance } from './types';
 import { capabilityForNodeType, hashString } from './local-loop-detection';
 
 const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
-  'client-object',
+  'client-loader',
+  'client-executor',
   'proc-client-sensors',
   'math',
   'ai-model-ref',
@@ -109,8 +110,8 @@ export const isPatchRootType = (type: string): boolean => PATCH_ROOT_TYPE_SET.ha
 export const assertPatchDeployableNodeType = (type: string): void => {
   if (PATCH_DEPLOYABLE_NODE_TYPES.has(String(type))) return;
   const hint =
-    type === 'client-object'
-      ? 'Client is manager-only; screenshots/images must be routed via commands (e.g. Client.Image Out -> Show Image -> Display), not deployed as a patch.'
+    type === 'client-loader' || type === 'client-executor'
+      ? 'Client Loader and Client Executor are manager-only; screenshots/images must be routed via commands (e.g. Client Executor.Image Out -> Show Image -> Display), not deployed as a patch.'
       : '';
   throw new Error(
     hint

@@ -302,7 +302,13 @@
     const srcNode = conn
       ? ($graphStateStore.nodes ?? []).find((n: NodeInstance) => n.id === conn.sourceNodeId)
       : null;
-    sensorsClientId = srcNode?.config?.clientId ? String(srcNode.config.clientId) : '';
+    const outputClient = srcNode?.outputValues?.client as AnyRecord | undefined;
+    sensorsClientId =
+      typeof outputClient?.clientId === 'string'
+        ? String(outputClient.clientId)
+        : srcNode?.config?.clientId
+          ? String(srcNode.config.clientId)
+          : '';
     sensorsData = sensorsClientId
       ? (($sensorData.get(sensorsClientId) as unknown as AnyRecord) ?? null)
       : null;

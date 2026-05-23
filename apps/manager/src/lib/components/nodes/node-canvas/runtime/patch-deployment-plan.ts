@@ -129,61 +129,14 @@ export function resolvePatchDeploymentPlan(
     return Boolean(port) && String(port?.type ?? '') === 'command';
   };
 
-  const resolveClientId = (nodeId: string, outputPortId: string) => {
-    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
-    const runtimeOut = asRecord(runtimeNode?.outputValues?.[outputPortId]);
-    const fromOut =
-      typeof runtimeOut?.clientId === 'string' ? String(runtimeOut.clientId).trim() : '';
-    const config = asRecord(runtimeNode?.config);
-    const fromConfig = typeof config?.clientId === 'string' ? String(config.clientId).trim() : '';
-    return fromOut || fromConfig;
-  };
-
-  const resolveClientNodeTargets = (nodeId: string): string[] => {
-    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
-    if (!runtimeNode) return [];
+  const resolveClientExecutorTargets = (nodeId: string): string[] => {
     const computed = getLastComputedInputs(nodeId);
-    const isPortConnected = (portId: string) =>
-      connections.some(
-        (c) =>
-          String(c.targetNodeId) === String(nodeId) && String(c.targetPortId) === String(portId)
-      );
-    const getEffectiveInput = (portId: 'index' | 'range' | 'random'): unknown => {
-      const connected = isPortConnected(portId);
-      if (connected && computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
-        return computed[portId];
-      }
-      const inputValues = runtimeNode.inputValues as Record<string, unknown> | undefined;
-      return inputValues?.[portId];
-    };
-
-    const clients = audienceClientIdsInOrder();
-    const total = clients.length;
-    if (total === 0) return [];
-
-    const randomRaw = getEffectiveInput('random');
-    const random = coerceBoolean(randomRaw, false);
-    const ordered = random ? buildStableRandomOrder(nodeId, clients) : clients;
-
-    const primaryId = resolveClientId(nodeId, 'out');
-    const indexRaw = getEffectiveInput('index');
-    const indexCandidate = toFiniteNumber(indexRaw, Number.NaN);
-    const indexFromInput = Number.isFinite(indexCandidate)
-      ? clampInt(indexCandidate, 1, total)
-      : null;
-    const indexFromPrimary = primaryId ? ordered.indexOf(primaryId) + 1 : 0;
-    const index = indexFromInput ?? (indexFromPrimary > 0 ? indexFromPrimary : 1);
-
-    const rangeRaw = getEffectiveInput('range');
-    const rangeCandidate = toFiniteNumber(rangeRaw, 1);
-    const range = clampInt(rangeCandidate, 1, total);
-
-    const ids: string[] = [];
-    const start = index - 1;
-    for (let i = 0; i < range; i += 1) {
-      ids.push(ordered[(start + i) % total]);
-    }
-    return ids;
+    const clientInput = asRecord(computed?.client);
+    const idsRaw = clientInput?.clientIds;
+    const ids = Array.isArray(idsRaw) ? idsRaw.map(String).filter(Boolean) : [];
+    if (ids.length > 0) return ids;
+    const clientId = typeof clientInput?.clientId === 'string' ? String(clientInput.clientId).trim() : '';
+    return clientId ? [clientId] : [];
   };
 
   const displayClientIdsInOrder = (): string[] =>
@@ -305,7 +258,7 @@ export function resolvePatchDeploymentPlan(
           continue;
         }
 
-        if (targetType === 'client-object') {
+        if (targetType === 'client-executor') {
           if (!routedClientNodeIdSet.has(targetNodeId)) {
             routedClientNodeIdSet.add(targetNodeId);
             routedClientNodeIds.push(targetNodeId);
@@ -323,7 +276,7 @@ export function resolvePatchDeploymentPlan(
     const seen = new Set<string>();
 
     for (const nodeId of routedClientNodeIds) {
-      const ids = resolveClientNodeTargets(nodeId);
+      const ids = resolveClientExecutorTargets(nodeId);
       for (const id of ids) {
         if (!id || !connectedAudience.has(id) || seen.has(id)) continue;
         seen.add(id);

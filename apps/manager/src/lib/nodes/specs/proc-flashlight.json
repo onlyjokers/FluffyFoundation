@@ -10,9 +10,9 @@
     "description": "Builds a flashlight control command for selected client devices.",
     "compatibility": [
       {
-        "target": "client-object",
-        "rule": "Connect cmd output to a client-object sink to route the command to clients.",
-        "repairHint": "Add a client-object node when commands are not reaching devices."
+        "target": "client-executor",
+        "rule": "Connect cmd output to a Client Executor sink to route the command to clients.",
+        "repairHint": "Add a Client Loader -> Client Executor chain when commands are not reaching devices."
       }
     ],
     "examples": [

@@ -74,7 +74,8 @@ export type CommandRuntime = {
 };
 
 export type NodeRuntime =
-  | { kind: 'client-object' }
+  | { kind: 'client-loader' }
+  | { kind: 'client-executor' }
   | { kind: 'client-permission-filter' }
   | { kind: 'display-object' }
   | { kind: 'proc-client-sensors' }

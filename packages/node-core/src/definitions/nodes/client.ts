@@ -69,6 +69,47 @@ function coerceUiChain(raw: unknown): ClientUiLayerItem[] {
   return out;
 }
 
+function createClientObjectForSelection(
+  primaryClientId: string,
+  selectedIds: string[],
+  deps: ClientObjectDeps
+): ClientObject {
+  const latest = primaryClientId
+    ? (deps.getSensorForClientId?.(primaryClientId) ?? deps.getLatestSensor?.() ?? null)
+    : (deps.getLatestSensor?.() ?? null);
+  const sensors: ClientSensorMessage | null = latest
+    ? {
+        sensorType: latest.sensorType,
+        payload: latest.payload,
+        serverTimestamp: latest.serverTimestamp,
+        clientTimestamp: latest.clientTimestamp,
+      }
+    : null;
+  return { clientId: primaryClientId, clientIds: selectedIds, sensors };
+}
+
+function resolveTargetsFromClientInput(raw: unknown): string[] {
+  const record = asRecord(raw);
+  if (!record) return [];
+  const idsRaw = record.clientIds;
+  const ids = Array.isArray(idsRaw) ? idsRaw.map(String).filter(Boolean) : [];
+  if (ids.length > 0) return ids;
+  const clientId = getStringValue(record.clientId);
+  return clientId ? [clientId] : [];
+}
+
+function commandFromUnknown(raw: unknown): NodeCommand | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const action = getStringValue(record.action) as ControlAction | undefined;
+  if (!action) return null;
+  return {
+    action,
+    payload: (record.payload ?? {}) as ControlPayload,
+    executeAt: getNumberValue(record.executeAt) ?? undefined,
+  };
+}
+
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
   return {
     type: 'client-count',
@@ -252,23 +293,21 @@ export function createClientInputBoxNode(deps: ClientObjectDeps): NodeDefinition
   };
 }
 
-export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
+export function createClientLoaderNode(deps: ClientObjectDeps): NodeDefinition {
   return {
-    type: 'client-object',
-    label: 'Client',
+    type: 'client-loader',
+    label: 'Client Loader',
     category: 'Objects',
     inputs: [
       { id: 'loadIndexs', label: 'Load Indexs', type: 'array' },
       { id: 'index', label: 'Index', type: 'number', defaultValue: 1, min: 1, step: 1 },
       { id: 'range', label: 'Range', type: 'number', defaultValue: 1, min: 1, step: 1 },
       { id: 'random', label: 'Random', type: 'boolean', defaultValue: false },
-      { id: 'in', label: 'In', type: 'command', kind: 'sink' },
     ],
     outputs: [
-      { id: 'out', label: 'Out', type: 'client' },
-      { id: 'indexOut', label: 'Index Out', type: 'number' },
+      { id: 'client', label: 'Client', type: 'client' },
       { id: 'indexs', label: 'Indexs', type: 'array' },
-      { id: 'imageOut', label: 'Image Out', type: 'image' },
+      { id: 'number', label: 'Number', type: 'number' },
     ],
     configSchema: [{ key: 'clientId', label: 'Clients', type: 'client-picker', defaultValue: '' }],
     process: (inputs, config, context) => {
@@ -286,92 +325,62 @@ export function createClientObjectNode(deps: ClientObjectDeps): NodeDefinition {
       const primaryClientId =
         selection.selectedIds[0] ?? fallbackSelected[0] ?? deps.getClientId() ?? configured;
 
-      const latest = primaryClientId
-        ? (deps.getSensorForClientId?.(primaryClientId) ?? deps.getLatestSensor?.() ?? null)
-        : (deps.getLatestSensor?.() ?? null);
-      const sensors: ClientSensorMessage | null = latest
-        ? {
-            sensorType: latest.sensorType,
-            payload: latest.payload,
-            serverTimestamp: latest.serverTimestamp,
-            clientTimestamp: latest.clientTimestamp,
-          }
-        : null;
-      const out: ClientObject = { clientId: primaryClientId, sensors };
+      const client = createClientObjectForSelection(primaryClientId, selection.selectedIds, deps);
 
+      return { client, indexs: selection.selectedIds, number: selection.selectedIds.length };
+    },
+  };
+}
+
+export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition {
+  const resolveTargets = (inputs: Record<string, unknown>): string[] => {
+    const targets = resolveTargetsFromClientInput(inputs.client);
+    if (targets.length > 0) return targets;
+    const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
+    if (fallbackSelected.length > 0) return fallbackSelected;
+    const fallbackSingle = deps.getClientId();
+    return fallbackSingle ? [fallbackSingle] : [];
+  };
+
+  const send = (clientId: string, cmd: NodeCommand) => {
+    if (!clientId) return;
+    if (deps.executeCommandForClientId) deps.executeCommandForClientId(clientId, cmd);
+    else deps.executeCommand(cmd);
+  };
+
+  return {
+    type: 'client-executor',
+    label: 'Client Executor',
+    category: 'Objects',
+    inputs: [
+      { id: 'client', label: 'Client', type: 'client' },
+      { id: 'in', label: 'In', type: 'command', kind: 'sink' },
+    ],
+    outputs: [{ id: 'imageOut', label: 'Image Out', type: 'image' }],
+    configSchema: [],
+    process: (inputs) => {
+      const primaryClientId = resolveTargetsFromClientInput(inputs.client)[0] ?? '';
       const imageOut =
         typeof deps.getImageForClientId === 'function' && primaryClientId
           ? deps.getImageForClientId(primaryClientId)
           : null;
-      return { out, indexOut: selection.index, indexs: selection.selectedIds, imageOut };
+      return { imageOut };
     },
-    onSink: (inputs, config, context) => {
-      const configured = typeof config.clientId === 'string' ? String(config.clientId) : '';
-
-      const available = deps.getAllClientIds?.() ?? [];
-      const loadInds = getArrayValue(inputs.loadIndexs);
-      const loadedIds = loadInds ? loadInds.map(String).filter((id) => available.includes(id)) : [];
-
-      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs, configured);
-
-      const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
-      const fallbackSingle = deps.getClientId() ?? configured;
-      const targets =
-        selection.selectedIds.length > 0
-          ? selection.selectedIds
-          : fallbackSelected.length > 0
-            ? fallbackSelected
-            : fallbackSingle
-              ? [fallbackSingle]
-              : [];
+    onSink: (inputs) => {
+      const targets = resolveTargets(inputs);
       if (targets.length === 0) return;
 
       const raw = inputs.in;
       const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
-      for (const cmd of commands) {
-        const record = asRecord(cmd);
-        if (!record) continue;
-        const action = getStringValue(record.action) as ControlAction | undefined;
-        if (!action) continue;
-        const next: NodeCommand = {
-          action,
-          payload: (record.payload ?? {}) as ControlPayload,
-          executeAt: getNumberValue(record.executeAt) ?? undefined,
-        };
-
-        for (const clientId of targets) {
-          if (!clientId) continue;
-          if (deps.executeCommandForClientId) deps.executeCommandForClientId(clientId, next);
-          else deps.executeCommand(next);
-        }
+      for (const rawCommand of commands) {
+        const next = commandFromUnknown(rawCommand);
+        if (!next) continue;
+        for (const clientId of targets) send(clientId, next);
       }
     },
-    onDisable: (inputs, config, context) => {
-      const configured = typeof config.clientId === 'string' ? String(config.clientId) : '';
-
-      const available = deps.getAllClientIds?.() ?? [];
-      const loadInds = getArrayValue(inputs.loadIndexs);
-      const loadedIds = loadInds ? loadInds.map(String).filter((id) => available.includes(id)) : [];
-
-      const selection = resolveClientSelection(context.nodeId, available, loadedIds, inputs, configured);
-
-      const fallbackSelected = deps.getSelectedClientIds?.() ?? [];
-      const fallbackSingle = deps.getClientId() ?? configured;
-      const targets =
-        selection.selectedIds.length > 0
-          ? selection.selectedIds
-          : fallbackSelected.length > 0
-            ? fallbackSelected
-            : fallbackSingle
-              ? [fallbackSingle]
-              : [];
+    onDisable: (inputs) => {
+      const targets = resolveTargets(inputs);
       if (targets.length === 0) return;
-
-      const send = (clientId: string, cmd: NodeCommand) => {
-        if (!clientId) return;
-        if (deps.executeCommandForClientId) deps.executeCommandForClientId(clientId, cmd);
-        else deps.executeCommand(cmd);
-      };
 
       const cleanupCommands: NodeCommand[] = [
         { action: 'stopSound', payload: {} },

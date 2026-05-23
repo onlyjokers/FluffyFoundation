@@ -19,7 +19,7 @@ test('buildCustomNodeProjectionFrame wraps every projected node using adapter bo
       },
       {
         id: 'view:custom:custom-1:client',
-        type: 'client-object',
+        type: 'client-loader',
         position: { x: 560, y: 130 },
         config: { projectionOwnerNodeId: 'custom-1' },
         inputValues: {},

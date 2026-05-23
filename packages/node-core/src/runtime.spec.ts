@@ -64,10 +64,18 @@ test('input value changes retrigger command sink effects', async () => {
         outputValues: {},
       },
       {
-        id: 'client',
-        type: 'client-object',
+        id: 'loader',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
         config: { clientId: 'client-a' },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'executor',
+        type: 'client-executor',
+        position: { x: 0, y: 0 },
+        config: {},
         inputValues: {},
         outputValues: {},
       },
@@ -84,8 +92,15 @@ test('input value changes retrigger command sink effects', async () => {
         id: 'c2',
         sourceNodeId: 'agg',
         sourcePortId: 'cmd',
-        targetNodeId: 'client',
+        targetNodeId: 'executor',
         targetPortId: 'in',
+      },
+      {
+        id: 'c3',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
       },
     ],
   };
@@ -109,7 +124,7 @@ test('input value changes retrigger command sink effects', async () => {
   assert.equal(updated.cmd.action, 'modulateSoundUpdate');
 });
 
-test('configured client-object target receives command sink effects', async () => {
+test('client loader selects client collections and executor routes command sink effects', async () => {
   const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
@@ -134,11 +149,19 @@ test('configured client-object target receives command sink effects', async () =
         outputValues: {},
       },
       {
-        id: 'client',
-        type: 'client-object',
+        id: 'loader',
+        type: 'client-loader',
         position: { x: 0, y: 0 },
-        config: { clientId: 'client-b' },
-        inputValues: { index: 1, range: 1, random: false },
+        config: {},
+        inputValues: { index: 1, range: 2, random: false },
+        outputValues: {},
+      },
+      {
+        id: 'executor',
+        type: 'client-executor',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
         outputValues: {},
       },
     ],
@@ -147,17 +170,50 @@ test('configured client-object target receives command sink effects', async () =
         id: 'c1',
         sourceNodeId: 'synth',
         sourcePortId: 'cmd',
-        targetNodeId: 'client',
+        targetNodeId: 'executor',
         targetPortId: 'in',
+      },
+      {
+        id: 'c2',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
       },
     ],
   });
 
   runtime.start();
-  await waitFor(() => commands.length > 0);
+  const loader = runtime.getNode('loader');
+  assert.ok(loader);
+  await waitFor(
+    () =>
+      Array.isArray(loader.outputValues.indexs) &&
+      (loader.outputValues.indexs as string[]).length === 2 &&
+      commands.some((entry) => entry.clientId === 'client-a') &&
+      commands.some((entry) => entry.clientId === 'client-b')
+  );
+  const loaderOutput = { ...loader.outputValues };
   runtime.stop();
 
-  assert.equal(commands[0].clientId, 'client-b');
+  assert.deepEqual(new Set(commands.map((entry) => entry.clientId)), new Set(['client-a', 'client-b']));
+  assert.deepEqual(loaderOutput.indexs, ['client-a', 'client-b']);
+  assert.equal(loaderOutput.number, 2);
+  assert.deepEqual((loaderOutput.client as { clientIds?: string[] }).clientIds, ['client-a', 'client-b']);
+});
+
+test('default registry replaces legacy client-object with loader and executor nodes', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  assert.equal(registry.get('client-object'), undefined);
+  assert.equal(registry.get('client-loader')?.label, 'Client Loader');
+  assert.equal(registry.get('client-executor')?.label, 'Client Executor');
 });
 
 test('default registry exposes int, float, and display-object for server semantic authority', () => {

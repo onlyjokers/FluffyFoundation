@@ -1,5 +1,5 @@
 /**
- * Purpose: Stable client selection helpers for client-object nodes.
+ * Purpose: Stable client selection helpers for client-loader nodes.
  */
 import { clampInt, coerceBoolean, hashStringDjb2 } from './utils.js';
 

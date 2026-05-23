@@ -10,16 +10,16 @@ import { targetManagedClient } from './client-target';
 
 export function registerDefaultRuntimeNodes(): void {
   registerDefaultNodeDefinitions(nodeRegistry, {
-  // Manager-side: resolve clientId from node config.
+  // Manager-side: client selection is resolved by Client Loader.
   getClientId: () => null,
-  // Client node selection should only enumerate audience clients; Display has its own `display-object` node.
+  // Client Loader selection should only enumerate audience clients; Display has its own `display-object` node.
   getAllClientIds: () =>
     (get(state).clients ?? [])
       .filter((c) => String(c?.group ?? '') !== 'display')
       .map((c) => String(c?.clientId ?? ''))
       .filter(Boolean),
   // Decouple Node Graph client targeting from Manager UI "selected clients".
-  // Client targeting must be driven by the graph itself (client-object inputs/config).
+  // Client targeting must be driven by the graph itself (client-loader inputs/config).
   getSelectedClientIds: () => [],
   getSensorForClientId: (clientId: string) => {
     if (!clientId) return null;

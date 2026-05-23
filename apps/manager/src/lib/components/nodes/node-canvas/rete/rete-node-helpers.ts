@@ -67,6 +67,10 @@ export function formatPortValue(portType: string, value: unknown): string | null
   if (portType === 'string' || portType === 'asset') return typeof value === 'string' ? value : null;
   if (portType === 'color') return typeof value === 'string' ? value : null;
   if (portType === 'client' && typeof value === 'object' && value) {
+    const clientIds = (value as AnyRecord).clientIds;
+    if (Array.isArray(clientIds) && clientIds.length > 0) {
+      return clientIds.map(String).filter(Boolean).join(', ');
+    }
     const clientId = (value as AnyRecord).clientId;
     return clientId ? String(clientId) : null;
   }

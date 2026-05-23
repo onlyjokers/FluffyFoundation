@@ -8,7 +8,7 @@ import type { GraphState, NodeInstance } from '$lib/nodes/types';
 
 const clientNode = (): NodeInstance => ({
   id: 'client-node',
-  type: 'client-object',
+  type: 'client-loader',
   position: { x: 0, y: 0 },
   config: { clientId: 'client-a' },
   inputValues: { index: 1, range: 1 },
