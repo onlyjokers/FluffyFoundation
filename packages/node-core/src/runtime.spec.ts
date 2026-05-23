@@ -399,15 +399,25 @@ test('client permission filter supports all and any permission matching', () => 
 
   assert.deepEqual(
     node.process({}, { microphone: true, motion: true, matchMode: 'all' }, { nodeId: 'filter', time: 0, deltaTime: 0 }),
-    { indexs: ['client-a'], number: 1, rejectedIndexs: ['client-b'] }
+    {
+      client: { clientId: 'client-a', clientIds: ['client-a'], sensors: null },
+      indexs: ['client-a'],
+      number: 1,
+      rejectedIndexs: ['client-b'],
+    }
   );
   assert.deepEqual(
     node.process({}, { microphone: true, motion: true, matchMode: 'any' }, { nodeId: 'filter', time: 0, deltaTime: 0 }),
-    { indexs: ['client-a', 'client-b'], number: 2, rejectedIndexs: [] }
+    {
+      client: { clientId: 'client-a', clientIds: ['client-a', 'client-b'], sensors: null },
+      indexs: ['client-a', 'client-b'],
+      number: 2,
+      rejectedIndexs: [],
+    }
   );
 });
 
-test('client permission filter pass-throughs empty requirements and filters loaded indexes', () => {
+test('client permission filter pass-throughs empty requirements and filters client input collections', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
     getClientId: () => null,
@@ -422,19 +432,77 @@ test('client permission filter pass-throughs empty requirements and filters load
 
   assert.deepEqual(
     node.process(
-      { loadIndexs: ['client-a', 'client-b'] },
+      { client: { clientId: 'client-a', clientIds: ['client-a', 'client-b'] } },
       { camera: true, matchMode: 'all' },
       { nodeId: 'filter', time: 0, deltaTime: 0 }
     ),
-    { indexs: ['client-b'], number: 1, rejectedIndexs: ['client-a'] }
+    {
+      client: { clientId: 'client-b', clientIds: ['client-b'], sensors: null },
+      indexs: ['client-b'],
+      number: 1,
+      rejectedIndexs: ['client-a'],
+    }
   );
   assert.deepEqual(
     node.process(
-      { loadIndexs: ['client-a', 'client-b'] },
+      { client: { clientId: 'client-a', clientIds: ['client-a', 'client-b'] } },
       { matchMode: 'all' },
       { nodeId: 'filter', time: 0, deltaTime: 0 }
     ),
-    { indexs: ['client-a', 'client-b'], number: 2, rejectedIndexs: [] }
+    {
+      client: { clientId: 'client-a', clientIds: ['client-a', 'client-b'], sensors: null },
+      indexs: ['client-a', 'client-b'],
+      number: 2,
+      rejectedIndexs: [],
+    }
+  );
+});
+
+test('client permission filter supports boolean inputs overriding permission config toggles', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b'],
+    getSelectedClientIds: () => [],
+    getClientPermissions: (clientId) =>
+      clientId === 'client-b' ? { camera: 'granted' } : { camera: 'denied' },
+    executeCommand: () => {},
+  });
+  const node = registry.get('client-permission-filter');
+  assert.ok(node);
+
+  assert.deepEqual(
+    node.inputs
+      .filter((input) => input.type === 'boolean')
+      .map((input) => input.id)
+      .sort(),
+    ['camera', 'geolocation', 'microphone', 'motion', 'wakeLock'].sort()
+  );
+  assert.deepEqual(
+    node.process(
+      { camera: false },
+      { camera: true, matchMode: 'all' },
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    ),
+    {
+      client: { clientId: 'client-a', clientIds: ['client-a', 'client-b'], sensors: null },
+      indexs: ['client-a', 'client-b'],
+      number: 2,
+      rejectedIndexs: [],
+    }
+  );
+  assert.deepEqual(
+    node.process(
+      { camera: true },
+      { camera: false, matchMode: 'all' },
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    ),
+    {
+      client: { clientId: 'client-b', clientIds: ['client-b'], sensors: null },
+      indexs: ['client-b'],
+      number: 1,
+      rejectedIndexs: ['client-a'],
+    }
   );
 });
 

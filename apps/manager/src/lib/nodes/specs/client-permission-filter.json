@@ -16,7 +16,14 @@
       }
     ]
   },
-  "inputs": [{ "id": "client", "label": "Client", "type": "client" }],
+  "inputs": [
+    { "id": "client", "label": "Client", "type": "client" },
+    { "id": "microphone", "label": "Microphone", "type": "boolean" },
+    { "id": "motion", "label": "Motion", "type": "boolean" },
+    { "id": "camera", "label": "Camera", "type": "boolean" },
+    { "id": "wakeLock", "label": "Wake Lock", "type": "boolean" },
+    { "id": "geolocation", "label": "Geolocation", "type": "boolean" }
+  ],
   "outputs": [
     { "id": "client", "label": "Client", "type": "client" },
     { "id": "indexs", "label": "Indexs", "type": "array" },

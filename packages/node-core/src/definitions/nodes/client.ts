@@ -35,8 +35,16 @@ function resolveClientSelection(
 
 const permissionConfigKeys: ClientPermissionName[] = ['microphone', 'motion', 'camera', 'wakeLock', 'geolocation'];
 
-function selectedPermissionKeys(config: Record<string, unknown>): ClientPermissionName[] {
-  return permissionConfigKeys.filter((key) => config[key] === true);
+function resolveRequiredPermissionKeys(
+  inputs: Record<string, unknown>,
+  config: Record<string, unknown>
+): ClientPermissionName[] {
+  return permissionConfigKeys.filter((key) => {
+    if (Object.prototype.hasOwnProperty.call(inputs, key)) {
+      return getBooleanValue(inputs[key]) === true;
+    }
+    return config[key] === true;
+  });
 }
 
 function hasGrantedPermission(permissions: ClientPermissions | null | undefined, key: ClientPermissionName): boolean {
@@ -122,7 +130,14 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
     type: 'client-permission-filter',
     label: 'Client Filter for Permissions',
     category: 'Objects',
-    inputs: [{ id: 'client', label: 'Client', type: 'client' }],
+    inputs: [
+      { id: 'client', label: 'Client', type: 'client' },
+      { id: 'microphone', label: 'Microphone', type: 'boolean' },
+      { id: 'motion', label: 'Motion', type: 'boolean' },
+      { id: 'camera', label: 'Camera', type: 'boolean' },
+      { id: 'wakeLock', label: 'Wake Lock', type: 'boolean' },
+      { id: 'geolocation', label: 'Geolocation', type: 'boolean' },
+    ],
     outputs: [
       { id: 'client', label: 'Client', type: 'client' },
       { id: 'indexs', label: 'Indexs', type: 'array' },
@@ -155,7 +170,7 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
       const candidates = inputClientIds.length > 0
         ? inputClientIds.filter((clientId) => audienceClients.includes(clientId))
         : audienceClients;
-      const required = selectedPermissionKeys(config);
+      const required = resolveRequiredPermissionKeys(inputs, config);
 
       if (required.length === 0) {
         return {

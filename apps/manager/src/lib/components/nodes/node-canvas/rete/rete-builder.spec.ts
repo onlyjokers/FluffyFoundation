@@ -499,6 +499,68 @@ test('input and config control changes dispatch explicit semantic commands', () 
   assert.deepEqual(params, [{ nodeId: 'param-1', patch: { gain: 2 } }]);
 });
 
+test('boolean config control can be toggled back to its initial value', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'toggle-node',
+    label: 'Toggle Node',
+    category: 'Values',
+    inputs: [],
+    outputs: [],
+    configSchema: [{ key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false }],
+    process: () => ({}),
+  });
+  const params: unknown[] = [];
+  const configUpdates: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'toggle-1',
+        type: 'toggle-node',
+        config: { enabled: false },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (nodeId, patch) => configUpdates.push({ nodeId, patch }),
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      boolean: new ClassicPreset.Socket('boolean'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeParams: (nodeId, patch) => {
+      params.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'toggle-1',
+    type: 'toggle-node',
+    config: { enabled: false },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const control = node.controls.enabled as { setValue(value: boolean): void };
+  control.setValue(true);
+  control.setValue(false);
+
+  assert.deepEqual(configUpdates, [
+    { nodeId: 'toggle-1', patch: { enabled: true } },
+    { nodeId: 'toggle-1', patch: { enabled: false } },
+  ]);
+  assert.deepEqual(params, [
+    { nodeId: 'toggle-1', patch: { enabled: true } },
+    { nodeId: 'toggle-1', patch: { enabled: false } },
+  ]);
+});
+
 test('display-object routing inputs render inline controls and dispatch semantic input commands', () => {
   const nodeRegistry = new NodeRegistry();
   nodeRegistry.register({

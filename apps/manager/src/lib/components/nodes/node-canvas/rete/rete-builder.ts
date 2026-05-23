@@ -477,14 +477,17 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           return false;
         })();
 
+        let lastValue = initial;
         node.addControl(
           key,
           new BooleanControl({
             label: field.label,
             initial,
             change: (value) => {
-              if (value === initial) return;
-              commitConfigValue(key, value);
+              const next = Boolean(value);
+              if (next === lastValue) return;
+              const accepted = commitConfigValue(key, next);
+              if (accepted) lastValue = next;
             },
           })
         );
