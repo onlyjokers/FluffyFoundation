@@ -396,12 +396,14 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
             : typeof instance.config?.[input.id] === 'string'
               ? String(instance.config[input.id])
               : String(configField.defaultValue ?? '');
+        let lastValue = initial;
         const control = new SelectControl({
           initial,
           options: configField.options ?? [],
           change: (value) => {
-            if (value === initial) return;
-            commitInputValue(input.id, value);
+            if (value === lastValue) return;
+            const accepted = commitInputValue(input.id, value);
+            if (accepted) lastValue = value;
           },
         });
         withControlMeta(control, { inline: true });
@@ -444,15 +446,17 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       const key = field.key;
       const current = instance.config?.[key] ?? field.defaultValue;
       if (field.type === 'select') {
+        let lastValue = String(current ?? '');
         node.addControl(
           key,
           new SelectControl({
             label: field.label,
-            initial: String(current ?? ''),
+            initial: lastValue,
             options: field.options ?? [],
             change: (value) => {
-              if (value === String(current ?? '')) return;
-              commitConfigValue(key, value);
+              if (value === lastValue) return;
+              const accepted = commitConfigValue(key, value);
+              if (accepted) lastValue = value;
             },
           })
         );

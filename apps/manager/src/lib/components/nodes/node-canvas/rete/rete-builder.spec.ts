@@ -561,6 +561,147 @@ test('boolean config control can be toggled back to its initial value', () => {
   ]);
 });
 
+test('select config control can be switched back to its initial value', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-fct-track',
+    label: 'Scene FCT Track',
+    category: 'Scene',
+    inputs: [],
+    outputs: [],
+    configSchema: [
+      {
+        key: 'variant',
+        label: 'Variant',
+        type: 'select',
+        defaultValue: 'shattered-reality',
+        options: [
+          { value: 'shattered-reality', label: 'shattered-reality' },
+          { value: 'liquid-chrome', label: 'liquid-chrome' },
+        ],
+      },
+    ],
+    process: () => ({}),
+  });
+  const params: unknown[] = [];
+  const configUpdates: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-fct-track',
+        config: { variant: 'shattered-reality' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (nodeId, patch) => configUpdates.push({ nodeId, patch }),
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeParams: (nodeId, patch) => {
+      params.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-fct-track',
+    config: { variant: 'shattered-reality' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const control = node.controls.variant as { setValue(value: string): void };
+  control.setValue('liquid-chrome');
+  control.setValue('shattered-reality');
+
+  assert.deepEqual(configUpdates, [
+    { nodeId: 'scene-1', patch: { variant: 'liquid-chrome' } },
+    { nodeId: 'scene-1', patch: { variant: 'shattered-reality' } },
+  ]);
+  assert.deepEqual(params, [
+    { nodeId: 'scene-1', patch: { variant: 'liquid-chrome' } },
+    { nodeId: 'scene-1', patch: { variant: 'shattered-reality' } },
+  ]);
+});
+
+test('inline select config-backed input can be switched back to its initial value', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-like-node',
+    label: 'Scene Like Node',
+    category: 'Scene',
+    inputs: [{ id: 'audioSource', label: 'Audio Source', type: 'string' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+    configSchema: [
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+        ],
+      },
+    ],
+    process: () => ({}),
+  });
+  const inputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-like-node',
+        config: { audioSource: 'microphone' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      string: new ClassicPreset.Socket('string'),
+      scene: new ClassicPreset.Socket('scene'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-like-node',
+    config: { audioSource: 'microphone' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const control = node.inputs.audioSource?.control as { setValue(value: string): void };
+  control.setValue('playback');
+  control.setValue('microphone');
+
+  assert.deepEqual(inputs, [
+    { nodeId: 'scene-1', patch: { audioSource: 'playback' } },
+    { nodeId: 'scene-1', patch: { audioSource: 'microphone' } },
+  ]);
+});
+
 test('display-object routing inputs render inline controls and dispatch semantic input commands', () => {
   const nodeRegistry = new NodeRegistry();
   nodeRegistry.register({
