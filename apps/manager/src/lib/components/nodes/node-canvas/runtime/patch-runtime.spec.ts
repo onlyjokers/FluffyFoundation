@@ -536,3 +536,198 @@ test('patch runtime redeploys when custom-node gate changes compiled topology', 
   );
   runtime.destroy();
 });
+
+test('patch runtime stops Display targets removed when display-object range shrinks', () => {
+  const displayNode = node('display-node', 'display-object');
+  displayNode.inputValues = { index: 1, range: 2, random: false };
+  const graph: GraphState = {
+    nodes: [node('scene', 'scene-fct-track'), node('out', 'scene-out'), displayNode],
+    connections: [
+      {
+        id: 'display-cmd',
+        sourceNodeId: 'out',
+        sourcePortId: 'cmd',
+        targetNodeId: 'display-node',
+        targetPortId: 'in',
+      },
+    ],
+  };
+  const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['display-object', definition('display-object', 'Display', [port('in', 'command')], [])],
+  ]);
+  const payload = basePayload();
+  payload.meta.loopId = 'patch:scene-out:out:display';
+
+  const runtime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: () => null,
+      exportGraphForPatchFromRootNodeIds: () => payload,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => graph,
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [
+        { clientId: 'display-1', group: 'display', connected: true },
+        { clientId: 'display-2', group: 'display', connected: true },
+      ],
+      selectedClientIds: [],
+    }),
+    displayTransport: {
+      getAvailability: () => ({
+        route: 'server',
+        hasLocalSession: false,
+        hasLocalReady: false,
+        hasRemoteDisplay: true,
+      }),
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (target, pluginName, command, nextPayload) => {
+        sent.push({ target, pluginName, command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start', 'deploy', 'start']);
+
+  sent.length = 0;
+  displayNode.inputValues = { index: 1, range: 1, random: false };
+  runtime.scheduleReconcile('display-selection', { immediate: true });
+
+  assert.deepEqual(
+    sent.map((message) => ({
+      target: message.target,
+      command: message.command,
+      loopId: (message.payload as { loopId?: string }).loopId,
+    })),
+    [
+      {
+        target: { mode: 'group', groupId: 'client:display-2' },
+        command: 'stop',
+        loopId: 'patch:scene-out:out:display',
+      },
+      {
+        target: { mode: 'group', groupId: 'client:display-2' },
+        command: 'remove',
+        loopId: 'patch:scene-out:out:display',
+      },
+    ]
+  );
+  runtime.destroy();
+});
+
+test('patch runtime detects display-object range shrink on the next runtime tick', () => {
+  const displayNode = node('display-node', 'display-object');
+  displayNode.inputValues = { index: 1, range: 2, random: false };
+  const graph: GraphState = {
+    nodes: [node('scene', 'scene-fct-track'), node('out', 'scene-out'), displayNode],
+    connections: [
+      {
+        id: 'display-cmd',
+        sourceNodeId: 'out',
+        sourcePortId: 'cmd',
+        targetNodeId: 'display-node',
+        targetPortId: 'in',
+      },
+    ],
+  };
+  const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['display-object', definition('display-object', 'Display', [port('in', 'command')], [])],
+  ]);
+  const payload = basePayload();
+  payload.meta.loopId = 'patch:scene-out:out:display';
+
+  const runtime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: () => null,
+      exportGraphForPatchFromRootNodeIds: () => payload,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => graph,
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [
+        { clientId: 'display-1', group: 'display', connected: true },
+        { clientId: 'display-2', group: 'display', connected: true },
+      ],
+      selectedClientIds: [],
+    }),
+    displayTransport: {
+      getAvailability: () => ({
+        route: 'server',
+        hasLocalSession: false,
+        hasLocalReady: false,
+        hasRemoteDisplay: true,
+      }),
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (target, pluginName, command, nextPayload) => {
+        sent.push({ target, pluginName, command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  sent.length = 0;
+
+  displayNode.inputValues = { index: 1, range: 1, random: false };
+  runtime.onTick();
+
+  assert.deepEqual(
+    sent.map((message) => ({
+      target: message.target,
+      command: message.command,
+      loopId: (message.payload as { loopId?: string }).loopId,
+    })),
+    [
+      {
+        target: { mode: 'group', groupId: 'client:display-2' },
+        command: 'stop',
+        loopId: 'patch:scene-out:out:display',
+      },
+      {
+        target: { mode: 'group', groupId: 'client:display-2' },
+        command: 'remove',
+        loopId: 'patch:scene-out:out:display',
+      },
+    ]
+  );
+  runtime.destroy();
+});

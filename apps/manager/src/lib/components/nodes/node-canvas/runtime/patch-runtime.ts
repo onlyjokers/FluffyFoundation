@@ -617,7 +617,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     patchRuntimeTargetsLastCheckAt = now;
 
     const planKey = resolvePatchDeploymentPlan()?.planKey ?? '';
-    if (planKey !== patchLastPlanKey) scheduleReconcile('runtime-target-change');
+    if (planKey !== patchLastPlanKey) {
+      scheduleReconcile('runtime-target-change', { immediate: true });
+    }
   };
 
   const onGraphStateChanged = () => {

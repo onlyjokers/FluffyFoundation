@@ -516,6 +516,7 @@ test('display-object routing inputs render inline controls and dispatch semantic
     process: () => ({}),
   });
   const inputs: unknown[] = [];
+  const routingInputs: unknown[] = [];
   const builder = createReteBuilder({
     nodeRegistry,
     nodeEngine: {
@@ -541,6 +542,12 @@ test('display-object routing inputs render inline controls and dispatch semantic
     sendSemanticNodeInputs: (nodeId, patch) => {
       inputs.push({ nodeId, patch });
       return true;
+    },
+    onClientNodeSelectInput: (nodeId, portId, value) => {
+      routingInputs.push({ nodeId, portId, value });
+    },
+    onClientNodeRandom: (nodeId, value) => {
+      routingInputs.push({ nodeId, portId: 'random', value });
     },
   });
 
@@ -571,6 +578,11 @@ test('display-object routing inputs render inline controls and dispatch semantic
     { nodeId: 'display-1', patch: { index: 2 } },
     { nodeId: 'display-1', patch: { range: 3 } },
     { nodeId: 'display-1', patch: { random: true } },
+  ]);
+  assert.deepEqual(routingInputs, [
+    { nodeId: 'display-1', portId: 'index', value: 2 },
+    { nodeId: 'display-1', portId: 'range', value: 3 },
+    { nodeId: 'display-1', portId: 'random', value: true },
   ]);
 });
 
@@ -632,6 +644,90 @@ test('display-object index and range controls use connected display count as the
   assert.deepEqual(inputs, [
     { nodeId: 'display-1', patch: { index: 2 } },
     { nodeId: 'display-1', patch: { range: 2 } },
+  ]);
+});
+
+test('display-object routing inputs dispatch when switching back to their initial values', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'display-object',
+    label: 'Display',
+    category: 'Objects',
+    inputs: [
+      { id: 'index', label: 'Index', type: 'number', min: 1, step: 1 },
+      { id: 'range', label: 'Range', type: 'number', min: 1, step: 1 },
+      { id: 'random', label: 'Random', type: 'boolean' },
+      { id: 'in', label: 'In', type: 'command', kind: 'sink' },
+    ],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const inputs: unknown[] = [];
+  const routingInputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      command: new ClassicPreset.Socket('command'),
+    },
+    getNumberParamOptions: () => [],
+    getDisplayClientCount: () => 2,
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+    onClientNodeSelectInput: (nodeId, portId, value) => {
+      routingInputs.push({ nodeId, portId, value });
+    },
+    onClientNodeRandom: (nodeId, value) => {
+      routingInputs.push({ nodeId, portId: 'random', value });
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'display-1',
+    type: 'display-object',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const indexControl = node.inputs.index?.control as ClassicPreset.InputControl<'number'>;
+  const rangeControl = node.inputs.range?.control as ClassicPreset.InputControl<'number'>;
+  const randomControl = node.inputs.random?.control as { setValue: (value: boolean) => void };
+
+  indexControl.setValue(2);
+  indexControl.setValue(1);
+  rangeControl.setValue(2);
+  rangeControl.setValue(1);
+  randomControl.setValue(true);
+  randomControl.setValue(false);
+
+  assert.deepEqual(inputs, [
+    { nodeId: 'display-1', patch: { index: 2 } },
+    { nodeId: 'display-1', patch: { index: 1 } },
+    { nodeId: 'display-1', patch: { range: 2 } },
+    { nodeId: 'display-1', patch: { range: 1 } },
+    { nodeId: 'display-1', patch: { random: true } },
+    { nodeId: 'display-1', patch: { random: false } },
+  ]);
+  assert.deepEqual(routingInputs, [
+    { nodeId: 'display-1', portId: 'index', value: 2 },
+    { nodeId: 'display-1', portId: 'index', value: 1 },
+    { nodeId: 'display-1', portId: 'range', value: 2 },
+    { nodeId: 'display-1', portId: 'range', value: 1 },
+    { nodeId: 'display-1', portId: 'random', value: true },
+    { nodeId: 'display-1', portId: 'random', value: false },
   ]);
 });
 

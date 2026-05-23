@@ -261,12 +261,15 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
 
           inp.addControl(
             (() => {
+              let lastValue = clamp(initial);
               const control = new ClassicPreset.InputControl('number', {
-                initial: clamp(initial),
+                initial: lastValue,
                 change: (value) => {
-                  if (value === initial) return;
                   const next = typeof value === 'number' ? clamp(value) : value;
-                  commitInputValue(input.id, next);
+                  if (next === lastValue) return;
+                  const accepted = commitInputValue(input.id, next);
+                  if (!accepted) return;
+                  if (typeof next === 'number') lastValue = next;
                   if (
                     !isEditorProjection &&
                     isSelectableTargetNode &&
@@ -308,11 +311,13 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               : typeof configValue === 'string'
                 ? configValue
                 : String(derivedDefault ?? '');
+          let lastValue = initial;
           const control = new ClassicPreset.InputControl('text', {
             initial,
             change: (value) => {
-              if (value === initial) return;
-              commitInputValue(input.id, value);
+              if (value === lastValue) return;
+              const accepted = commitInputValue(input.id, value);
+              if (accepted) lastValue = value;
             },
           });
           withControlMeta(control, { inline: true });
@@ -326,13 +331,16 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                 : forceInlineInput
                   ? false
                   : Boolean(derivedDefault);
+          let lastValue = initial;
           const control = new BooleanControl({
             initial,
             change: (value) => {
               const isCustomGate =
                 String(instance.type).startsWith(CUSTOM_NODE_TYPE_PREFIX) && input.id === 'gate';
-              if (!isCustomGate && value === initial) return;
-              commitInputValue(input.id, value);
+              if (!isCustomGate && value === lastValue) return;
+              const accepted = commitInputValue(input.id, value);
+              if (!accepted) return;
+              lastValue = value;
               if (!isEditorProjection && isSelectableTargetNode && input.id === 'random') {
                 opts.onClientNodeRandom?.(instance.id, value);
               }
