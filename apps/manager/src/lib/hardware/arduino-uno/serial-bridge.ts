@@ -5,7 +5,7 @@ import { get, writable, type Writable } from 'svelte/store';
 
 import { nodeEngine } from '$lib/nodes/engine';
 import {
-  collectArduinoUnoPayloads,
+  collectArduinoUnoSerialRoutes,
   diffArduinoUnoBridgeCommands,
   type ArduinoUnoBridgeActive,
   type ArduinoUnoBridgeCommand,
@@ -36,6 +36,7 @@ export type ArduinoUnoBridgeState = {
   lastCommand: string | null;
   activeNodes: number;
   pendingCommands: number;
+  connectedDevices: number;
 };
 
 const initialState: ArduinoUnoBridgeState = {
@@ -44,15 +45,21 @@ const initialState: ArduinoUnoBridgeState = {
   lastCommand: null,
   activeNodes: 0,
   pendingCommands: 0,
+  connectedDevices: 0,
+};
+
+type ArduinoUnoSerialDevice = {
+  id: string;
+  port: SerialPortLike;
+  writer: WritableStreamDefaultWriter<Uint8Array>;
+  active: Map<string, ArduinoUnoBridgeActive>;
 };
 
 class ArduinoUnoSerialBridge {
   public state: Writable<ArduinoUnoBridgeState> = writable(initialState);
 
-  private port: SerialPortLike | null = null;
-  private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private encoder = new TextEncoder();
-  private active = new Map<string, ArduinoUnoBridgeActive>();
+  private devices = new Map<string, ArduinoUnoSerialDevice>();
   private writeChain: Promise<void> = Promise.resolve();
 
   constructor() {
@@ -79,13 +86,19 @@ class ArduinoUnoSerialBridge {
       const writer = port.writable?.getWriter();
       if (!writer) throw new Error('Selected serial port is not writable.');
 
-      this.port = port;
-      this.writer = writer;
-      this.active.clear();
-      this.patchState({ status: 'connected', lastError: null, lastCommand: null, activeNodes: 0, pendingCommands: 0 });
+      const deviceId = this.createDeviceId();
+      this.devices.set(deviceId, { id: deviceId, port, writer, active: new Map() });
+      this.patchState({
+        status: 'connected',
+        lastError: null,
+        lastCommand: null,
+        activeNodes: 0,
+        pendingCommands: 0,
+        connectedDevices: this.devices.size,
+      });
       this.flushFromGraph();
     } catch (error) {
-      await this.closePort();
+      await this.closeAllDevices();
       this.patchState({
         status: 'error',
         lastError: error instanceof Error ? error.message : String(error),
@@ -95,8 +108,12 @@ class ArduinoUnoSerialBridge {
 
   async disconnect(): Promise<void> {
     await this.resetActivePins();
-    await this.closePort();
-    this.patchState({ status: this.isSupported() ? 'disconnected' : 'unsupported', pendingCommands: 0 });
+    await this.closeAllDevices();
+    this.patchState({
+      status: this.isSupported() ? 'disconnected' : 'unsupported',
+      pendingCommands: 0,
+      connectedDevices: 0,
+    });
   }
 
   private isSupported(): boolean {
@@ -104,30 +121,50 @@ class ArduinoUnoSerialBridge {
   }
 
   private flushFromGraph(): void {
-    if (!this.writer || get(this.state).status !== 'connected') return;
+    if (this.devices.size === 0 || get(this.state).status !== 'connected') return;
 
-    const { payloads, errors } = collectArduinoUnoPayloads({
+    const routesPlan = collectArduinoUnoSerialRoutes({
       graph: get(nodeEngine.graphState),
       getComputedInputs: (nodeId) => nodeEngine.getLastComputedInputs(nodeId),
+      arduinoIdsInOrder: () => Array.from(this.devices.keys()),
     });
-    const plan = diffArduinoUnoBridgeCommands(this.active, payloads);
-    this.active = plan.nextActive;
+    const nextActiveByDevice = new Map<string, Map<string, ArduinoUnoBridgeActive>>();
+    const groupedRoutes = new Map<string, typeof routesPlan.routes>();
+    for (const route of routesPlan.routes) {
+      const list = groupedRoutes.get(route.arduinoId) ?? [];
+      list.push(route);
+      groupedRoutes.set(route.arduinoId, list);
+    }
 
-    if (errors.length > 0) {
-      this.patchState({ lastError: errors.map((error) => `${error.nodeId}: ${error.message}`).join('; ') });
+    if (routesPlan.errors.length > 0) {
+      this.patchState({ lastError: routesPlan.errors.map((error) => `${error.nodeId}: ${error.message}`).join('; ') });
     } else {
       this.patchState({ lastError: null });
     }
 
-    if (plan.commands.length > 0) this.enqueueCommands(plan.commands);
-    this.patchState({ activeNodes: this.active.size });
+    const commands: Array<{ deviceId: string; command: ArduinoUnoBridgeCommand }> = [];
+    for (const [deviceId, device] of this.devices) {
+      const nextPayloads = (groupedRoutes.get(deviceId) ?? []).map((route) => route.payload);
+      const plan = diffArduinoUnoBridgeCommands(device.active, nextPayloads);
+      nextActiveByDevice.set(deviceId, plan.nextActive);
+      for (const command of plan.commands) commands.push({ deviceId, command });
+    }
+
+    for (const [deviceId, nextActive] of nextActiveByDevice) {
+      const device = this.devices.get(deviceId);
+      if (device) device.active = nextActive;
+    }
+
+    if (commands.length > 0) this.enqueueCommands(commands);
+    const activeNodes = Array.from(this.devices.values()).reduce((sum, device) => sum + device.active.size, 0);
+    this.patchState({ activeNodes, connectedDevices: this.devices.size });
   }
 
-  private enqueueCommands(commands: ArduinoUnoBridgeCommand[]): void {
+  private enqueueCommands(commands: Array<{ deviceId: string; command: ArduinoUnoBridgeCommand }>): void {
     this.patchState({ pendingCommands: get(this.state).pendingCommands + commands.length });
     this.writeChain = this.writeChain.then(async () => {
       for (const entry of commands) {
-        await this.writeCommand(entry.command);
+        await this.writeCommand(entry.deviceId, entry.command.command);
       }
     });
     this.writeChain.catch((error) => {
@@ -138,9 +175,10 @@ class ArduinoUnoSerialBridge {
     });
   }
 
-  private async writeCommand(command: string): Promise<void> {
-    if (!this.writer) return;
-    await this.writer.write(this.encoder.encode(command));
+  private async writeCommand(deviceId: string, command: string): Promise<void> {
+    const device = this.devices.get(deviceId);
+    if (!device) return;
+    await device.writer.write(this.encoder.encode(command));
     this.patchState({
       lastCommand: command.trim(),
       pendingCommands: Math.max(0, get(this.state).pendingCommands - 1),
@@ -148,37 +186,42 @@ class ArduinoUnoSerialBridge {
   }
 
   private async resetActivePins(): Promise<void> {
-    if (!this.writer || this.active.size === 0) {
-      this.active.clear();
+    if (this.devices.size === 0) {
       this.patchState({ activeNodes: 0 });
       return;
     }
-    const plan = diffArduinoUnoBridgeCommands(this.active, []);
-    this.active.clear();
-    this.enqueueCommands(plan.commands);
+    const commands: Array<{ deviceId: string; command: ArduinoUnoBridgeCommand }> = [];
+    for (const [deviceId, device] of this.devices) {
+      if (device.active.size === 0) continue;
+      const plan = diffArduinoUnoBridgeCommands(device.active, []);
+      device.active.clear();
+      for (const command of plan.commands) commands.push({ deviceId, command });
+    }
+    if (commands.length > 0) this.enqueueCommands(commands);
     await this.writeChain;
     this.patchState({ activeNodes: 0 });
   }
 
-  private async closePort(): Promise<void> {
-    const writer = this.writer;
-    const port = this.port;
-    this.writer = null;
-    this.port = null;
+  private async closeAllDevices(): Promise<void> {
+    const devices = Array.from(this.devices.values());
+    this.devices.clear();
 
-    try {
-      writer?.releaseLock();
-    } catch {
-      // Ignore cleanup failures; the following connect attempt will request a fresh port.
-    }
-
-    if (port) {
+    for (const device of devices) {
       try {
-        await port.close();
+        device.writer.releaseLock();
+      } catch {
+        // Ignore cleanup failures; the following connect attempt will request a fresh port.
+      }
+      try {
+        await device.port.close();
       } catch (error) {
         this.patchState({ lastError: error instanceof Error ? error.message : String(error) });
       }
     }
+  }
+
+  private createDeviceId(): string {
+    return `arduino-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
   private patchState(patch: Partial<ArduinoUnoBridgeState>): void {

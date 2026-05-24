@@ -78,6 +78,7 @@ type ReteBuilderOptions = {
   onNodeActivity?: (nodeId: string, portId: string) => void;
   getAudienceClientCount?: () => number;
   getDisplayClientCount?: () => number;
+  getArduinoDeviceCount?: () => number;
   onClientNodePick?: (nodeId: string, clientId: string) => void;
   onClientNodeSelectInput?: (nodeId: string, portId: 'index' | 'range', value: number) => void;
   onClientNodeRandom?: (nodeId: string, value: boolean) => void;
@@ -218,7 +219,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       const current = instance.inputValues?.[input.id];
       const derivedDefault = hasDefault ? input.defaultValue : configField?.defaultValue;
       const isSelectableTargetNode =
-        instance.type === 'client-loader' || instance.type === 'display-object';
+        instance.type === 'client-loader' || instance.type === 'display-object' || instance.type === 'arduino-object';
       const forceInlineInput =
         isSelectableTargetNode && (input.id === 'index' || input.id === 'range' || input.id === 'random');
       const hasInitial =
@@ -237,6 +238,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                   const raw =
                     instance.type === 'display-object'
                       ? opts.getDisplayClientCount?.()
+                      : instance.type === 'arduino-object'
+                        ? opts.getArduinoDeviceCount?.()
                       : opts.getAudienceClientCount?.();
                   const count = Math.floor(Number(raw));
                   return Number.isFinite(count) && count > 0 ? count : undefined;

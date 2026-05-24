@@ -5,7 +5,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { GraphState } from '$lib/nodes/types';
-import { diffArduinoUnoBridgeCommands, collectArduinoUnoPayloads } from './bridge-core';
+import {
+  collectArduinoUnoPayloads,
+  diffArduinoUnoBridgeCommands,
+  resolveArduinoUnoDeviceTargets,
+  collectArduinoUnoSerialRoutes,
+} from './bridge-core';
 
 const graph: GraphState = {
   nodes: [
@@ -37,9 +42,119 @@ test('collectArduinoUnoPayloads reads Arduino node inputs from computed values f
 
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.payloads, [
-    { action: 'pwm', nodeId: 'pwm-1', pin: 9, value: 0.75 },
-    { action: 'digital', nodeId: 'digital-1', pin: 13, value: true },
+    { target: 'arduino', action: 'pwm', nodeId: 'pwm-1', pin: 9, value: 0.75 },
+    { target: 'arduino', action: 'digital', nodeId: 'digital-1', pin: 13, value: true },
   ]);
+});
+
+test('collectArduinoUnoSerialRoutes only emits commands routed through Static Serial Player to Arduino', () => {
+  const result = collectArduinoUnoSerialRoutes({
+    graph: {
+      nodes: [
+        {
+          id: 'pwm-1',
+          type: 'plugin:arduino-uno:pwm',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: { value: 0.75, pin: 9 },
+          outputValues: {},
+        },
+        {
+          id: 'player-1',
+          type: 'static-serial-player',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'arduino-1',
+          type: 'arduino-object',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: { index: 2, range: 1, random: false },
+          outputValues: {},
+        },
+        {
+          id: 'unrouted-digital',
+          type: 'plugin:arduino-uno:digital',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: { value: true, pin: 13 },
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'c1',
+          sourceNodeId: 'pwm-1',
+          sourcePortId: 'cmd',
+          targetNodeId: 'player-1',
+          targetPortId: 'in',
+        },
+        {
+          id: 'c2',
+          sourceNodeId: 'player-1',
+          sourcePortId: 'cmd',
+          targetNodeId: 'arduino-1',
+          targetPortId: 'in',
+        },
+      ],
+    },
+    getComputedInputs: () => null,
+    arduinoIdsInOrder: () => ['uno-a', 'uno-b'],
+  });
+
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.routes, [
+    {
+      arduinoId: 'uno-b',
+      payload: { target: 'arduino', action: 'pwm', nodeId: 'pwm-1', pin: 9, value: 0.75 },
+    },
+  ]);
+});
+
+test('resolveArduinoUnoDeviceTargets supports index range random and clamps to available devices', () => {
+  const graph: GraphState = {
+    nodes: [
+      {
+        id: 'arduino-1',
+        type: 'arduino-object',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { index: 99, range: 99, random: false },
+        outputValues: {},
+      },
+      {
+        id: 'arduino-2',
+        type: 'arduino-object',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { index: 2, range: 2, random: true },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  assert.deepEqual(
+    resolveArduinoUnoDeviceTargets({
+      graph,
+      nodeId: 'arduino-1',
+      arduinoIdsInOrder: () => ['uno-a', 'uno-b', 'uno-c'],
+      getComputedInputs: () => null,
+    }),
+    { explicit: true, ids: ['uno-c', 'uno-a', 'uno-b'] }
+  );
+  assert.deepEqual(
+    resolveArduinoUnoDeviceTargets({
+      graph,
+      nodeId: 'arduino-2',
+      arduinoIdsInOrder: () => ['uno-a', 'uno-b', 'uno-c'],
+      getComputedInputs: () => null,
+    }),
+    { explicit: true, ids: ['uno-b', 'uno-c'] }
+  );
 });
 
 test('diffArduinoUnoBridgeCommands emits writes, dedupes unchanged values, and resets removed nodes', () => {

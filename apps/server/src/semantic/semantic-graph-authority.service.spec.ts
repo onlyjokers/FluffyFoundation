@@ -163,14 +163,30 @@ test('SemanticGraphAuthorityService exposes Arduino UNO plugin node definitions 
   const { service } = createService();
   const snapshot = service.getSnapshot();
   const arduinoTypes = snapshot.definitions
-    .filter((definition) => definition.type.startsWith('plugin:arduino-uno:'))
+    .filter(
+      (definition) =>
+        definition.type.startsWith('plugin:arduino-uno:') ||
+        definition.type === 'arduino-object' ||
+        definition.type === 'static-serial-player'
+    )
     .map((definition) => definition.type)
     .sort();
 
-  assert.deepEqual(arduinoTypes, ['plugin:arduino-uno:digital', 'plugin:arduino-uno:pwm']);
+  assert.deepEqual(arduinoTypes, [
+    'arduino-object',
+    'plugin:arduino-uno:digital',
+    'plugin:arduino-uno:pwm',
+    'static-serial-player',
+  ]);
   const pwm = snapshot.definitions.find((definition) => definition.type === 'plugin:arduino-uno:pwm');
   assert.equal(pwm?.aiSummary?.platforms.includes('manager'), true);
   assert.equal(pwm?.aiSummary?.permissions.includes('hardware:serial'), true);
+  const arduino = snapshot.definitions.find((definition) => definition.type === 'arduino-object');
+  assert.equal(arduino?.aiSummary?.category, 'Objects');
+  assert.equal(arduino?.aiSummary?.ports.inputs.some((port) => port.id === 'in' && port.type === 'command'), true);
+  const serialPlayer = snapshot.definitions.find((definition) => definition.type === 'static-serial-player');
+  assert.equal(serialPlayer?.aiSummary?.category, 'Player');
+  assert.equal(serialPlayer?.aiSummary?.ports.outputs.some((port) => port.id === 'cmd' && port.type === 'command'), true);
 });
 
 test('SemanticGraphAuthorityService accepts display-object nodes for server-owned snapshots', () => {

@@ -1088,6 +1088,55 @@ test('display-object index and range controls use connected display count as the
   ]);
 });
 
+test('arduino-object index and range controls use connected arduino count as their max', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'arduino-object',
+    label: 'Arduino',
+    category: 'Objects',
+    inputs: [
+      { id: 'index', label: 'Index', type: 'number', min: 1, step: 1 },
+      { id: 'range', label: 'Range', type: 'number', min: 1, step: 1 },
+      { id: 'random', label: 'Random', type: 'boolean' },
+    ],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+  });
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      number: new ClassicPreset.Socket('number'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      command: new ClassicPreset.Socket('command'),
+    },
+    getNumberParamOptions: () => [],
+    getArduinoDeviceCount: () => 2,
+    sendNodeOverride: () => {},
+  });
+
+  const node = builder.buildReteNode({
+    id: 'arduino-1',
+    type: 'arduino-object',
+    config: {},
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const indexControl = node.inputs.index?.control as ClassicPreset.InputControl<'number'>;
+  const rangeControl = node.inputs.range?.control as ClassicPreset.InputControl<'number'>;
+
+  assert.equal((indexControl as unknown as { max?: number }).max, 2);
+  assert.equal((rangeControl as unknown as { max?: number }).max, 2);
+});
+
 test('display-object routing inputs dispatch when switching back to their initial values', () => {
   const nodeRegistry = new NodeRegistry();
   nodeRegistry.register({

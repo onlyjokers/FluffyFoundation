@@ -32,8 +32,8 @@ Purpose: Manager-local Arduino UNO serial bridge controls and status.
     </div>
 
     <div class="actions">
-      <Button variant="primary" size="sm" on:click={connect} disabled={connected || busy || unsupported}>
-        Connect
+      <Button variant="primary" size="sm" on:click={connect} disabled={busy || unsupported}>
+        {connected ? 'Add Device' : 'Connect'}
       </Button>
       <Button variant="ghost" size="sm" on:click={disconnect} disabled={!connected && bridge.status !== 'error'}>
         Disconnect
@@ -41,6 +41,10 @@ Purpose: Manager-local Arduino UNO serial bridge controls and status.
     </div>
 
     <dl class="metrics">
+      <div>
+        <dt>Devices</dt>
+        <dd>{bridge.connectedDevices}</dd>
+      </div>
       <div>
         <dt>Active nodes</dt>
         <dd>{bridge.activeNodes}</dd>
