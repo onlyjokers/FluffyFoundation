@@ -78,6 +78,7 @@ export type NodeRuntime =
   | { kind: 'client-executor' }
   | { kind: 'url-session' }
   | { kind: 'url-to-qr-generator' }
+  | { kind: 'gpt-image-gen' }
   | { kind: 'client-permission-filter' }
   | { kind: 'client-url-session-filter' }
   | { kind: 'display-object' }

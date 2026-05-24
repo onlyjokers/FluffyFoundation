@@ -58,6 +58,7 @@ import {
   createToneReverbNode,
 } from './nodes/audio.js';
 import {
+  createGptImageGenNode,
   createLoadAudioAssetFromAssetsNode,
   createLoadAudioFromAssetsNode,
   createLoadAudioFromLocalNode,
@@ -162,6 +163,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createLoadAudioFromLocalNode,
     createLoadImageFromAssetsNode,
     createLoadImageFromLocalNode,
+    () => createGptImageGenNode(deps),
     // Image modulation nodes
     createUrlToQrGeneratorNode,
     createImgScaleNode,

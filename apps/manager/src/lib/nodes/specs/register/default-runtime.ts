@@ -7,6 +7,7 @@ import { registerDefaultNodeDefinitions, type LatestSensorDataLike, type NodeCom
 import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, clientUiInteractions, getSDK, sensorData, state } from '$lib/stores/manager';
 import { targetManagedClient } from './client-target';
+import { createManagerImageAssetNodeDeps } from './image-asset-node-deps';
 
 export function registerDefaultRuntimeNodes(): void {
   registerDefaultNodeDefinitions(nodeRegistry, {
@@ -85,6 +86,7 @@ export function registerDefaultRuntimeNodes(): void {
       return pressed;
     },
   },
+  imageAssets: createManagerImageAssetNodeDeps(),
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {
     nodeRegistry.register(definition);

@@ -403,6 +403,120 @@ test('url to qr generator converts a string input into an image data url', () =>
   assert.match(decodeURIComponent(String(result.image).split(',', 2)[1] ?? ''), /<svg/);
 });
 
+test('gpt image gen exposes prompt image trigger inputs and image asset outputs', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    imageAssets: {
+      getGeneratedImageAsset: () => '',
+    },
+  });
+
+  const node = registry.get('gpt-image-gen');
+  assert.ok(node);
+  assert.equal(node.label, 'GPT Image Gen');
+  assert.deepEqual(node.inputs.map((input) => [input.id, input.type]), [
+    ['prompt', 'string'],
+    ['image', 'image'],
+    ['trigger', 'boolean'],
+  ]);
+  assert.deepEqual(node.outputs.map((output) => [output.id, output.type]), [
+    ['image', 'image'],
+    ['assetId', 'string'],
+  ]);
+  assert.equal(node.configSchema.find((field) => field.key === 'model')?.defaultValue, 'gpt-image-2');
+  assert.equal(node.configSchema.find((field) => field.key === 'size')?.defaultValue, '1024x1024');
+  assert.equal(node.configSchema.find((field) => field.key === 'quality')?.defaultValue, 'low');
+});
+
+test('gpt image gen triggers generation on rising edges and reuses same-signature cache', () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const readyAssetBySignature = new Map<string, string>();
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    imageAssets: {
+      getGeneratedImageAsset: (request) => {
+        const signature = JSON.stringify(request);
+        const ready = readyAssetBySignature.get(signature);
+        if (ready) return ready;
+        calls.push(request);
+        const assetId = calls.length === 1 ? 'asset-1' : 'asset-2';
+        readyAssetBySignature.set(signature, assetId);
+        return assetId;
+      },
+    },
+  });
+
+  const node = registry.get('gpt-image-gen');
+  assert.ok(node);
+  const context = { nodeId: 'gpt-image-gen-test', time: 0, deltaTime: 0 };
+  const config = { model: 'gpt-image-2', size: '1024x1024', quality: 'low' };
+  const baseInputs = {
+    prompt: 'a small red cube on a table',
+    image: 'asset:source-image',
+  };
+
+  assert.deepEqual(node.process({ ...baseInputs, trigger: false }, config, context), {
+    image: '',
+    assetId: '',
+  });
+  assert.equal(calls.length, 0);
+
+  assert.deepEqual(node.process({ ...baseInputs, trigger: true }, config, context), {
+    image: 'asset:asset-1',
+    assetId: 'asset-1',
+  });
+  assert.deepEqual(calls[0], {
+    prompt: 'a small red cube on a table',
+    image: 'asset:source-image',
+    model: 'gpt-image-2',
+    size: '1024x1024',
+    quality: 'low',
+  });
+
+  assert.deepEqual(node.process({ ...baseInputs, trigger: true }, config, context), {
+    image: 'asset:asset-1',
+    assetId: 'asset-1',
+  });
+  assert.equal(calls.length, 1);
+
+  assert.deepEqual(node.process({ ...baseInputs, trigger: false }, config, context), {
+    image: 'asset:asset-1',
+    assetId: 'asset-1',
+  });
+  assert.deepEqual(node.process({ ...baseInputs, trigger: true }, config, context), {
+    image: 'asset:asset-1',
+    assetId: 'asset-1',
+  });
+  assert.equal(calls.length, 1);
+
+  assert.deepEqual(
+    node.process({ ...baseInputs, prompt: 'a blue cube', trigger: true }, config, context),
+    {
+      image: 'asset:asset-1',
+      assetId: 'asset-1',
+    }
+  );
+  assert.equal(calls.length, 1);
+
+  node.process({ ...baseInputs, prompt: 'a blue cube', trigger: false }, config, context);
+  assert.deepEqual(
+    node.process({ ...baseInputs, prompt: 'a blue cube', trigger: true }, config, context),
+    {
+      image: 'asset:asset-2',
+      assetId: 'asset-2',
+    }
+  );
+  assert.equal(calls.length, 2);
+});
+
 test('client permission filter supports all and any permission matching', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {

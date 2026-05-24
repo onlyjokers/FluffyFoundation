@@ -50,6 +50,19 @@ export type ClientUiDeps = {
   clearClientUi?: () => void;
 };
 
+export type GeneratedImageAssetRequest = {
+  prompt: string;
+  image?: string;
+  model?: string;
+  size?: string;
+  quality?: string;
+};
+
+export type ImageAssetNodeDeps = {
+  getGeneratedImageAsset?: (request: GeneratedImageAssetRequest) => string | null | undefined;
+  peekGeneratedImageAsset?: (request: GeneratedImageAssetRequest) => string | null | undefined;
+};
+
 export type ClientObjectDeps = {
   getClientId: () => string | null;
   /**
@@ -99,4 +112,8 @@ export type ClientObjectDeps = {
    * Client-side rendered UI bridge for ClientUI nodes.
    */
   clientUi?: ClientUiDeps;
+  /**
+   * Manager-side image generation and asset persistence bridge.
+   */
+  imageAssets?: ImageAssetNodeDeps;
 };

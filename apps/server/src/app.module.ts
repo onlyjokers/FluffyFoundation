@@ -9,6 +9,7 @@ import { LocalMediaModule } from './local-media/local-media.module.js';
 import { SemanticModule } from './semantic/semantic.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { AliyunTtsModule } from './tts/aliyun-tts.module.js';
+import { OpenAiImageModule } from './ai-image/openai-image.module.js';
 
 @Module({
     imports: [
@@ -21,6 +22,7 @@ import { AliyunTtsModule } from './tts/aliyun-tts.module.js';
         SemanticModule,
         AiModule,
         AliyunTtsModule,
+        OpenAiImageModule,
     ],
     controllers: [AppController],
 })

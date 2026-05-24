@@ -11,6 +11,8 @@ export type {
   ClientUiLayerItem,
   ClientUiState,
   ClientSensorMessage,
+  GeneratedImageAssetRequest,
+  ImageAssetNodeDeps,
   LatestSensorDataLike,
   NodeCommand,
 } from './definitions/types.js';
