@@ -123,6 +123,16 @@ function normalizeKind(raw: unknown): AssetKind | null {
   return null;
 }
 
+function normalizeStoredAssetRecord(asset: StoredAssetRecord): StoredAssetRecord {
+  return {
+    ...defaultAssetRecordFields(),
+    ...asset,
+    variants: Array.isArray(asset.variants) ? asset.variants : defaultAssetRecordFields().variants,
+    cachePolicy: asset.cachePolicy ?? defaultAssetRecordFields().cachePolicy,
+    permissions: asset.permissions ?? defaultAssetRecordFields().permissions,
+  };
+}
+
 @Injectable()
 export class AssetsService {
   readonly config: AssetServiceConfig = readAssetServiceConfig();
@@ -237,8 +247,9 @@ export class AssetsService {
       for (const asset of parsed.assets) {
         if (!asset?.id || typeof asset.id !== 'string') continue;
         if (!asset?.sha256 || typeof asset.sha256 !== 'string') continue;
-        byId.set(asset.id, asset);
-        bySha256.set(asset.sha256, asset.id);
+        const normalized = normalizeStoredAssetRecord(asset);
+        byId.set(normalized.id, normalized);
+        bySha256.set(normalized.sha256, normalized.id);
       }
       this.index = { byId, bySha256 };
     } catch (err: unknown) {
