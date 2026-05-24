@@ -2,6 +2,7 @@
  * Purpose: Create manager NodeDefinition objects from JSON node specs.
  */
 import { get } from 'svelte/store';
+import { getCommandArrayDiffMetadata } from '@shugu/node-core';
 import { type ControlAction, type ControlPayload } from '@shugu/protocol';
 import type { NodeDefinition, ProcessContext } from '../../types';
 import { parameterRegistry } from '$lib/parameters/registry';
@@ -12,7 +13,7 @@ import { mapRangeWithOptions } from '$lib/features/midi/midi-math';
 import { displayObjectLogLastAt, midiBooleanState, midiSourceKey } from './client-selection';
 import { createCommandProcess } from './command-mapping';
 import { coreRuntimeImplByKind } from './core-runtime';
-import { sendDisplayNodeCommand } from './display-targets';
+import { cleanupDisplayActionFor, sendDisplayNodeCommand } from './display-targets';
 import { asRecord, coerceBoolean, isFiniteNumber } from './helpers';
 import type { MidiBooleanState, NodeRuntime, NodeSpec } from './types';
 
@@ -69,11 +70,57 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
             }
           }
 
+          const activeActions = new Set<ControlAction>();
+          const commandDiff = getCommandArrayDiffMetadata(raw);
+          if (commandDiff) {
+            for (const action of commandDiff.currentActions) activeActions.add(action as ControlAction);
+          }
+          for (const cmd of commands) {
+            const cmdRecord = asRecord(cmd);
+            const actionRaw = cmdRecord?.action;
+            if (!commandDiff && typeof actionRaw === 'string' && actionRaw !== '__commandRemoved') {
+              activeActions.add(actionRaw as ControlAction);
+            }
+          }
+
           for (const cmd of commands) {
             const cmdRecord = asRecord(cmd);
             if (!cmdRecord) continue;
             const actionRaw = cmdRecord.action;
             if (typeof actionRaw !== 'string') continue;
+            if (actionRaw === '__commandRemoved') {
+              const removedPayload = asRecord(cmdRecord.payload);
+              const removedActionRaw = removedPayload?.action;
+              if (typeof removedActionRaw !== 'string') continue;
+              const cleanup = cleanupDisplayActionFor(removedActionRaw as ControlAction);
+              if (!cleanup) continue;
+              sendDisplayNodeCommand({
+                nodeId,
+                clients: (get(state).clients ?? []).map((client) => ({
+                  clientId: String(client.clientId ?? ''),
+                  group: String(client.group ?? ''),
+                  connected: client.connected !== false,
+                })),
+                node: runtimeNode
+                  ? {
+                      config: runtimeNode.config as Record<string, unknown>,
+                      inputValues: runtimeNode.inputValues as Record<string, unknown>,
+                    }
+                  : selectedDisplayId
+                    ? { config: { displayId: selectedDisplayId }, inputValues: {} }
+                    : null,
+                computedInputs,
+                graph: graphState,
+                action: cleanup.action,
+                activeActions,
+                payload: cleanup.payload,
+                executeAt: undefined,
+                sendLocalControl: (nextAction, nextPayload, nextExecuteAt) =>
+                  displayTransport.sendControl(nextAction, nextPayload, nextExecuteAt),
+                sendDisplayOperation: sdk ? (operation) => sdk.sendDisplayOperation(operation) : undefined,
+              });
+              continue;
+            }
             const action = actionRaw as ControlAction;
             const payloadRecord = asRecord(cmdRecord.payload) ?? {};
             const payload = payloadRecord as ControlPayload;
@@ -97,6 +144,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
               computedInputs,
               graph: graphState,
               action,
+              activeActions,
               payload,
               executeAt,
               sendLocalControl: (nextAction, nextPayload, nextExecuteAt) =>

@@ -30,6 +30,7 @@ export type ResolveDisplayNodeTargetsOptions = {
 
 export type SendDisplayNodeCommandOptions = ResolveDisplayNodeTargetsOptions & {
   action: ControlAction;
+  activeActions?: Set<ControlAction>;
   payload: ControlPayload;
   executeAt?: number;
   sendLocalControl: (action: ControlAction, payload: ControlPayload, executeAt?: number) => void;
@@ -162,6 +163,12 @@ function cleanupActionFor(action: ControlAction): { action: ControlAction; paylo
   }
 }
 
+export function cleanupDisplayActionFor(
+  action: ControlAction
+): { action: ControlAction; payload: ControlPayload } | null {
+  return cleanupActionFor(action);
+}
+
 function sendDisplayOperationToId(
   options: SendDisplayNodeCommandOptions,
   displayId: string,
@@ -190,6 +197,14 @@ function cleanupRouteState(
     const cleanup = cleanupActionFor(action);
     const kept = ids.filter((displayId) => keepIds.has(displayId));
     if (!cleanup) continue;
+
+    if (options.activeActions && !options.activeActions.has(action)) {
+      ids.forEach((displayId, index) =>
+        sendDisplayOperationToId(options, displayId, cleanup.action, cleanup.payload, index)
+      );
+      previous.activeByAction.delete(action);
+      continue;
+    }
     ids
       .filter((displayId) => !keepIds.has(displayId))
       .forEach((displayId, index) =>
@@ -232,8 +247,14 @@ export function sendDisplayNodeCommand(options: SendDisplayNodeCommandOptions): 
       sendDisplayOperationToId(options, displayId, options.action, options.payload, index);
     });
     const nextState: DisplayRouteState = previous ?? { activeByAction: new Map() };
-    nextState.activeByAction.set(options.action, resolved.ids);
-    displayRouteStateByNode.set(options.nodeId, nextState);
+    if (cleanupActionFor(options.action)) {
+      nextState.activeByAction.set(options.action, resolved.ids);
+      displayRouteStateByNode.set(options.nodeId, nextState);
+    } else if (nextState.activeByAction.size > 0) {
+      displayRouteStateByNode.set(options.nodeId, nextState);
+    } else {
+      displayRouteStateByNode.delete(options.nodeId);
+    }
 
     return { route: 'remote', explicit: true, ids: resolved.ids };
   }

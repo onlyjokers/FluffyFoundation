@@ -6,6 +6,7 @@
 export * from './types.js';
 export * from './registry.js';
 export * from './runtime.js';
+export * from './runtime-watchdog.js';
 export * from './definitions.js';
 export * from './graph-state/changes.js';
 export * from './graph-state/history.js';

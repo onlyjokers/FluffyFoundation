@@ -15,6 +15,11 @@ type SinkSignatureEntry = {
   signature: string;
 };
 
+export type CommandArrayDiffMetadata = {
+  currentActions: string[];
+  removedActions: string[];
+};
+
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 
@@ -123,7 +128,33 @@ export const recordSinkSignature = (
   return null;
 };
 
+export const commandActionsFromValue = (value: unknown): string[] => {
+  const out: string[] = [];
+  const visit = (item: unknown) => {
+    if (Array.isArray(item)) {
+      item.forEach(visit);
+      return;
+    }
+    const record = asRecord(item);
+    const action = typeof record?.action === 'string' ? record.action : '';
+    if (action && action !== '__commandRemoved' && !out.includes(action)) out.push(action);
+  };
+  visit(value);
+  return out;
+};
+
+export const getCommandArrayDiffMetadata = (value: unknown): CommandArrayDiffMetadata | null =>
+  value && typeof value === 'object'
+    ? (((value as { __commandArrayDiff?: CommandArrayDiffMetadata }).__commandArrayDiff ??
+        null) as CommandArrayDiffMetadata | null)
+    : null;
+
 export const diffCommandArray = (prev: unknown[], next: unknown[]): unknown[] => {
+  const missingCommandMarker = (action: string) => ({
+    action: '__commandRemoved',
+    payload: { action },
+  });
+
   const signatureOf = (value: unknown): string => {
     if (value === null) return 'null';
     if (value === undefined) return 'undefined';
@@ -157,6 +188,7 @@ export const diffCommandArray = (prev: unknown[], next: unknown[]): unknown[] =>
 
   const changed: unknown[] = [];
   const nextCounts = new Map<string, number>();
+  const nextKeys = new Set<string>();
   for (const cmd of next) {
     const key = keyFor(cmd, nextCounts);
     // If we can't key this command, treat it as changed (best-effort safety).
@@ -164,9 +196,28 @@ export const diffCommandArray = (prev: unknown[], next: unknown[]): unknown[] =>
       changed.push(cmd);
       continue;
     }
+    nextKeys.add(key);
     const sig = signatureOf(cmd);
     if (prevSignatures.get(key) !== sig) changed.push(cmd);
   }
+
+  const removedActions: string[] = [];
+  for (const key of prevSignatures.keys()) {
+    if (nextKeys.has(key)) continue;
+    const [action] = key.split('#');
+    if (action) {
+      removedActions.push(action);
+      changed.push(missingCommandMarker(action));
+    }
+  }
+
+  Object.defineProperty(changed, '__commandArrayDiff', {
+    value: {
+      currentActions: commandActionsFromValue(next),
+      removedActions,
+    } satisfies CommandArrayDiffMetadata,
+    enumerable: false,
+  });
 
   return changed;
 };

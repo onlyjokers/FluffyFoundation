@@ -133,6 +133,14 @@ function commandFromUnknown(raw: unknown): NodeCommand | null {
   };
 }
 
+function removedCommandActionFromUnknown(raw: unknown): string | null {
+  const record = asRecord(raw);
+  if (!record || getStringValue(record.action) !== '__commandRemoved') return null;
+  const payload = asRecord(record.payload);
+  const action = getStringValue(payload?.action);
+  return action || null;
+}
+
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
   return {
     type: 'client-count',
@@ -474,6 +482,27 @@ export function createClientLoaderNode(deps: ClientObjectDeps): NodeDefinition {
 }
 
 export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition {
+  const routeStateByNode = new Map<string, Map<string, string[]>>();
+
+  const cleanupCommandsFor = (cmd: NodeCommand): NodeCommand[] => {
+    switch (cmd.action) {
+      case 'showText':
+        return [{ action: 'hideText', payload: {} }];
+      case 'showImage':
+        return [{ action: 'hideImage', payload: {} }];
+      case 'playMedia':
+        return [{ action: 'stopMedia', payload: {} }];
+      case 'screenColor':
+        return [{ action: 'screenColor', payload: { color: '#000000', opacity: 0, mode: 'solid' } }];
+      case 'modulateSoundUpdate':
+        return [{ action: 'stopSound', payload: {} }];
+      case 'flashlight':
+        return [{ action: 'flashlight', payload: { mode: 'off' } }];
+      default:
+        return [];
+    }
+  };
+
   const resolveTargets = (inputs: Record<string, unknown>): string[] => {
     const targets = resolveTargetsFromClientInput(inputs.client);
     if (targets.length > 0) return targets;
@@ -507,33 +536,62 @@ export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition
           : null;
       return { imageOut };
     },
-    onSink: (inputs) => {
+    onSink: (inputs, _config, context) => {
       const targets = resolveTargets(inputs);
       if (targets.length === 0) return;
 
       const raw = inputs.in;
       const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
       for (const rawCommand of commands) {
+        const routeState = routeStateByNode.get(context.nodeId) ?? new Map<string, string[]>();
+        const removedAction = removedCommandActionFromUnknown(rawCommand);
+        if (removedAction) {
+          const previousTargets = routeState.get(removedAction) ?? [];
+          for (const previousClientId of previousTargets) {
+            for (const cleanup of cleanupCommandsFor({ action: removedAction as ControlAction, payload: {} })) {
+              send(previousClientId, cleanup);
+            }
+          }
+          routeState.delete(removedAction);
+          routeStateByNode.set(context.nodeId, routeState);
+          continue;
+        }
+
         const next = commandFromUnknown(rawCommand);
         if (!next) continue;
+        const previousTargets = routeState.get(next.action) ?? [];
+        const nextTargetSet = new Set(targets);
+        for (const previousClientId of previousTargets) {
+          if (nextTargetSet.has(previousClientId)) continue;
+          for (const cleanup of cleanupCommandsFor(next)) send(previousClientId, cleanup);
+        }
         for (const clientId of targets) send(clientId, next);
+        routeState.set(next.action, [...targets]);
+        routeStateByNode.set(context.nodeId, routeState);
       }
     },
-    onDisable: (inputs) => {
+    onDisable: (inputs, _config, context) => {
       const targets = resolveTargets(inputs);
-      if (targets.length === 0) return;
+      const routeState = routeStateByNode.get(context.nodeId);
+      const cleanupTargetIds = new Set(targets);
+      for (const ids of routeState?.values() ?? []) {
+        for (const clientId of ids) cleanupTargetIds.add(clientId);
+      }
+      if (cleanupTargetIds.size === 0) return;
 
       const cleanupCommands: NodeCommand[] = [
         { action: 'stopSound', payload: {} },
         { action: 'stopMedia', payload: {} },
         { action: 'hideImage', payload: {} },
+        { action: 'hideText', payload: {} },
         { action: 'flashlight', payload: { mode: 'off' } },
         { action: 'screenColor', payload: { color: '#000000', opacity: 0, mode: 'solid' } },
       ];
 
-      for (const clientId of targets) {
+      for (const clientId of cleanupTargetIds) {
         for (const cmd of cleanupCommands) send(clientId, cmd);
       }
+      routeStateByNode.delete(context.nodeId);
     },
   };
 }

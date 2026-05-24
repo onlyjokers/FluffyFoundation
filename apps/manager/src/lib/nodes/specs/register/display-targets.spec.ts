@@ -202,6 +202,46 @@ test('sendDisplayNodeCommand clears displays removed from an explicit showText r
   );
 });
 
+test('sendDisplayNodeCommand clears previous long-lived action on a kept display before another action takes over', () => {
+  resetDisplayNodeRouteStateForTests();
+  const emitted: Array<{ action?: string; target?: { displayId?: string } }> = [];
+  const base = {
+    nodeId: 'display-node',
+    clients,
+    node: { inputValues: { index: 1, range: 1, random: false } },
+    computedInputs: { index: 1, range: 1, random: false },
+    graph: { connections: [] },
+    activeActions: new Set(['showText' as const]),
+    sendLocalControl: () => emitted.push({ action: 'local' }),
+    sendDisplayOperation: (operation: (typeof emitted)[number]) => emitted.push(operation),
+  };
+
+  sendDisplayNodeCommand({
+    ...base,
+    action: 'showText',
+    payload: { text: 'caption' },
+  });
+
+  sendDisplayNodeCommand({
+    ...base,
+    activeActions: new Set(['showImage' as const]),
+    action: 'showImage',
+    payload: { url: '/next.png' },
+  });
+
+  assert.deepEqual(
+    emitted.map((operation) => ({
+      action: operation.action,
+      displayId: operation.target?.displayId,
+    })),
+    [
+      { action: 'showText', displayId: 'display-1' },
+      { action: 'hideText', displayId: 'display-1' },
+      { action: 'showImage', displayId: 'display-1' },
+    ]
+  );
+});
+
 test('sendDisplayNodeCommand clears each long-lived Display action when the route moves', () => {
   resetDisplayNodeRouteStateForTests();
   const emitted: Array<{ action?: string; payload?: unknown; target?: { displayId?: string } }> = [];
