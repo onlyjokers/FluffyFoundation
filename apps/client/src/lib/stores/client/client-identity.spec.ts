@@ -73,3 +73,11 @@ test('getOrCreateClientIdentity replaces stored url session ids only with valid 
   installWindow('https://fluffyfoundation.xyz/client?sessionId=bad/session', stores.localStorage, new MemoryStorage());
   assert.equal(getOrCreateClientIdentity()?.urlSessionId, 'session-b');
 });
+
+test('getOrCreateClientIdentity accepts legacy path url session links', () => {
+  installWindow('https://10.30.229.86:5174/sessionId=session-a');
+  assert.equal(getOrCreateClientIdentity()?.urlSessionId, 'session-a');
+
+  installWindow('https://10.30.229.86:5174/sessionld=session-b');
+  assert.equal(getOrCreateClientIdentity()?.urlSessionId, 'session-b');
+});

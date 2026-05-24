@@ -31,14 +31,24 @@ function sanitizeUrlSessionId(value: unknown): string | null {
   return /^[a-zA-Z0-9_-]+$/.test(trimmed) ? trimmed : null;
 }
 
+function readUrlSessionIdFromLocation(href: string): string | null {
+  try {
+    const url = new URL(href);
+    const fromQuery =
+      sanitizeUrlSessionId(url.searchParams.get('sessionId')) ??
+      sanitizeUrlSessionId(url.searchParams.get('urlSessionId')) ??
+      sanitizeUrlSessionId(url.searchParams.get('sessionld'));
+    if (fromQuery) return fromQuery;
+
+    const pathMatch = url.pathname.match(/(?:^|\/)(?:sessionId|urlSessionId|sessionld)=([^/?#]+)/);
+    return sanitizeUrlSessionId(pathMatch?.[1] ? decodeURIComponent(pathMatch[1]) : null);
+  } catch {
+    return null;
+  }
+}
+
 function resolveUrlSessionId(win: Window): string | undefined {
-  const fromUrl = (() => {
-    try {
-      return sanitizeUrlSessionId(new URL(win.location.href).searchParams.get('sessionId'));
-    } catch {
-      return null;
-    }
-  })();
+  const fromUrl = readUrlSessionIdFromLocation(win.location.href);
 
   if (fromUrl) {
     win.localStorage.setItem(URL_SESSION_ID_STORAGE_KEY, fromUrl);
