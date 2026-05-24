@@ -1,15 +1,49 @@
 /**
  * Purpose: HTTP endpoint for Aliyun TTS synthesis.
  */
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
+import { AssetsService } from '../assets/assets.service.js';
+import { AudioDropBoxService } from '../assets/audio-dropbox.service.js';
+import { requireAssetWriteAuth } from '../assets/assets.auth.js';
 import { AliyunTtsService, type AliyunTtsRequest } from './aliyun-tts.service.js';
 
 @Controller('api/tts')
 export class AliyunTtsController {
-  constructor(private readonly tts: AliyunTtsService) {}
+  constructor(
+    private readonly tts: AliyunTtsService,
+    private readonly assets: AssetsService,
+    private readonly audioDropBox: AudioDropBoxService
+  ) {}
 
   @Post('synthesize')
   async synthesize(@Body() body: AliyunTtsRequest): Promise<{ url: string; mimeType: string; usage: Record<string, unknown> | null }> {
     return await this.tts.synthesize(body ?? { text: '' });
+  }
+
+  @Post('asset')
+  async synthesizeAsset(
+    @Body() body: AliyunTtsRequest & { dropBoxName?: string },
+    @Req() req: Request
+  ): Promise<{
+    assetId: string;
+    asset: import('../assets/assets.types.js').AssetRecord;
+    deduped: boolean;
+    dropBoxEntry: import('../assets/audio-dropbox.service.js').AudioDropBoxEntry;
+    usage: Record<string, unknown> | null;
+  }> {
+    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    const result = await this.tts.synthesizeAsset(body ?? { text: '' }, this.assets);
+    const dropBoxEntry = await this.audioDropBox.push({
+      assetId: result.asset.id,
+      name: body?.dropBoxName ?? body?.text,
+    });
+    return {
+      assetId: result.asset.id,
+      asset: result.asset,
+      deduped: result.deduped,
+      dropBoxEntry,
+      usage: result.usage,
+    };
   }
 }

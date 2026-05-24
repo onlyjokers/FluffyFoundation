@@ -3,8 +3,9 @@
  */
 import type { NodeDefinition } from '../../../types.js';
 import { normalizeLocalMediaRef } from '../../media-utils.js';
-import { clampNumber, coerceBoolean, coerceNumber } from '../../utils.js';
+import { clampNumber, coerceBoolean, coerceBooleanOr, coerceNumber } from '../../utils.js';
 import { getRecordString } from '../node-definition-utils.js';
+import type { ClientObjectDeps } from '../../types.js';
 
 type LoadAudioTimelineState = {
   signature: string;
@@ -185,6 +186,7 @@ export function createLoadAudioFromAssetsNode(): NodeDefinition {
     label: 'Load Audio From Remote',
     category: 'Assets',
     inputs: [
+      { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' },
       { id: 'startSec', label: 'Start (s)', type: 'number', defaultValue: 0, min: 0, step: 0.01 },
       { id: 'endSec', label: 'End (s)', type: 'number', defaultValue: -1, min: -1, step: 0.01 },
       {
@@ -243,7 +245,13 @@ export function createLoadAudioFromAssetsNode(): NodeDefinition {
       },
     ],
     process: (inputs, config, context) => {
-      const assetId = typeof config.assetId === 'string' ? config.assetId.trim() : '';
+      const assetRaw =
+        typeof inputs.asset === 'string' && inputs.asset.trim()
+          ? inputs.asset.trim()
+          : typeof config.assetId === 'string'
+            ? config.assetId.trim()
+            : '';
+      const assetId = assetRaw.startsWith('asset:') ? assetRaw.slice('asset:'.length).trim() : assetRaw;
       const timeline = resolveAudioTimelineInputs(inputs, config);
 
       if (!assetId) {
@@ -254,7 +262,7 @@ export function createLoadAudioFromAssetsNode(): NodeDefinition {
       // Manager-side simulation: the actual audio playback is implemented on the client runtime.
       const ended = computeLoadAudioFinished({
         nodeId: context.nodeId,
-        signature: createAudioTimelineSignature({ asset: assetId, ...timeline }),
+        signature: createAudioTimelineSignature({ asset: assetRaw || assetId, ...timeline }),
         deltaTimeMs: context.deltaTime,
         ...timeline,
       });
@@ -283,6 +291,233 @@ export function createLoadAudioAssetFromAssetsNode(): NodeDefinition {
     process: (_inputs, config) => {
       const assetId = typeof config.assetId === 'string' ? config.assetId.trim() : '';
       return { ref: assetId ? `asset:${assetId}` : '' };
+    },
+  };
+}
+
+function normalizeAssetRef(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('asset:')) return trimmed;
+  const shuguPrefix = 'shugu://asset/';
+  if (trimmed.startsWith(shuguPrefix)) {
+    const id = trimmed.slice(shuguPrefix.length).trim().split(/[?#]/)[0]?.trim() ?? '';
+    return id ? `asset:${id}` : '';
+  }
+  const id = trimmed.split(/[?#]/)[0]?.trim() ?? '';
+  return id ? `asset:${id}` : '';
+}
+
+function buildTtsSignature(input: {
+  text: string;
+  model: string;
+  voice: string;
+  languageType: string;
+  instructions: string;
+  optimizeInstructions: boolean;
+}): string {
+  return JSON.stringify(input);
+}
+
+export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'generate-tts-audio-asset',
+    label: 'Generate TTS Audio Asset',
+    category: 'AI',
+    inputs: [
+      { id: 'text', label: 'Text', type: 'string', defaultValue: '' },
+      { id: 'trigger', label: 'Trigger', type: 'boolean', defaultValue: true },
+    ],
+    outputs: [
+      { id: 'assetId', label: 'Asset ID', type: 'string' },
+      { id: 'asset', label: 'Asset', type: 'asset' },
+    ],
+    configSchema: [
+      { key: 'model', label: 'Model', type: 'string', defaultValue: 'qwen3-tts-flash' },
+      { key: 'voice', label: 'Voice', type: 'string', defaultValue: 'Cherry' },
+      { key: 'languageType', label: 'Language', type: 'string', defaultValue: 'Chinese' },
+      { key: 'instructions', label: 'Instructions', type: 'string', defaultValue: '' },
+      {
+        key: 'optimizeInstructions',
+        label: 'Optimize Instructions',
+        type: 'boolean',
+        defaultValue: false,
+      },
+    ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'server'],
+      sideEffectClass: 'network',
+      permissions: [],
+      compatibility: [
+        {
+          target: 'load-audio-from-assets',
+          rule: 'Produces an asset ref that can feed Load Audio From Assets via the asset input.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Generate reusable speech asset',
+          summary: 'Generate a speech asset once, then feed it into the playback chain.',
+          inputs: { text: '你好，世界', trigger: true },
+          config: { model: 'qwen3-tts-flash', voice: 'Cherry' },
+        },
+      ],
+      risks: [
+        'Requires server-side DashScope credentials and asset write access.',
+      ],
+      description:
+        'Generate a reusable audio asset from text using the server-side TTS asset pipeline.',
+      repairHints: [
+        'Keep the node on the manager/control plane; its output is an asset reference, not live audio.',
+      ],
+    },
+    process: (inputs, config, context) => {
+      const text = typeof inputs.text === 'string' ? inputs.text.trim() : '';
+      const trigger = coerceBooleanOr(inputs.trigger, true);
+      const model = typeof config.model === 'string' ? config.model.trim() : 'qwen3-tts-flash';
+      const voice = typeof config.voice === 'string' ? config.voice.trim() : 'Cherry';
+      const languageType = typeof config.languageType === 'string' ? config.languageType.trim() : 'Chinese';
+      const instructions = typeof config.instructions === 'string' ? config.instructions.trim() : '';
+      const optimizeInstructions = coerceBooleanOr(config.optimizeInstructions, false);
+      const signature = buildTtsSignature({
+        text,
+        model,
+        voice,
+        languageType,
+        instructions,
+        optimizeInstructions,
+      });
+
+      if (!text || !trigger) {
+        return { assetId: '', asset: '' };
+      }
+
+      const assetId = deps.audioAssets?.getTtsAudioAsset?.({
+        nodeId: context.nodeId,
+        signature,
+        text,
+        model,
+        voice,
+        languageType,
+        instructions,
+        optimizeInstructions,
+      }) ?? '';
+      return { assetId, asset: assetId ? normalizeAssetRef(assetId) : '' };
+    },
+  };
+}
+
+export function createUploadAudioToDropBoxNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'upload-audio-to-drop-box',
+    label: 'Upload to Drop Box for Audio',
+    category: 'Assets',
+    inputs: [
+      { id: 'assetId', label: 'Asset ID', type: 'string', defaultValue: '' },
+      { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' },
+    ],
+    outputs: [
+      { id: 'assetId', label: 'Asset ID', type: 'string' },
+      { id: 'asset', label: 'Asset', type: 'asset' },
+    ],
+    configSchema: [
+      { key: 'name', label: 'Name', type: 'string', defaultValue: '' },
+    ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'server'],
+      sideEffectClass: 'network',
+      permissions: [],
+      compatibility: [
+        {
+          target: 'reference-audio-from-drop-box',
+          rule: 'Stores an audio asset reference in the persistent Drop Box queue.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Queue reusable speech',
+          summary: 'Push a synthesized speech asset into the Drop Box queue.',
+        },
+      ],
+      risks: ['Requires asset write access and a persistent asset store.'],
+      description: 'Push an audio asset reference into the persistent Drop Box queue.',
+    },
+    process: (inputs, config, context) => {
+      const assetRaw =
+        typeof inputs.asset === 'string' && inputs.asset.trim()
+          ? inputs.asset.trim()
+          : typeof inputs.assetId === 'string'
+            ? inputs.assetId.trim()
+            : '';
+      const assetId = assetRaw.startsWith('asset:') ? assetRaw.slice('asset:'.length).trim() : assetRaw;
+      const name = typeof config.name === 'string' ? config.name.trim() : '';
+      if (!assetId) return { assetId: '', asset: '' };
+      const nextAssetId =
+        deps.audioAssets?.uploadAudioToDropBox?.({
+          nodeId: context.nodeId,
+          signature: `${assetId}|${name}`,
+          assetId,
+          ...(name ? { name } : {}),
+        }) ?? assetId;
+      return { assetId: nextAssetId, asset: nextAssetId ? `asset:${nextAssetId}` : '' };
+    },
+  };
+}
+
+export function createReferenceAudioFromDropBoxNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'reference-audio-from-drop-box',
+    label: 'Reference from Drop Box for Audio',
+    category: 'Assets',
+    inputs: [],
+    outputs: [
+      { id: 'assetId', label: 'Asset ID', type: 'string' },
+      { id: 'asset', label: 'Asset', type: 'asset' },
+    ],
+    configSchema: [
+      { key: 'assetId', label: 'Asset ID', type: 'string', defaultValue: '' },
+      { key: 'name', label: 'Name', type: 'string', defaultValue: '' },
+      { key: 'index', label: 'Index', type: 'number', defaultValue: -1, min: -1, step: 1 },
+      { key: 'latest', label: 'Latest', type: 'boolean', defaultValue: true },
+    ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'server'],
+      sideEffectClass: 'network',
+      permissions: [],
+      compatibility: [
+        {
+          target: 'load-audio-from-assets',
+          rule: 'Resolves a queued audio asset ref for playback.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Read latest queued speech',
+          summary: 'Return the newest audio asset reference from the Drop Box.',
+        },
+      ],
+      risks: ['Depends on the persistent Drop Box queue being available on the server.'],
+      description: 'Resolve an audio asset reference from the persistent Drop Box queue.',
+    },
+    process: (_inputs, config, context) => {
+      const assetId = typeof config.assetId === 'string' ? config.assetId.trim() : '';
+      const name = typeof config.name === 'string' ? config.name.trim() : '';
+      const indexRaw = typeof config.index === 'number' ? config.index : Number(config.index);
+      const index = Number.isFinite(indexRaw) ? Math.floor(indexRaw) : -1;
+      const latest = coerceBooleanOr(config.latest, true);
+      const nextAssetId =
+        deps.audioAssets?.referenceAudioFromDropBox?.({
+          nodeId: context.nodeId,
+          signature: `${assetId}|${name}|${index}|${latest ? 1 : 0}`,
+          ...(assetId ? { assetId } : {}),
+          ...(name ? { name } : {}),
+          index,
+          latest,
+        }) ?? assetId;
+      return { assetId: nextAssetId, asset: nextAssetId ? `asset:${nextAssetId}` : '' };
     },
   };
 }

@@ -51,6 +51,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
       if (!sdk) return;
       sdk.sendControl(target, cmd.action, cmd.payload ?? {}, cmd.executeAt);
     },
+    audioAssets: {},
   });
 
   const pick = (type: string): CoreRuntimeImpl => {

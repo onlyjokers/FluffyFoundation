@@ -50,6 +50,33 @@ export type ClientUiDeps = {
   clearClientUi?: () => void;
 };
 
+export type AudioAssetNodeDeps = {
+  getTtsAudioAsset?: (request: {
+    nodeId: string;
+    signature: string;
+    text: string;
+    model: string;
+    voice: string;
+    languageType: string;
+    instructions: string;
+    optimizeInstructions: boolean;
+  }) => string | null;
+  uploadAudioToDropBox?: (request: {
+    nodeId: string;
+    signature: string;
+    assetId: string;
+    name?: string;
+  }) => string | null;
+  referenceAudioFromDropBox?: (request: {
+    nodeId: string;
+    signature: string;
+    assetId?: string;
+    name?: string;
+    index?: number;
+    latest?: boolean;
+  }) => string | null;
+};
+
 export type ClientObjectDeps = {
   getClientId: () => string | null;
   /**
@@ -99,4 +126,5 @@ export type ClientObjectDeps = {
    * Client-side rendered UI bridge for ClientUI nodes.
    */
   clientUi?: ClientUiDeps;
+  audioAssets?: AudioAssetNodeDeps;
 };

@@ -3,6 +3,9 @@
  */
 export {
   createLoadAudioAssetFromAssetsNode,
+  createGenerateTtsAudioAssetNode,
+  createReferenceAudioFromDropBoxNode,
+  createUploadAudioToDropBoxNode,
   createLoadAudioFromAssetsNode,
   createLoadAudioFromLocalNode,
 } from './assets/audio.js';

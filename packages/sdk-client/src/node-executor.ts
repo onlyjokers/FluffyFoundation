@@ -141,6 +141,7 @@ export class NodeExecutor {
       getLatestSensor: () => this.sdk.getLatestSensorData(),
       executeCommand: (cmd) => this.executeCommand(cmd),
       clientUi: this.clientUi ?? undefined,
+      audioAssets: {},
     });
     // Client-only Tone.js implementations override the shared node-core definitions.
     this.toneAdapter = registerToneClientDefinitions(this.registry, {

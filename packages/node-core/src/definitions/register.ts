@@ -58,13 +58,16 @@ import {
   createToneReverbNode,
 } from './nodes/audio.js';
 import {
+  createGenerateTtsAudioAssetNode,
   createLoadAudioAssetFromAssetsNode,
   createLoadAudioFromAssetsNode,
   createLoadAudioFromLocalNode,
   createLoadImageFromAssetsNode,
   createLoadImageFromLocalNode,
+  createReferenceAudioFromDropBoxNode,
   createLoadVideoFromAssetsNode,
   createLoadVideoFromLocalNode,
+  createUploadAudioToDropBoxNode,
 } from './nodes/assets.js';
 import {
   createImgFitNode,
@@ -159,6 +162,9 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     // Player helpers.
     createLoadAudioFromAssetsNode,
     createLoadAudioAssetFromAssetsNode,
+    () => createGenerateTtsAudioAssetNode(deps),
+    () => createUploadAudioToDropBoxNode(deps),
+    () => createReferenceAudioFromDropBoxNode(deps),
     createLoadAudioFromLocalNode,
     createLoadImageFromAssetsNode,
     createLoadImageFromLocalNode,

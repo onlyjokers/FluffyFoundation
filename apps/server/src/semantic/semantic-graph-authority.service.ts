@@ -83,6 +83,7 @@ export class SemanticGraphAuthorityService {
       getImageForClientId: () => null,
       executeCommand: () => undefined,
       executeCommandForClientId: () => undefined,
+      audioAssets: {},
     });
     for (const definition of createArduinoUnoNodeDefinitions()) {
       this.registry.register(definition);

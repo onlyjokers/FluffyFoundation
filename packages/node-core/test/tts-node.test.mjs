@@ -16,6 +16,11 @@ function buildRegistry() {
     getSensorForClientId: () => null,
     executeCommand: () => {},
     executeCommandForClientId: () => {},
+    audioAssets: {
+      getTtsAudioAsset: () => 'asset-tts-1',
+      uploadAudioToDropBox: ({ assetId }) => assetId,
+      referenceAudioFromDropBox: ({ assetId }) => assetId ?? 'asset-tts-1',
+    },
   });
   return registry;
 }
@@ -49,4 +54,45 @@ test('aliyun-tts process emits active audio only when text and play are present'
   assert.deepEqual(def.process({ text: '你好', play: true }, {}, context), { ref: 1 });
   assert.deepEqual(def.process({ text: '你好', play: false }, {}, context), { ref: 0 });
   assert.deepEqual(def.process({ text: '   ', play: true }, {}, context), { ref: 0 });
+});
+
+test('asset-first TTS nodes expose asset-id refs for the Load Audio From Assets chain', () => {
+  const registry = buildRegistry();
+  const generate = registry.get('generate-tts-audio-asset');
+  const upload = registry.get('upload-audio-to-drop-box');
+  const reference = registry.get('reference-audio-from-drop-box');
+
+  assert.ok(generate, 'expected generate-tts-audio-asset definition');
+  assert.ok(upload, 'expected upload-audio-to-drop-box definition');
+  assert.ok(reference, 'expected reference-audio-from-drop-box definition');
+
+  assert.deepEqual(
+    generate.outputs.map((output) => ({ id: output.id, type: output.type })),
+    [
+      { id: 'assetId', type: 'string' },
+      { id: 'asset', type: 'asset' },
+    ]
+  );
+  assert.deepEqual(upload.inputs.map((input) => ({ id: input.id, type: input.type })), [
+    { id: 'assetId', type: 'string' },
+    { id: 'asset', type: 'asset' },
+  ]);
+  assert.deepEqual(reference.outputs.map((output) => ({ id: output.id, type: output.type })), [
+    { id: 'assetId', type: 'string' },
+    { id: 'asset', type: 'asset' },
+  ]);
+
+  const context = { nodeId: 'tts', time: 0, deltaTime: 0 };
+  assert.deepEqual(
+    generate.process({ text: 'hello' }, {}, context),
+    { assetId: 'asset-tts-1', asset: 'asset:asset-tts-1' }
+  );
+  assert.deepEqual(
+    upload.process({ assetId: 'asset-tts-1' }, {}, context),
+    { assetId: 'asset-tts-1', asset: 'asset:asset-tts-1' }
+  );
+  assert.deepEqual(
+    reference.process({}, { assetId: 'asset-tts-1' }, context),
+    { assetId: 'asset-tts-1', asset: 'asset:asset-tts-1' }
+  );
 });

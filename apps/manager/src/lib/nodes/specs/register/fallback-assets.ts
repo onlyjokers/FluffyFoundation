@@ -14,6 +14,7 @@ if (!nodeRegistry.get('load-audio-from-assets')) {
     label: 'Load Audio From Remote',
     category: 'Assets',
     inputs: [
+      { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' },
       { id: 'startSec', label: 'Start (s)', type: 'number', defaultValue: 0, min: 0, step: 0.01 },
       { id: 'endSec', label: 'End (s)', type: 'number', defaultValue: -1, min: -1, step: 0.01 },
       { id: 'cursorSec', label: 'Cursor (s)', type: 'number', defaultValue: -1, min: -1, step: 0.01 },
@@ -49,7 +50,13 @@ if (!nodeRegistry.get('load-audio-from-assets')) {
       },
     ],
     process: (inputs, config) => {
-      const assetId = typeof config.assetId === 'string' ? String(config.assetId).trim() : '';
+      const assetRaw =
+        typeof inputs.asset === 'string' && String(inputs.asset).trim()
+          ? String(inputs.asset).trim()
+          : typeof config.assetId === 'string'
+            ? String(config.assetId).trim()
+            : '';
+      const assetId = assetRaw.startsWith('asset:') ? assetRaw.slice('asset:'.length).trim() : assetRaw;
       const playRaw = inputs.play;
       const play = typeof playRaw === 'number' ? playRaw >= 0.5 : Boolean(playRaw);
       // Manager-side placeholder: the actual audio playback is implemented on the client runtime.

@@ -6,6 +6,7 @@ import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
 import { registerDefaultNodeDefinitions, type LatestSensorDataLike, type NodeCommand } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, clientUiInteractions, getSDK, sensorData, state } from '$lib/stores/manager';
+import { createManagerAudioAssetNodeDeps } from './audio-asset-node-deps';
 import { targetManagedClient } from './client-target';
 
 export function registerDefaultRuntimeNodes(): void {
@@ -85,6 +86,7 @@ export function registerDefaultRuntimeNodes(): void {
       return pressed;
     },
   },
+  audioAssets: createManagerAudioAssetNodeDeps(),
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {
     nodeRegistry.register(definition);

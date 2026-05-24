@@ -26,6 +26,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { AssetKind, AssetRecord } from './assets.types.js';
+import { AudioDropBoxService, type AudioDropBoxEntry } from './audio-dropbox.service.js';
 import { AssetsService } from './assets.service.js';
 import { requireAssetReadAuth, requireAssetWriteAuth } from './assets.auth.js';
 import { parseByteRangeHeader } from './range.js';
@@ -100,7 +101,10 @@ function buildContentDisposition(originalName: string): string {
 
 @Controller('api/assets')
 export class AssetsController {
-  constructor(private readonly assets: AssetsService) {}
+  constructor(
+    private readonly assets: AssetsService,
+    private readonly audioDropBox: AudioDropBoxService
+  ) {}
 
   @Get()
   async list(@Req() req: Request): Promise<{ assets: AssetRecord[] }> {
@@ -158,6 +162,39 @@ export class AssetsController {
     const baseUrl = buildPublicBaseUrl(req, this.assets.config.publicBaseUrl);
     const contentUrl = `${baseUrl}/api/assets/${result.asset.id}/content`;
     return { asset: result.asset, contentUrl, deduped: result.deduped };
+  }
+
+  @Get('drop-box/audio')
+  async listAudioDropBox(@Req() req: Request): Promise<{ entries: AudioDropBoxEntry[] }> {
+    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    return { entries: this.audioDropBox.list() };
+  }
+
+  @Post('drop-box/audio')
+  async pushAudioDropBox(
+    @Body() body: unknown,
+    @Req() req: Request
+  ): Promise<{ entry: AudioDropBoxEntry }> {
+    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const entry = await this.audioDropBox.push({
+      assetId: record.assetId ?? record.asset,
+      name: record.name,
+    });
+    return { entry };
+  }
+
+  @Get('drop-box/audio/reference')
+  async referenceAudioDropBox(@Req() req: Request): Promise<{ entry: AudioDropBoxEntry | null }> {
+    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    const query = req.query && typeof req.query === 'object' ? req.query : {};
+    const entry = this.audioDropBox.resolve({
+      assetId: query.assetId,
+      name: query.name,
+      index: query.index,
+      latest: query.latest,
+    });
+    return { entry };
   }
 
   @Delete(':id')

@@ -40,6 +40,13 @@ function normalizeAssetRef(raw: string): string | null {
   return null;
 }
 
+function assetIdFromRef(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const normalized = normalizeAssetRef(raw.trim());
+  if (!normalized) return null;
+  return normalized.slice('asset:'.length);
+}
+
 function collectAssetRefs(value: unknown, out: string[], seen: Set<string>): void {
   if (typeof value === 'string') {
     const normalized = normalizeAssetRef(value);
@@ -116,6 +123,7 @@ export function exportGraphForPatch(
     if (!registry) return true;
     const node = nodes.find((n) => String(n.id) === String(targetNodeId));
     if (!node) return true;
+    if (String(node.type) === 'load-audio-from-assets' && String(targetPortId) === 'asset') return false;
     const def = registry.get(String(node.type));
     const port = def?.inputs?.find((p) => String(p.id) === String(targetPortId));
     const type = (port?.type ?? 'any') as string;
@@ -143,11 +151,28 @@ export function exportGraphForPatch(
   };
   for (const rootId of rootNodeIds) visit(rootId);
 
-  const keptNodes = nodes.filter((n) => keep.has(String(n.id)));
+  const keptNodes = nodes
+    .filter((n) => keep.has(String(n.id)))
+    .map((n) => ({ ...n, config: { ...(n.config ?? {}) }, inputValues: { ...(n.inputValues ?? {}) } }));
   const keptNodeIds = new Set(keptNodes.map((n) => String(n.id)));
   let keptConnections = connections.filter(
     (c) => keptNodeIds.has(String(c.sourceNodeId)) && keptNodeIds.has(String(c.targetNodeId))
   );
+
+  const allNodeById = new Map(nodes.map((n) => [String(n.id), n]));
+  for (const node of keptNodes) {
+    if (String(node.type) !== 'load-audio-from-assets') continue;
+    const assetInput = connections.find(
+      (c) => String(c.targetNodeId) === String(node.id) && String(c.targetPortId) === 'asset'
+    );
+    if (!assetInput) continue;
+    const source = allNodeById.get(String(assetInput.sourceNodeId));
+    const raw = source?.outputValues?.[String(assetInput.sourcePortId)];
+    const id = assetIdFromRef(raw) ?? (typeof raw === 'string' && raw.trim() ? raw.trim().split(/[?#]/)[0] : '');
+    if (id) {
+      node.config = { ...(node.config ?? {}), assetId: id };
+    }
+  }
 
   // Stable ordering for deterministic deploy signatures.
   const inferBypassPorts = (type: string): { inId: string; outId: string } | null => {
@@ -281,9 +306,9 @@ export function exportGraphForPatch(
   for (const n of effectiveNodes) {
     // Include asset-picker config fields which may store bare assetIds (not prefixed refs).
     if (registry) {
-        const def = registry.get(String(n.type));
-        for (const field of def?.configSchema ?? []) {
-          const fieldRecord =
+      const def = registry.get(String(n.type));
+      for (const field of def?.configSchema ?? []) {
+        const fieldRecord =
           field && typeof field === 'object' ? (field as unknown as Record<string, unknown>) : null;
         if (fieldRecord?.type !== 'asset-picker') continue;
         const key = typeof fieldRecord.key === 'string' ? fieldRecord.key : String(fieldRecord?.key ?? '');
