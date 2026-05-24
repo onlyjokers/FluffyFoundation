@@ -34,6 +34,7 @@ export function createAudioDataNode(): NodeDefinition {
           { value: '4096', label: '4096' },
           { value: '8192', label: '8192' },
         ],
+        connectable: true,
       },
       {
         key: 'smoothing',
@@ -140,6 +141,7 @@ export function createToneLFONode(): NodeDefinition {
         type: 'select',
         defaultValue: 'sine',
         options: TONE_LFO_WAVEFORM_OPTIONS as unknown as { value: string; label: string }[],
+        connectable: true,
       },
     ],
     process: (inputs, config, context) => {
@@ -219,6 +221,7 @@ export function createToneOscNode(): NodeDefinition {
           { value: 'triangle', label: 'Triangle' },
           { value: 'sawtooth', label: 'Sawtooth' },
         ],
+        connectable: true,
       },
       {
         key: 'loop',

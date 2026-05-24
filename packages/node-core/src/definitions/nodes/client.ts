@@ -180,6 +180,7 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
           { value: 'all', label: 'All' },
           { value: 'any', label: 'Any' },
         ],
+        connectable: true,
       },
       { key: 'microphone', label: 'Microphone', type: 'boolean', defaultValue: false },
       { key: 'motion', label: 'Motion', type: 'boolean', defaultValue: false },
@@ -207,7 +208,11 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
         };
       }
 
-      const matchAny = config.matchMode === 'any';
+      const matchMode =
+        typeof inputs.matchMode === 'string' && inputs.matchMode.trim()
+          ? inputs.matchMode.trim()
+          : String(config.matchMode ?? 'all');
+      const matchAny = matchMode === 'any';
       const indexs: string[] = [];
       const rejectedIndexs: string[] = [];
 

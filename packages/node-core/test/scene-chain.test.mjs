@@ -57,18 +57,19 @@ test('scene-box appends color, background opacity, and audio source config to th
       { id: 'in', type: 'scene' },
       { id: 'color', type: 'color' },
       { id: 'showBackground', type: 'number' },
+      { id: 'audioSource', type: 'string' },
     ]
   );
 
   const context = { nodeId: 'box', time: 0, deltaTime: 0 };
   const out = def.process(
-    { in: [], color: '#ff3366', showBackground: 0.25 },
+    { in: [], color: '#ff3366', showBackground: 0.25, audioSource: 'both' },
     { color: '#001122', showBackground: 0.75, audioSource: 'playback' },
     context
   );
 
   assert.deepEqual(out, {
-    out: [{ type: 'box', color: '#ff3366', showBackground: 0.25, audioSource: 'playback' }],
+    out: [{ type: 'box', color: '#ff3366', showBackground: 0.25, audioSource: 'both' }],
   });
 });
 
@@ -82,17 +83,18 @@ test('scene-mel appends background opacity and audio source config to the chain'
     [
       { id: 'in', type: 'scene' },
       { id: 'showBackground', type: 'number' },
+      { id: 'audioSource', type: 'string' },
     ]
   );
 
   const context = { nodeId: 'mel', time: 0, deltaTime: 0 };
   const out = def.process(
-    { in: [], showBackground: 0.6 },
+    { in: [], showBackground: 0.6, audioSource: 'playback' },
     { showBackground: 0, audioSource: 'both' },
     context
   );
 
-  assert.deepEqual(out, { out: [{ type: 'mel', showBackground: 0.6, audioSource: 'both' }] });
+  assert.deepEqual(out, { out: [{ type: 'mel', showBackground: 0.6, audioSource: 'playback' }] });
 });
 
 test('scene camera nodes do not expose background controls', () => {

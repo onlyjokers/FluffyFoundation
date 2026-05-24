@@ -30,6 +30,24 @@ export function createPushImageUploadNode(): NodeDefinition {
     category: 'Processors',
     inputs: [{ id: 'trigger', label: 'Push', type: 'boolean', defaultValue: false }],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      description: 'Builds a client screenshot upload request. Display does not execute this client capture command.',
+      compatibility: [
+        {
+          target: 'client-executor',
+          rule: 'Connect cmd output to Client Executor to request captures from selected clients.',
+          repairHint:
+            'If no image arrives, confirm the target Client supports capture and is connected through Client Loader -> Client Executor.',
+        },
+      ],
+      examples: [],
+      risks: ['Capture uploads can generate network traffic quickly at high speeds.'],
+      repairHints: ['Keep speed low enough to avoid flooding the Manager with uploads.'],
+    },
     configSchema: [
       {
         key: 'format',
@@ -41,6 +59,7 @@ export function createPushImageUploadNode(): NodeDefinition {
           { value: 'image/png', label: 'PNG' },
           { value: 'image/webp', label: 'WebP' },
         ],
+        connectable: true,
       },
       {
         key: 'quality',
@@ -79,7 +98,12 @@ export function createPushImageUploadNode(): NodeDefinition {
         return {};
       }
 
-      const formatRaw = typeof config.format === 'string' ? config.format.trim().toLowerCase() : '';
+      const formatRaw =
+        typeof inputs.format === 'string' && inputs.format.trim()
+          ? inputs.format.trim().toLowerCase()
+          : typeof config.format === 'string'
+            ? config.format.trim().toLowerCase()
+            : '';
       const format =
         formatRaw === 'image/png' || formatRaw === 'image/webp' || formatRaw === 'image/jpeg'
           ? formatRaw
@@ -151,6 +175,22 @@ export function createShowImageProcessorNode(): NodeDefinition {
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'image' }],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Connect cmd output to Display to route image visibility commands to the selected Display endpoints.',
+          repairHint: 'If the image is not visible on Display, confirm the Display node is connected and routed to the correct targets.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build an image visibility command from an image input.',
+    },
     configSchema: [],
     process: (inputs, _config, context) => {
       const url = resolveUrl(inputs.in);
@@ -187,6 +227,23 @@ export function createFlashlightProcessorNode(): NodeDefinition {
       { id: 'dutyCycle', label: 'Duty', type: 'number' },
     ],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'client-executor',
+          rule: 'Connect cmd output to a Client Executor sink to route the command to clients.',
+          repairHint: 'Add a Client Loader -> Client Executor chain when commands are not reaching devices.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a flashlight command for selected client devices.',
+      repairHints: ['Clamp frequency and duty cycle when inputs come from noisy sensors.'],
+    },
     configSchema: [
       // `Active=false` sends a one-shot "off" command so effects can be disabled without stopping the graph.
       { key: 'active', label: 'Active', type: 'boolean', defaultValue: true },
@@ -196,6 +253,7 @@ export function createFlashlightProcessorNode(): NodeDefinition {
         type: 'select',
         defaultValue: 'blink',
         options: FLASHLIGHT_MODE_OPTIONS as unknown as { value: string; label: string }[],
+        connectable: true,
       },
       { key: 'frequencyHz', label: 'Frequency (Hz)', type: 'number', defaultValue: 2 },
       { key: 'dutyCycle', label: 'Duty Cycle', type: 'number', defaultValue: 0.5 },
@@ -264,6 +322,22 @@ export function createScreenColorProcessorNode(): NodeDefinition {
       { id: 'minOpacity', label: 'Min', type: 'number' },
     ],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Connect cmd output to Display to route screen color commands to the selected Display endpoints.',
+          repairHint: 'If the color does not appear on Display, confirm the Display node is connected and routed to the correct targets.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a screen color overlay command for selected runtime endpoints.',
+    },
     configSchema: [
       // `Active=false` sends a "solid transparent" payload to stop the animation loop and clear the overlay.
       { key: 'active', label: 'Active', type: 'boolean', defaultValue: true },
@@ -277,6 +351,7 @@ export function createScreenColorProcessorNode(): NodeDefinition {
         type: 'select',
         defaultValue: 'sine',
         options: SCREEN_WAVEFORM_OPTIONS as unknown as { value: string; label: string }[],
+        connectable: true,
       },
       { key: 'frequencyHz', label: 'Frequency (Hz)', type: 'number', defaultValue: 1.5 },
     ],
@@ -356,6 +431,22 @@ export function createDisplayTextProcessorNode(): NodeDefinition {
       { id: 'durationMs', label: 'Duration', type: 'number', min: 0, step: 100 },
     ],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Connect cmd output to Display to route text overlay commands to the selected Display endpoints.',
+          repairHint: 'If text does not appear on Display, confirm the Display node is connected and routed to the correct targets.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a text overlay command for selected display endpoints.',
+    },
     configSchema: [
       { key: 'text', label: 'Text', type: 'string', defaultValue: '你好' },
       { key: 'color', label: 'Color', type: 'string', defaultValue: '#ffffff' },
@@ -430,6 +521,23 @@ export function createSynthUpdateProcessorNode(): NodeDefinition {
       { id: 'durationMs', label: 'Dur', type: 'number' },
     ],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'client-executor',
+          rule: 'Connect cmd output to a Client Executor sink to route the command to clients.',
+          repairHint: 'Add a Client Loader -> Client Executor chain when commands are not reaching devices.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a synth update command for selected client devices.',
+      repairHints: ['Keep modulation depth within 0-1 to avoid unstable synth updates.'],
+    },
     configSchema: [
       // `Active=false` sends an update with `durationMs=0` so the client can stop the synth immediately.
       { key: 'active', label: 'Active', type: 'boolean', defaultValue: true },
@@ -441,6 +549,7 @@ export function createSynthUpdateProcessorNode(): NodeDefinition {
         type: 'select',
         defaultValue: 'square',
         options: SYNTH_WAVEFORM_OPTIONS as unknown as { value: string; label: string }[],
+        connectable: true,
       },
       { key: 'modDepth', label: 'Wobble Depth', type: 'number', defaultValue: 0 },
       { key: 'modFrequency', label: 'Wobble Rate (Hz)', type: 'number', defaultValue: 12 },

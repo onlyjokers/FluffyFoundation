@@ -36,7 +36,12 @@ function parseVideoPlaybackInputs(
   config: Record<string, unknown>,
   source: string
 ): VideoPlaybackOptions {
-  const fitRaw = typeof config.fit === 'string' ? config.fit.trim().toLowerCase() : '';
+  const fitRaw =
+    typeof inputs.fit === 'string' && inputs.fit.trim()
+      ? inputs.fit.trim().toLowerCase()
+      : typeof config.fit === 'string'
+        ? config.fit.trim().toLowerCase()
+        : '';
   const fit =
     fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
   const startSecRaw = inputs.startSec;
@@ -223,6 +228,7 @@ export function createLoadVideoFromAssetsNode(): NodeDefinition {
           { value: 'cover', label: 'Cover' },
           { value: 'fill', label: 'Fill' },
         ],
+        connectable: true,
       },
     ],
     process: (inputs, config, context) => {
@@ -306,6 +312,7 @@ export function createLoadVideoFromLocalNode(): NodeDefinition {
           { value: 'cover', label: 'Cover' },
           { value: 'fill', label: 'Fill' },
         ],
+        connectable: true,
       },
     ],
     process: (inputs, config, context) => {

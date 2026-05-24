@@ -100,6 +100,7 @@ export function createEffectConvolutionNode(): NodeDefinition {
           { value: 'sobelY', label: 'Sobel Y' },
           { value: 'custom', label: 'Custom Kernel' },
         ],
+        connectable: true,
       },
       { key: 'mix', label: 'Mix', type: 'number', defaultValue: 1, min: 0, max: 1, step: 0.01 },
       {

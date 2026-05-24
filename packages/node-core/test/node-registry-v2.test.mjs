@@ -120,3 +120,39 @@ test('connectable config fields become semantic input ports with option metadata
   ]);
   assert.equal(summary?.ports.inputs.some((input) => input.id === 'assetId'), false);
 });
+
+test('connectable config metadata augments existing same-key input ports', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'fixture-connectable-existing-input-node',
+    label: 'Fixture Existing Input Node',
+    category: 'Logic',
+    inputs: [{ id: 'mode', label: 'Mode', type: 'string' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [
+      {
+        key: 'mode',
+        label: 'Mode',
+        type: 'select',
+        defaultValue: 'alpha',
+        connectable: true,
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta' },
+        ],
+      },
+    ],
+    process: () => ({}),
+  });
+
+  const definition = registry.get('fixture-connectable-existing-input-node');
+  assert.ok(definition);
+  assert.deepEqual(
+    definition.inputs.map((input) => input.id),
+    ['mode']
+  );
+  assert.deepEqual(definition.inputs[0].options, [
+    { value: 'alpha', label: 'Alpha' },
+    { value: 'beta', label: 'Beta' },
+  ]);
+});

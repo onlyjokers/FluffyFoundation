@@ -33,16 +33,27 @@ export const inputsWithConnectableConfigPorts = (
   inputs: NodePort[],
   configSchema: ConfigField[]
 ): NodePort[] => {
-  const seen = new Set(inputs.map((input) => input.id));
+  const byId = new Map(inputs.map((input) => [input.id, input]));
   const derived: NodePort[] = [];
   for (const field of configSchema) {
-    if (seen.has(field.key)) continue;
     const port = connectableConfigPortForField(field);
     if (!port) continue;
-    seen.add(port.id);
+    const existing = byId.get(port.id);
+    if (existing) {
+      byId.set(port.id, {
+        ...port,
+        ...existing,
+        options: existing.options ?? port.options,
+        min: existing.min ?? port.min,
+        max: existing.max ?? port.max,
+        step: existing.step ?? port.step,
+      });
+      continue;
+    }
+    byId.set(port.id, port);
     derived.push(port);
   }
-  return [...inputs, ...derived];
+  return [...inputs.map((input) => byId.get(input.id) ?? input), ...derived];
 };
 
 export const nodeDefinitionWithConnectableConfigPorts = (definition: NodeDefinition): NodeDefinition => ({

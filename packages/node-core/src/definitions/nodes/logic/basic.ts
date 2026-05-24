@@ -81,6 +81,7 @@ export function createMathNode(): NodeDefinition {
           { value: 'mod', label: 'Modulo (%)' },
           { value: 'pow', label: 'Power (^)' },
         ],
+        connectable: true,
       },
     ],
     process: (inputs, config) => {

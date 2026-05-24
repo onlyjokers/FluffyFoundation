@@ -103,12 +103,18 @@ export function createImgFitNode(): NodeDefinition {
           { value: 'cover', label: 'Cover' },
           { value: 'fill', label: 'Fill' },
         ],
+        connectable: true,
       },
     ],
     process: (inputs, config) => {
       const inRef = typeof inputs.in === 'string' ? inputs.in.trim() : '';
       if (!inRef) return { out: '' };
-      const fitRaw = typeof config.fit === 'string' ? config.fit.trim().toLowerCase() : '';
+      const fitRaw =
+        typeof inputs.fit === 'string' && inputs.fit.trim()
+          ? inputs.fit.trim().toLowerCase()
+          : typeof config.fit === 'string'
+            ? config.fit.trim().toLowerCase()
+            : '';
       const fit =
         fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
       return { out: mergeImageHashParam(inRef, 'fit', fit) };

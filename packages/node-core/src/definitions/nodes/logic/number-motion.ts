@@ -161,6 +161,7 @@ export function createNumberScriptNode(): NodeDefinition {
           { value: 'one-way', label: 'One-way (repeat)' },
           { value: 'around', label: 'Around (ping-pong)' },
         ],
+        connectable: true,
       },
       { key: 'duration', label: 'Duration (ms)', type: 'number', defaultValue: 1000, min: 1 },
       { key: 'start', label: 'Start', type: 'number', defaultValue: 0 },

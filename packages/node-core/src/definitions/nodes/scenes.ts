@@ -109,6 +109,7 @@ export function createSceneBoxNode(): NodeDefinition {
           { value: 'playback', label: 'Playback' },
           { value: 'both', label: 'Microphone + Playback' },
         ],
+        connectable: true,
       },
       { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
     ],
@@ -118,7 +119,7 @@ export function createSceneBoxNode(): NodeDefinition {
         type: 'box',
         color: coerceCssColor(inputs.color, config.color, '#4a90d9'),
         showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
-        audioSource: coerceFctAudioSource(config.audioSource),
+        audioSource: coerceFctAudioSource(inputs.audioSource ?? config.audioSource),
       };
       return { out: [...chain, scene] };
     },
@@ -146,6 +147,7 @@ export function createSceneMelNode(): NodeDefinition {
           { value: 'playback', label: 'Playback' },
           { value: 'both', label: 'Microphone + Playback' },
         ],
+        connectable: true,
       },
       { key: 'showBackground', label: 'Show Background', type: 'number', defaultValue: 0, min: 0, max: 1, step: 0.01 },
     ],
@@ -154,7 +156,7 @@ export function createSceneMelNode(): NodeDefinition {
       const scene: VisualSceneLayerItem = {
         type: 'mel',
         showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
-        audioSource: coerceFctAudioSource(config.audioSource),
+        audioSource: coerceFctAudioSource(inputs.audioSource ?? config.audioSource),
       };
       return { out: [...chain, scene] };
     },
