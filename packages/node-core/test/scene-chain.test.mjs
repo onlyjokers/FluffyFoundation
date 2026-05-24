@@ -166,8 +166,48 @@ test('scene-fct-track exposes numeric parameters as connectable inputs', () => {
       { id: 'brightness', type: 'number' },
       { id: 'contrast', type: 'number' },
       { id: 'showBackground', type: 'number' },
+      { id: 'variant', type: 'string' },
+      { id: 'palette', type: 'string' },
+      { id: 'blend', type: 'string' },
+      { id: 'audioSource', type: 'string' },
     ]
   );
+});
+
+test('scene-fct-track connectable select inputs override config fallbacks', () => {
+  const registry = buildRegistry();
+  const def = registry.get('scene-fct-track');
+  assert.ok(def, 'expected scene-fct-track definition');
+
+  const context = { nodeId: 'fct', time: 0, deltaTime: 0 };
+  const out = def.process(
+    {
+      in: [],
+      variant: 'acab',
+      palette: 'red-black-invert',
+      blend: 'over',
+      audioSource: 'both',
+    },
+    {
+      variant: 'shattered-reality',
+      palette: 'red',
+      blend: 'replace',
+      audioSource: 'microphone',
+    },
+    context
+  );
+
+  assert.deepEqual(out.out[0], {
+    type: 'fctTrack',
+    variant: 'acab',
+    palette: 'red-black-invert',
+    sensitivity: 1,
+    brightness: 1,
+    contrast: 1,
+    blend: 'over',
+    audioSource: 'both',
+    showBackground: 0,
+  });
 });
 
 test('scene-fct-track numeric inputs override config fallbacks', () => {

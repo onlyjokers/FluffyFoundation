@@ -71,3 +71,52 @@ test('AI context snapshot includes an auto-registered fixture node summary', () 
     step: 1,
   });
 });
+
+test('connectable config fields become semantic input ports with option metadata', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'fixture-connectable-node',
+    label: 'Fixture Connectable Node',
+    category: 'Logic',
+    inputs: [{ id: 'in', label: 'In', type: 'number' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [
+      {
+        key: 'mode',
+        label: 'Mode',
+        type: 'select',
+        defaultValue: 'alpha',
+        connectable: true,
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta' },
+        ],
+      },
+      { key: 'assetId', label: 'Asset', type: 'asset-picker', defaultValue: '' },
+    ],
+    process: () => ({}),
+  });
+
+  const definition = registry.get('fixture-connectable-node');
+  assert.ok(definition);
+  assert.deepEqual(
+    definition.inputs.map((input) => input.id),
+    ['in', 'mode']
+  );
+  assert.deepEqual(definition.inputs.find((input) => input.id === 'mode')?.options, [
+    { value: 'alpha', label: 'Alpha' },
+    { value: 'beta', label: 'Beta' },
+  ]);
+
+  const snapshot = createSemanticGraphSnapshot({
+    graph: { nodes: [], connections: [] },
+    definitions: registry.list(),
+    revision: 1,
+  });
+  const summary = snapshot.definitions.find((item) => item.type === 'fixture-connectable-node')?.aiSummary;
+  assert.deepEqual(summary?.ports.inputs.find((input) => input.id === 'mode')?.options, [
+    { value: 'alpha', label: 'Alpha' },
+    { value: 'beta', label: 'Beta' },
+  ]);
+  assert.equal(summary?.ports.inputs.some((input) => input.id === 'assetId'), false);
+});

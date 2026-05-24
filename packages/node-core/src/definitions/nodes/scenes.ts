@@ -244,6 +244,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
         type: 'select',
         defaultValue: 'shattered-reality',
         options: fctVariantOptions,
+        connectable: true,
       },
       {
         key: 'palette',
@@ -251,6 +252,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
         type: 'select',
         defaultValue: 'red-black',
         options: fctPaletteOptions,
+        connectable: true,
       },
       { key: 'sensitivity', label: 'Sensitivity', type: 'number', defaultValue: 1, min: 0, max: 2, step: 0.01 },
       { key: 'brightness', label: 'Brightness', type: 'number', defaultValue: 1, min: 0, max: 2, step: 0.01 },
@@ -260,6 +262,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
         label: 'Blend',
         type: 'select',
         defaultValue: 'replace',
+        connectable: true,
         options: [
           { value: 'replace', label: 'Replace' },
           { value: 'over', label: 'Over' },
@@ -270,6 +273,7 @@ export function createSceneFctTrackNode(): NodeDefinition {
         label: 'Audio Source',
         type: 'select',
         defaultValue: 'microphone',
+        connectable: true,
         options: [
           { value: 'microphone', label: 'Microphone' },
           { value: 'playback', label: 'Playback' },
@@ -282,13 +286,13 @@ export function createSceneFctTrackNode(): NodeDefinition {
       const chain = coerceSceneChain(inputs.in);
       const scene: VisualSceneLayerItem = {
         type: 'fctTrack',
-        variant: coerceFctVariant(config.variant),
-        palette: coerceFctPalette(config.palette),
+        variant: coerceFctVariant(inputs.variant ?? config.variant),
+        palette: coerceFctPalette(inputs.palette ?? config.palette),
         sensitivity: coerceFctNumberParam(inputs.sensitivity, config.sensitivity, 1, 0, 2),
         brightness: coerceFctNumberParam(inputs.brightness, config.brightness, 1, 0, 2),
         contrast: coerceFctNumberParam(inputs.contrast, config.contrast, 1, 0, 2),
-        blend: coerceFctBlend(config.blend),
-        audioSource: coerceFctAudioSource(config.audioSource),
+        blend: coerceFctBlend(inputs.blend ?? config.blend),
+        audioSource: coerceFctAudioSource(inputs.audioSource ?? config.audioSource),
         showBackground: coerceSceneShowBackground(inputs.showBackground, config.showBackground, 0),
       };
       return { out: [...chain, scene] };

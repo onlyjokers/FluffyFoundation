@@ -879,6 +879,76 @@ test('inline select config-backed input can be switched back to its initial valu
   ]);
 });
 
+test('connectable select config field renders as one inline input control', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'scene-connectable-node',
+    label: 'Scene Connectable Node',
+    category: 'Scene',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+    configSchema: [
+      {
+        key: 'audioSource',
+        label: 'Audio Source',
+        type: 'select',
+        defaultValue: 'microphone',
+        connectable: true,
+        options: [
+          { value: 'microphone', label: 'Microphone' },
+          { value: 'playback', label: 'Playback' },
+        ],
+      },
+    ],
+    process: () => ({}),
+  });
+  const inputs: unknown[] = [];
+  const configUpdates: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'scene-1',
+        type: 'scene-connectable-node',
+        config: { audioSource: 'microphone' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (_nodeId, patch) => configUpdates.push(patch),
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      string: new ClassicPreset.Socket('string'),
+      scene: new ClassicPreset.Socket('scene'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'scene-1',
+    type: 'scene-connectable-node',
+    config: { audioSource: 'microphone' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  assert.ok(node.inputs.audioSource);
+  assert.equal(node.controls.audioSource, undefined);
+  const control = node.inputs.audioSource?.control as { setValue(value: string): void };
+  control.setValue('playback');
+
+  assert.deepEqual(inputs, [{ nodeId: 'scene-1', patch: { audioSource: 'playback' } }]);
+  assert.deepEqual(configUpdates, []);
+});
+
 test('note text control can be switched back to its initial value', () => {
   const nodeRegistry = new NodeRegistry();
   nodeRegistry.register({

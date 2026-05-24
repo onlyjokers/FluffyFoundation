@@ -9,6 +9,7 @@ import type {
   NodeSideEffectClass,
   NodePlatformTarget,
 } from './types.js';
+import { nodeDefinitionWithConnectableConfigPorts } from './connectable-config.js';
 
 const DEFAULT_VERSION = '1.0.0';
 
@@ -140,6 +141,7 @@ const summarizePort = (port: NodePort): Record<string, unknown> => ({
   ...(typeof port.min === 'number' ? { min: port.min } : {}),
   ...(typeof port.max === 'number' ? { max: port.max } : {}),
   ...(typeof port.step === 'number' ? { step: port.step } : {}),
+  ...(port.options ? { options: port.options.map((option) => ({ ...option })) } : {}),
 });
 
 const summarizeParam = (field: ConfigField): Record<string, unknown> => ({
@@ -150,6 +152,9 @@ const summarizeParam = (field: ConfigField): Record<string, unknown> => ({
   ...(typeof field.max === 'number' ? { max: field.max } : {}),
   ...(typeof field.step === 'number' ? { step: field.step } : {}),
   ...(field.unit ? { unit: field.unit } : {}),
+  ...(field.connectable === true ? { connectable: true } : {}),
+  ...(field.portType ? { portType: field.portType } : {}),
+  ...(field.options ? { options: field.options.map((option) => ({ ...option })) } : {}),
 });
 
 export type AgentNodeDefinitionSummary = {
@@ -170,21 +175,22 @@ export type AgentNodeDefinitionSummary = {
 };
 
 export function createAgentNodeDefinitionSummary(definition: NodeDefinition): AgentNodeDefinitionSummary {
-  const metadata = inferNodeDefinitionMetadata(definition, definition.metadata ?? {});
+  const normalizedDefinition = nodeDefinitionWithConnectableConfigPorts(definition);
+  const metadata = inferNodeDefinitionMetadata(normalizedDefinition, normalizedDefinition.metadata ?? {});
   return {
-    type: definition.type,
-    label: definition.label,
+    type: normalizedDefinition.type,
+    label: normalizedDefinition.label,
     version: metadata.version,
-    category: definition.category,
+    category: normalizedDefinition.category,
     description: metadata.description,
     platforms: metadata.platformTargets,
     sideEffects: metadata.sideEffectClass,
     permissions: metadata.permissions,
     ports: {
-      inputs: definition.inputs.map(summarizePort),
-      outputs: definition.outputs.map(summarizePort),
+      inputs: normalizedDefinition.inputs.map(summarizePort),
+      outputs: normalizedDefinition.outputs.map(summarizePort),
     },
-    params: definition.configSchema.map(summarizeParam),
+    params: normalizedDefinition.configSchema.map(summarizeParam),
     compatibility: metadata.compatibility,
     examples: metadata.examples,
     risks: metadata.risks,

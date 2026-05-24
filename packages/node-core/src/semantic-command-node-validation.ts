@@ -16,6 +16,7 @@ import {
   normalizeSelectFieldValue,
   paramValidationError,
   portFor,
+  selectFieldOptions,
   validateNode,
   validationError,
 } from './semantic-command-validation-helpers.js';
@@ -195,7 +196,17 @@ const validateInputValue = (
     return typeof value === 'boolean' ? null : inputValidationError(nodeId, port.id, 'boolean', value);
   }
   if (port.type === 'string' || port.type === 'color' || port.type === 'asset') {
-    return typeof value === 'string' ? null : inputValidationError(nodeId, port.id, 'string', value);
+    if (typeof value !== 'string') return inputValidationError(nodeId, port.id, 'string', value);
+    if (port.options && port.options.length > 0 && !selectFieldOptions(port).includes(value)) {
+      return validationError(
+        'GRAPH.INPUT_INVALID',
+        `nodes.${nodeId}.inputs.${port.id}`,
+        `Input ${port.id} is not supported.`,
+        [`Choose one of: ${selectFieldOptions(port).join(', ')}`],
+        `Unsupported value: ${String(value)}`
+      );
+    }
+    return null;
   }
   if (port.type === 'array') {
     return Array.isArray(value) ? null : inputValidationError(nodeId, port.id, 'array', value);

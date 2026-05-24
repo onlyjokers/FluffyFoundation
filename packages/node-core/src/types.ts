@@ -30,6 +30,7 @@ export interface NodePort {
   label: string;
   type: PortType;
   defaultValue?: unknown;
+  options?: { value: string; label: string }[];
   /**
    * Optional numeric UI hints.
    * Platforms may choose to enforce these limits (e.g. manager clamps inputs).
@@ -70,6 +71,8 @@ export interface ConfigField {
   accept?: string;
   buttonLabel?: string;
   unit?: string;
+  connectable?: boolean;
+  portType?: PortType;
 }
 
 export interface ProcessContext {
