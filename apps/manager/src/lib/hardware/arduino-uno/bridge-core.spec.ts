@@ -114,6 +114,50 @@ test('collectArduinoUnoSerialRoutes only emits commands routed through Static Se
   ]);
 });
 
+test('collectArduinoUnoSerialRoutes emits commands routed directly to Arduino object', () => {
+  const result = collectArduinoUnoSerialRoutes({
+    graph: {
+      nodes: [
+        {
+          id: 'digital-1',
+          type: 'plugin:arduino-uno:digital',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: { value: true, pin: 8 },
+          outputValues: {},
+        },
+        {
+          id: 'arduino-1',
+          type: 'arduino-object',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: { index: 1, range: 1, random: false },
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'c1',
+          sourceNodeId: 'digital-1',
+          sourcePortId: 'cmd',
+          targetNodeId: 'arduino-1',
+          targetPortId: 'in',
+        },
+      ],
+    },
+    getComputedInputs: () => null,
+    arduinoIdsInOrder: () => ['uno-a'],
+  });
+
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.routes, [
+    {
+      arduinoId: 'uno-a',
+      payload: { target: 'arduino', action: 'digital', nodeId: 'digital-1', pin: 8, value: true },
+    },
+  ]);
+});
+
 test('resolveArduinoUnoDeviceTargets supports index range random and clamps to available devices', () => {
   const graph: GraphState = {
     nodes: [

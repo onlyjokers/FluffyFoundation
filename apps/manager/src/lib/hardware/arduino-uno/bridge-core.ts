@@ -252,6 +252,39 @@ export function collectArduinoUnoSerialRoutes(input: CollectArduinoUnoSerialRout
     }
   }
 
+  for (const arduino of input.graph.nodes ?? []) {
+    if (arduino.type !== ARDUINO_UNO_OBJECT_NODE_TYPE) continue;
+
+    const payloads: ArduinoUnoPayload[] = [];
+    for (const connection of incomingTo(input.graph, String(arduino.id), 'in')) {
+      const source = nodesById.get(String(connection.sourceNodeId ?? ''));
+      if (!source || (source.type !== ARDUINO_UNO_PWM_NODE_TYPE && source.type !== ARDUINO_UNO_DIGITAL_NODE_TYPE)) {
+        continue;
+      }
+      try {
+        payloads.push(buildPayloadFromNode(source, input.getComputedInputs));
+      } catch (error) {
+        errors.push({
+          nodeId: String(source.id),
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (payloads.length === 0) continue;
+
+    const resolved = resolveArduinoUnoDeviceTargets({
+      graph: input.graph,
+      nodeId: String(arduino.id),
+      arduinoIdsInOrder: input.arduinoIdsInOrder,
+      getComputedInputs: input.getComputedInputs,
+    });
+
+    for (const arduinoId of resolved.ids) {
+      for (const payload of payloads) routes.push({ arduinoId, payload });
+    }
+  }
+
   return { routes, errors };
 }
 
