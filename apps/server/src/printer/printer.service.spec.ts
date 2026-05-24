@@ -12,6 +12,8 @@ import {
   parseLpstatPrinters,
   type PrinterCommandRunner,
 } from './printer.service.js';
+import { LocalMediaModule } from '../local-media/local-media.module.js';
+import { LocalMediaService } from '../local-media/local-media.service.js';
 
 test('parseLpstatPrinters preserves Chinese printer names and default printer', () => {
   const printers = parseLpstatPrinters(`打印机 打印机_Paperang_C1 闲置，启用时间始于 Fri May 15 22:12:40 2026
@@ -78,4 +80,9 @@ test('resolveImageRef writes data image payloads and accepts localfile refs', as
   const dataPath = await service.resolveImageRef('data:image/png;base64,AQID');
   assert.ok(dataPath.startsWith(tempDir));
   assert.ok(dataPath.endsWith('.png'));
+});
+
+test('LocalMediaModule exports LocalMediaService for PrinterModule injection', () => {
+  const exportsMetadata = Reflect.getMetadata('exports', LocalMediaModule) as unknown[];
+  assert.ok(exportsMetadata.includes(LocalMediaService));
 });

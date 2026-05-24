@@ -11,6 +11,6 @@ import { LocalMediaService } from './local-media.service.js';
   imports: [AssetsModule],
   controllers: [LocalMediaController],
   providers: [LocalMediaService],
+  exports: [LocalMediaService],
 })
 export class LocalMediaModule {}
-
