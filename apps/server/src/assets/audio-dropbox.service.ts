@@ -18,11 +18,6 @@ type AudioDropBoxIndexFile = {
   entries: AudioDropBoxEntry[];
 };
 
-type AudioDropBoxOptions = {
-  filePath?: string;
-  capacity?: number;
-};
-
 function parsePositiveInt(value: unknown, fallback: number): number {
   const raw = typeof value === 'string' ? Number(value) : Number(value);
   if (!Number.isFinite(raw)) return fallback;
@@ -71,10 +66,10 @@ export class AudioDropBoxService {
   private persistChain: Promise<void> = Promise.resolve();
   private mutationChain: Promise<void> = Promise.resolve();
 
-  constructor(options: AudioDropBoxOptions = {}) {
-    this.filePath = options.filePath ?? readDropBoxFilePath();
+  constructor() {
+    this.filePath = readDropBoxFilePath();
     this.capacity = parsePositiveInt(
-      options.capacity ?? process.env.AUDIO_DROP_BOX_CAPACITY,
+      process.env.AUDIO_DROP_BOX_CAPACITY,
       10
     );
   }
