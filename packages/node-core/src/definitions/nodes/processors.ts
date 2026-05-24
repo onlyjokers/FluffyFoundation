@@ -344,6 +344,70 @@ export function createScreenColorProcessorNode(): NodeDefinition {
   };
 }
 
+export function createDisplayTextProcessorNode(): NodeDefinition {
+  return {
+    type: 'proc-display-text',
+    label: 'Display Text',
+    category: 'Processors',
+    inputs: [
+      { id: 'text', label: 'Text', type: 'string' },
+      { id: 'color', label: 'Color', type: 'color' },
+      { id: 'backgroundColor', label: 'Bg', type: 'color' },
+      { id: 'durationMs', label: 'Duration', type: 'number', min: 0, step: 100 },
+    ],
+    outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    configSchema: [
+      { key: 'text', label: 'Text', type: 'string', defaultValue: '你好' },
+      { key: 'color', label: 'Color', type: 'string', defaultValue: '#ffffff' },
+      {
+        key: 'backgroundColor',
+        label: 'Background',
+        type: 'string',
+        defaultValue: 'rgba(0, 0, 0, 0.72)',
+      },
+      {
+        key: 'durationMs',
+        label: 'Duration (ms, 0 = sticky)',
+        type: 'number',
+        defaultValue: 0,
+        min: 0,
+        step: 100,
+      },
+    ],
+    process: (inputs, config) => {
+      const text =
+        typeof inputs.text === 'string' && inputs.text.trim()
+          ? String(inputs.text)
+          : String(config.text ?? '你好');
+      const color =
+        typeof inputs.color === 'string' && inputs.color
+          ? String(inputs.color)
+          : String(config.color ?? '#ffffff');
+      const backgroundColor =
+        typeof inputs.backgroundColor === 'string' && inputs.backgroundColor
+          ? String(inputs.backgroundColor)
+          : String(config.backgroundColor ?? 'rgba(0, 0, 0, 0.72)');
+      const durationRaw =
+        typeof inputs.durationMs === 'number'
+          ? (inputs.durationMs as number)
+          : Number(config.durationMs ?? 0);
+      const duration = Number.isFinite(durationRaw) ? Math.max(0, durationRaw) : 0;
+
+      return {
+        cmd: {
+          action: 'showText',
+          payload: {
+            text,
+            color,
+            backgroundColor,
+            ...(duration > 0 ? { duration } : {}),
+          },
+        },
+      };
+    },
+  };
+}
+
 const SYNTH_WAVEFORM_OPTIONS = [
   { value: 'square', label: 'Square' },
   { value: 'sine', label: 'Sine' },

@@ -14,13 +14,13 @@ export function registerJsonSpecs(): void {
       if (!type) continue;
 
       const existing = nodeRegistry.get(type);
-      if (existing) {
+      const runtimeRecord = asRecord(spec.runtime);
+      if (existing && runtimeRecord?.kind !== 'display-object') {
         nodeRegistry.load({ overlays: [spec] });
         continue;
       }
 
       // Manager-only node (not in node-core): still defined via JSON runtime.kind (backward-compatible path).
-      const runtimeRecord = asRecord(spec.runtime);
       if (!runtimeRecord || typeof runtimeRecord.kind !== 'string') {
         console.warn('[node-specs] missing runtime.kind for manager-only spec:', type);
         continue;

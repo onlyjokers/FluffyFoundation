@@ -210,6 +210,27 @@ test('SemanticGraphAuthorityService accepts display-object nodes for server-owne
   assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'display-object'), true);
 });
 
+test('SemanticGraphAuthorityService accepts display text processor nodes for server-owned snapshots', () => {
+  const { service } = createService();
+  const displayTextNode = {
+    id: 'display-text-1',
+    type: 'proc-display-text',
+    position: { x: 10, y: 20 },
+    config: { text: 'Hello Display' },
+    inputValues: {},
+    outputValues: {},
+  };
+
+  const added = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: { type: 'node.add', node: displayTextNode },
+  });
+
+  assert.equal(added.ok, true);
+  assert.equal(service.getSnapshot().nodes[0]?.id, 'display-text-1');
+  assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'proc-display-text'), true);
+});
+
 test('SemanticGraphAuthorityService persists custom node definitions and AI capability settings', () => {
   const { path, service } = createService();
   const customDefinition = {

@@ -202,6 +202,40 @@ test('client loader selects client collections and executor routes command sink 
   assert.deepEqual((loaderOutput.client as { clientIds?: string[] }).clientIds, ['client-a', 'client-b']);
 });
 
+test('display text processor maps text inputs to showText commands', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const definition = registry.get('proc-display-text');
+  assert.ok(definition);
+  const output = definition.process(
+    { text: '你好，AI 已收到', durationMs: 0 },
+    {
+      text: 'fallback',
+      color: '#ffffff',
+      backgroundColor: 'rgba(0, 0, 0, 0.72)',
+      durationMs: 0,
+    },
+    { nodeId: 'n-display-text', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(output, {
+    cmd: {
+      action: 'showText',
+      payload: {
+        text: '你好，AI 已收到',
+        color: '#ffffff',
+        backgroundColor: 'rgba(0, 0, 0, 0.72)',
+      },
+    },
+  });
+});
+
 test('client UI nodes expose interaction state through runtime dependencies', () => {
   let buttonPressed = true;
   const registry = new NodeRegistry();

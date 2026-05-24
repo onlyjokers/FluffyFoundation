@@ -87,6 +87,7 @@ import {
   createVideoOutNode,
 } from './nodes/player.js';
 import {
+  createDisplayTextProcessorNode,
   createFlashlightProcessorNode,
   createPushImageUploadNode,
   createScreenColorProcessorNode,
@@ -187,6 +188,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     () => createUiOutNode(deps),
     createFlashlightProcessorNode,
     createShowImageProcessorNode,
+    createDisplayTextProcessorNode,
     createPushImageUploadNode,
     createScreenColorProcessorNode,
     createSynthUpdateProcessorNode,
