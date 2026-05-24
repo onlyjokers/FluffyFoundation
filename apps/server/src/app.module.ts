@@ -10,6 +10,7 @@ import { SemanticModule } from './semantic/semantic.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { AliyunTtsModule } from './tts/aliyun-tts.module.js';
 import { PrinterModule } from './printer/printer.module.js';
+import { OpenAiImageModule } from './ai-image/openai-image.module.js';
 
 @Module({
     imports: [
@@ -23,6 +24,7 @@ import { PrinterModule } from './printer/printer.module.js';
         AiModule,
         AliyunTtsModule,
         PrinterModule,
+        OpenAiImageModule,
     ],
     controllers: [AppController],
 })

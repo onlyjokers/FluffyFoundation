@@ -9,6 +9,7 @@ import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, clientUiInteractions, getSDK, sensorData, state } from '$lib/stores/manager';
 import { createManagerAudioAssetNodeDeps } from './audio-asset-node-deps';
 import { targetManagedClient } from './client-target';
+import { createManagerImageAssetNodeDeps } from './image-asset-node-deps';
 
 export function registerDefaultRuntimeNodes(): void {
   registerDefaultNodeDefinitions(nodeRegistry, {
@@ -88,6 +89,7 @@ export function registerDefaultRuntimeNodes(): void {
     },
   },
   audioAssets: createManagerAudioAssetNodeDeps(),
+  imageAssets: createManagerImageAssetNodeDeps(),
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {
     nodeRegistry.register(definition);

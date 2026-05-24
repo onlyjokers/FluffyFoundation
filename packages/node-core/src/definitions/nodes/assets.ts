@@ -9,5 +9,6 @@ export {
   createLoadAudioFromAssetsNode,
   createLoadAudioFromLocalNode,
 } from './assets/audio.js';
+export { createGptImageGenNode } from './assets/image-generation.js';
 export { createLoadImageFromAssetsNode, createLoadImageFromLocalNode } from './assets/image.js';
 export { createLoadVideoFromAssetsNode, createLoadVideoFromLocalNode } from './assets/video.js';

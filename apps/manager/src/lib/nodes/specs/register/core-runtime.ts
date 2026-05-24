@@ -6,6 +6,7 @@ import { NodeRegistry as CoreNodeRegistry, registerDefaultNodeDefinitions, type 
 import type { NodeDefinition } from '../../types';
 import { getSDK, sensorData, state } from '$lib/stores/manager';
 import { targetManagedClient } from './client-target';
+import { createManagerImageAssetNodeDeps } from './image-asset-node-deps';
 
 export type CoreRuntimeImpl = Pick<NodeDefinition, 'process' | 'onSink'>;
 
@@ -52,6 +53,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
       sdk.sendControl(target, cmd.action, cmd.payload ?? {}, cmd.executeAt);
     },
     audioAssets: {},
+    imageAssets: createManagerImageAssetNodeDeps(),
   });
 
   const pick = (type: string): CoreRuntimeImpl => {
@@ -67,6 +69,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     ['client-executor', pick('client-executor')],
     ['url-session', pick('url-session')],
     ['url-to-qr-generator', pick('url-to-qr-generator')],
+    ['gpt-image-gen', pick('gpt-image-gen')],
     ['client-permission-filter', pick('client-permission-filter')],
     ['client-url-session-filter', pick('client-url-session-filter')],
     ['proc-client-sensors', pick('proc-client-sensors')],

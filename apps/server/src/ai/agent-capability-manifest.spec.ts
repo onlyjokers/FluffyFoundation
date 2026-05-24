@@ -245,3 +245,99 @@ test('manifest exposes connectable config inputs with option metadata', () => {
     ]
   );
 });
+
+test('manifest exposes GPT image generation ports for agent-created image chains', () => {
+  const snapshot = {
+    revision: 1,
+    nodes: [],
+    definitions: [
+      {
+        type: 'gpt-image-gen',
+        label: 'GPT Image Gen',
+        category: 'AI',
+        ports: {
+          inputs: [
+            { id: 'prompt', label: 'Prompt', type: 'string' },
+            { id: 'image', label: 'Image', type: 'image' },
+            { id: 'trigger', label: 'Generate', type: 'boolean', defaultValue: false },
+          ],
+          outputs: [
+            { id: 'image', label: 'Image', type: 'image' },
+            { id: 'assetId', label: 'Asset ID', type: 'string' },
+          ],
+        },
+        params: [
+          { key: 'model', label: 'Model', type: 'string', defaultValue: 'gpt-image-2' },
+          {
+            key: 'quality',
+            label: 'Quality',
+            type: 'select',
+            defaultValue: 'low',
+            options: [
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' },
+            ],
+          },
+        ],
+      },
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    connections: [],
+    groups: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    deviceCapabilities: [],
+    errors: [],
+    permissions: [],
+    proposals: [],
+  };
+  const targetSpace = {
+    id: 'ai-space:image',
+    parentId: null,
+    kind: 'ai-space' as const,
+    name: 'Image Space',
+    nodeIds: [],
+    disabled: false,
+    agentPolicy: {
+      enabled: true,
+      allowedCommands: ['node.add', 'node.connect', 'node.inputs.update'],
+      targetScope: {
+        nodeIds: [],
+        allowNewNodes: true,
+        allowedNodeTypes: ['gpt-image-gen'],
+      },
+    },
+  };
+
+  const manifest = buildCapabilityManifest(snapshot as never, targetSpace as never) as {
+    createableNodeTypes: Array<{
+      type: string;
+      ports: { inputs: Array<Record<string, unknown>>; outputs: Array<Record<string, unknown>> };
+      params: Array<Record<string, unknown>>;
+    }>;
+  };
+
+  const imageNode = manifest.createableNodeTypes[0];
+  assert.equal(imageNode.type, 'gpt-image-gen');
+  assert.deepEqual(
+    imageNode.ports.inputs.map((input) => [input.id, input.type]),
+    [
+      ['prompt', 'string'],
+      ['image', 'image'],
+      ['trigger', 'boolean'],
+    ]
+  );
+  assert.deepEqual(imageNode.ports.outputs.map((output) => [output.id, output.type]), [
+    ['image', 'image'],
+    ['assetId', 'string'],
+  ]);
+  assert.deepEqual(
+    imageNode.params.find((param) => param.key === 'quality')?.options,
+    [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+    ]
+  );
+});
