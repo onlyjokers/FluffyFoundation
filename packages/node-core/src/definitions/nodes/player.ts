@@ -91,6 +91,21 @@ export function createAudioOutNode(): NodeDefinition {
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Route this player through Display when audio playback should run on selected Display endpoints.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Deploy static audio playback to selected runtime endpoints.',
+    },
     configSchema: [],
     process: () => ({}),
   };
@@ -187,6 +202,21 @@ export function createImageOutNode(deps: ClientObjectDeps): NodeDefinition {
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Route this player through Display when image output should appear on selected Display endpoints.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Deploy static image playback to selected runtime endpoints.',
+    },
     configSchema: [],
     process: () => ({}),
     onSink: (inputs) => {
@@ -269,6 +299,21 @@ export function createVideoOutNode(deps: ClientObjectDeps): NodeDefinition {
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Route this player through Display when video playback should run on selected Display endpoints.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Deploy static video playback to selected runtime endpoints.',
+    },
     configSchema: [],
     process: () => ({}),
     onSink: (inputs) => {
@@ -353,6 +398,21 @@ export function createEffectOutNode(deps: ClientObjectDeps): NodeDefinition {
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Route this player through Display when effects should apply to selected Display endpoints.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Deploy visual effect layers to selected runtime endpoints.',
+    },
     configSchema: [],
     process: () => ({}),
     onSink: (inputs) => {
@@ -434,6 +494,21 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
       // This output is not part of the exported client patch subgraph.
       { id: 'cmd', label: 'Deploy', type: 'command' },
     ],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Route this player through Display when scenes should render on selected Display endpoints.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Deploy scene layers to selected runtime endpoints.',
+    },
     configSchema: [],
     process: () => ({}),
     onSink: (inputs) => {
@@ -534,6 +609,22 @@ export function createPlayMediaNode(): NodeDefinition {
       },
     ],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Connect cmd output to Display to route media playback commands to the selected Display endpoints.',
+          repairHint: 'If media is not visible on Display, confirm the Display node is connected and routed to the correct targets.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a media playback command for selected runtime endpoints.',
+    },
     configSchema: [
       { key: 'audioUrl', label: 'Audio URL', type: 'string', defaultValue: '' },
       { key: 'imageUrl', label: 'Image URL', type: 'string', defaultValue: '' },

@@ -3,6 +3,21 @@
   "type": "proc-display-text",
   "label": "Display Text",
   "category": "Processors",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "display"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send"],
+    "description": "Builds a Display text overlay command for selected Display endpoints.",
+    "compatibility": [
+      {
+        "target": "display-object",
+        "rule": "Connect cmd output to Display to route text overlay commands to selected Display endpoints.",
+        "repairHint": "If text does not appear on Display, confirm the Display node is connected and routed to the correct targets."
+      }
+    ],
+    "repairHints": ["Set durationMs to 0 for sticky text, or connect another Display Text command to replace it."]
+  },
   "inputs": [
     { "id": "text", "label": "Text", "type": "string" },
     { "id": "color", "label": "Color", "type": "color" },

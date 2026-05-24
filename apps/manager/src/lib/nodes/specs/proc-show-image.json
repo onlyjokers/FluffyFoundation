@@ -3,6 +3,25 @@
   "type": "proc-show-image",
   "label": "Dynamic Image Player",
   "category": "Player",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client", "display"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send"],
+    "description": "Converts an image URL into showImage/hideImage commands for Client or Display sinks.",
+    "compatibility": [
+      {
+        "target": "display-object",
+        "rule": "Connect cmd output to Display to route image commands to selected Display endpoints.",
+        "repairHint": "If the image is not visible on Display, confirm the Display node is connected and routed to the correct targets."
+      },
+      {
+        "target": "client-executor",
+        "rule": "Connect cmd output to Client Executor to route image commands to audience clients."
+      }
+    ],
+    "repairHints": ["An empty image input emits hideImage."]
+  },
   "inputs": [{ "id": "in", "label": "In", "type": "image" }],
   "outputs": [{ "id": "cmd", "label": "Cmd", "type": "command" }]
 }

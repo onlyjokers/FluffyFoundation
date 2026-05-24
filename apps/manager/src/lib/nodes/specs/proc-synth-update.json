@@ -2,6 +2,21 @@
   "type": "proc-synth-update",
   "label": "Synth (Update)",
   "category": "Processors",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send", "media:playback"],
+    "description": "Builds a client synth update command. Display does not execute this device-audio command.",
+    "compatibility": [
+      {
+        "target": "client-executor",
+        "rule": "Connect cmd output to Client Executor to route synth updates to clients.",
+        "repairHint": "If no sound changes, confirm the target Client is connected through Client Loader -> Client Executor."
+      }
+    ],
+    "repairHints": ["Use active=false or durationMs=0 to stop the client synth update."]
+  },
   "inputs": [
     { "id": "active", "label": "Active", "type": "boolean" },
     { "id": "waveform", "label": "Wave", "type": "string" },

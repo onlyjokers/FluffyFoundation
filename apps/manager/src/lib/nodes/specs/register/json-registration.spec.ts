@@ -13,3 +13,28 @@ test('registerJsonSpecs re-registers specs with manager runtime kinds over core 
   assert.match(source, /createDefinition\(spec as NodeSpec & \{ runtime: NodeRuntime \}\)/);
   assert.doesNotMatch(source, /if\s*\(\s*existing\s*\)\s*\{\s*nodeRegistry\.load\(\{\s*overlays:\s*\[spec\]\s*\}\)/);
 });
+
+test('display-related manager JSON specs carry explicit routing metadata', () => {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const displayText = JSON.parse(readFileSync(join(currentDir, '..', 'proc-display-text.json'), 'utf8')) as {
+    metadata?: { platformTargets?: string[]; compatibility?: Array<{ target?: string }> };
+  };
+  const screenColor = JSON.parse(readFileSync(join(currentDir, '..', 'proc-screen-color.json'), 'utf8')) as {
+    metadata?: { platformTargets?: string[]; compatibility?: Array<{ target?: string }> };
+  };
+  const showImage = JSON.parse(readFileSync(join(currentDir, '..', 'proc-show-image.json'), 'utf8')) as {
+    metadata?: { platformTargets?: string[]; compatibility?: Array<{ target?: string }> };
+  };
+  const pushImageUpload = JSON.parse(readFileSync(join(currentDir, '..', 'proc-push-image-upload.json'), 'utf8')) as {
+    metadata?: { platformTargets?: string[]; compatibility?: Array<{ target?: string }> };
+  };
+
+  assert.equal(displayText.metadata?.platformTargets?.includes('display'), true);
+  assert.equal(screenColor.metadata?.platformTargets?.includes('display'), true);
+  assert.equal(showImage.metadata?.platformTargets?.includes('display'), true);
+  assert.equal(pushImageUpload.metadata?.platformTargets?.includes('display'), false);
+  assert.equal(displayText.metadata?.compatibility?.some((rule) => rule.target === 'display-object'), true);
+  assert.equal(screenColor.metadata?.compatibility?.some((rule) => rule.target === 'display-object'), true);
+  assert.equal(showImage.metadata?.compatibility?.some((rule) => rule.target === 'display-object'), true);
+  assert.equal(pushImageUpload.metadata?.compatibility?.some((rule) => rule.target === 'display-object'), false);
+});

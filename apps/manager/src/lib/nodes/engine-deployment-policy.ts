@@ -69,6 +69,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'load-video-from-assets',
   'load-video-from-local',
   // Image modulation nodes
+  'url-to-qr-generator',
   'img-scale',
   'img-fit',
   'img-xy-offset',

@@ -231,6 +231,34 @@ test('SemanticGraphAuthorityService accepts display text processor nodes for ser
   assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'proc-display-text'), true);
 });
 
+test('SemanticGraphAuthorityService exposes display routing metadata for display-compatible processors', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  const displayTypes = ['proc-display-text', 'proc-screen-color', 'proc-show-image', 'play-media', 'scene-out', 'effect-out'];
+
+  for (const type of displayTypes) {
+    const definition = snapshot.definitions.find((entry) => entry.type === type);
+    assert.ok(definition, `${type} definition should be exposed`);
+    assert.equal(definition.aiSummary?.platforms.includes('display'), true, `${type} should support Display`);
+    assert.equal(
+      definition.aiSummary?.compatibility.some((rule) => rule.target === 'display-object'),
+      true,
+      `${type} should document Display routing`
+    );
+  }
+
+  for (const type of ['proc-flashlight', 'proc-synth-update', 'proc-push-image-upload']) {
+    const definition = snapshot.definitions.find((entry) => entry.type === type);
+    assert.ok(definition, `${type} definition should be exposed`);
+    assert.equal(definition.aiSummary?.platforms.includes('display'), false, `${type} should not claim Display support`);
+    assert.equal(
+      definition.aiSummary?.compatibility.some((rule) => rule.target === 'client-executor'),
+      true,
+      `${type} should document Client routing`
+    );
+  }
+});
+
 test('SemanticGraphAuthorityService persists custom node definitions and AI capability settings', () => {
   const { path, service } = createService();
   const customDefinition = {

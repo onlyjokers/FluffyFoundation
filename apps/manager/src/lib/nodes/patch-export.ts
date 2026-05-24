@@ -64,6 +64,8 @@ function collectAssetRefs(value: unknown, out: string[], seen: Set<string>): voi
   for (const v of Object.values(value as Record<string, unknown>)) collectAssetRefs(v, out, seen);
 }
 
+const MANAGER_ONLY_SNAPSHOT_NODE_TYPES = new Set(['url-session']);
+
 export function exportGraphForPatch(
   state: GraphState,
   opts: PatchExportOptions = {}
@@ -158,6 +160,38 @@ export function exportGraphForPatch(
   let keptConnections = connections.filter(
     (c) => keptNodeIds.has(String(c.sourceNodeId)) && keptNodeIds.has(String(c.targetNodeId))
   );
+
+  const snapshotOnlyNodeIds = new Set(
+    keptNodes
+      .filter((node) => MANAGER_ONLY_SNAPSHOT_NODE_TYPES.has(String(node.type)))
+      .map((node) => String(node.id))
+      .filter(Boolean)
+  );
+  if (snapshotOnlyNodeIds.size > 0) {
+    const keptNodeById = new Map(keptNodes.map((node) => [String(node.id), node]));
+    for (const connection of keptConnections) {
+      const sourceNodeId = String(connection.sourceNodeId);
+      if (!snapshotOnlyNodeIds.has(sourceNodeId)) continue;
+      const source = keptNodeById.get(sourceNodeId);
+      const target = keptNodeById.get(String(connection.targetNodeId));
+      if (!source || !target) continue;
+      const value = source.outputValues?.[String(connection.sourcePortId)];
+      if (value === undefined) continue;
+      target.inputValues = {
+        ...(target.inputValues ?? {}),
+        [String(connection.targetPortId)]: value,
+      };
+    }
+    for (const id of snapshotOnlyNodeIds) keptNodeIds.delete(id);
+    for (let i = keptNodes.length - 1; i >= 0; i -= 1) {
+      if (snapshotOnlyNodeIds.has(String(keptNodes[i]?.id))) keptNodes.splice(i, 1);
+    }
+    keptConnections = keptConnections.filter(
+      (connection) =>
+        !snapshotOnlyNodeIds.has(String(connection.sourceNodeId)) &&
+        !snapshotOnlyNodeIds.has(String(connection.targetNodeId))
+    );
+  }
 
   const allNodeById = new Map(nodes.map((n) => [String(n.id), n]));
   for (const node of keptNodes) {

@@ -2,6 +2,25 @@
   "type": "proc-screen-color",
   "label": "Screen Color",
   "category": "Processors",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client", "display"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send"],
+    "description": "Builds a screen color control command for Client screens or selected Display endpoints.",
+    "compatibility": [
+      {
+        "target": "display-object",
+        "rule": "Connect cmd output to Display to route screen color commands to selected Display endpoints.",
+        "repairHint": "If the color does not appear on Display, confirm the Display node is connected and routed to the correct targets."
+      },
+      {
+        "target": "client-executor",
+        "rule": "Connect cmd output to Client Executor to route screen color commands to audience clients."
+      }
+    ],
+    "repairHints": ["Use Active=false to clear the screen color overlay."]
+  },
   "inputs": [
     { "id": "active", "label": "Active", "type": "boolean" },
     { "id": "primary", "label": "Primary", "type": "color" },

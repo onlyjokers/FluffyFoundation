@@ -3,6 +3,21 @@
   "type": "proc-push-image-upload",
   "label": "Push Image Upload",
   "category": "Processors",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send"],
+    "description": "Builds a client screenshot upload request. Display does not execute this client capture command.",
+    "compatibility": [
+      {
+        "target": "client-executor",
+        "rule": "Connect cmd output to Client Executor to request captures from selected clients.",
+        "repairHint": "If no image arrives, confirm the target Client supports capture and is connected through Client Loader -> Client Executor."
+      }
+    ],
+    "repairHints": ["Keep speed low enough to avoid flooding the Manager with uploads."]
+  },
   "inputs": [{ "id": "trigger", "label": "Push", "type": "boolean" }],
   "outputs": [{ "id": "cmd", "label": "Cmd", "type": "command" }]
 }
