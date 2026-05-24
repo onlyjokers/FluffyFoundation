@@ -4,16 +4,19 @@ Purpose: Manager-local Arduino UNO serial bridge controls and status.
 <script lang="ts">
   import Card from '$lib/components/ui/Card.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Toggle from '$lib/components/ui/Toggle.svelte';
   import {
     arduinoUnoSerialBridgeState,
     connectArduinoUno,
     disconnectArduinoUno,
+    setArduinoUnoAutoConnect,
   } from '$lib/hardware/arduino-uno/serial-bridge';
 
   $: bridge = $arduinoUnoSerialBridgeState;
   $: connected = bridge.status === 'connected';
   $: busy = bridge.status === 'connecting';
   $: unsupported = bridge.status === 'unsupported';
+  $: autoConnect = bridge.autoConnectCurrentArduino;
 
   function connect(): void {
     void connectArduinoUno();
@@ -21,6 +24,11 @@ Purpose: Manager-local Arduino UNO serial bridge controls and status.
 
   function disconnect(): void {
     void disconnectArduinoUno();
+  }
+
+  function handleAutoConnectChange(event: Event): void {
+    const input = event.currentTarget;
+    setArduinoUnoAutoConnect(input instanceof HTMLInputElement ? input.checked : false);
   }
 </script>
 
@@ -40,6 +48,13 @@ Purpose: Manager-local Arduino UNO serial bridge controls and status.
       </Button>
     </div>
 
+    <Toggle
+      label="Auto connect current Arduino"
+      description="Reconnect saved authorized serial devices on next Manager login."
+      checked={autoConnect}
+      on:change={handleAutoConnectChange}
+    />
+
     <dl class="metrics">
       <div>
         <dt>Devices</dt>
@@ -56,6 +71,10 @@ Purpose: Manager-local Arduino UNO serial bridge controls and status.
       <div>
         <dt>Last command</dt>
         <dd>{bridge.lastCommand ?? '-'}</dd>
+      </div>
+      <div>
+        <dt>Unavailable saved</dt>
+        <dd>{bridge.unavailableAutoConnectDevices}</dd>
       </div>
     </dl>
 
