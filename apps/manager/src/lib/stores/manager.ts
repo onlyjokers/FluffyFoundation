@@ -570,13 +570,6 @@ export function stopSound(toAll = false): void {
     getManagerSDK()?.stopSound(toAll);
 }
 
-export function interruptMedia(toAll = false): void {
-    // Stop video/audio/media streams and hide images
-    stopMedia(toAll);
-    stopSound(toAll);
-    hideImage(toAll);
-}
-
 export function showImage(
     url: string,
     options?: { duration?: number },

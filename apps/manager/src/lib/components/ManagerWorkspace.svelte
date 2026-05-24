@@ -4,12 +4,11 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
 <script lang="ts">
   import { tick } from 'svelte';
   import { spring } from 'svelte/motion';
-  import { state, interruptMedia } from '$lib/stores/manager';
+  import { state } from '$lib/stores/manager';
 
   import AppShell from '$lib/layouts/AppShell.svelte';
   import ClientSelector from '$lib/components/ClientSelector.svelte';
   import DisplayPanel from '$lib/components/DisplayPanel.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Toggle from '$lib/components/ui/Toggle.svelte';
   import GeoControl from '$lib/features/location/GeoControl.svelte';
@@ -80,10 +79,6 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   fullBleed={activePage === 'nodes' || activePage === 'assets' || activePage === 'node-manager'}
   collapseHeader={false}
 >
-  <div slot="headerActions">
-    <Button variant="danger" size="sm" on:click={() => interruptMedia(true)}>Global Stop</Button>
-  </div>
-
   <div slot="tabs" class="page-tabs" bind:this={tabsEl}>
     <div
       class="page-tabs-slider"
