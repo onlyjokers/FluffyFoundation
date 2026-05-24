@@ -68,6 +68,7 @@
     createPickerController,
     type SocketData,
   } from './node-canvas/controllers/picker-controller';
+  import { handlePickerNodeAdded } from './node-canvas/controllers/picker-node-added';
   import { createReteBuilder } from './node-canvas/rete/rete-builder';
   import { createReteSockets } from './node-canvas/rete/rete-sockets';
   import { readAreaTransform } from './node-canvas/utils/view-utils';
@@ -399,10 +400,11 @@
       return nodeId;
     },
     onNodeAdded: (nodeId) => {
-      setSelectedNode(nodeId);
-      focusController.setPendingFocusNodeIds([nodeId]);
-      requestFramesUpdate();
-      minimapController.requestUpdate();
+      handlePickerNodeAdded(nodeId, {
+        setSelectedNode,
+        requestFramesUpdate,
+        requestMinimapUpdate: minimapController.requestUpdate,
+      });
     },
     addConnection: (conn) => {
       canvasCommands.connect(conn);

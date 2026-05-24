@@ -55,7 +55,7 @@ test('connect picker never creates a semantic connection when the initial socket
   assert.deepEqual(addedConnections, []);
 });
 
-test('picker reports successfully added nodes so the canvas can select and focus them', () => {
+test('picker reports successfully added nodes so the canvas can select them', () => {
   const { controller, addedNodes } = createHarness();
 
   controller.openPicker({ clientX: 100, clientY: 120, mode: 'add' });
