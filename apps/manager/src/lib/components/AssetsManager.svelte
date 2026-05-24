@@ -20,7 +20,6 @@
 
   export let serverUrl: string;
 
-  const storageKeyWriteToken = 'shugu-asset-write-token';
   const storageKeyReadToken = 'shugu-asset-read-token';
   const storageKeyAssetsView = 'shugu-assets-view';
 
@@ -42,7 +41,6 @@
   let sizeMinMb = ''; // number input as string
   let sizeMaxMb = ''; // number input as string
 
-  let writeToken = '';
   let readToken = '';
 
   let selectedId: string | null = null;
@@ -113,7 +111,7 @@
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.max(1, Math.floor(timeoutMs)));
     try {
-      return await fetch(url, { ...init, signal: controller.signal });
+      return await fetch(url, { ...init, credentials: 'include', signal: controller.signal });
     } finally {
       clearTimeout(timeout);
     }
@@ -121,7 +119,7 @@
 
   async function refreshAssets(): Promise<void> {
     uploadError = '';
-    await assetsStore.refresh({ serverUrl, writeToken });
+    await assetsStore.refresh({ serverUrl });
   }
 
   function openDrawer(assetId: string): void {
@@ -204,10 +202,6 @@
   }
 
   function uploadOne(itemId: string, file: File): Promise<void> {
-    const token = writeToken.trim();
-    if (!token)
-      return Promise.reject(new Error('Missing Asset Write Token (set it on the connect screen).'));
-
     const url = buildUrl('api/assets');
     const kind = inferKindFromFile(file);
 
@@ -219,7 +213,7 @@
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.withCredentials = true;
       xhr.timeout = 90_000;
 
       xhr.upload.onprogress = (evt) => {
@@ -282,11 +276,9 @@
   async function deleteSelectedAsset(asset: AssetRecord): Promise<void> {
     if (!confirm(`Delete asset ${asset.id}?\n\nThis cannot be undone.`)) return;
     try {
-      const token = writeToken.trim();
-      if (!token) throw new Error('Missing Asset Write Token (set it on the connect screen).');
       const res = await fetchWithTimeout(
         buildUrl(`api/assets/${asset.id}`),
-        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+        { method: 'DELETE', credentials: 'include' },
         20_000
       );
       if (!res.ok) {
@@ -305,9 +297,6 @@
     saveError = '';
     isSaving = true;
     try {
-      const token = writeToken.trim();
-      if (!token) throw new Error('Missing Asset Write Token (set it on the connect screen).');
-
       const payload = {
         originalName: editName,
         kind: editKind,
@@ -319,8 +308,8 @@
         buildUrl(`api/assets/${asset.id}`),
         {
           method: 'PATCH',
+          credentials: 'include',
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(payload),
@@ -399,7 +388,6 @@
   }
 
   onMount(() => {
-    writeToken = readLocalStorage(storageKeyWriteToken);
     readToken = readLocalStorage(storageKeyReadToken);
 
     const savedView = readLocalStorage(storageKeyAssetsView) as ViewMode;

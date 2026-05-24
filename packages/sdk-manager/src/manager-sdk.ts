@@ -105,6 +105,7 @@ export class ManagerSDK {
             query: { role: 'manager' },
             auth: this.config.managerKey ? { managerKey: this.config.managerKey } : undefined,
             transports: this.config.transports,
+            withCredentials: true,
             ...(typeof this.config.rejectUnauthorized === 'boolean'
                 ? { rejectUnauthorized: this.config.rejectUnauthorized }
                 : {}),

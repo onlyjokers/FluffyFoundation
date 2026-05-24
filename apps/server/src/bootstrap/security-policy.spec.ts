@@ -11,17 +11,31 @@ import {
   validateServerSecurityConfig,
 } from './security-policy.js';
 
-test('validateServerSecurityConfig rejects production without a secure manager key', () => {
+test('validateServerSecurityConfig rejects production without any manager credential path', () => {
   assert.throws(
     () =>
       validateServerSecurityConfig({
         nodeEnv: 'production',
         managerKey: '',
+        managerPassword: '',
         allowInsecureManager: '',
         corsOrigins: 'https://manager.example.test',
         hasHttps: true,
       }),
-    /SHUGU_MANAGER_KEY/
+    /SHUGU_MANAGER_PASSWORD/
+  );
+});
+
+test('validateServerSecurityConfig accepts production manager session auth without legacy manager key', () => {
+  assert.doesNotThrow(() =>
+    validateServerSecurityConfig({
+      nodeEnv: 'production',
+      managerKey: '',
+      managerPassword: 'shared-manager-password',
+      allowInsecureManager: '',
+      corsOrigins: 'https://manager.example.test',
+      hasHttps: true,
+    })
   );
 });
 
@@ -31,6 +45,7 @@ test('validateServerSecurityConfig rejects explicit local insecure manager mode 
       validateServerSecurityConfig({
         nodeEnv: 'production',
         managerKey: 'secure-manager-key-123',
+        managerPassword: '',
         allowInsecureManager: '1',
         corsOrigins: 'https://manager.example.test',
         hasHttps: true,
@@ -45,6 +60,7 @@ test('validateServerSecurityConfig rejects production wildcard CORS origins', ()
       validateServerSecurityConfig({
         nodeEnv: 'production',
         managerKey: 'secure-manager-key-123',
+        managerPassword: '',
         allowInsecureManager: '',
         corsOrigins: '*',
         hasHttps: true,
@@ -59,6 +75,7 @@ test('validateServerSecurityConfig blocks production HTTP fallback for manager c
       validateServerSecurityConfig({
         nodeEnv: 'production',
         managerKey: 'secure-manager-key-123',
+        managerPassword: '',
         allowInsecureManager: '',
         corsOrigins: 'https://manager.example.test',
         hasHttps: false,
@@ -71,6 +88,7 @@ test('HTTP and Socket.IO CORS options fail closed in production and preserve exp
   const options = {
     nodeEnv: 'production',
     managerKey: 'secure-manager-key-123',
+    managerPassword: '',
     allowInsecureManager: '',
     corsOrigins: 'https://manager.example.test,https://control.example.test',
     hasHttps: true,
@@ -86,7 +104,7 @@ test('HTTP and Socket.IO CORS options fail closed in production and preserve exp
   ]);
 });
 
-test('Socket.IO CORS uses a real wildcard origin for local development defaults', () => {
+test('Socket.IO CORS reflects local development origins so cookies can be sent', () => {
   assert.equal(
     createSocketCorsOptions({
       nodeEnv: undefined,
@@ -95,7 +113,7 @@ test('Socket.IO CORS uses a real wildcard origin for local development defaults'
       corsOrigins: undefined,
       hasHttps: true,
     }).origin,
-    '*'
+    true
   );
 });
 

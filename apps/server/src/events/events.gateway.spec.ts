@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { EventsGateway } from './events.gateway.js';
+import { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 
 function createGateway(overrides?: { isManager?: boolean }) {
   const clientRegistry = {
@@ -16,7 +17,7 @@ function createGateway(overrides?: { isManager?: boolean }) {
     routeMessage: (message: unknown) => routed.push(message),
   };
 
-  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
+  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never, new ManagerAuthService());
   return { gateway, routed };
 }
 
@@ -75,7 +76,7 @@ function createConnectionGateway() {
     routeMessage: () => undefined,
   };
 
-  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
+  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never, new ManagerAuthService());
   gateway.server = { sockets: { sockets: new Map() } } as never;
 
   return { gateway, getRegisteredRole: () => registeredRole, getRegisteredIdentity: () => registeredIdentity, groupAssignments };
@@ -141,7 +142,7 @@ test('handleMessage records client permission snapshots by socket identity', () 
       broadcastCount += 1;
     },
   };
-  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
+  const gateway = new EventsGateway(clientRegistry as never, messageRouter as never, new ManagerAuthService());
 
   gateway.handleMessage(
     {
@@ -285,7 +286,37 @@ test('handleConnection denies requested manager role by default when no secure k
   );
 });
 
-test('handleConnection denies requested manager role when configured key is wrong', () => {
+test('handleConnection grants manager role with a valid Manager session cookie before checking legacy manager key', () => {
+  withEnv(
+    {
+      SHUGU_MANAGER_USERS: 'Eureka',
+      SHUGU_MANAGER_PASSWORD: 'secret-password',
+      SHUGU_MANAGER_SESSION_SECRET: 'session-secret',
+      SHUGU_MANAGER_KEY: 'legacy-manager-key',
+      SHUGU_ALLOW_INSECURE_MANAGER: undefined,
+      NODE_ENV: undefined,
+    },
+    () => {
+      const { gateway, getRegisteredRole } = createConnectionGateway();
+      const login = gateway.managerAuth.login({ username: 'Eureka', password: 'secret-password' });
+      assert.equal(login.ok, true);
+
+      gateway.handleConnection({
+        id: 'socket-manager-session',
+        handshake: {
+          query: { role: 'manager' },
+          headers: { cookie: login.cookie },
+          auth: { managerKey: 'wrong-key' },
+          address: '203.0.113.10',
+        },
+      } as never);
+
+      assert.equal(getRegisteredRole(), 'manager');
+    }
+  );
+});
+
+test('handleConnection denies requested manager role when configured key is wrong and no session is present', () => {
   withEnv(
     {
       SHUGU_MANAGER_KEY: 'secure-manager-key-123',

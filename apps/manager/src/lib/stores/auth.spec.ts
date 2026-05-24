@@ -11,7 +11,13 @@ test('manager auth source does not compile the legacy hardcoded password', () =>
   assert.equal(authSource.includes('521184'), false);
 });
 
-test('manager auth source gates password login to explicit Vite dev configuration', () => {
-  assert.match(authSource, /import\.meta\.env\.DEV/);
-  assert.match(authSource, /VITE_SHUGU_MANAGER_DEV_PASSWORD/);
+test('manager auth source delegates password checks to the server session endpoint', () => {
+  assert.equal(authSource.includes('api/manager/auth/login'), true);
+  assert.match(authSource, /credentials: 'include'/);
+  assert.equal(authSource.includes('VITE_SHUGU_MANAGER_DEV_PASSWORD'), false);
+});
+
+test('manager auth source keeps long-lived sessions fresh while the Manager stays open', () => {
+  assert.match(authSource, /setInterval/);
+  assert.match(authSource, /api\/manager\/auth\/session/);
 });

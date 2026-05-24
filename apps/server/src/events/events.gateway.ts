@@ -40,6 +40,7 @@ import {
 } from '../bootstrap/state-strategy.js';
 import { handleDisplayRouterCommand } from './display-routing.js';
 import { AiDebugLogger } from '../ai/ai-debug-logger.js';
+import { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 
 function sanitizeGroup(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -81,6 +82,7 @@ function sanitizeClientPermissions(value: unknown): ClientPermissions | null {
   cors: createSocketCorsOptions({
     nodeEnv: process.env.NODE_ENV,
     managerKey: process.env.SHUGU_MANAGER_KEY,
+    managerPassword: process.env.SHUGU_MANAGER_PASSWORD,
     allowInsecureManager: process.env.SHUGU_ALLOW_INSECURE_MANAGER,
     corsOrigins: process.env.SHUGU_CORS_ORIGINS,
     hasHttps: process.env.NODE_ENV === 'production',
@@ -100,6 +102,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   constructor(
     private readonly clientRegistry: ClientRegistryService,
     private readonly messageRouter: MessageRouterService,
+    public readonly managerAuth: ManagerAuthService = new ManagerAuthService(),
     @Optional() private readonly aiDebugLogger?: AiDebugLogger
   ) {
     this.clientRegistry.onClientExpired((clientId) => {
@@ -168,15 +171,21 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
     const expectedManagerKey = (process.env.SHUGU_MANAGER_KEY ?? '').trim();
     const requestedManagerKey = typeof auth?.managerKey === 'string' ? auth.managerKey.trim() : '';
+    const managerSession = this.managerAuth.verifyCookieHeader(
+      typeof client.handshake.headers.cookie === 'string' ? client.handshake.headers.cookie : undefined
+    );
 
-    const role: ConnectionRole = resolveManagerRole({
-      requestedRole,
-      expectedManagerKey,
-      requestedManagerKey,
-      allowInsecureManager: process.env.SHUGU_ALLOW_INSECURE_MANAGER,
-      nodeEnv: process.env.NODE_ENV,
-      address: client.handshake.address,
-    });
+    const role: ConnectionRole =
+      requestedRole === 'manager' && managerSession.ok
+        ? 'manager'
+        : resolveManagerRole({
+            requestedRole,
+            expectedManagerKey,
+            requestedManagerKey,
+            allowInsecureManager: process.env.SHUGU_ALLOW_INSECURE_MANAGER,
+            nodeEnv: process.env.NODE_ENV,
+            address: client.handshake.address,
+          });
 
     if (requestedRole === 'manager' && role !== 'manager') {
       const ip = client.handshake.address;

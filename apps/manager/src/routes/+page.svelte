@@ -13,15 +13,14 @@ Purpose: Classic Manager control and authoring route.
   import ManagerWorkspace from '$lib/components/ManagerWorkspace.svelte';
 
   let serverUrl = 'https://localhost:3001';
-  let managerKey = '';
   let isConnecting = false;
 
   const PERFORMANCE_MODE_STORAGE_KEY = 'shugu-manager-performance-mode';
-  const MANAGER_KEY_STORAGE_KEY = 'shugu-manager-key';
   const allowInsecureHttpManagerControl = import.meta.env.DEV;
 
   let performanceMode = false;
   let performanceModeRestored = false;
+  let serverUrlSyncedAfterLogin = false;
 
   onMount(() => {
     serverUrl = resolveLocalServerUrl({
@@ -32,8 +31,6 @@ Purpose: Classic Manager control and authoring route.
       savedUrl: localStorage.getItem('shugu-server-url'),
       allowInsecureHttp: allowInsecureHttpManagerControl,
     });
-
-    managerKey = localStorage.getItem(MANAGER_KEY_STORAGE_KEY) ?? '';
 
     try {
       performanceMode = localStorage.getItem(PERFORMANCE_MODE_STORAGE_KEY) === '1';
@@ -53,17 +50,27 @@ Purpose: Classic Manager control and authoring route.
     }
   }
 
+  $: if (typeof window !== 'undefined' && $auth.user && !serverUrlSyncedAfterLogin) {
+    const savedServerUrl = localStorage.getItem('shugu-server-url');
+    if (savedServerUrl) {
+      serverUrl = savedServerUrl;
+    }
+    serverUrlSyncedAfterLogin = true;
+  }
+
+  $: if (!$auth.user) {
+    serverUrlSyncedAfterLogin = false;
+  }
+
   function handleConnect() {
     if (!$auth.user) return;
     if (!allowInsecureHttpManagerControl && serverUrl.trim().toLowerCase().startsWith('http:')) {
       return;
     }
     localStorage.setItem('shugu-server-url', serverUrl);
-    localStorage.setItem(MANAGER_KEY_STORAGE_KEY, managerKey);
     isConnecting = true;
     connect({
       serverUrl,
-      managerKey,
       transports: performanceMode ? ['websocket'] : ['polling', 'websocket'],
       commandEnvelope: {
         actor: $auth.user,
@@ -74,9 +81,9 @@ Purpose: Classic Manager control and authoring route.
     isConnecting = false;
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     disconnect();
-    auth.logout();
+    await auth.logout();
   }
 </script>
 
@@ -107,16 +114,6 @@ Purpose: Classic Manager control and authoring route.
             class="input"
             bind:value={serverUrl}
             placeholder="https://localhost:3001"
-          />
-
-          <label class="form-label" for="manager-key">Manager Key</label>
-          <input
-            id="manager-key"
-            type="password"
-            class="input"
-            bind:value={managerKey}
-            placeholder="SHUGU_MANAGER_KEY"
-            autocomplete="off"
           />
 
           <p class="status-note">Logged in as: <strong>{$auth.user}</strong></p>

@@ -1,7 +1,7 @@
 /**
  * Purpose: Manager-side cache + validation helpers for Local Media (server-local files).
  *
- * Backed by server `GET /api/local-media` + `POST /api/local-media/validate` (write-token protected).
+ * Backed by server `GET /api/local-media` + `POST /api/local-media/validate` (Manager session protected).
  * This enables "Load * From Local(Display)" nodes to pick/validate absolute file paths
  * without uploading anything to the Asset Service.
  */
@@ -28,7 +28,6 @@ type LocalMediaState = {
   lastUpdatedAt: number;
 };
 
-const storageKeyWriteToken = 'shugu-asset-write-token';
 const storageKeyServerUrl = 'shugu-server-url';
 
 function buildUrl(serverUrl: string, path: string): string | null {
@@ -43,20 +42,12 @@ function buildUrl(serverUrl: string, path: string): string | null {
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, { ...init, credentials: 'include' });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(text ? `HTTP ${res.status}: ${text}` : `HTTP ${res.status}`);
   }
   return await res.json();
-}
-
-function readWriteToken(): string {
-  try {
-    return localStorage.getItem(storageKeyWriteToken) ?? '';
-  } catch {
-    return '';
-  }
 }
 
 function readServerUrl(): string {
@@ -77,12 +68,10 @@ async function refresh(): Promise<void> {
   refreshInFlight = (async () => {
     store.update((s) => ({ ...s, status: 'loading', error: null }));
     try {
-      const token = readWriteToken();
-      if (!token) throw new Error('Missing Asset Write Token (set it on the connect screen).');
       const serverUrl = readServerUrl();
       const url = buildUrl(serverUrl, 'api/local-media');
       if (!url) throw new Error('Missing or invalid Server URL.');
-      const data = await fetchJson(url, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      const data = await fetchJson(url, { method: 'GET', credentials: 'include' });
       const record = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : null;
       const files = Array.isArray(record?.files) ? (record.files as LocalMediaFile[]) : [];
       const roots = Array.isArray(record?.roots) ? record.roots.map(String) : [];
@@ -102,14 +91,13 @@ async function refresh(): Promise<void> {
 }
 
 async function validatePath(path: string, kind: LocalMediaKind): Promise<LocalMediaFile> {
-  const token = readWriteToken();
-  if (!token) throw new Error('Missing Asset Write Token (set it on the connect screen).');
   const serverUrl = readServerUrl();
   const url = buildUrl(serverUrl, 'api/local-media/validate');
   if (!url) throw new Error('Missing or invalid Server URL.');
   const data = await fetchJson(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, kind }),
   });
   const record = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : null;

@@ -11,6 +11,7 @@ import { AiModule } from './ai/ai.module.js';
 import { AliyunTtsModule } from './tts/aliyun-tts.module.js';
 import { PrinterModule } from './printer/printer.module.js';
 import { OpenAiImageModule } from './ai-image/openai-image.module.js';
+import { ManagerAuthModule } from './manager-auth/manager-auth.module.js';
 
 @Module({
     imports: [
@@ -25,6 +26,7 @@ import { OpenAiImageModule } from './ai-image/openai-image.module.js';
         AliyunTtsModule,
         PrinterModule,
         OpenAiImageModule,
+        ManagerAuthModule,
     ],
     controllers: [AppController],
 })

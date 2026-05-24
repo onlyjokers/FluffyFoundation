@@ -2,27 +2,35 @@
 Purpose: Isolate manager login UI and dev-only password configuration from the main route.
 -->
 <script lang="ts">
-  import {
-    ALLOWED_USERNAMES,
-    auth,
-    isDevPasswordLoginEnabled,
-    type AuthUser,
-  } from '$lib/stores/auth';
+  import { ALLOWED_USERNAMES, auth, type AuthUser } from '$lib/stores/auth';
 
   let username: AuthUser | '' = '';
   let password = '';
-  let rememberLogin = false;
+  let serverUrl = '';
+  let isSubmitting = false;
 
-  function handleLogin(event: Event) {
+  async function handleLogin(event: Event) {
     event.preventDefault();
+    if (isSubmitting) return;
     auth.clearError();
-    const result = auth.login(username, password, rememberLogin);
+    try {
+      localStorage.setItem('shugu-server-url', serverUrl);
+    } catch {
+      // ignore
+    }
+    isSubmitting = true;
+    const result = await auth.login(username, password, serverUrl);
+    isSubmitting = false;
 
     if (result.ok) {
       password = '';
     } else {
       password = '';
     }
+  }
+
+  $: if (typeof window !== 'undefined' && !serverUrl) {
+    serverUrl = localStorage.getItem('shugu-server-url') ?? 'http://localhost:3001';
   }
 </script>
 
@@ -31,6 +39,15 @@ Purpose: Isolate manager login UI and dev-only password configuration from the m
     <h1 class="title">Fluffy Manager</h1>
 
     <form class="connect-form" on:submit|preventDefault={handleLogin} autocomplete="on">
+      <label class="form-label" for="server-url">Server URL</label>
+      <input
+        id="server-url"
+        type="text"
+        class="input"
+        bind:value={serverUrl}
+        placeholder="http://localhost:3001"
+      />
+
       <label class="form-label" for="username">Username</label>
       <input
         id="username"
@@ -59,25 +76,16 @@ Purpose: Isolate manager login UI and dev-only password configuration from the m
         on:input={() => auth.clearError()}
       />
 
-      <label class="remember-row">
-        <input type="checkbox" bind:checked={rememberLogin} />
-        <span>Remember me</span>
-      </label>
-
       {#if $auth.error}
         <p class="error-message">{$auth.error}</p>
-      {/if}
-
-      {#if !isDevPasswordLoginEnabled()}
-        <p class="error-message">Password login is available only in explicit dev mode.</p>
       {/if}
 
       <button
         class="btn btn-primary btn-lg w-full"
         type="submit"
-        disabled={!isDevPasswordLoginEnabled()}
+        disabled={isSubmitting}
       >
-        Login
+        {isSubmitting ? 'Logging in...' : 'Login'}
       </button>
     </form>
   </div>
@@ -137,15 +145,6 @@ Purpose: Isolate manager login UI and dev-only password configuration from the m
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px var(--border-glow);
-  }
-
-  .remember-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    cursor: pointer;
   }
 
   .error-message {

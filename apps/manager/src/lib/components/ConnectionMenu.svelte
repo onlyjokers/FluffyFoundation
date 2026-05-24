@@ -19,10 +19,10 @@
     disconnect();
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     closeMenu();
     disconnect();
-    auth.logout();
+    await auth.logout();
   }
 
   onMount(() => {
