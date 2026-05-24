@@ -897,6 +897,74 @@ test('semantic command input update rejects unknown ports and invalid values', (
   assert.equal(wrongType.validationErrors[0].path, 'nodes.n1.inputs.value');
 });
 
+test('semantic command input update accepts connectable config inputs and rejects unsupported options', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'scene',
+          type: 'scene-fct-track',
+          position: { x: 0, y: 0 },
+          config: { variant: 'shattered-reality' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'scene-fct-track',
+        label: 'Scene FCT Track',
+        category: 'Scene',
+        inputs: [{ id: 'in', label: 'In', type: 'scene' }],
+        outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+        configSchema: [
+          {
+            key: 'variant',
+            label: 'Variant',
+            type: 'select',
+            defaultValue: 'shattered-reality',
+            connectable: true,
+            options: [
+              { value: 'shattered-reality', label: 'Shattered Reality' },
+              { value: 'acab', label: 'ACAB' },
+            ],
+          },
+        ],
+      },
+    ],
+    revision: 1,
+  });
+
+  const accepted = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'scene',
+      inputValues: { variant: 'acab' },
+    },
+  });
+
+  assert.equal(accepted.ok, true);
+  assert.equal(bus.getSnapshot().nodes[0].params.variant, 'shattered-reality');
+  assert.equal(bus.getSnapshot().nodes[0].inputValues.variant, 'acab');
+
+  const rejected = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.inputs.update',
+      nodeId: 'scene',
+      inputValues: { variant: 'unknown' },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.validationErrors[0].code, 'GRAPH.INPUT_INVALID');
+  assert.equal(rejected.validationErrors[0].path, 'nodes.scene.inputs.variant');
+});
+
 test('semantic command normalizes select aliases and rejects unsupported select values', () => {
   const bus = createSemanticCommandBus({
     graph: {

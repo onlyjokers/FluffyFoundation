@@ -160,3 +160,88 @@ test('manifest hides node types disabled by agent capability settings', () => {
   assert.deepEqual(manifest.createableNodeTypes.map((definition) => definition.type), ['string']);
   assert.deepEqual(manifest.disabledNodeTypes, [{ type: 'number' }]);
 });
+
+test('manifest exposes connectable config inputs with option metadata', () => {
+  const snapshot = {
+    revision: 1,
+    nodes: [
+      {
+        id: 'scene',
+        type: 'scene-fct-track',
+        params: { variant: 'shattered-reality' },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    definitions: [
+      {
+        type: 'scene-fct-track',
+        label: 'Scene FCT Track',
+        category: 'Scene',
+        ports: {
+          inputs: [
+            { id: 'in', label: 'In', type: 'scene' },
+            {
+              id: 'variant',
+              label: 'Variant',
+              type: 'string',
+              defaultValue: 'shattered-reality',
+              options: [
+                { value: 'shattered-reality', label: 'Shattered Reality' },
+                { value: 'acab', label: 'ACAB' },
+              ],
+            },
+          ],
+          outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+        },
+        params: [
+          {
+            key: 'variant',
+            label: 'Variant',
+            type: 'select',
+            defaultValue: 'shattered-reality',
+            connectable: true,
+            options: [
+              { value: 'shattered-reality', label: 'Shattered Reality' },
+              { value: 'acab', label: 'ACAB' },
+            ],
+          },
+        ],
+      },
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    connections: [],
+    groups: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    deviceCapabilities: [],
+    errors: [],
+    permissions: [],
+    proposals: [],
+  };
+  const targetSpace = {
+    id: 'ai-space:test',
+    parentId: null,
+    kind: 'ai-space' as const,
+    name: 'Test Space',
+    nodeIds: ['scene'],
+    disabled: false,
+    agentPolicy: {
+      enabled: true,
+      allowedCommands: ['node.connect', 'node.inputs.update'],
+      targetScope: { nodeIds: ['scene'] },
+    },
+  };
+
+  const manifest = buildCapabilityManifest(snapshot as never, targetSpace as never) as {
+    nodeTypes: Array<{ type: string; ports: { inputs: Array<Record<string, unknown>> } }>;
+  };
+
+  assert.deepEqual(
+    manifest.nodeTypes[0].ports.inputs.find((input) => input.id === 'variant')?.options,
+    [
+      { value: 'shattered-reality', label: 'Shattered Reality' },
+      { value: 'acab', label: 'ACAB' },
+    ]
+  );
+});

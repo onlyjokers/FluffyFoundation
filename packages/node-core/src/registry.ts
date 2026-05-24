@@ -4,6 +4,7 @@ import {
   withNodeDefinitionMetadata,
   type AgentNodeDefinitionSummary,
 } from './node-definition-metadata.js';
+import { nodeDefinitionWithConnectableConfigPorts } from './connectable-config.js';
 
 type NodeDefinitionOverlay = {
   type: string;
@@ -125,7 +126,7 @@ export class NodeRegistry {
   private definitions = new Map<string, NodeDefinition>();
 
   register(definition: NodeDefinition): void {
-    this.definitions.set(definition.type, withNodeDefinitionMetadata(definition));
+    this.definitions.set(definition.type, withNodeDefinitionMetadata(nodeDefinitionWithConnectableConfigPorts(definition)));
   }
 
   unregister(type: string): void {

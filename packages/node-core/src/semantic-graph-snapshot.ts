@@ -18,6 +18,7 @@ import type {
   SemanticSnapshotInput,
 } from './semantic-graph-types.js';
 import { createAgentNodeDefinitionSummary } from './node-definition-metadata.js';
+import { inputsWithConnectableConfigPorts } from './connectable-config.js';
 import type {
   ControlPlaneActorRole,
   ControlPlaneCapability,
@@ -256,13 +257,17 @@ export const normalizeDefinitions = (
       : Array.isArray(record.params)
         ? (record.params as SemanticDefinition['params'])
         : [];
+    const normalizedInputs = inputsWithConnectableConfigPorts(
+      inputs as SemanticDefinition['ports']['inputs'],
+      params as SemanticDefinition['params']
+    );
     const aiSummary = isRecord(record.aiSummary)
       ? (record.aiSummary as SemanticDefinition['aiSummary'])
       : createAgentNodeDefinitionSummary({
           type: String(def.type),
           label: String(def.label ?? def.type),
           category: String(def.category ?? 'Other'),
-          inputs: [...inputs],
+          inputs: [...normalizedInputs],
           outputs: [...outputs],
           configSchema: [...params],
           metadata: def.metadata,
@@ -273,7 +278,7 @@ export const normalizeDefinitions = (
       type: String(def.type),
       label: String(def.label ?? def.type),
       category: String(def.category ?? 'Other'),
-      ports: { inputs: [...inputs], outputs: [...outputs] },
+      ports: { inputs: [...normalizedInputs], outputs: [...outputs] },
       params: [...params],
       aiSummary,
     };
