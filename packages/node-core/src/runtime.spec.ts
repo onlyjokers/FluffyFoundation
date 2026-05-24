@@ -506,6 +506,84 @@ test('client permission filter supports boolean inputs overriding permission con
   );
 });
 
+test('url session node creates a new session only on trigger pulses', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const node = registry.get('url-session');
+  assert.ok(node);
+
+  const context = { nodeId: 'url-session-1', time: 0, deltaTime: 0 };
+  const idle = node.process({}, { baseUrl: 'https://example.test/client' }, context);
+  assert.equal(idle.sessionId, '');
+  assert.equal(idle.url, 'https://example.test/client');
+
+  const first = node.process({ trigger: true }, { baseUrl: 'https://example.test/client' }, context);
+  assert.match(String(first.sessionId), /^us_[a-z0-9]+$/);
+  assert.equal(first.url, `https://example.test/client?sessionId=${first.sessionId}`);
+
+  const held = node.process({ trigger: true }, { baseUrl: 'https://example.test/client' }, context);
+  assert.equal(held.sessionId, first.sessionId);
+  assert.equal(held.url, first.url);
+
+  node.process({ trigger: false }, { baseUrl: 'https://example.test/client' }, context);
+  const second = node.process({ trigger: true }, { baseUrl: 'https://example.test/client' }, context);
+  assert.notEqual(second.sessionId, first.sessionId);
+});
+
+test('client url session filter narrows client collections and pass-throughs empty sessions', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c', 'display-1'],
+    getSelectedClientIds: () => [],
+    getClientUrlSessionId: (clientId) => {
+      if (clientId === 'client-a') return 'session-a';
+      if (clientId === 'client-b') return 'session-b';
+      if (clientId === 'display-1') return 'session-a';
+      return null;
+    },
+    isAudienceClient: (clientId) => clientId !== 'display-1',
+    executeCommand: () => {},
+  });
+  const node = registry.get('client-url-session-filter');
+  assert.ok(node);
+
+  const filtered = node.process(
+    { sessionId: 'session-a' },
+    {},
+    { nodeId: 'url-filter', time: 0, deltaTime: 0 }
+  );
+  assert.deepEqual(filtered.indexs, ['client-a']);
+  assert.deepEqual(filtered.rejectedIndexs, ['client-b', 'client-c']);
+  assert.equal(filtered.number, 1);
+  assert.equal((filtered.client as { clientId?: string }).clientId, 'client-a');
+  assert.deepEqual((filtered.client as { clientIds?: string[] }).clientIds, ['client-a']);
+
+  const subset = node.process(
+    {
+      client: { clientId: 'client-b', clientIds: ['client-b', 'client-c'] },
+      sessionId: 'session-b',
+    },
+    {},
+    { nodeId: 'url-filter', time: 0, deltaTime: 0 }
+  );
+  assert.deepEqual(subset.indexs, ['client-b']);
+  assert.deepEqual(subset.rejectedIndexs, ['client-c']);
+
+  const passThrough = node.process(
+    { client: { clientId: 'client-b', clientIds: ['client-b', 'client-c'] } },
+    {},
+    { nodeId: 'url-filter', time: 0, deltaTime: 0 }
+  );
+  assert.deepEqual(passThrough.indexs, ['client-b', 'client-c']);
+  assert.deepEqual(passThrough.rejectedIndexs, []);
+});
+
 test('semantic command normalization migrates legacy number source nodes to float', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {

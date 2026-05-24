@@ -154,3 +154,30 @@ test('ManagerSDK preserves client permission snapshots from client list updates'
     motion: 'denied',
   });
 });
+
+test('ManagerSDK preserves client url session ids from client list updates', () => {
+  const sdk = new ManagerSDK({ serverUrl: 'http://localhost:3001' });
+
+  (
+    sdk as unknown as {
+      handleSystemMessage: (message: unknown) => void;
+    }
+  ).handleSystemMessage({
+    type: 'system',
+    version: 1,
+    serverTimestamp: 123,
+    action: 'clientList',
+    payload: {
+      clients: [
+        {
+          clientId: 'client-1',
+          connectedAt: 10,
+          selected: false,
+          urlSessionId: 'session-a',
+        },
+      ],
+    },
+  });
+
+  assert.equal(managerState(sdk).clients[0]?.urlSessionId, 'session-a');
+});

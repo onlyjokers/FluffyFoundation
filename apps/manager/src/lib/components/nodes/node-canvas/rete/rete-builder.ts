@@ -346,6 +346,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
                   : Boolean(derivedDefault);
           let lastValue = initial;
           const control = new BooleanControl({
+            label: input.label,
             initial,
             change: (value) => {
               const isCustomGate =
@@ -371,6 +372,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               }
             },
           });
+          if (instance.type === 'url-session' && input.id === 'trigger') {
+            control.button = true;
+            control.buttonLabel = 'New URL';
+          }
           withControlMeta(control, { inline: true });
           inp.addControl(control);
         }

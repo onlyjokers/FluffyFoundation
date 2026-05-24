@@ -279,3 +279,55 @@ test('bindManagerClientSubscription refreshes graph runtime when client permissi
   assert.equal(graphSyncCalls.length, 1);
   assert.equal(syncClientNodeCalls, 1);
 });
+
+test('bindManagerClientSubscription refreshes graph runtime when client url session changes', () => {
+  const managerState = writable({
+    clients: [
+      {
+        clientId: 'client-a',
+        group: 'audience',
+        connected: true,
+        urlSessionId: 'session-a',
+      },
+    ],
+  });
+  const graphState = writable({ nodes: [], connections: [] });
+  const graphSyncCalls: unknown[] = [];
+  const reconcileCalls: string[] = [];
+  let syncClientNodeCalls = 0;
+
+  const unsubscribe = bindManagerClientSubscription({
+    managerState,
+    graphStateStore: graphState,
+    graphSync: { schedule: (state: unknown) => graphSyncCalls.push(state) },
+    nodeEngine: {
+      getNode: () => null,
+      updateNodeConfig: () => undefined,
+      tickTime: { set: () => undefined },
+    },
+    schedulePatchReconcile: (reason: string) => reconcileCalls.push(reason),
+    syncClientNodesFromInputs: () => {
+      syncClientNodeCalls += 1;
+    },
+  });
+
+  graphSyncCalls.length = 0;
+  reconcileCalls.length = 0;
+  syncClientNodeCalls = 0;
+
+  managerState.set({
+    clients: [
+      {
+        clientId: 'client-a',
+        group: 'audience',
+        connected: true,
+        urlSessionId: 'session-b',
+      },
+    ],
+  });
+
+  unsubscribe?.();
+  assert.deepEqual(reconcileCalls, ['manager-state']);
+  assert.equal(graphSyncCalls.length, 1);
+  assert.equal(syncClientNodeCalls, 1);
+});

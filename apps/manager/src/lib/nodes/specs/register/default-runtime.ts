@@ -39,6 +39,11 @@ export function registerDefaultRuntimeNodes(): void {
     const client = (get(state).clients ?? []).find((entry) => String(entry?.clientId ?? '') === clientId);
     return client?.permissions ?? null;
   },
+  getClientUrlSessionId: (clientId: string) => {
+    if (!clientId) return null;
+    const client = (get(state).clients ?? []).find((entry) => String(entry?.clientId ?? '') === clientId);
+    return typeof client?.urlSessionId === 'string' ? client.urlSessionId : null;
+  },
   isAudienceClient: (clientId: string) => {
     const client = (get(state).clients ?? []).find((entry) => String(entry?.clientId ?? '') === clientId);
     return String(client?.group ?? '') !== 'display';

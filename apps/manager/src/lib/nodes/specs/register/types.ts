@@ -76,7 +76,9 @@ export type CommandRuntime = {
 export type NodeRuntime =
   | { kind: 'client-loader' }
   | { kind: 'client-executor' }
+  | { kind: 'url-session' }
   | { kind: 'client-permission-filter' }
+  | { kind: 'client-url-session-filter' }
   | { kind: 'display-object' }
   | { kind: 'proc-client-sensors' }
   | { kind: 'param-get' }

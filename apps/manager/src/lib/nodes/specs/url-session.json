@@ -1,0 +1,42 @@
+{
+  "__purpose": "Manager node spec for creating reusable URL session links for audience client grouping.",
+  "type": "url-session",
+  "label": "URL Session",
+  "category": "Objects",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager"],
+    "sideEffectClass": "local-state",
+    "permissions": [],
+    "description": "Generates a session-scoped client URL when triggered.",
+    "compatibility": [
+      {
+        "target": "Client Filter for URL Session",
+        "rule": "Connect Session ID to Client Filter for URL Session to route clients that entered through this URL.",
+        "repairHint": "Click New URL before showing or copying the URL for a new group."
+      }
+    ]
+  },
+  "inputs": [
+    { "id": "trigger", "label": "New URL", "type": "boolean", "defaultValue": false },
+    {
+      "id": "baseUrl",
+      "label": "Base URL",
+      "type": "string",
+      "defaultValue": "https://fluffyfoundation.xyz/client"
+    }
+  ],
+  "outputs": [
+    { "id": "sessionId", "label": "Session ID", "type": "string" },
+    { "id": "url", "label": "URL", "type": "string" }
+  ],
+  "configSchema": [
+    {
+      "key": "baseUrl",
+      "label": "Base URL",
+      "type": "string",
+      "defaultValue": "https://fluffyfoundation.xyz/client"
+    }
+  ],
+  "runtime": { "kind": "url-session" }
+}

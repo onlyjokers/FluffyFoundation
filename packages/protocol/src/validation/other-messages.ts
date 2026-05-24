@@ -193,6 +193,7 @@ function validateClientInfo(client: unknown, ctx: MutableValidationContext, path
   optionalBoolean(client, ctx, 'connected', `${path}.connected`, 'message.system.payload.clients.connected');
   optionalNumber(client, ctx, 'lastSeenAt', `${path}.lastSeenAt`, 'message.system.payload.clients.lastSeenAt');
   validateClientPermissions(client.permissions, ctx, `${path}.permissions`);
+  validateUrlSessionId(client.urlSessionId, ctx, `${path}.urlSessionId`);
 }
 
 function validateClientPermissions(value: unknown, ctx: MutableValidationContext, path: string): void {
@@ -209,6 +210,17 @@ function validateClientPermissions(value: unknown, ctx: MutableValidationContext
     if (!isOneOf(status, CLIENT_PERMISSION_STATUSES)) {
       addReason(ctx, 'protocol.field.invalid', 'message.system.payload.permissions', `${path}.${key}`, `${path}.${key} must be a supported permission status`);
     }
+  }
+}
+
+function validateUrlSessionId(value: unknown, ctx: MutableValidationContext, path: string): void {
+  if (value === undefined) return;
+  if (typeof value !== 'string' || !value.trim()) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.clients.urlSessionId', path, `${path} must be a non-empty string`);
+    return;
+  }
+  if (value.length > 80 || !/^[a-zA-Z0-9_-]+$/.test(value)) {
+    addReason(ctx, 'protocol.field.invalid', 'message.system.payload.clients.urlSessionId', path, `${path} must use URL-session safe characters`);
   }
 }
 

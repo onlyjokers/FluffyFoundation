@@ -23,9 +23,10 @@ interface ConnectionInfo {
     deviceId?: string;
     instanceId?: string;
     permissions?: ClientPermissions;
+    urlSessionId?: string;
 }
 
-type ClientIdentity = { deviceId?: string; instanceId?: string; clientId?: string };
+type ClientIdentity = { deviceId?: string; instanceId?: string; clientId?: string; urlSessionId?: string };
 
 @Injectable()
 export class ClientRegistryService {
@@ -105,6 +106,7 @@ export class ClientRegistryService {
             const deviceId = this.sanitizeId(identity?.deviceId);
             const instanceId = this.sanitizeId(identity?.instanceId);
             const requestedClientId = this.sanitizeId(identity?.clientId);
+            const urlSessionId = this.sanitizeSessionId(identity?.urlSessionId);
 
             if (deviceId) {
                 const desiredClientId = requestedClientId ?? deviceId;
@@ -126,6 +128,7 @@ export class ClientRegistryService {
                         existing.deviceId = deviceId;
                         existing.instanceId = instanceId;
                         existing.connected = true;
+                        existing.urlSessionId = urlSessionId ?? existing.urlSessionId;
                         this.clearGraceTimer(desiredClientId);
 
                         this.socketToClientId.set(socketId, desiredClientId);
@@ -147,6 +150,7 @@ export class ClientRegistryService {
                         connected: true,
                         deviceId,
                         instanceId: instanceId ?? undefined,
+                        urlSessionId: urlSessionId ?? undefined,
                     };
                     this.clients.set(allocated, info);
                     this.socketToClientId.set(socketId, allocated);
@@ -166,6 +170,7 @@ export class ClientRegistryService {
                     connected: true,
                     deviceId,
                     instanceId: instanceId ?? undefined,
+                    urlSessionId: urlSessionId ?? undefined,
                 };
                 this.clients.set(desiredClientId, info);
                 this.socketToClientId.set(socketId, desiredClientId);
@@ -184,6 +189,7 @@ export class ClientRegistryService {
                 userAgent,
                 selected: false,
                 connected: true,
+                urlSessionId: urlSessionId ?? undefined,
             };
             this.clients.set(clientId, info);
             this.socketToClientId.set(socketId, clientId);
@@ -217,6 +223,13 @@ export class ClientRegistryService {
         const limited = trimmed.slice(0, 80);
         const sanitized = limited.replace(/[^a-zA-Z0-9_-]/g, '_');
         return sanitized || null;
+    }
+
+    private sanitizeSessionId(value: unknown): string | null {
+        if (typeof value !== 'string') return null;
+        const trimmed = value.trim();
+        if (!trimmed || trimmed.length > 80) return null;
+        return /^[a-zA-Z0-9_-]+$/.test(trimmed) ? trimmed : null;
     }
 
     private allocateClientId(baseId: string): string {
@@ -302,6 +315,7 @@ export class ClientRegistryService {
             selected: c.selected,
             connected: c.connected,
             permissions: c.permissions ? { ...c.permissions } : undefined,
+            urlSessionId: c.urlSessionId,
         }));
     }
     getAllManagers(): { clientId: string; connectedAt: number }[] {

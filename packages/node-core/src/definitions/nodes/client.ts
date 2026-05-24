@@ -34,6 +34,7 @@ function resolveClientSelection(
 }
 
 const permissionConfigKeys: ClientPermissionName[] = ['microphone', 'motion', 'camera', 'wakeLock', 'geolocation'];
+const urlSessionStateByNodeId = new Map<string, { lastTrigger: boolean; sessionId: string }>();
 
 function resolveRequiredPermissionKeys(
   inputs: Record<string, unknown>,
@@ -93,6 +94,31 @@ function resolveTargetsFromClientInput(raw: unknown): string[] {
   if (ids.length > 0) return ids;
   const clientId = getStringValue(record.clientId);
   return clientId ? [clientId] : [];
+}
+
+function getBaseUrl(inputs: Record<string, unknown>, config: Record<string, unknown>): string {
+  const fromInput = getStringValue(inputs.baseUrl);
+  if (fromInput) return fromInput;
+  const fromConfig = getStringValue(config.baseUrl);
+  if (fromConfig) return fromConfig;
+  return 'https://fluffyfoundation.xyz/client';
+}
+
+function generateUrlSessionId(): string {
+  const time = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 10);
+  return `us_${time}${random}`;
+}
+
+function buildUrlWithSessionId(baseUrl: string, sessionId: string): string {
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.set('sessionId', sessionId);
+    return url.toString();
+  } catch {
+    const join = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${join}sessionId=${encodeURIComponent(sessionId)}`;
+  }
 }
 
 function commandFromUnknown(raw: unknown): NodeCommand | null {
@@ -190,6 +216,98 @@ export function createClientPermissionFilterNode(deps: ClientObjectDeps): NodeDe
         const granted = required.map((key) => hasGrantedPermission(permissions, key));
         const accepted = matchAny ? granted.some(Boolean) : granted.every(Boolean);
         if (accepted) indexs.push(clientId);
+        else rejectedIndexs.push(clientId);
+      }
+
+      return {
+        client: createClientObjectForSelection(indexs[0] ?? '', indexs, deps),
+        indexs,
+        number: indexs.length,
+        rejectedIndexs,
+      };
+    },
+  };
+}
+
+export function createUrlSessionNode(): NodeDefinition {
+  return {
+    type: 'url-session',
+    label: 'URL Session',
+    category: 'Objects',
+    inputs: [
+      { id: 'trigger', label: 'Trigger', type: 'boolean', defaultValue: false },
+      { id: 'baseUrl', label: 'Base URL', type: 'string', defaultValue: 'https://fluffyfoundation.xyz/client' },
+    ],
+    outputs: [
+      { id: 'sessionId', label: 'Session ID', type: 'string' },
+      { id: 'url', label: 'URL', type: 'string' },
+    ],
+    configSchema: [
+      {
+        key: 'baseUrl',
+        label: 'Base URL',
+        type: 'string',
+        defaultValue: 'https://fluffyfoundation.xyz/client',
+      },
+    ],
+    process: (inputs, config, context) => {
+      const state = urlSessionStateByNodeId.get(context.nodeId) ?? { lastTrigger: false, sessionId: '' };
+      const trigger = getBooleanValue(inputs.trigger) ?? false;
+      if (trigger && !state.lastTrigger) {
+        state.sessionId = generateUrlSessionId();
+      }
+      state.lastTrigger = trigger;
+      urlSessionStateByNodeId.set(context.nodeId, state);
+
+      const baseUrl = getBaseUrl(inputs, config);
+      const url = state.sessionId ? buildUrlWithSessionId(baseUrl, state.sessionId) : baseUrl;
+      return { sessionId: state.sessionId, url };
+    },
+  };
+}
+
+export function createClientUrlSessionFilterNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'client-url-session-filter',
+    label: 'Client Filter for URL Session',
+    category: 'Objects',
+    inputs: [
+      { id: 'client', label: 'Client', type: 'client' },
+      { id: 'sessionId', label: 'Session ID', type: 'string' },
+    ],
+    outputs: [
+      { id: 'client', label: 'Client', type: 'client' },
+      { id: 'indexs', label: 'Indexs', type: 'array' },
+      { id: 'number', label: 'Number', type: 'number' },
+      { id: 'rejectedIndexs', label: 'Rejected Indexs', type: 'array' },
+    ],
+    configSchema: [
+      { key: 'sessionId', label: 'Session ID', type: 'string', defaultValue: '' },
+    ],
+    process: (inputs, config) => {
+      const allClients = deps.getAllClientIds?.() ?? [];
+      const audienceClients = deps.isAudienceClient
+        ? allClients.filter((clientId) => deps.isAudienceClient?.(clientId) !== false)
+        : allClients;
+      const inputClientIds = resolveTargetsFromClientInput(inputs.client);
+      const candidates = inputClientIds.length > 0
+        ? inputClientIds.filter((clientId) => audienceClients.includes(clientId))
+        : audienceClients;
+      const sessionId = getStringValue(inputs.sessionId) || getStringValue(config.sessionId) || '';
+      if (!sessionId) {
+        return {
+          client: createClientObjectForSelection(candidates[0] ?? '', candidates, deps),
+          indexs: candidates,
+          number: candidates.length,
+          rejectedIndexs: [],
+        };
+      }
+
+      const indexs: string[] = [];
+      const rejectedIndexs: string[] = [];
+      for (const clientId of candidates) {
+        const current = getStringValue(deps.getClientUrlSessionId?.(clientId));
+        if (current && current === sessionId) indexs.push(clientId);
         else rejectedIndexs.push(clientId);
       }
 

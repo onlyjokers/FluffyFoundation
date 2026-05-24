@@ -33,6 +33,10 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
       const client = (get(state).clients ?? []).find((entry) => String(entry.clientId ?? '') === clientId);
       return client?.permissions ?? null;
     },
+    getClientUrlSessionId: (clientId) => {
+      const client = (get(state).clients ?? []).find((entry) => String(entry.clientId ?? '') === clientId);
+      return typeof client?.urlSessionId === 'string' ? client.urlSessionId : null;
+    },
     isAudienceClient: (clientId) => {
       const client = (get(state).clients ?? []).find((entry) => String(entry.clientId ?? '') === clientId);
       return client?.group !== 'display';
@@ -60,7 +64,9 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
   return new Map<string, CoreRuntimeImpl>([
     ['client-loader', pick('client-loader')],
     ['client-executor', pick('client-executor')],
+    ['url-session', pick('url-session')],
     ['client-permission-filter', pick('client-permission-filter')],
+    ['client-url-session-filter', pick('client-url-session-filter')],
     ['proc-client-sensors', pick('proc-client-sensors')],
     ['float', pick('float')],
     ['int', pick('int')],

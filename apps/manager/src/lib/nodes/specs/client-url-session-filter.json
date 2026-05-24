@@ -1,0 +1,34 @@
+{
+  "__purpose": "Manager node spec for filtering audience clients by persistent URL session grouping.",
+  "type": "client-url-session-filter",
+  "label": "Client Filter for URL Session",
+  "category": "Objects",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager"],
+    "sideEffectClass": "none",
+    "permissions": [],
+    "description": "Filters a client collection to clients bound to a URL Session ID.",
+    "compatibility": [
+      {
+        "target": "client-executor",
+        "rule": "Connect Client output to Client Executor, optionally after Client Filter for Permissions.",
+        "repairHint": "If no clients pass, confirm those devices opened the URL with the same sessionId."
+      }
+    ]
+  },
+  "inputs": [
+    { "id": "client", "label": "Client", "type": "client" },
+    { "id": "sessionId", "label": "Session ID", "type": "string" }
+  ],
+  "outputs": [
+    { "id": "client", "label": "Client", "type": "client" },
+    { "id": "indexs", "label": "Indexs", "type": "array" },
+    { "id": "number", "label": "Number", "type": "number" },
+    { "id": "rejectedIndexs", "label": "Rejected Indexs", "type": "array" }
+  ],
+  "configSchema": [
+    { "key": "sessionId", "label": "Session ID", "type": "string", "defaultValue": "" }
+  ],
+  "runtime": { "kind": "client-url-session-filter" }
+}

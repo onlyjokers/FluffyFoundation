@@ -139,6 +139,36 @@ test('manager default runtime registers client loader and executor nodes', () =>
     assert.equal(nodeRegistry.get('client-object'), undefined);
     assert.equal(nodeRegistry.get('client-loader')?.label, 'Client Loader');
     assert.equal(nodeRegistry.get('client-executor')?.label, 'Client Executor');
+    assert.equal(nodeRegistry.get('url-session')?.label, 'URL Session');
+    assert.equal(nodeRegistry.get('client-url-session-filter')?.label, 'Client Filter for URL Session');
+  } finally {
+    state.set(previousState);
+  }
+});
+
+test('manager default runtime filters clients by url session id', () => {
+  const previousState = get(state);
+  state.set({
+    ...previousState,
+    status: 'connected',
+    clients: [
+      { clientId: 'client-a', connected: true, group: 'client:client-a', connectedAt: 1, urlSessionId: 'session-a' },
+      { clientId: 'client-b', connected: true, group: 'client:client-b', connectedAt: 2, urlSessionId: 'session-b' },
+    ],
+    selectedClientIds: [],
+  });
+
+  try {
+    const node = nodeRegistry.get('client-url-session-filter');
+    assert.ok(node);
+    const result = node.process(
+      { sessionId: 'session-a' },
+      {},
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    );
+    assert.deepEqual(result.indexs, ['client-a']);
+    assert.deepEqual(result.rejectedIndexs, ['client-b']);
+    assert.equal((result.client as { clientId?: string }).clientId, 'client-a');
   } finally {
     state.set(previousState);
   }

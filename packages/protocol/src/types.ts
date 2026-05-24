@@ -613,6 +613,7 @@ export interface ClientInfo {
   connected?: boolean;
   lastSeenAt?: number;
   permissions?: ClientPermissions;
+  urlSessionId?: string;
 }
 
 /**

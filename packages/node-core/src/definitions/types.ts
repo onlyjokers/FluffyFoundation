@@ -79,6 +79,10 @@ export type ClientObjectDeps = {
    */
   getClientPermissions?: (clientId: string) => ClientPermissions | null;
   /**
+   * Manager-side lookup for the URL session group reported by a client.
+   */
+  getClientUrlSessionId?: (clientId: string) => string | null;
+  /**
    * Manager-side audience filter. Display clients should normally be excluded from client filters.
    */
   isAudienceClient?: (clientId: string) => boolean;

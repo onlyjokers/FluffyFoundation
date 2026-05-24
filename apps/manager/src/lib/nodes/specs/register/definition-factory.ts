@@ -29,7 +29,8 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
 
   switch (spec.runtime.kind) {
     case 'client-loader':
-    case 'client-executor': {
+    case 'client-executor':
+    case 'url-session': {
       const impl = coreRuntimeImplByKind.get(spec.runtime.kind);
       if (!impl) {
         throw new Error(`[node-specs] missing core runtime kind: ${spec.runtime.kind}`);
@@ -162,6 +163,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
     }
     case 'proc-client-sensors':
     case 'client-permission-filter':
+    case 'client-url-session-filter':
     case 'float':
     case 'int':
     case 'number-stabilizer':

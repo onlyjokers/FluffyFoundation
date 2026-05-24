@@ -78,3 +78,31 @@ test('client registry stores permission snapshots on client info', () => {
     camera: 'pending',
   });
 });
+
+test('client registry binds url sessions to stable client ids until a new session is provided', () => {
+  const registry = new ClientRegistryService();
+  registry.registerConnection('socket-1', 'client', undefined, {
+    deviceId: 'client-1',
+    instanceId: 'tab-1',
+    urlSessionId: 'session-a',
+  });
+
+  assert.equal(registry.getAllClients()[0]?.urlSessionId, 'session-a');
+
+  registry.unregisterBySocketId('socket-1');
+  registry.registerConnection('socket-2', 'client', undefined, {
+    deviceId: 'client-1',
+    instanceId: 'tab-1',
+  });
+
+  assert.equal(registry.getAllClients()[0]?.urlSessionId, 'session-a');
+
+  registry.unregisterBySocketId('socket-2');
+  registry.registerConnection('socket-3', 'client', undefined, {
+    deviceId: 'client-1',
+    instanceId: 'tab-1',
+    urlSessionId: 'session-b',
+  });
+
+  assert.equal(registry.getAllClients()[0]?.urlSessionId, 'session-b');
+});

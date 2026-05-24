@@ -219,13 +219,15 @@ export function bindManagerClientSubscription(opts: {
           id: getString(record.clientId, ''),
           group: getString(record.group, ''),
           permissions: permissionsKey(record.permissions),
+          urlSessionId: getString(record.urlSessionId, ''),
         };
       })
       .filter((c: { connected: boolean }) => c.connected)
-      .map(({ id, group, permissions }: { id: string; group: string; permissions: string }) => ({
+      .map(({ id, group, permissions, urlSessionId }: { id: string; group: string; permissions: string; urlSessionId: string }) => ({
         id,
         group,
         permissions,
+        urlSessionId,
       }))
       .filter((c: { id: string }) => Boolean(c.id));
 
@@ -241,8 +243,8 @@ export function bindManagerClientSubscription(opts: {
 
     const nextClientKey = clientsWithGroups
       .map(
-        (c: { id: string; group: string; permissions: string }) =>
-          `${c.id}:${c.group}:${c.permissions}`
+        (c: { id: string; group: string; permissions: string; urlSessionId: string }) =>
+          `${c.id}:${c.group}:${c.permissions}:${c.urlSessionId}`
       )
       .join('|');
     if (nextClientKey === lastClientKey) return;

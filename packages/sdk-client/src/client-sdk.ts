@@ -70,6 +70,10 @@ export interface ClientIdentity {
      * Optional preferred clientId (persist per-tab, e.g. sessionStorage). Server may override to avoid collisions.
      */
     clientId?: string;
+    /**
+     * Optional URL session group for clients entering through a generated URL.
+     */
+    urlSessionId?: string;
 }
 
 /**

@@ -53,11 +53,13 @@ function withEnv(patch: Record<string, string | undefined>, fn: () => void): voi
 
 function createConnectionGateway() {
   let registeredRole: string | null = null;
+  let registeredIdentity: Record<string, unknown> | null = null;
   const groupAssignments: { clientId: string; group: string }[] = [];
   const clientRegistry = {
     onClientExpired: () => () => undefined,
-    registerConnection: (_socketId: string, role: string) => {
+    registerConnection: (_socketId: string, role: string, _userAgent?: string, identity?: Record<string, unknown>) => {
       registeredRole = role;
+      registeredIdentity = identity ?? null;
       return { clientId: 'registered-1', isNewClient: true };
     },
     setClientGroup: (clientId: string, group: string) => {
@@ -76,7 +78,7 @@ function createConnectionGateway() {
   const gateway = new EventsGateway(clientRegistry as never, messageRouter as never);
   gateway.server = { sockets: { sockets: new Map() } } as never;
 
-  return { gateway, getRegisteredRole: () => registeredRole, groupAssignments };
+  return { gateway, getRegisteredRole: () => registeredRole, getRegisteredIdentity: () => registeredIdentity, groupAssignments };
 }
 
 test('handleMessage rejects schema-invalid messages before routing and logs structured reasons', () => {
@@ -363,4 +365,20 @@ test('handleConnection preserves explicit client groups instead of replacing the
   } as never);
 
   assert.deepEqual(groupAssignments, [{ clientId: 'registered-1', group: 'stage-left' }]);
+});
+
+test('handleConnection passes url session identity from client auth or query to registry', () => {
+  const { gateway, getRegisteredIdentity } = createConnectionGateway();
+
+  gateway.handleConnection({
+    id: 'socket-client-url-session',
+    handshake: {
+      query: { sessionId: 'query-session' },
+      headers: {},
+      auth: { deviceId: 'client-a', instanceId: 'tab-a', urlSessionId: 'auth-session' },
+      address: '127.0.0.1',
+    },
+  } as never);
+
+  assert.equal(getRegisteredIdentity()?.urlSessionId, 'auth-session');
 });

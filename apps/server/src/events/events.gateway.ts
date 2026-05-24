@@ -54,6 +54,10 @@ function managedClientGroupId(clientId: string): string {
   return `client:${clientId}`;
 }
 
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 function sanitizeClientPermissions(value: unknown): ClientPermissions | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const out: ClientPermissions = {};
@@ -160,6 +164,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const group = sanitizeGroup(client.handshake.query.group);
     const userAgent = client.handshake.headers['user-agent'];
     const auth = client.handshake.auth as Record<string, unknown> | undefined;
+    const query = client.handshake.query as Record<string, unknown>;
 
     const expectedManagerKey = (process.env.SHUGU_MANAGER_KEY ?? '').trim();
     const requestedManagerKey = typeof auth?.managerKey === 'string' ? auth.managerKey.trim() : '';
@@ -189,6 +194,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         deviceId: typeof auth?.deviceId === 'string' ? auth.deviceId : undefined,
         instanceId: typeof auth?.instanceId === 'string' ? auth.instanceId : undefined,
         clientId: typeof auth?.clientId === 'string' ? auth.clientId : undefined,
+        urlSessionId: readString(auth?.urlSessionId) ?? readString(query.urlSessionId) ?? readString(query.sessionId),
       }
     );
 

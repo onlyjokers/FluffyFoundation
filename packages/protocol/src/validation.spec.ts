@@ -114,6 +114,7 @@ test('validateMessage accepts client permission snapshots in client lists and up
         clientId: 'client-1',
         connectedAt: 1000,
         selected: true,
+        urlSessionId: 'session-a',
         permissions: {
           microphone: 'granted',
           motion: 'denied',
@@ -158,6 +159,34 @@ test('validateMessage rejects malformed client permission snapshots', () => {
 
   assert.equal(badKey.ok, false);
   assert.equal(badStatus.ok, false);
+});
+
+test('validateMessage rejects malformed client url session ids', () => {
+  const badType = validateMessage(
+    createSystemMessage('clientList', {
+      clients: [
+        {
+          clientId: 'client-1',
+          connectedAt: 1000,
+          urlSessionId: 123,
+        },
+      ],
+    } as never)
+  );
+  const badCharacters = validateMessage(
+    createSystemMessage('clientList', {
+      clients: [
+        {
+          clientId: 'client-1',
+          connectedAt: 1000,
+          urlSessionId: 'bad/session',
+        },
+      ],
+    })
+  );
+
+  assert.equal(badType.ok, false);
+  assert.equal(badCharacters.ok, false);
 });
 
 test('validateMessage accepts display operation plugin commands', () => {
