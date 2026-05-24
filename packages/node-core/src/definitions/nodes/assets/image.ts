@@ -5,6 +5,16 @@ import type { NodeDefinition } from '../../../types.js';
 import { normalizeLocalMediaRef } from '../../media-utils.js';
 import { getRecordString } from '../node-definition-utils.js';
 
+function normalizeAssetId(value: unknown): string {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return '';
+  const assetPrefix = 'asset:';
+  const withoutPrefix = trimmed.startsWith(assetPrefix)
+    ? trimmed.slice(assetPrefix.length).trim()
+    : trimmed;
+  return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
+}
+
 export function createLoadImageFromAssetsNode(): NodeDefinition {
   return {
     type: 'load-image-from-assets',
@@ -22,7 +32,7 @@ export function createLoadImageFromAssetsNode(): NodeDefinition {
       },
     ],
     process: (_inputs, config) => {
-      const assetId = typeof config.assetId === 'string' ? config.assetId.trim() : '';
+      const assetId = normalizeAssetId(config.assetId);
       return { ref: assetId ? `asset:${assetId}` : '' };
     },
   };

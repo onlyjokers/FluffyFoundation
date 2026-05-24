@@ -2,7 +2,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildClientPickerView, shouldUpdateClientPickerView } from './rete-control-helpers';
+import {
+  buildAssetContentUrl,
+  buildClientPickerView,
+  shouldUpdateClientPickerView,
+} from './rete-control-helpers';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 
 const clients = [
@@ -76,4 +80,11 @@ test('shouldUpdateClientPickerView skips equal picker snapshots', () => {
 
   assert.equal(shouldUpdateClientPickerView(previous, same), false);
   assert.equal(shouldUpdateClientPickerView(previous, changed), true);
+});
+
+test('buildAssetContentUrl accepts asset refs and emits raw asset content URLs', () => {
+  assert.equal(
+    buildAssetContentUrl('https://10.30.229.86:3001', 'asset:12f199f0-4839-45cb-b08e-e75d80504aa4'),
+    'https://10.30.229.86:3001/api/assets/12f199f0-4839-45cb-b08e-e75d80504aa4/content'
+  );
 });

@@ -96,6 +96,27 @@ export const buildAssetOptions = (
   }));
 };
 
+export const normalizeAssetIdForContentUrl = (assetRefOrId: string): string => {
+  const trimmed = assetRefOrId.trim();
+  const assetPrefix = 'asset:';
+  const withoutPrefix = trimmed.startsWith(assetPrefix)
+    ? trimmed.slice(assetPrefix.length).trim()
+    : trimmed;
+  return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
+};
+
+export const buildAssetContentUrl = (serverUrl: string, assetRefOrId: string): string | null => {
+  const trimmed = serverUrl.trim();
+  const id = normalizeAssetIdForContentUrl(assetRefOrId);
+  if (!trimmed || !id) return null;
+  try {
+    const base = trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+    return new URL(`api/assets/${encodeURIComponent(id)}/content`, base).toString();
+  } catch {
+    return null;
+  }
+};
+
 export const clientLabel = (c: ClientInfo): string => String(asRecord(c).clientId ?? '');
 
 export const readinessClass = (

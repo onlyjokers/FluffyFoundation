@@ -112,3 +112,24 @@ test('config-only select fields use input values before config fallbacks', () =>
   ).cmd;
   assert.equal(cmd.payload.format, 'image/png');
 });
+
+test('remote asset loader nodes accept typed asset refs without double-prefixing', () => {
+  const registry = buildRegistry();
+
+  const videoAssets = registry.get('load-video-from-assets');
+  assert.ok(videoAssets);
+  const videoRef = videoAssets.process(
+    { play: true, loop: false, reverse: false, muted: false, volume: 1 },
+    { assetId: 'asset:clip-1' },
+    context('video-assets-ref')
+  ).ref;
+  assert.match(videoRef, /^asset:clip-1#/);
+  assert.doesNotMatch(videoRef, /^asset:asset:/);
+
+  const imageAssets = registry.get('load-image-from-assets');
+  assert.ok(imageAssets);
+  assert.equal(
+    imageAssets.process({}, { assetId: 'asset:image-1' }, context('image-assets-ref')).ref,
+    'asset:image-1'
+  );
+});

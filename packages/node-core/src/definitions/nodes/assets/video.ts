@@ -31,6 +31,16 @@ function coerceBooleanLike(value: unknown): boolean {
   return typeof value === 'number' ? value >= 0.5 : Boolean(value);
 }
 
+function normalizeAssetId(value: unknown): string {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return '';
+  const assetPrefix = 'asset:';
+  const withoutPrefix = trimmed.startsWith(assetPrefix)
+    ? trimmed.slice(assetPrefix.length).trim()
+    : trimmed;
+  return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
+}
+
 function parseVideoPlaybackInputs(
   inputs: Record<string, unknown>,
   config: Record<string, unknown>,
@@ -232,7 +242,7 @@ export function createLoadVideoFromAssetsNode(): NodeDefinition {
       },
     ],
     process: (inputs, config, context) => {
-      const assetId = typeof config.assetId === 'string' ? config.assetId.trim() : '';
+      const assetId = normalizeAssetId(config.assetId);
       const opts = parseVideoPlaybackInputs(inputs, config, assetId ? `asset:${assetId}` : '');
       const ref = createVideoRef(opts, context);
 

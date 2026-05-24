@@ -12,6 +12,7 @@
     localDisplayMediaStore,
     parseDisplayFileId,
   } from '$lib/stores/local-display-media';
+  import { buildAssetContentUrl } from './rete-control-helpers';
   import type { LocalMediaKind } from '$lib/stores/local-media';
   import { nodeEngine } from '$lib/nodes';
   import type { Connection, NodeInstance } from '$lib/nodes/types';
@@ -95,18 +96,6 @@
     if (!Number.isFinite(num)) return '—';
     const rounded = Math.round(num * 100) / 100;
     return secondsFormatter.format(rounded);
-  };
-
-  const buildAssetContentUrl = (serverUrl: string, assetId: string): string | null => {
-    const trimmed = serverUrl.trim();
-    const id = assetId.trim();
-    if (!trimmed || !id) return null;
-    try {
-      const base = trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
-      return new URL(`api/assets/${encodeURIComponent(id)}/content`, base).toString();
-    } catch {
-      return null;
-    }
   };
 
   const buildLocalMediaContentUrl = (
