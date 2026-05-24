@@ -702,14 +702,37 @@ test('gpt image gen exposes prompt image trigger inputs and image asset outputs'
     ['prompt', 'string'],
     ['image', 'image'],
     ['trigger', 'boolean'],
+    ['model', 'string'],
+    ['size', 'string'],
+    ['quality', 'string'],
   ]);
   assert.deepEqual(node.outputs.map((output) => [output.id, output.type]), [
     ['image', 'image'],
     ['assetId', 'string'],
   ]);
-  assert.equal(node.configSchema.find((field) => field.key === 'model')?.defaultValue, 'gpt-image-2');
-  assert.equal(node.configSchema.find((field) => field.key === 'size')?.defaultValue, '1024x1024');
-  assert.equal(node.configSchema.find((field) => field.key === 'quality')?.defaultValue, 'low');
+  assert.deepEqual(
+    node.inputs.filter((input) => ['model', 'size', 'quality'].includes(input.id)).map((input) => [
+      input.id,
+      input.type,
+      input.options?.map((option) => option.value),
+    ]),
+    [
+      ['model', 'string', ['gpt-image-2']],
+      ['size', 'string', ['1024x1024', '1024x1536', '1536x1024']],
+      ['quality', 'string', ['low', 'medium', 'high']],
+    ]
+  );
+  const modelField = node.configSchema.find((field) => field.key === 'model');
+  const sizeField = node.configSchema.find((field) => field.key === 'size');
+  const qualityField = node.configSchema.find((field) => field.key === 'quality');
+  assert.equal(modelField?.type, 'select');
+  assert.equal(modelField?.defaultValue, 'gpt-image-2');
+  assert.deepEqual(modelField?.options?.map((option) => option.value), ['gpt-image-2']);
+  assert.equal(modelField?.connectable, true);
+  assert.equal(sizeField?.defaultValue, '1024x1024');
+  assert.equal(sizeField?.connectable, true);
+  assert.equal(qualityField?.defaultValue, 'low');
+  assert.equal(qualityField?.connectable, true);
 });
 
 test('gpt image gen triggers generation on rising edges and reuses same-signature cache', () => {
@@ -795,6 +818,46 @@ test('gpt image gen triggers generation on rising edges and reuses same-signatur
     }
   );
   assert.equal(calls.length, 2);
+});
+
+test('gpt image gen connectable option inputs override config fallbacks', () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    imageAssets: {
+      getGeneratedImageAsset: (request) => {
+        calls.push(request);
+        return 'asset-option-inputs';
+      },
+    },
+  });
+
+  const node = registry.get('gpt-image-gen');
+  assert.ok(node);
+  const result = node.process(
+    {
+      prompt: 'a glass sphere',
+      image: '',
+      trigger: true,
+      model: 'gpt-image-2',
+      size: '1536x1024',
+      quality: 'high',
+    },
+    { model: 'ignored-model', size: '1024x1024', quality: 'low' },
+    { nodeId: 'gpt-image-gen-option-inputs', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(result, { image: 'asset:asset-option-inputs', assetId: 'asset-option-inputs' });
+  assert.deepEqual(calls[0], {
+    prompt: 'a glass sphere',
+    model: 'gpt-image-2',
+    size: '1536x1024',
+    quality: 'high',
+  });
 });
 
 test('client permission filter supports all and any permission matching', () => {

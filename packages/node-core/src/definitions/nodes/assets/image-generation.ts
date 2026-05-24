@@ -45,9 +45,9 @@ function resolveRequest(
 ): GeneratedImageAssetRequest {
   const prompt = getStringValue(inputs.prompt) ?? getStringValue(config.prompt) ?? '';
   const image = getStringValue(inputs.image) ?? getStringValue(config.image) ?? '';
-  const model = getStringValue(config.model) || DEFAULT_MODEL;
-  const size = getStringValue(config.size) || DEFAULT_SIZE;
-  const quality = getStringValue(config.quality) || DEFAULT_QUALITY;
+  const model = getStringValue(inputs.model) || getStringValue(config.model) || DEFAULT_MODEL;
+  const size = getStringValue(inputs.size) || getStringValue(config.size) || DEFAULT_SIZE;
+  const quality = getStringValue(inputs.quality) || getStringValue(config.quality) || DEFAULT_QUALITY;
   return {
     prompt,
     ...(image ? { image } : {}),
@@ -86,12 +86,20 @@ export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
       { id: 'assetId', label: 'Asset ID', type: 'string' },
     ],
     configSchema: [
-      { key: 'model', label: 'Model', type: 'string', defaultValue: DEFAULT_MODEL },
+      {
+        key: 'model',
+        label: 'Model',
+        type: 'select',
+        defaultValue: DEFAULT_MODEL,
+        connectable: true,
+        options: [{ value: 'gpt-image-2', label: 'GPT Image 2' }],
+      },
       {
         key: 'size',
         label: 'Size',
         type: 'select',
         defaultValue: DEFAULT_SIZE,
+        connectable: true,
         options: [
           { value: '1024x1024', label: '1024 x 1024' },
           { value: '1024x1536', label: '1024 x 1536' },
@@ -103,6 +111,7 @@ export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
         label: 'Quality',
         type: 'select',
         defaultValue: DEFAULT_QUALITY,
+        connectable: true,
         options: [
           { value: 'low', label: 'Low' },
           { value: 'medium', label: 'Medium' },
