@@ -71,6 +71,7 @@ import {
   createImgScaleNode,
   createImgTransparencyNode,
   createImgXYOffsetNode,
+  createUrlToQrGeneratorNode,
 } from './nodes/image.js';
 import {
   createAliyunTtsNode,
@@ -162,6 +163,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createLoadImageFromAssetsNode,
     createLoadImageFromLocalNode,
     // Image modulation nodes
+    createUrlToQrGeneratorNode,
     createImgScaleNode,
     createImgFitNode,
     createImgXYOffsetNode,

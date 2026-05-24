@@ -380,6 +380,29 @@ test('default registry exposes int, float, and display-object for server semanti
   assert.equal(floatNode?.configSchema.find((field) => field.key === 'value')?.step, 0.01);
 });
 
+test('url to qr generator converts a string input into an image data url', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const node = registry.get('url-to-qr-generator');
+  assert.ok(node);
+  assert.deepEqual(node.inputs.map((input) => [input.id, input.type]), [['url', 'string']]);
+  assert.deepEqual(node.outputs.map((output) => [output.id, output.type]), [['image', 'image']]);
+
+  const result = node.process(
+    { url: 'https://fluffyfoundation.xyz/client?sessionId=session-a' },
+    {},
+    { nodeId: 'qr', time: 0, deltaTime: 0 }
+  );
+
+  assert.match(String(result.image), /^data:image\/svg\+xml;charset=utf-8,/);
+  assert.match(decodeURIComponent(String(result.image).split(',', 2)[1] ?? ''), /<svg/);
+});
+
 test('client permission filter supports all and any permission matching', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {

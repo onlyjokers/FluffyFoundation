@@ -30,7 +30,8 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
   switch (spec.runtime.kind) {
     case 'client-loader':
     case 'client-executor':
-    case 'url-session': {
+    case 'url-session':
+    case 'url-to-qr-generator': {
       const impl = coreRuntimeImplByKind.get(spec.runtime.kind);
       if (!impl) {
         throw new Error(`[node-specs] missing core runtime kind: ${spec.runtime.kind}`);

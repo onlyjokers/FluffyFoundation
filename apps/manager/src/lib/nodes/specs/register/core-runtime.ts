@@ -65,6 +65,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     ['client-loader', pick('client-loader')],
     ['client-executor', pick('client-executor')],
     ['url-session', pick('url-session')],
+    ['url-to-qr-generator', pick('url-to-qr-generator')],
     ['client-permission-filter', pick('client-permission-filter')],
     ['client-url-session-filter', pick('client-url-session-filter')],
     ['proc-client-sensors', pick('proc-client-sensors')],

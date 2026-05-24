@@ -1,0 +1,23 @@
+{
+  "__purpose": "Manager node spec for converting a URL string into a QR code image data URL.",
+  "type": "url-to-qr-generator",
+  "label": "URL to QR Generator",
+  "category": "Image",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client", "display"],
+    "sideEffectClass": "pure",
+    "permissions": [],
+    "description": "Converts a URL string into a QR code image.",
+    "compatibility": [
+      {
+        "target": "Dynamic Image Player",
+        "rule": "Connect Image Out to Dynamic Image Player to show the generated QR code.",
+        "repairHint": "Feed this node from URL Session.url when generating audience session QR codes."
+      }
+    ]
+  },
+  "inputs": [{ "id": "url", "label": "URL", "type": "string" }],
+  "outputs": [{ "id": "image", "label": "Image Out", "type": "image" }],
+  "runtime": { "kind": "url-to-qr-generator" }
+}

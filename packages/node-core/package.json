@@ -23,7 +23,8 @@
     "dist-node-core"
   ],
   "dependencies": {
-    "@shugu/protocol": "workspace:*"
+    "@shugu/protocol": "workspace:*",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "typescript": "^5.3.0"

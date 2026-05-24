@@ -140,6 +140,7 @@ test('manager default runtime registers client loader and executor nodes', () =>
     assert.equal(nodeRegistry.get('client-loader')?.label, 'Client Loader');
     assert.equal(nodeRegistry.get('client-executor')?.label, 'Client Executor');
     assert.equal(nodeRegistry.get('url-session')?.label, 'URL Session');
+    assert.equal(nodeRegistry.get('url-to-qr-generator')?.label, 'URL to QR Generator');
     assert.equal(nodeRegistry.get('client-url-session-filter')?.label, 'Client Filter for URL Session');
   } finally {
     state.set(previousState);

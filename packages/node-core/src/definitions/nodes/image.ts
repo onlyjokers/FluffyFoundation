@@ -1,6 +1,7 @@
 /**
  * Purpose: Image modulation node definitions.
  */
+import qrcode from 'qrcode-generator';
 import type { NodeDefinition } from '../../types.js';
 import { coerceNumber } from '../utils.js';
 
@@ -15,6 +16,30 @@ function mergeImageHashParam(baseRef: string, key: string, value: string | numbe
   const params = new URLSearchParams(baseRef.slice(hashIndex + 1));
   params.set(key, String(value));
   return `${base}#${params.toString()}`;
+}
+
+function toSvgDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+export function createUrlToQrGeneratorNode(): NodeDefinition {
+  return {
+    type: 'url-to-qr-generator',
+    label: 'URL to QR Generator',
+    category: 'Image',
+    inputs: [{ id: 'url', label: 'URL', type: 'string' }],
+    outputs: [{ id: 'image', label: 'Image Out', type: 'image' }],
+    configSchema: [],
+    process: (inputs) => {
+      const url = typeof inputs.url === 'string' ? inputs.url.trim() : '';
+      if (!url) return { image: '' };
+
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      return { image: toSvgDataUrl(qr.createSvgTag({ cellSize: 8, margin: 4, scalable: true })) };
+    },
+  };
 }
 
 // Image Scale modulation node

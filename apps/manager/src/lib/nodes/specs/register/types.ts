@@ -77,6 +77,7 @@ export type NodeRuntime =
   | { kind: 'client-loader' }
   | { kind: 'client-executor' }
   | { kind: 'url-session' }
+  | { kind: 'url-to-qr-generator' }
   | { kind: 'client-permission-filter' }
   | { kind: 'client-url-session-filter' }
   | { kind: 'display-object' }
