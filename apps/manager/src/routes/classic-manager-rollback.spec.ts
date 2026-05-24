@@ -20,6 +20,13 @@ test('manager route does not expose Root navigation or published-group-only cons
   assert.equal(page.includes('Fluffy Root'), false);
 });
 
+test('manager route reuses the server URL saved during login before connecting', () => {
+  const page = readRepoFile('apps/manager/src/routes/+page.svelte');
+
+  assert.match(page, /shugu-server-url/);
+  assert.match(page, /serverUrl\s*=\s*savedServerUrl/);
+});
+
 test('root product route files are retired', () => {
   assert.equal(existsSync(join(root, 'apps/manager/src/routes/root/+page.svelte')), false);
   assert.equal(existsSync(join(root, 'apps/manager/src/routes/root/RootWorkspace.svelte')), false);

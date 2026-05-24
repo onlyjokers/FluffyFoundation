@@ -34,13 +34,8 @@ function buildUrl(path: string): string | null {
   }
 }
 
-function writeTokenHeader(): Record<string, string> {
-  const token = readLocalStorage('shugu-asset-write-token').trim();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function fetchJson(url: string, init: RequestInit): Promise<Record<string, unknown>> {
-  const response = await fetch(url, init);
+  const response = await fetch(url, { ...init, credentials: 'include' });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     throw new Error(body ? `HTTP ${response.status}: ${body}` : `HTTP ${response.status}`);
@@ -96,7 +91,7 @@ export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
       state.inFlight = true;
       void fetchJson(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...writeTokenHeader() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: request.text,
           model: request.model,
@@ -132,7 +127,7 @@ export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
       state.assetId = request.assetId;
       void fetchJson(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...writeTokenHeader() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assetId: request.assetId,
           ...(request.name ? { name: request.name } : {}),
@@ -159,7 +154,7 @@ export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
       const url = buildUrl(`api/assets/drop-box/audio/reference${buildReferenceQuery(request)}`);
       if (!url) return '';
       state.inFlight = true;
-      void fetchJson(url, { method: 'GET', headers: writeTokenHeader() })
+      void fetchJson(url, { method: 'GET' })
         .then((json) => {
           const assetId = extractAssetId(json);
           if (assetId) {

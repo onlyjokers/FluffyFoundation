@@ -1,7 +1,7 @@
 /**
  * Purpose: Manager-side asset list cache shared by AssetsManager page and node controls.
  *
- * Single source of truth: always derived from server `GET /api/assets` (write-token protected).
+ * Single source of truth: always derived from server `GET /api/assets` (Manager session protected).
  */
 
 import { writable } from 'svelte/store';
@@ -48,7 +48,6 @@ type AssetsState = {
   lastUpdatedAt: number;
 };
 
-const storageKeyWriteToken = 'shugu-asset-write-token';
 const storageKeyServerUrl = 'shugu-server-url';
 
 function buildUrl(serverUrl: string, path: string): string | null {
@@ -63,20 +62,12 @@ function buildUrl(serverUrl: string, path: string): string | null {
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, { ...init, credentials: 'include' });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(text ? `HTTP ${res.status}: ${text}` : `HTTP ${res.status}`);
   }
   return await res.json();
-}
-
-function readWriteToken(): string {
-  try {
-    return localStorage.getItem(storageKeyWriteToken) ?? '';
-  } catch {
-    return '';
-  }
 }
 
 function readServerUrl(): string {
@@ -92,19 +83,17 @@ const store = writable<AssetsState>(initial);
 
 let refreshInFlight: Promise<void> | null = null;
 
-async function refresh(opts?: { serverUrl?: string; writeToken?: string }): Promise<void> {
+async function refresh(opts?: { serverUrl?: string }): Promise<void> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
     store.update((s) => ({ ...s, status: 'loading', error: null }));
     try {
-      const token = typeof opts?.writeToken === 'string' ? opts.writeToken : readWriteToken();
-      if (!token) throw new Error('Missing Asset Write Token (set it on the connect screen).');
       const serverUrl = typeof opts?.serverUrl === 'string' ? opts.serverUrl : readServerUrl();
       const url = buildUrl(serverUrl, 'api/assets');
       if (!url) throw new Error('Missing or invalid Server URL.');
       const data = await fetchJson(url, {
         method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
       });
       const record = (data ?? {}) as Record<string, unknown>;
       const assets = Array.isArray(record.assets) ? (record.assets as AssetRecord[]) : [];

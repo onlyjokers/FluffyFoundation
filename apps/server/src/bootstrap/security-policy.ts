@@ -6,13 +6,14 @@ import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-option
 export type ServerSecurityConfig = {
   nodeEnv?: string;
   managerKey?: string;
+  managerPassword?: string;
   allowInsecureManager?: string;
   corsOrigins?: string;
   hasHttps: boolean;
 };
 
 export type SocketCorsOptions = {
-  origin: string[] | string;
+  origin: string[] | string | boolean;
   methods: string[];
 };
 
@@ -95,8 +96,10 @@ export function resolveManagerRole(opts: {
 export function validateServerSecurityConfig(config: ServerSecurityConfig): void {
   if (!isProductionLike(config.nodeEnv)) return;
 
-  if (!(config.managerKey ?? '').trim()) {
-    throw new Error('Production boot denied: SHUGU_MANAGER_KEY must be configured.');
+  if (!(config.managerPassword ?? '').trim() && !(config.managerKey ?? '').trim()) {
+    throw new Error(
+      'Production boot denied: SHUGU_MANAGER_PASSWORD must be configured for Manager sessions, or SHUGU_MANAGER_KEY must be configured for legacy clients.'
+    );
   }
 
   if (isEnabledFlag(config.allowInsecureManager)) {
@@ -123,9 +126,9 @@ export function createHttpCorsOptions(config: ServerSecurityConfig): CorsOptions
   const origins = parseCorsOrigins(config.corsOrigins);
 
   return {
-    origin: production ? origins : origins.length > 0 ? origins : '*',
+    origin: production ? origins : origins.length > 0 ? origins : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: false,
+    credentials: true,
     allowedHeaders: ['Range', 'If-None-Match', 'Content-Type', 'Authorization'],
     exposedHeaders: ['Content-Range', 'Accept-Ranges', 'ETag', 'Content-Length', 'Content-Type'],
   };
@@ -137,7 +140,7 @@ export function createSocketCorsOptions(config: ServerSecurityConfig): SocketCor
   const origins = parseCorsOrigins(config.corsOrigins);
 
   return {
-    origin: production ? origins : origins.length > 0 ? origins : '*',
+    origin: production ? origins : origins.length > 0 ? origins : true,
     methods: ['GET', 'POST'],
   };
 }

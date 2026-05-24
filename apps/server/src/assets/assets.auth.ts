@@ -2,9 +2,10 @@
  * Purpose: Low-latency bearer-token auth helpers for Asset Service endpoints.
  */
 
-import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
+import type { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 import { getQueryString } from '../utils/request-utils.js';
 
 type HeaderRequest = Pick<Request, 'header' | 'query'>;
@@ -40,13 +41,19 @@ export function requireAssetReadAuth(req: HeaderRequest, expectedToken: string |
   }
 }
 
-export function requireAssetWriteAuth(req: HeaderRequest, expectedToken: string | null): void {
-  if (!expectedToken) {
-    throw new ServiceUnavailableException(
-      'asset service auth is not configured (ASSET_WRITE_TOKEN)'
-    );
-  }
+export function requireAssetWriteAuth(
+  req: HeaderRequest,
+  expectedToken: string | null,
+  managerAuth?: ManagerAuthService
+): void {
+  const managerSession = managerAuth?.verifyCookieHeader(req.header('cookie'));
+  if (managerSession?.ok) return;
+
   const token = parseBearerToken(req);
+  if (expectedToken && token && constantTimeEqual(token, expectedToken)) return;
+  if (!expectedToken) {
+    throw new UnauthorizedException('manager session is required for asset write access');
+  }
   if (!token || !constantTimeEqual(token, expectedToken)) {
     throw new UnauthorizedException('invalid asset write token');
   }

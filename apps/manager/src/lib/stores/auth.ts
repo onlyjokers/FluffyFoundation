@@ -13,42 +13,45 @@ type AuthState = {
 
 type LoginResult = { ok: true } | { ok: false; reason: string };
 
-const DEV_PASSWORD = import.meta.env.DEV
-  ? (import.meta.env.VITE_SHUGU_MANAGER_DEV_PASSWORD ?? '')
-  : '';
-const COOKIE_NAME = 'shugu-manager-auth';
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+const SERVER_URL_STORAGE_KEY = 'shugu-server-url';
+const SESSION_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 function isAuthUser(value: string): value is AuthUser {
   return (ALLOWED_USERNAMES as readonly string[]).includes(value);
 }
 
 export function isDevPasswordLoginEnabled(): boolean {
-  return import.meta.env.DEV && DEV_PASSWORD.length > 0;
+  return true;
 }
 
-function readCookie(name: string): string | null {
-  if (!browser) return null;
-
-  const entry = document.cookie.split('; ').find((part) => part.trim().startsWith(`${name}=`));
-
-  if (!entry) return null;
-  const [, value] = entry.split('=');
-  return value ? decodeURIComponent(value) : null;
+function readServerUrl(): string {
+  if (!browser) return '';
+  try {
+    return localStorage.getItem(SERVER_URL_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
 }
 
-function writeCookie(value: string, maxAge: number): void {
-  if (!browser) return;
-
-  const secure = location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+function buildUrl(serverUrl: string, path: string): string | null {
+  const baseRaw = serverUrl.trim();
+  if (!baseRaw) return null;
+  try {
+    const base = baseRaw.endsWith('/') ? baseRaw : `${baseRaw}/`;
+    return new URL(path, base).toString();
+  } catch {
+    return null;
+  }
 }
 
-function clearCookie(): void {
-  if (!browser) return;
-
-  const secure = location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${COOKIE_NAME}=; Path=/; SameSite=Lax; Max-Age=0${secure}`;
+async function fetchJson(url: string, init: RequestInit): Promise<Record<string, unknown>> {
+  const res = await fetch(url, { ...init, credentials: 'include' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text ? `HTTP ${res.status}: ${text}` : `HTTP ${res.status}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  return data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
 }
 
 function createAuthStore() {
@@ -56,56 +59,93 @@ function createAuthStore() {
     user: null,
     error: null,
     isRestoring: browser,
-    remember: false,
+    remember: true,
   });
+  let sessionRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  const restore = () => {
+  const stopSessionRefresh = () => {
+    if (!sessionRefreshTimer) return;
+    clearInterval(sessionRefreshTimer);
+    sessionRefreshTimer = null;
+  };
+
+  const startSessionRefresh = () => {
+    if (!browser || sessionRefreshTimer) return;
+    sessionRefreshTimer = setInterval(() => {
+      void restore({ silent: true });
+    }, SESSION_REFRESH_INTERVAL_MS);
+  };
+
+  const restore = async (
+    serverUrlInputOrOptions?: string | { silent?: boolean },
+    options: { silent?: boolean } = {}
+  ): Promise<void> => {
     if (!browser) return;
-
-    update((state) => ({ ...state, isRestoring: true }));
-
-    const cookieUser = readCookie(COOKIE_NAME);
-
-    if (cookieUser && isAuthUser(cookieUser)) {
-      set({ user: cookieUser, error: null, isRestoring: false, remember: true });
+    const serverUrlInput = typeof serverUrlInputOrOptions === 'string' ? serverUrlInputOrOptions : undefined;
+    const silent = typeof serverUrlInputOrOptions === 'object' ? Boolean(serverUrlInputOrOptions.silent) : Boolean(options.silent);
+    if (!silent) {
+      update((state) => ({ ...state, isRestoring: true, error: null }));
+    }
+    const url = buildUrl(serverUrlInput ?? readServerUrl(), 'api/manager/auth/session');
+    if (!url) {
+      set({ user: null, error: null, isRestoring: false, remember: true });
+      stopSessionRefresh();
       return;
     }
 
-    clearCookie();
-    set({ user: null, error: null, isRestoring: false, remember: false });
-  };
-
-  const persist = (user: AuthUser, remember: boolean) => {
-    if (!browser) return;
-    if (remember) {
-      writeCookie(user, COOKIE_MAX_AGE);
-    } else {
-      clearCookie();
+    try {
+      const data = await fetchJson(url, { method: 'GET' });
+      const user = typeof data.user === 'string' && isAuthUser(data.user) ? data.user : null;
+      set({ user, error: null, isRestoring: false, remember: true });
+      if (user) startSessionRefresh();
+      else stopSessionRefresh();
+    } catch {
+      if (silent) return;
+      set({ user: null, error: null, isRestoring: false, remember: true });
+      stopSessionRefresh();
     }
   };
 
-  const login = (usernameInput: string, password: string, remember: boolean): LoginResult => {
+  const login = async (
+    usernameInput: string,
+    password: string,
+    serverUrlInput?: string
+  ): Promise<LoginResult> => {
     const normalized = usernameInput.trim();
-
     if (!isAuthUser(normalized)) {
       update((state) => ({ ...state, error: '未知用户' }));
       return { ok: false, reason: 'invalid-user' };
     }
 
-    if (!isDevPasswordLoginEnabled() || password !== DEV_PASSWORD) {
-      update((state) => ({ ...state, error: '密码错误' }));
-      return { ok: false, reason: 'invalid-password' };
+    const url = buildUrl(serverUrlInput ?? readServerUrl(), 'api/manager/auth/login');
+    if (!url) {
+      update((state) => ({ ...state, error: 'Server URL 无效' }));
+      return { ok: false, reason: 'invalid-server-url' };
     }
 
-    set({ user: normalized, error: null, isRestoring: false, remember });
-    persist(normalized, remember);
-
-    return { ok: true };
+    try {
+      const data = await fetchJson(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: normalized, password }),
+      });
+      const user = typeof data.user === 'string' && isAuthUser(data.user) ? data.user : normalized;
+      set({ user, error: null, isRestoring: false, remember: true });
+      startSessionRefresh();
+      return { ok: true };
+    } catch {
+      update((state) => ({ ...state, error: '密码错误或无法连接 server' }));
+      return { ok: false, reason: 'invalid-password' };
+    }
   };
 
-  const logout = () => {
-    clearCookie();
-    set({ user: null, error: null, isRestoring: false, remember: false });
+  const logout = async (): Promise<void> => {
+    const url = buildUrl(readServerUrl(), 'api/manager/auth/logout');
+    if (url) {
+      await fetch(url, { method: 'POST', credentials: 'include' }).catch(() => undefined);
+    }
+    stopSessionRefresh();
+    set({ user: null, error: null, isRestoring: false, remember: true });
   };
 
   const clearError = () => {
@@ -113,7 +153,7 @@ function createAuthStore() {
   };
 
   if (browser) {
-    restore();
+    void restore();
   }
 
   return { subscribe, login, logout, restore, clearError };

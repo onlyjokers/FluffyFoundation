@@ -25,6 +25,7 @@ import { LocalMediaService } from './local-media.service.js';
 import type { LocalMediaKind } from './local-media.config.js';
 import type { LocalMediaFile } from './local-media.types.js';
 import { getBodyString, getQueryString } from '../utils/request-utils.js';
+import { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 
 type HeaderRequest = Pick<Request, 'header' | 'get' | 'protocol' | 'query'>;
 
@@ -41,12 +42,13 @@ function parseLocalPathQuery(req: HeaderRequest): string {
 export class LocalMediaController {
   constructor(
     private readonly assets: AssetsService,
-    private readonly localMedia: LocalMediaService
+    private readonly localMedia: LocalMediaService,
+    private readonly managerAuth: ManagerAuthService
   ) {}
 
   @Get()
   async list(@Req() req: Request): Promise<{ files: LocalMediaFile[]; roots: string[] }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     const kindRaw = getQueryString(req.query, 'kind') ?? '';
     const kind: LocalMediaKind | null =
       kindRaw === 'audio' || kindRaw === 'image' || kindRaw === 'video' ? kindRaw : null;
@@ -56,7 +58,7 @@ export class LocalMediaController {
 
   @Post('validate')
   async validate(@Body() body: unknown, @Req() req: Request): Promise<{ file: LocalMediaFile }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     const rawPath = getBodyString(body, 'path') ?? '';
     const kindRaw = getBodyString(body, 'kind') ?? '';
     const kind: LocalMediaKind | null =

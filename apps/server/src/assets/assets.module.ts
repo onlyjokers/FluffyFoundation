@@ -6,8 +6,10 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { AssetsController } from './assets.controller.js';
 import { AudioDropBoxService } from './audio-dropbox.service.js';
 import { AssetsService } from './assets.service.js';
+import { ManagerAuthModule } from '../manager-auth/manager-auth.module.js';
 
 @Module({
+  imports: [ManagerAuthModule],
   controllers: [AssetsController],
   providers: [AssetsService, AudioDropBoxService],
   exports: [AssetsService, AudioDropBoxService],
@@ -21,8 +23,5 @@ export class AssetsModule implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.assets.init();
     await this.audioDropBox.init();
-    if (!this.assets.config.writeToken) {
-      console.warn('[asset-service] ASSET_WRITE_TOKEN not configured; write endpoints will return 503');
-    }
   }
 }

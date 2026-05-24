@@ -6,6 +6,7 @@ import type { Request } from 'express';
 import { AssetsService } from '../assets/assets.service.js';
 import { AudioDropBoxService } from '../assets/audio-dropbox.service.js';
 import { requireAssetWriteAuth } from '../assets/assets.auth.js';
+import { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 import { AliyunTtsService, type AliyunTtsRequest } from './aliyun-tts.service.js';
 
 @Controller('api/tts')
@@ -13,7 +14,8 @@ export class AliyunTtsController {
   constructor(
     private readonly tts: AliyunTtsService,
     private readonly assets: AssetsService,
-    private readonly audioDropBox: AudioDropBoxService
+    private readonly audioDropBox: AudioDropBoxService,
+    private readonly managerAuth: ManagerAuthService
   ) {}
 
   @Post('synthesize')
@@ -32,7 +34,7 @@ export class AliyunTtsController {
     dropBoxEntry: import('../assets/audio-dropbox.service.js').AudioDropBoxEntry;
     usage: Record<string, unknown> | null;
   }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     const result = await this.tts.synthesizeAsset(body ?? { text: '' }, this.assets);
     const dropBoxEntry = await this.audioDropBox.push({
       assetId: result.asset.id,

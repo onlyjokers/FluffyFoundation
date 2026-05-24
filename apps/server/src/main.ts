@@ -55,6 +55,7 @@ async function bootstrap() {
   const securityConfig = {
     nodeEnv: process.env.NODE_ENV,
     managerKey: process.env.SHUGU_MANAGER_KEY,
+    managerPassword: process.env.SHUGU_MANAGER_PASSWORD,
     allowInsecureManager: process.env.SHUGU_ALLOW_INSECURE_MANAGER,
     corsOrigins: process.env.SHUGU_CORS_ORIGINS,
     hasHttps: Boolean(httpsOptions),

@@ -368,12 +368,6 @@
       return null;
     }
 
-    const token = localStorage.getItem('shugu-asset-write-token') ?? '';
-    if (!token) {
-      fileUploadError = 'Missing Asset Write Token (shugu-asset-write-token)';
-      return null;
-    }
-
     const formData = new FormData();
     formData.set('file', file);
     formData.set('originalName', file.name);
@@ -385,7 +379,7 @@
 
     const res = await fetch(uploadUrl, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
       body: formData,
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));

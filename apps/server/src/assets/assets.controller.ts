@@ -32,6 +32,7 @@ import { requireAssetReadAuth, requireAssetWriteAuth } from './assets.auth.js';
 import { parseByteRangeHeader } from './range.js';
 import { readAssetServiceConfig } from './assets.config.js';
 import { getBodyString } from '../utils/request-utils.js';
+import { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 import {
   cacheControlForAsset,
   toAssetManifest,
@@ -103,12 +104,13 @@ function buildContentDisposition(originalName: string): string {
 export class AssetsController {
   constructor(
     private readonly assets: AssetsService,
-    private readonly audioDropBox: AudioDropBoxService
+    private readonly audioDropBox: AudioDropBoxService,
+    private readonly managerAuth: ManagerAuthService
   ) {}
 
   @Get()
   async list(@Req() req: Request): Promise<{ assets: AssetRecord[] }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     return { assets: this.assets.listAssets() };
   }
 
@@ -129,7 +131,7 @@ export class AssetsController {
     @UploadedFile() file: UploadFile | undefined,
     @Req() req: Request
   ): Promise<{ asset: AssetRecord; contentUrl: string; deduped: boolean }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
 
     if (!file) throw new BadRequestException('missing file');
     const mimeType = typeof file.mimetype === 'string' ? file.mimetype : 'application/octet-stream';
@@ -166,7 +168,7 @@ export class AssetsController {
 
   @Get('drop-box/audio')
   async listAudioDropBox(@Req() req: Request): Promise<{ entries: AudioDropBoxEntry[] }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     return { entries: this.audioDropBox.list() };
   }
 
@@ -175,7 +177,7 @@ export class AssetsController {
     @Body() body: unknown,
     @Req() req: Request
   ): Promise<{ entry: AudioDropBoxEntry }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
     const entry = await this.audioDropBox.push({
       assetId: record.assetId ?? record.asset,
@@ -186,7 +188,7 @@ export class AssetsController {
 
   @Get('drop-box/audio/reference')
   async referenceAudioDropBox(@Req() req: Request): Promise<{ entry: AudioDropBoxEntry | null }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     const query = req.query && typeof req.query === 'object' ? req.query : {};
     const entry = this.audioDropBox.resolve({
       assetId: query.assetId,
@@ -199,7 +201,7 @@ export class AssetsController {
 
   @Delete(':id')
   async delete(@Param('id') id: string, @Req() req: Request): Promise<{ deleted: boolean }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     return await this.assets.deleteAsset(id);
   }
 
@@ -209,7 +211,7 @@ export class AssetsController {
     @Body() body: unknown,
     @Req() req: Request
   ): Promise<{ asset: AssetRecord }> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     const asset = await this.assets.updateAsset(id, body ?? {});
     if (!asset) throw new NotFoundException('asset not found');
     return { asset };
