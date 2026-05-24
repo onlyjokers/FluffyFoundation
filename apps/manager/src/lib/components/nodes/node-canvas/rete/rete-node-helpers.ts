@@ -78,6 +78,28 @@ export function formatPortValue(portType: string, value: unknown): string | null
   return null;
 }
 
+type PortValueText = {
+  inputs: Record<string, string | null>;
+  outputs: Record<string, string | null>;
+};
+
+function sortedRecordSignature(record: Record<string, string | null>): string {
+  return Object.keys(record)
+    .sort()
+    .map((key) => `${key}:${String(record[key])}`)
+    .join('|');
+}
+
+export function shouldUpdatePortValueText(
+  previous: PortValueText,
+  next: PortValueText
+): boolean {
+  return (
+    sortedRecordSignature(previous.inputs) !== sortedRecordSignature(next.inputs) ||
+    sortedRecordSignature(previous.outputs) !== sortedRecordSignature(next.outputs)
+  );
+}
+
 function bypassCandidate(inPort: PortDefinitionLike, outPort: PortDefinitionLike): BypassPorts | null {
   if (String(inPort.type) !== String(outPort.type)) return null;
   if (inPort.type === 'command' || inPort.type === 'client') return null;

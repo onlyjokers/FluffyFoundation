@@ -7,6 +7,12 @@ export type PatchPayloadLike = {
   graph: Pick<GraphState, 'nodes' | 'connections'>;
 };
 
+export type PatchDeploymentPlanSnapshotLike = {
+  planKey?: string;
+  targetClientIds?: string[];
+  rootIdsByClientId?: Map<string, string[]>;
+} | null;
+
 export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'connections'>): string {
   const nodes = (payload.nodes ?? []).map((node) => ({
     id: String(node.id),
@@ -27,6 +33,29 @@ export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'co
   });
 
   return JSON.stringify({ nodes, connections });
+}
+
+function planSnapshotSignature(plan: PatchDeploymentPlanSnapshotLike): string {
+  if (!plan) return '';
+  const targets = (plan.targetClientIds ?? []).map(String).sort();
+  const roots = Array.from(plan.rootIdsByClientId?.entries?.() ?? [])
+    .map(([clientId, rootIds]) => ({
+      clientId: String(clientId),
+      rootIds: (rootIds ?? []).map(String).sort(),
+    }))
+    .sort((a, b) => a.clientId.localeCompare(b.clientId));
+  return JSON.stringify({
+    planKey: String(plan.planKey ?? ''),
+    targets,
+    roots,
+  });
+}
+
+export function shouldUpdatePatchDeploymentPlan(
+  previous: PatchDeploymentPlanSnapshotLike,
+  next: PatchDeploymentPlanSnapshotLike
+): boolean {
+  return planSnapshotSignature(previous) !== planSnapshotSignature(next);
 }
 
 export function isDefinitionBypassableWhenDisabled(def: NodeDefinition | undefined): boolean {

@@ -9,6 +9,11 @@ import type { nodeRegistry as nodeRegistryValue } from '$lib/nodes';
 
 export type AnyRecord = Record<string, unknown>;
 export type NumberBounds = { min?: number; max?: number; step?: number };
+export type ClientPickerItem = {
+  client: ClientInfo;
+  selected: boolean;
+  primary: boolean;
+};
 
 const asRecord = (value: unknown): AnyRecord =>
   value && typeof value === 'object' ? (value as unknown as AnyRecord) : {};
@@ -143,7 +148,7 @@ export const buildClientPickerView = (args: {
   audienceClients: AnyRecord[];
   getNode: (nodeId: string) => NodeInstance | undefined;
   getLastComputedInputs: (nodeId: string) => Record<string, unknown> | null;
-}): { client: ClientInfo; selected: boolean; primary: boolean }[] => {
+}): ClientPickerItem[] => {
   if (args.data?.controlType !== 'client-picker') return [];
 
   const nodeId = String(args.data?.nodeId ?? '');
@@ -221,6 +226,19 @@ export const buildClientPickerView = (args: {
     primary: String(asRecord(c).clientId ?? '') === selectedFirstId,
   }));
 };
+
+const clientPickerSignature = (items: ClientPickerItem[]): string =>
+  items
+    .map(
+      (item) =>
+        `${String(item.client?.clientId ?? '')}:${item.selected ? 1 : 0}:${item.primary ? 1 : 0}`
+    )
+    .join('|');
+
+export const shouldUpdateClientPickerView = (
+  previous: ClientPickerItem[],
+  next: ClientPickerItem[]
+): boolean => clientPickerSignature(previous) !== clientPickerSignature(next);
 
 export const formatValue = (val: unknown): string => {
   if (val === null || val === undefined) return '0.00';

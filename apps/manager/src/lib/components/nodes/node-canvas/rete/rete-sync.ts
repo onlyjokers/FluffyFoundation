@@ -39,6 +39,7 @@ export type GraphSyncController = {
 export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
   let queuedGraphState: { nodes: NodeInstance[]; connections: EngineConnection[] } | null = null;
   let syncLoop: Promise<void> | null = null;
+  const lastTranslatedPositionByNodeId = new Map<string, { x: number; y: number }>();
 
   const setEquals = (a: Set<string>, b: Set<string>): boolean => {
     if (a.size !== b.size) return false;
@@ -179,7 +180,16 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
         }
 
         await ensureCmdAggregatorInputs(n, reteNode, viewState.connections);
-        await opts.areaPlugin.translate(reteNode.id, { x: n.position.x, y: n.position.y });
+        const nextPosition = { x: n.position.x, y: n.position.y };
+        const lastPosition = lastTranslatedPositionByNodeId.get(reteNode.id);
+        if (
+          !lastPosition ||
+          Math.abs(lastPosition.x - nextPosition.x) > 0.001 ||
+          Math.abs(lastPosition.y - nextPosition.y) > 0.001
+        ) {
+          await opts.areaPlugin.translate(reteNode.id, nextPosition);
+          lastTranslatedPositionByNodeId.set(reteNode.id, nextPosition);
+        }
       }
 
       for (const c of viewState.connections) {
@@ -223,6 +233,7 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
           // ignore
         }
         opts.nodeMap.delete(id);
+        lastTranslatedPositionByNodeId.delete(id);
       }
 
       const connectedInputs = new Set<string>();

@@ -7,6 +7,7 @@ import {
   applyTimeRangePlayheadsToPatchPayload,
   computeTopologySignature,
   isDefinitionBypassableWhenDisabled,
+  shouldUpdatePatchDeploymentPlan,
 } from './patch-runtime-helpers';
 
 const graphA: Pick<GraphState, 'nodes' | 'connections'> = {
@@ -96,4 +97,25 @@ test('applyTimeRangePlayheadsToPatchPayload injects cursorSec for asset media no
 
   assert.equal((payload.graph.nodes[0].inputValues as Record<string, unknown>).cursorSec, 12.5);
   assert.equal(Object.hasOwn(payload.graph.nodes[1].inputValues, 'cursorSec'), false);
+});
+
+test('shouldUpdatePatchDeploymentPlan ignores stable lightweight plan snapshots', () => {
+  const previous = {
+    planKey: 'plan-a',
+    targetClientIds: ['display-1'],
+    rootIdsByClientId: new Map([['display-1', ['scene-out']]]),
+  };
+  const same = {
+    planKey: 'plan-a',
+    targetClientIds: ['display-1'],
+    rootIdsByClientId: new Map([['display-1', ['scene-out']]]),
+  };
+  const changed = {
+    planKey: 'plan-b',
+    targetClientIds: ['display-1'],
+    rootIdsByClientId: new Map([['display-1', ['scene-out']]]),
+  };
+
+  assert.equal(shouldUpdatePatchDeploymentPlan(previous, same), false);
+  assert.equal(shouldUpdatePatchDeploymentPlan(previous, changed), true);
 });

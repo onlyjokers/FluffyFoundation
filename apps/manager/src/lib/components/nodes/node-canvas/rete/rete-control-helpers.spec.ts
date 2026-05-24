@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildClientPickerView } from './rete-control-helpers';
+import { buildClientPickerView, shouldUpdateClientPickerView } from './rete-control-helpers';
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 
 const clients = [
@@ -58,4 +58,22 @@ test('display client picker highlights index and range ahead of displayId', () =
       { id: 'display-2', selected: true, primary: false },
     ]
   );
+});
+
+test('shouldUpdateClientPickerView skips equal picker snapshots', () => {
+  const previous = [
+    { client: { clientId: 'display-1', connected: true } as any, selected: true, primary: true },
+    { client: { clientId: 'display-2', connected: true } as any, selected: false, primary: false },
+  ];
+  const same = [
+    { client: { clientId: 'display-1', connected: true } as any, selected: true, primary: true },
+    { client: { clientId: 'display-2', connected: true } as any, selected: false, primary: false },
+  ];
+  const changed = [
+    { client: { clientId: 'display-1', connected: true } as any, selected: false, primary: false },
+    { client: { clientId: 'display-2', connected: true } as any, selected: true, primary: true },
+  ];
+
+  assert.equal(shouldUpdateClientPickerView(previous, same), false);
+  assert.equal(shouldUpdateClientPickerView(previous, changed), true);
 });

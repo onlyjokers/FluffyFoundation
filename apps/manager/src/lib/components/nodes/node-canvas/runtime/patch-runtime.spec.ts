@@ -481,6 +481,128 @@ test('patch runtime routes overrides for source nodes outside compiled custom-no
   runtime.destroy();
 });
 
+test('patch runtime does not recompile patch planning graph on stable runtime ticks', () => {
+  const compiledGraph = {
+    nodes: [
+      node('number-1', 'number'),
+      node('cn:custom-1:scene', 'scene-fct-track'),
+      node('cn:custom-1:out', 'scene-out'),
+      node('cn:custom-1:loader', 'client-loader'),
+      node('cn:custom-1:client', 'client-executor'),
+    ],
+    connections: [
+      {
+        id: 'compiled-input',
+        sourceNodeId: 'number-1',
+        sourcePortId: 'value',
+        targetNodeId: 'cn:custom-1:scene',
+        targetPortId: 'brightness',
+      },
+      {
+        id: 'compiled-cmd',
+        sourceNodeId: 'cn:custom-1:out',
+        sourcePortId: 'cmd',
+        targetNodeId: 'cn:custom-1:client',
+        targetPortId: 'in',
+      },
+      {
+        id: 'compiled-client',
+        sourceNodeId: 'cn:custom-1:loader',
+        sourcePortId: 'client',
+        targetNodeId: 'cn:custom-1:client',
+        targetPortId: 'client',
+      },
+    ],
+  } satisfies GraphState;
+  const compiledCalls: number[] = [];
+
+  const stableRuntime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) =>
+        nodeId === 'number-1' ? node('number-1', 'number') : undefined,
+      getLastComputedInputs: (nodeId) =>
+        String(nodeId).endsWith(':client')
+          ? { client: { clientId: 'client-1', clientIds: ['client-1'] } }
+          : null,
+      exportCompiledGraphForPatchPlanning: () => {
+        compiledCalls.push(Date.now());
+        return compiledGraph;
+      },
+      exportGraphForPatchFromRootNodeIds: () => ({
+        ...basePayload(),
+        graph: compiledGraph,
+        meta: {
+          ...basePayload().meta,
+          loopId: 'patch:scene-out:cn:custom-1:out:compiled',
+        },
+      }),
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: {
+      get: (type) =>
+        new Map<string, NodeDefinition>([
+          ['number', definition('number', 'Number', [port('value', 'number')], [port('value', 'number')])],
+          ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+          ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('brightness', 'number')], [port('out', 'scene')])],
+          ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+          ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+        ]).get(type),
+    },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => ({
+      nodes: [node('number-1', 'number'), node('custom-1', 'custom:def-1')],
+      connections: [
+        {
+          id: 'external-to-custom',
+          sourceNodeId: 'number-1',
+          sourcePortId: 'value',
+          targetNodeId: 'custom-1',
+          targetPortId: 'brightness',
+        },
+      ],
+    }),
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: () => undefined,
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  const originalNow = Date.now;
+  let now = 1_000;
+  Date.now = () => now;
+  try {
+    stableRuntime.scheduleReconcile('initial', { immediate: true });
+    const compileCountAfterInitial = compiledCalls.length;
+
+    now += 250;
+    stableRuntime.onTick();
+
+    assert.equal(compiledCalls.length, compileCountAfterInitial);
+  } finally {
+    Date.now = originalNow;
+    stableRuntime.destroy();
+  }
+});
+
 test('patch runtime redeploys when custom-node gate changes compiled topology', () => {
   let compiledGraph: GraphState = {
     nodes: [node('number-1', 'number')],

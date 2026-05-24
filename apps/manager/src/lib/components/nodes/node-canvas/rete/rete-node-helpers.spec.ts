@@ -4,6 +4,7 @@ import {
   buildGroupFrameProxyPorts,
   formatPortValue,
   inferBypassPorts,
+  shouldUpdatePortValueText,
   resolveRenderedNodeType,
   sortByIndex,
   type PortDefinitionLike,
@@ -73,6 +74,24 @@ test('formatPortValue matches ReteNode live port display semantics', () => {
   assert.equal(formatPortValue('client', { clientId: 'client-1' }), 'client-1');
   assert.equal(formatPortValue('string', 'hello'), 'hello');
   assert.equal(formatPortValue('asset', undefined), null);
+});
+
+test('shouldUpdatePortValueText skips equal live port value snapshots', () => {
+  const previous = {
+    inputs: { a: '1', b: '--' },
+    outputs: { value: '1.5' },
+  };
+  const same = {
+    inputs: { b: '--', a: '1' },
+    outputs: { value: '1.5' },
+  };
+  const changed = {
+    inputs: { a: '2', b: '--' },
+    outputs: { value: '1.5' },
+  };
+
+  assert.equal(shouldUpdatePortValueText(previous, same), false);
+  assert.equal(shouldUpdatePortValueText(previous, changed), true);
 });
 
 test('inferBypassPorts rejects command/client passthrough and finds compatible sink ports', () => {

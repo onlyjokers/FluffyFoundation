@@ -25,7 +25,9 @@
     inferAssetKind,
     readinessClass as resolveReadinessClass,
     resolveNumberBounds,
+    shouldUpdateClientPickerView,
     type AnyRecord,
+    type ClientPickerItem,
   } from './rete-control-helpers';
   import CurveEditor from '../ui/CurveEditor.svelte';
   import ReteClientPickerControl from './ReteClientPickerControl.svelte';
@@ -270,22 +272,38 @@
     );
   })();
 
-  $: clientPickerView = (() => {
+  let clientPickerView: ClientPickerItem[] = [];
+  $: {
+    const nextClientPickerView = (() => {
+      if (data?.controlType !== 'client-picker') return [];
+      const _tick = $tickTimeStore;
+      void _tick;
+      const pickerClients =
+        data?.nodeType === 'display-object'
+          ? (($displayClients ?? []) as unknown as AnyRecord[])
+          : (($audienceClients ?? []) as unknown as AnyRecord[]);
+
+      return buildClientPickerView({
+        data,
+        graphState: $graphStateStore,
+        audienceClients: pickerClients,
+        getNode: (nodeId) => nodeEngine.getNode(nodeId),
+        getLastComputedInputs: (nodeId) => nodeEngine.getLastComputedInputs(nodeId),
+      });
+    })();
+
+    if (shouldUpdateClientPickerView(clientPickerView, nextClientPickerView)) {
+      clientPickerView = nextClientPickerView;
+    }
+  }
+
+  $: activePickerClients = (() => {
     if (data?.controlType !== 'client-picker') return [];
-    const _tick = $tickTimeStore;
-    void _tick;
-    const pickerClients =
+    return (
       data?.nodeType === 'display-object'
         ? (($displayClients ?? []) as unknown as AnyRecord[])
-        : (($audienceClients ?? []) as unknown as AnyRecord[]);
-
-    return buildClientPickerView({
-      data,
-      graphState: $graphStateStore,
-      audienceClients: pickerClients,
-      getNode: (nodeId) => nodeEngine.getNode(nodeId),
-      getLastComputedInputs: (nodeId) => nodeEngine.getLastComputedInputs(nodeId),
-    });
+        : (($audienceClients ?? []) as unknown as AnyRecord[])
+    );
   })();
 
   let sensorsClientId = '';
@@ -589,12 +607,10 @@
     {handleFileChange}
   />
 {:else if data?.controlType === 'client-picker'}
-  {@const pickerClients =
-    data?.nodeType === 'display-object' ? ($displayClients ?? []) : ($audienceClients ?? [])}
   <ReteClientPickerControl
     {data}
     {hasLabel}
-    audienceClients={pickerClients}
+    audienceClients={activePickerClients}
     emptyLabel={data?.nodeType === 'display-object'
       ? 'No displays connected'
       : 'No clients connected'}

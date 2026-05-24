@@ -19,6 +19,7 @@
     formatPortValue,
     inferBypassPorts as inferBypassPortsFromDefinition,
     resolveRenderedNodeType,
+    shouldUpdatePortValueText,
     sortByIndex,
     type AnyRecord,
     type BypassPorts,
@@ -467,10 +468,12 @@
         if (formatted !== null) nextOutputs[String(key)] = formatted;
       }
 
-      portValueText = { inputs: nextInputs, outputs: nextOutputs };
+      const next = { inputs: nextInputs, outputs: nextOutputs };
+      if (shouldUpdatePortValueText(portValueText, next)) portValueText = next;
     }
   } else {
-    portValueText = { inputs: {}, outputs: {} };
+    const empty = { inputs: {}, outputs: {} };
+    if (shouldUpdatePortValueText(portValueText, empty)) portValueText = empty;
   }
 </script>
 

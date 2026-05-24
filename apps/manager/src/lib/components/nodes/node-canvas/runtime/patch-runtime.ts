@@ -11,6 +11,7 @@ import {
   applyTimeRangePlayheadsToPatchPayload,
   computeTopologySignature,
   isDefinitionBypassableWhenDisabled,
+  shouldUpdatePatchDeploymentPlan,
 } from './patch-runtime-helpers';
 import { resolveDeployedLoopClientId, selectExecutorLogsTargetId } from './patch-override-routing';
 import { createPatchMidiBridge } from './patch-midi-bridge';
@@ -99,8 +100,12 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   let deployedPatchByClientId = new Map<string, DeployedPatch>();
   let patchDeployTimer: ReturnType<typeof setTimeout> | null = null;
   let lastGraphTopologySignature = '';
-  let patchLastPlanKey = '';
+  let patchLastPlan: PatchDeploymentPlan | null = null;
   let patchRuntimeTargetsLastCheckAt = 0;
+  let cachedCompiledPlanningGraph: ReturnType<
+    NonNullable<typeof nodeEngine.exportCompiledGraphForPatchPlanning>
+  > | undefined;
+  let isCompiledPlanningGraphDirty = true;
 
   // ────────────────────────────────────────────────────────────────────────────
   // node-executor control transport
@@ -198,11 +203,21 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     return isDefinitionBypassableWhenDisabled(def);
   };
 
+  const invalidateCompiledPlanningGraph = () => {
+    cachedCompiledPlanningGraph = undefined;
+    isCompiledPlanningGraphDirty = true;
+  };
+
+  const getCompiledPlanningGraph = () => {
+    if (typeof nodeEngine.exportCompiledGraphForPatchPlanning !== 'function') return undefined;
+    if (!isCompiledPlanningGraphDirty) return cachedCompiledPlanningGraph;
+    cachedCompiledPlanningGraph = nodeEngine.exportCompiledGraphForPatchPlanning();
+    isCompiledPlanningGraphDirty = false;
+    return cachedCompiledPlanningGraph;
+  };
+
   const resolvePatchDeploymentPlan = (): PatchDeploymentPlan | null => {
-    const compiledGraph =
-      typeof nodeEngine.exportCompiledGraphForPatchPlanning === 'function'
-        ? nodeEngine.exportCompiledGraphForPatchPlanning()
-        : undefined;
+    const compiledGraph = getCompiledPlanningGraph();
 
     return resolvePatchDeploymentPlanCore({
       graph: getGraphState(),
@@ -260,7 +275,8 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       stopAndRemovePatchOnClient(clientId, patch.patchId);
     }
     deployedPatchByClientId = new Map();
-    patchLastPlanKey = '';
+    patchLastPlan = null;
+    invalidateCompiledPlanningGraph();
     midiBridge.resetPatchOverrides();
     syncPatchOffloadState(new Set());
     void applyPatchHighlights(new Set());
@@ -276,7 +292,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     const plan = resolvePatchDeploymentPlan();
     lastGraphTopologySignature = computeDesiredPatchTopologySignature();
-    patchLastPlanKey = plan?.planKey ?? '';
+    patchLastPlan = plan;
     if (!plan || plan.targetClientIds.length === 0) {
       if (deployedPatchByClientId.size > 0) stopAllDeployedPatches();
       return;
@@ -616,13 +632,15 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (now - patchRuntimeTargetsLastCheckAt < PATCH_RUNTIME_TARGETS_CHECK_INTERVAL_MS) return;
     patchRuntimeTargetsLastCheckAt = now;
 
-    const planKey = resolvePatchDeploymentPlan()?.planKey ?? '';
-    if (planKey !== patchLastPlanKey) {
+    const plan = resolvePatchDeploymentPlan();
+    const shouldUpdate = shouldUpdatePatchDeploymentPlan(patchLastPlan, plan);
+    if (shouldUpdate) {
       scheduleReconcile('runtime-target-change', { immediate: true });
     }
   };
 
   const onGraphStateChanged = () => {
+    invalidateCompiledPlanningGraph();
     const nextTopologySignature = computeDesiredPatchTopologySignature();
     const topologyChanged =
       lastGraphTopologySignature === '' || nextTopologySignature !== lastGraphTopologySignature;
