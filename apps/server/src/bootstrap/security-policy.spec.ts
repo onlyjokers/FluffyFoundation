@@ -105,16 +105,16 @@ test('HTTP and Socket.IO CORS options fail closed in production and preserve exp
 });
 
 test('Socket.IO CORS reflects local development origins so cookies can be sent', () => {
-  assert.equal(
-    createSocketCorsOptions({
-      nodeEnv: undefined,
-      managerKey: undefined,
-      allowInsecureManager: undefined,
-      corsOrigins: undefined,
-      hasHttps: true,
-    }).origin,
-    true
-  );
+  const options = createSocketCorsOptions({
+    nodeEnv: undefined,
+    managerKey: undefined,
+    allowInsecureManager: undefined,
+    corsOrigins: undefined,
+    hasHttps: true,
+  });
+
+  assert.equal(options.origin, true);
+  assert.equal(options.credentials, true);
 });
 
 test('resolveManagerRole grants local dev manager when no manager key is configured', () => {

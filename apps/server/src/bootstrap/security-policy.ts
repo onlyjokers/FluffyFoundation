@@ -15,6 +15,7 @@ export type ServerSecurityConfig = {
 export type SocketCorsOptions = {
   origin: string[] | string | boolean;
   methods: string[];
+  credentials: boolean;
 };
 
 export function isProductionLike(nodeEnv: string | undefined): boolean {
@@ -142,5 +143,6 @@ export function createSocketCorsOptions(config: ServerSecurityConfig): SocketCor
   return {
     origin: production ? origins : origins.length > 0 ? origins : true,
     methods: ['GET', 'POST'],
+    credentials: true,
   };
 }
