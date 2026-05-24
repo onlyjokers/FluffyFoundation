@@ -39,3 +39,16 @@ export function createSelectionController(opts: SelectionControllerOptions) {
 
   return { setSelectedNode };
 }
+
+export function shouldClearMissingSelectedNode(input: {
+  selectedNodeId: string;
+  graphNodeIds: Iterable<string>;
+  nodeMapIds: Iterable<string>;
+}): boolean {
+  const selectedNodeId = String(input.selectedNodeId ?? '');
+  if (!selectedNodeId) return false;
+  const graphIds = new Set(Array.from(input.graphNodeIds ?? []).map((id) => String(id)));
+  if (graphIds.has(selectedNodeId)) return false;
+  const viewIds = new Set(Array.from(input.nodeMapIds ?? []).map((id) => String(id)));
+  return !viewIds.has(selectedNodeId);
+}

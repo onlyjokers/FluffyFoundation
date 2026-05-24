@@ -7,6 +7,7 @@ import {
   buildAgentCapabilityRows,
   createAgentCapabilityCommand,
   filterAgentCapabilityRows,
+  getAgentCapabilityRowActions,
   summarizeAgentCapabilityRows,
 } from './agent-capability-manager';
 
@@ -189,4 +190,15 @@ test('filterAgentCapabilityRows filters by source, status, category, and query',
     }).map((row) => row.type),
     ['plugin:sparkle']
   );
+});
+
+test('getAgentCapabilityRowActions exposes Edit only for custom node rows', () => {
+  const rows = buildAgentCapabilityRows(snapshot());
+
+  assert.deepEqual(getAgentCapabilityRowActions(rows[0]).map((action) => action.id), [
+    'toggle-ai',
+    'edit-custom',
+    'delete-custom',
+  ]);
+  assert.deepEqual(getAgentCapabilityRowActions(rows[1]).map((action) => action.id), ['toggle-ai']);
 });

@@ -58,7 +58,10 @@
   import { createGroupPortNodesController } from './node-canvas/controllers/group-port-nodes-controller';
   import { createClipboardController } from './node-canvas/controllers/clipboard-controller';
   import { createFrameDragController } from './node-canvas/controllers/frame-drag-controller';
-  import { createSelectionController } from './node-canvas/controllers/selection-controller';
+  import {
+    createSelectionController,
+    shouldClearMissingSelectedNode,
+  } from './node-canvas/controllers/selection-controller';
   import {
     createLoopController,
     type LoopController,
@@ -85,6 +88,7 @@
   import { createCustomNodeComposition } from './node-canvas/custom-nodes/custom-node-composition';
   import { createNodeAdder } from './node-canvas/custom-nodes/node-addition';
   import { createDeleteNodeWithRules } from './node-canvas/custom-nodes/custom-node-delete';
+  import { createCustomNodeMotherInstance } from './node-canvas/custom-nodes/custom-node-mother';
   import { createGroupEdgeFinder } from './node-canvas/groups/group-edge-finder';
   import { createGroupFrameHeaderHandlers } from './node-canvas/groups/group-frame-header';
   import {
@@ -127,6 +131,7 @@
   let lastPointerClient = { x: 0, y: 0 };
   let groupEdgeHighlight: { groupId: string; side: 'input' | 'output' } | null = null;
   let connectDraggingSocket: SocketData | null = null;
+  let customNodeEditHandler: ((event: Event) => void) | null = null;
 
   const graphStateStore = nodeEngine?.graphState;
   const isRunningStore = nodeEngine?.isRunning;
@@ -535,6 +540,56 @@
 
   const generateId = () => `node-${crypto.randomUUID?.() ?? Date.now()}`;
 
+  const viewportCenterGraphPosition = () => {
+    const t = viewAdapter.getViewportTransform();
+    const k = Number(t?.k ?? 1) || 1;
+    const tx = Number(t?.tx ?? 0) || 0;
+    const ty = Number(t?.ty ?? 0) || 0;
+    const width = container?.clientWidth ?? 900;
+    const height = container?.clientHeight ?? 600;
+    return {
+      x: (width / 2 - tx) / k,
+      y: (height / 2 - ty) / k,
+    };
+  };
+
+  const focusSelectedNode = (nodeId: string) => {
+    setSelectedNode(nodeId);
+    focusController.setPendingFocusNodeIds([nodeId]);
+  };
+
+  const reintroduceCustomNodeMother = (definitionIdRaw: string) => {
+    const definitionId = String(definitionIdRaw ?? '');
+    if (!definitionId) return;
+
+    const existing = (nodeEngine.exportGraph().nodes ?? []).find((node) => {
+      const state = readCustomNodeState(node.config ?? {});
+      return Boolean(state && state.definitionId === definitionId && state.role === 'mother');
+    });
+    if (existing) {
+      focusSelectedNode(String(existing.id));
+      return;
+    }
+
+    const definition = getCustomNodeDefinition(definitionId);
+    if (!definition) {
+      lastErrorStore.set(`Custom Node definition not found: ${definitionId}`);
+      return;
+    }
+
+    const node = createCustomNodeMotherInstance({
+      definition,
+      nodeId: generateId(),
+      groupId: generateCustomNodeGroupId(),
+      type: customNodeType(definitionId),
+      position: viewportCenterGraphPosition(),
+      writeCustomNodeState,
+    });
+    if (!canvasCommands.addNode(node)) return;
+    graphState = nodeEngine.exportGraph();
+    focusSelectedNode(node.id);
+  };
+
   const groupPortNodesController = createGroupPortNodesController({
     nodeEngine,
     nodeRegistry,
@@ -730,11 +785,23 @@
     toggleToolbarMenu,
   });
 
-  $: if (selectedNodeId && !graphState.nodes.some((n) => n.id === selectedNodeId)) {
+  $: if (
+    shouldClearMissingSelectedNode({
+      selectedNodeId,
+      graphNodeIds: graphState.nodes.map((n) => String(n.id ?? '')),
+      nodeMapIds: nodeMap.keys(),
+    })
+  ) {
     setSelectedNode('');
   }
 
   onMount(async () => {
+    customNodeEditHandler = (event: Event) => {
+      const detail = event instanceof CustomEvent ? (event.detail as Record<string, unknown>) : {};
+      reintroduceCustomNodeMother(String(detail?.definitionId ?? ''));
+    };
+    window.addEventListener('shugu:custom-node-edit', customNodeEditHandler);
+
     mountedResources = await mountNodeCanvasResources({
       container,
       nodeMap,
@@ -827,6 +894,10 @@
   });
 
   onDestroy(() => {
+    if (customNodeEditHandler) {
+      window.removeEventListener('shugu:custom-node-edit', customNodeEditHandler);
+      customNodeEditHandler = null;
+    }
     destroyMountedNodeCanvasResources(mountedResources, {
       container,
       midiController,

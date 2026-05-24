@@ -122,3 +122,67 @@ test('custom node shell passes public inputs through bound group proxies', () =>
     unregisterCustomNodeDefinition(definitionId);
   }
 });
+
+test('custom node shell migrates legacy client-object internals before runtime load', () => {
+  const definitionId = 'test-legacy-client-runtime';
+  const internal = {
+    nodes: [
+      {
+        id: 'cmd',
+        type: 'play-media',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'client',
+        type: 'client-object',
+        position: { x: 160, y: 0 },
+        config: { clientId: 'client-a' },
+        inputValues: { index: 1, range: 1, random: false },
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'cmd-to-client',
+        sourceNodeId: 'cmd',
+        sourcePortId: 'cmd',
+        targetNodeId: 'client',
+        targetPortId: 'in',
+      },
+    ],
+  };
+
+  registerCustomNodeDefinition({
+    definitionId,
+    name: 'Legacy Client Runtime Custom',
+    template: internal,
+    ports: [],
+  });
+
+  try {
+    const def = nodeRegistry.get(customNodeType(definitionId));
+    const config = writeCustomNodeState(
+      {},
+      {
+        definitionId,
+        groupId: 'group-legacy-runtime',
+        role: 'mother',
+        manualGate: true,
+        internal,
+      }
+    );
+
+    assert.doesNotThrow(() =>
+      def?.process({ gate: true }, config, {
+        nodeId: 'custom-legacy-runtime',
+        time: 0,
+        deltaTime: 16,
+      })
+    );
+  } finally {
+    unregisterCustomNodeDefinition(definitionId);
+  }
+});

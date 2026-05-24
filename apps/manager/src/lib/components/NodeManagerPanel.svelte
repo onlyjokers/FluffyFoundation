@@ -1,5 +1,6 @@
 <!-- Purpose: Full-page manager for controlling which semantic node capabilities are visible to AI agents. -->
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import type { AgentCapabilityNodeSource } from '@shugu/node-core';
   import type { SemanticCommandPayload } from '@shugu/protocol';
   import Button from '$lib/components/ui/Button.svelte';
@@ -21,6 +22,9 @@
   let categoryFilter = 'all';
   let selectedType = '';
   let lastError = '';
+  const dispatch = createEventDispatcher<{
+    editCustomNode: { definitionId: string };
+  }>();
 
   $: rows = $semanticSnapshot ? buildAgentCapabilityRows($semanticSnapshot) : [];
   $: summary = summarizeAgentCapabilityRows(rows);
@@ -81,6 +85,12 @@
       },
     });
     if (selectedType === row.type) selectedType = '';
+  }
+
+  function editCustomDefinition(row: AgentCapabilityRow): void {
+    const definitionId = row.customDefinition?.definitionId;
+    if (!definitionId) return;
+    dispatch('editCustomNode', { definitionId });
   }
 
   function sourceLabel(source: AgentCapabilityNodeSource): string {
@@ -239,6 +249,13 @@
                   </button>
                   {#if row.customDefinition}
                     <button
+                      class="row-action"
+                      type="button"
+                      on:click|stopPropagation={() => editCustomDefinition(row)}
+                    >
+                      Edit
+                    </button>
+                    <button
                       class="row-action danger"
                       type="button"
                       on:click|stopPropagation={() => deleteCustomDefinition(row)}
@@ -316,9 +333,14 @@
             <div class="detail-section">
               <div class="section-heading">
                 <div class="section-title">Custom Node</div>
-                <Button size="sm" variant="ghost" on:click={() => deleteCustomDefinition(selectedRow)}>
-                  Delete
-                </Button>
+                <div class="section-actions">
+                  <Button size="sm" variant="ghost" on:click={() => editCustomDefinition(selectedRow)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" on:click={() => deleteCustomDefinition(selectedRow)}>
+                    Delete
+                  </Button>
+                </div>
               </div>
               <div class="kv-grid">
                 <div>
@@ -697,6 +719,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .section-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .section-title {

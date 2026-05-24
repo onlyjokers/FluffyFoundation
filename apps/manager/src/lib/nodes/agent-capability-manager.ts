@@ -41,6 +41,11 @@ export type AgentCapabilityFilterInput = {
   categoryFilter: string;
 };
 
+export type AgentCapabilityRowAction = {
+  id: 'toggle-ai' | 'edit-custom' | 'delete-custom';
+  label: string;
+};
+
 const SOURCE_ORDER: Record<AgentCapabilityNodeSource, number> = {
   custom: 0,
   builtin: 1,
@@ -177,4 +182,15 @@ export function filterAgentCapabilityRows(
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(term));
   });
+}
+
+export function getAgentCapabilityRowActions(row: AgentCapabilityRow): AgentCapabilityRowAction[] {
+  const actions: AgentCapabilityRowAction[] = [
+    { id: 'toggle-ai', label: row.enabled ? 'Disable' : 'Enable' },
+  ];
+  if (row.customDefinition) {
+    actions.push({ id: 'edit-custom', label: 'Edit' });
+    actions.push({ id: 'delete-custom', label: 'Delete' });
+  }
+  return actions;
 }

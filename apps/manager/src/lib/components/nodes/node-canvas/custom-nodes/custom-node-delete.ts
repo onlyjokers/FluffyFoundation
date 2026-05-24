@@ -14,7 +14,7 @@ export function createDeleteNodeWithRules(opts: {
   nodeEngine: NodeEngineLike;
   readCustomNodeState: (config: Record<string, unknown>) => CustomNodeInstanceState | null;
   getCustomNodeDefinition: (definitionId: string) => CustomNodeDefinition | undefined;
-  removeCustomNodeDefinition: (definitionId: string) => void;
+  removeCustomNodeDefinition?: (definitionId: string) => void;
   getSelectedNodeId: () => string;
   setSelectedNode: (id: string) => void;
   confirm: (message: string) => boolean;
@@ -40,31 +40,12 @@ export function createDeleteNodeWithRules(opts: {
     const def = opts.getCustomNodeDefinition(state.definitionId);
     const name = String(def?.name ?? 'Custom Node');
 
-    const graph = opts.nodeEngine.exportGraph();
-    const coupledChildren = (graph.nodes ?? [])
-      .map((n) => ({
-        id: String(n.id ?? ''),
-        state: opts.readCustomNodeState(asRecord(n.config)),
-      }))
-      .filter((n) =>
-        Boolean(
-          n.id &&
-            n.state &&
-            String(n.state.definitionId) === state.definitionId &&
-            n.state.role === 'child'
-        )
-      )
-      .map((n) => String(n.id))
-      .filter((cid: string) => cid !== id);
-
     const ok = opts.confirm(
-      `Delete mother "${name}"?\n\nThis will delete the Custom Node definition and ${coupledChildren.length} coupled child instance(s).`
+      `Delete mother "${name}"?\n\nThis will remove only this parent instance from the graph. The Custom Node definition and existing child instances will remain.\n\nYou can reintroduce the parent node in Node Manager.`
     );
     if (!ok) return;
 
-    for (const cid of coupledChildren) removeNode(cid);
     removeNode(id);
-    opts.removeCustomNodeDefinition(state.definitionId);
 
     if (opts.getSelectedNodeId() === id) opts.setSelectedNode('');
   };

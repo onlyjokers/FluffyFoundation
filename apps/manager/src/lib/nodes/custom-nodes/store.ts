@@ -11,6 +11,10 @@ import type { CustomNodeDefinition } from './types';
 import { readCustomNodeState } from './instance';
 import { NodeRuntime } from '@shugu/node-core';
 import { CUSTOM_NODE_TYPE_PREFIX, customNodeType } from './custom-node-type';
+import {
+  normalizeLegacyCustomNodeDefinition,
+  normalizeLegacyCustomNodeGraph,
+} from './legacy-migration';
 
 const buildInternalSignature = (graph: GraphState | null | undefined): string => {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
@@ -54,7 +58,9 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     const gate = inputs?.gate;
     if (gate === false) return {};
 
-    const internal = state.internal ?? { nodes: [], connections: [] };
+    const internal = normalizeLegacyCustomNodeGraph(
+      state.internal ?? { nodes: [], connections: [] }
+    );
     const signature = buildInternalSignature(internal);
 
     const nodeId = String(context?.nodeId ?? '');
@@ -136,17 +142,18 @@ function portsFor(definition: CustomNodeDefinition): { inputs: NodePort[]; outpu
 }
 
 function definitionToNodeDefinition(definition: CustomNodeDefinition): NodeDefinition {
-  const type = customNodeType(definition.definitionId);
-  const { inputs, outputs } = portsFor(definition);
+  const normalizedDefinition = normalizeLegacyCustomNodeDefinition(definition);
+  const type = customNodeType(normalizedDefinition.definitionId);
+  const { inputs, outputs } = portsFor(normalizedDefinition);
   return {
     type,
-    label: String(definition.name ?? 'Custom'),
+    label: String(normalizedDefinition.name ?? 'Custom'),
     category: CUSTOM_NODE_CATEGORY,
     inputs,
     outputs,
     // Custom nodes keep instance state in their node config; no schema fields are exposed in Phase 2.5.
     configSchema: [],
-    process: createCustomNodeProcess(definition),
+    process: createCustomNodeProcess(normalizedDefinition),
   };
 }
 
@@ -161,8 +168,9 @@ export function unregisterCustomNodeDefinition(definitionId: string): void {
 export function replaceCustomNodeDefinitions(definitions: CustomNodeDefinition[]): void {
   const prev = get(customNodeDefinitions);
   for (const def of prev) unregisterCustomNodeDefinition(def.definitionId);
-  for (const def of definitions) registerCustomNodeDefinition(def);
-  customNodeDefinitions.set(definitions);
+  const normalizedDefinitions = definitions.map(normalizeLegacyCustomNodeDefinition);
+  for (const def of normalizedDefinitions) registerCustomNodeDefinition(def);
+  customNodeDefinitions.set(normalizedDefinitions);
 }
 
 export function getCustomNodeDefinition(definitionId: string): CustomNodeDefinition | null {
@@ -175,8 +183,9 @@ export function addCustomNodeDefinition(definition: CustomNodeDefinition): void 
   const id = String(definition?.definitionId ?? '');
   if (!id) return;
   if (getCustomNodeDefinition(id)) return;
-  registerCustomNodeDefinition(definition);
-  customNodeDefinitions.set([...get(customNodeDefinitions), definition]);
+  const normalizedDefinition = normalizeLegacyCustomNodeDefinition(definition);
+  registerCustomNodeDefinition(normalizedDefinition);
+  customNodeDefinitions.set([...get(customNodeDefinitions), normalizedDefinition]);
 }
 
 export function upsertCustomNodeDefinition(definition: CustomNodeDefinition): void {
@@ -186,15 +195,17 @@ export function upsertCustomNodeDefinition(definition: CustomNodeDefinition): vo
   const prev = get(customNodeDefinitions);
   const idx = prev.findIndex((d) => String(d.definitionId) === id);
   if (idx < 0) {
-    registerCustomNodeDefinition(definition);
-    customNodeDefinitions.set([...prev, definition]);
+    const normalizedDefinition = normalizeLegacyCustomNodeDefinition(definition);
+    registerCustomNodeDefinition(normalizedDefinition);
+    customNodeDefinitions.set([...prev, normalizedDefinition]);
     return;
   }
 
   unregisterCustomNodeDefinition(id);
-  registerCustomNodeDefinition(definition);
+  const normalizedDefinition = normalizeLegacyCustomNodeDefinition(definition);
+  registerCustomNodeDefinition(normalizedDefinition);
   const next = prev.slice();
-  next[idx] = definition;
+  next[idx] = normalizedDefinition;
   customNodeDefinitions.set(next);
 }
 

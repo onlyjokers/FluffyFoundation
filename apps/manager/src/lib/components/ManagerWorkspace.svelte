@@ -71,6 +71,16 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   }
 
   $: if (tabsEl && activePage) void updateTabSlider();
+
+  function editCustomNodeFromManager(event: CustomEvent<{ definitionId: string }>) {
+    const definitionId = String(event.detail?.definitionId ?? '');
+    if (!definitionId) return;
+    activePage = 'nodes';
+    void updateTabSlider();
+    queueMicrotask(() => {
+      window.dispatchEvent(new CustomEvent('shugu:custom-node-edit', { detail: { definitionId } }));
+    });
+  }
 </script>
 
 <svelte:window on:resize={() => void updateTabSlider()} />
@@ -208,7 +218,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
 
   <div class:hide={activePage !== 'node-manager'}>
     <div class="node-manager-pane">
-      <NodeManagerPanel />
+      <NodeManagerPanel on:editCustomNode={editCustomNodeFromManager} />
     </div>
   </div>
 
