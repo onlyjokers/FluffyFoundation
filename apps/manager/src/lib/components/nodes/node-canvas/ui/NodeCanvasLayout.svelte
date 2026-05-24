@@ -234,6 +234,11 @@
     background: rgba(14, 165, 233, 0.95) !important;
   }
 
+  :global(.node-canvas-container .socket[title='print']),
+  :global(.node-canvas-container .socket.port-print) {
+    background: rgba(245, 158, 11, 0.95) !important;
+  }
+
   :global(.node-canvas-container .socket[title='client']),
   :global(.node-canvas-container .socket.port-client) {
     background: rgba(168, 85, 247, 0.95) !important;

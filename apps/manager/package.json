@@ -26,6 +26,7 @@
     "dependencies": {
         "@shugu/arduino-uno-plugin": "workspace:*",
         "@shugu/node-core": "workspace:*",
+        "@shugu/printer-plugin": "workspace:*",
         "@shugu/protocol": "workspace:*",
         "@shugu/sdk-manager": "workspace:*",
         "@shugu/ui-kit": "workspace:*",

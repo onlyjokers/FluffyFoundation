@@ -13,6 +13,7 @@ export const createReteSockets = () =>
     video: new ClassicPreset.Socket('video'),
     scene: new ClassicPreset.Socket('scene'),
     effect: new ClassicPreset.Socket('effect'),
+    print: new ClassicPreset.Socket('print'),
     client: new ClassicPreset.Socket('client'),
     command: new ClassicPreset.Socket('command'),
     fuzzy: new ClassicPreset.Socket('fuzzy'),

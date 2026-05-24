@@ -80,6 +80,10 @@
     background: rgba(34, 211, 238, 0.95) !important;
   }
 
+  :global(.node-canvas-container .socket[title='print']) {
+    background: rgba(245, 158, 11, 0.95) !important;
+  }
+
   :global(.node-canvas-container .socket[title='client']) {
     background: rgba(168, 85, 247, 0.95) !important;
   }

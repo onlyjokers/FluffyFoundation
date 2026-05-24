@@ -20,6 +20,7 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
   import PluginsPanel from '$lib/components/PluginsPanel.svelte';
   import NodeManagerPanel from '$lib/components/NodeManagerPanel.svelte';
   import ArduinoUnoPanel from '$lib/components/ArduinoUnoPanel.svelte';
+  import PrinterPanel from '$lib/components/PrinterPanel.svelte';
 
   export let serverUrl = 'https://localhost:3001';
   export let performanceMode = false;
@@ -183,6 +184,9 @@ Purpose: Classic Manager workspace for graph editing, assets, runtime controls, 
       </div>
       <div class="grid-item">
         <ArduinoUnoPanel />
+      </div>
+      <div class="grid-item">
+        <PrinterPanel {serverUrl} />
       </div>
     </div>
   </div>

@@ -17,6 +17,7 @@ export type PortType =
   | 'scene'
   | 'effect'
   | 'ui'
+  | 'print'
   | 'client'
   | 'command'
   | 'fuzzy'

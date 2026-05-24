@@ -41,6 +41,7 @@
     ensureDisplayLocalFilesRegisteredFromValue,
   } from '$lib/display/display-bridge';
   import { arduinoUnoSerialBridgeState } from '$lib/hardware/arduino-uno/serial-bridge';
+  import { printerBridgeState } from '$lib/hardware/printer/printer-bridge';
   import type { NodeInstance, Connection as EngineConnection, GraphState } from '$lib/nodes/types';
   import type { LocalLoop } from '$lib/nodes';
   import { createNodeCanvasFileActionBundle } from './node-canvas/io/node-canvas-file-actions';
@@ -342,6 +343,7 @@
         (client) => client?.group === 'display' && client?.connected !== false
       ).length,
     getArduinoDeviceCount: () => get(arduinoUnoSerialBridgeState).connectedDevices,
+    getPrinterDeviceCount: () => get(printerBridgeState).connectedPrinterIds.length,
     onClientNodePick: (nodeId, clientId) => void applyClientNodeSelection(nodeId, { clientId }),
     onClientNodeSelectInput: (nodeId, portId, value) =>
       void applyClientNodeSelection(nodeId, { [portId]: value }),

@@ -23,6 +23,7 @@
         "@shugu/ai-core": "workspace:*",
         "@shugu/arduino-uno-plugin": "workspace:*",
         "@shugu/node-core": "workspace:*",
+        "@shugu/printer-plugin": "workspace:*",
         "@shugu/protocol": "workspace:*",
         "@socket.io/redis-adapter": "^8.3.0",
         "redis": "^4.7.1",

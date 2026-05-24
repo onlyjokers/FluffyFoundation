@@ -28,6 +28,7 @@ import {
   type SemanticPartition,
 } from '@shugu/node-core';
 import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
+import { createPrinterNodeDefinitions } from '@shugu/printer-plugin';
 
 type PersistedSemanticGraph = {
   revision: number;
@@ -86,6 +87,9 @@ export class SemanticGraphAuthorityService {
       audioAssets: {},
     });
     for (const definition of createArduinoUnoNodeDefinitions()) {
+      this.registry.register(definition);
+    }
+    for (const definition of createPrinterNodeDefinitions()) {
       this.registry.register(definition);
     }
     this.persisted = this.load();

@@ -42,6 +42,7 @@ function asPortType(value: unknown): PortType {
       'ui',
       'client',
       'command',
+      'print',
       'fuzzy',
       'array',
       'any',

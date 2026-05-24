@@ -1,0 +1,32 @@
+{
+  "name": "@shugu/printer-plugin",
+  "version": "1.0.0",
+  "description": "Manager-local printer hardware plugin and node definitions.",
+  "main": "./dist-printer-plugin-out/index.js",
+  "module": "./dist-printer-plugin-out/index.js",
+  "types": "./dist-printer-plugin-out/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist-printer-plugin-out/index.d.ts",
+      "import": "./dist-printer-plugin-out/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc",
+    "dev": "pnpm exec tsc --watch",
+    "clean": "rm -rf dist-printer-plugin-out",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint \"src/**/*.ts\"",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "files": [
+    "dist-printer-plugin-out"
+  ],
+  "dependencies": {
+    "@shugu/node-core": "workspace:*",
+    "@shugu/plugin-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

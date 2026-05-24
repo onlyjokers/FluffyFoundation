@@ -13,4 +13,5 @@ export type {
   ClientSensorMessage,
   LatestSensorDataLike,
   NodeCommand,
+  AudioAssetNodeDeps,
 } from './definitions/types.js';

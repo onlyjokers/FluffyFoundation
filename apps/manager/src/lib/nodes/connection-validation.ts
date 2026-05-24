@@ -28,6 +28,7 @@ const VALID_PORT_TYPES = new Set<string>([
   'scene',
   'effect',
   'ui',
+  'print',
   'client',
   'command',
   'fuzzy',

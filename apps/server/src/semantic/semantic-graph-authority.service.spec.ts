@@ -189,6 +189,42 @@ test('SemanticGraphAuthorityService exposes Arduino UNO plugin node definitions 
   assert.equal(serialPlayer?.aiSummary?.ports.outputs.some((port) => port.id === 'cmd' && port.type === 'command'), true);
 });
 
+test('SemanticGraphAuthorityService exposes and accepts printer plugin node definitions', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  const printerTypes = snapshot.definitions
+    .filter((definition) => definition.type.startsWith('plugin:printer:') || definition.type === 'printer-object')
+    .map((definition) => definition.type)
+    .sort();
+
+  assert.deepEqual(printerTypes, [
+    'plugin:printer:print-image',
+    'plugin:printer:print-text',
+    'printer-object',
+  ]);
+  const printText = snapshot.definitions.find((definition) => definition.type === 'plugin:printer:print-text');
+  assert.equal(printText?.aiSummary?.ports.outputs.some((port) => port.id === 'print' && port.type === 'print'), true);
+  const printer = snapshot.definitions.find((definition) => definition.type === 'printer-object');
+  assert.equal(printer?.aiSummary?.category, 'Objects');
+  assert.equal(printer?.aiSummary?.ports.inputs.some((port) => port.id === 'in' && port.type === 'print'), true);
+
+  const added = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.add',
+      node: {
+        id: 'printer-1',
+        type: 'printer-object',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    },
+  });
+  assert.equal(added.ok, true);
+});
+
 test('SemanticGraphAuthorityService accepts display-object nodes for server-owned snapshots', () => {
   const { service } = createService();
   const displayNode = {

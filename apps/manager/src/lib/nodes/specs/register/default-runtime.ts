@@ -3,6 +3,7 @@
  */
 import { get } from 'svelte/store';
 import { createArduinoUnoNodeDefinitions } from '@shugu/arduino-uno-plugin';
+import { createPrinterNodeDefinitions } from '@shugu/printer-plugin';
 import { registerDefaultNodeDefinitions, type LatestSensorDataLike, type NodeCommand } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
 import { clientScreenshotUploads, clientUiInteractions, getSDK, sensorData, state } from '$lib/stores/manager';
@@ -89,6 +90,9 @@ export function registerDefaultRuntimeNodes(): void {
   audioAssets: createManagerAudioAssetNodeDeps(),
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {
+    nodeRegistry.register(definition);
+  }
+  for (const definition of createPrinterNodeDefinitions()) {
     nodeRegistry.register(definition);
   }
 }

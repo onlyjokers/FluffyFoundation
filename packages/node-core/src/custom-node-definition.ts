@@ -23,6 +23,7 @@ const normalizePortType = (value: unknown): PortType => {
     'video',
     'scene',
     'effect',
+    'print',
     'client',
     'command',
     'fuzzy',
