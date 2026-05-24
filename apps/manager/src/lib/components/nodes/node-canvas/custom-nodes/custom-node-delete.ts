@@ -10,6 +10,15 @@ type NodeEngineLike = {
   exportGraph: () => { nodes?: NodeInstance[] };
 };
 
+const callConfirm = (confirm: (message: string) => boolean, message: string): boolean => {
+  const globalConfirm =
+    typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+  if (globalConfirm && confirm === globalConfirm) {
+    return globalConfirm.call(globalThis, message);
+  }
+  return confirm(message);
+};
+
 export function createDeleteNodeWithRules(opts: {
   nodeEngine: NodeEngineLike;
   readCustomNodeState: (config: Record<string, unknown>) => CustomNodeInstanceState | null;
@@ -27,8 +36,15 @@ export function createDeleteNodeWithRules(opts: {
     const node = opts.nodeEngine.getNode(id);
     if (!node) return;
 
-    const removeNode = (targetId: string): void => {
-      if (!opts.removeNodeCommand?.(targetId)) opts.nodeEngine.removeNode(targetId);
+    const removeNode = (targetId: string, options?: { ensureLocalRemoved?: boolean }): void => {
+      const accepted = opts.removeNodeCommand?.(targetId);
+      if (!accepted) {
+        opts.nodeEngine.removeNode(targetId);
+        return;
+      }
+      if (options?.ensureLocalRemoved && opts.nodeEngine.getNode(targetId)) {
+        opts.nodeEngine.removeNode(targetId);
+      }
     };
 
     const state = opts.readCustomNodeState(asRecord(node.config));
@@ -40,12 +56,13 @@ export function createDeleteNodeWithRules(opts: {
     const def = opts.getCustomNodeDefinition(state.definitionId);
     const name = String(def?.name ?? 'Custom Node');
 
-    const ok = opts.confirm(
+    const ok = callConfirm(
+      opts.confirm,
       `Delete mother "${name}"?\n\nThis will remove only this parent instance from the graph. The Custom Node definition and existing child instances will remain.\n\nYou can reintroduce the parent node in Node Manager.`
     );
     if (!ok) return;
 
-    removeNode(id);
+    removeNode(id, { ensureLocalRemoved: true });
 
     if (opts.getSelectedNodeId() === id) opts.setSelectedNode('');
   };

@@ -118,3 +118,111 @@ test('deleteNodeWithRules removes only the mother instance and keeps definition 
   assert.deepEqual(removedDefinitions, []);
   assert.match(messages[0] ?? '', /You can reintroduce the parent node in Node Manager/);
 });
+
+test('deleteNodeWithRules locally removes mother when semantic remove accepts', () => {
+  const mother: NodeInstance = {
+    id: 'mother-1',
+    type: 'custom:pulse',
+    position: { x: 0, y: 0 },
+    config: {
+      customNode: {
+        definitionId: 'pulse',
+        groupId: 'group:mother',
+        role: 'mother',
+        manualGate: true,
+        internal: { nodes: [], connections: [] },
+      },
+    },
+    inputValues: {},
+    outputValues: {},
+  };
+  const nodes = new Map([[mother.id, mother]]);
+  const semanticRemovals: string[] = [];
+  const localRemovals: string[] = [];
+
+  const deleteNode = createDeleteNodeWithRules({
+    nodeEngine: {
+      getNode: (id) => nodes.get(id),
+      removeNode: (id) => {
+        localRemovals.push(id);
+        nodes.delete(id);
+      },
+      exportGraph: () => ({ nodes: Array.from(nodes.values()) }),
+    },
+    readCustomNodeState: (config) => (config.customNode as any) ?? null,
+    getCustomNodeDefinition: () => ({
+      definitionId: 'pulse',
+      name: 'Pulse',
+      template: { nodes: [], connections: [] },
+      ports: [],
+    }),
+    getSelectedNodeId: () => 'mother-1',
+    setSelectedNode: () => undefined,
+    confirm: () => true,
+    removeNodeCommand: (id) => {
+      semanticRemovals.push(id);
+      return true;
+    },
+  });
+
+  deleteNode('mother-1');
+
+  assert.deepEqual(semanticRemovals, ['mother-1']);
+  assert.deepEqual(localRemovals, ['mother-1']);
+  assert.equal(nodes.has('mother-1'), false);
+});
+
+test('deleteNodeWithRules calls browser confirm without illegal invocation', () => {
+  const mother: NodeInstance = {
+    id: 'mother-1',
+    type: 'custom:pulse',
+    position: { x: 0, y: 0 },
+    config: {
+      customNode: {
+        definitionId: 'pulse',
+        groupId: 'group:mother',
+        role: 'mother',
+        manualGate: true,
+        internal: { nodes: [], connections: [] },
+      },
+    },
+    inputValues: {},
+    outputValues: {},
+  };
+  const nodes = new Map([[mother.id, mother]]);
+  const previousConfirm = (globalThis as typeof globalThis & { confirm?: (message: string) => boolean }).confirm;
+  const browserLikeConfirm = function (this: typeof globalThis, message: string) {
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    return message.includes('Delete mother');
+  };
+  (globalThis as typeof globalThis & { confirm?: (message: string) => boolean }).confirm =
+    browserLikeConfirm;
+
+  try {
+    const deleteNode = createDeleteNodeWithRules({
+      nodeEngine: {
+        getNode: (id) => nodes.get(id),
+        removeNode: (id) => {
+          nodes.delete(id);
+        },
+        exportGraph: () => ({ nodes: Array.from(nodes.values()) }),
+      },
+      readCustomNodeState: (config) => (config.customNode as any) ?? null,
+      getCustomNodeDefinition: () => ({
+        definitionId: 'pulse',
+        name: 'Pulse',
+        template: { nodes: [], connections: [] },
+        ports: [],
+      }),
+      getSelectedNodeId: () => 'mother-1',
+      setSelectedNode: () => undefined,
+      confirm: browserLikeConfirm,
+    });
+
+    assert.doesNotThrow(() => deleteNode('mother-1'));
+    assert.equal(nodes.has('mother-1'), false);
+  } finally {
+    (globalThis as typeof globalThis & { confirm?: (message: string) => boolean }).confirm =
+      previousConfirm;
+  }
+});
