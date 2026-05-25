@@ -19,6 +19,7 @@ export type ServerSemanticNodeEngine = {
   updateNodeConfig?: (nodeId: string, config: Record<string, unknown>) => void;
   updateNodeInputValue?: (nodeId: string, portId: string, value: unknown) => void;
   replaceNodeInputValues?: (nodeId: string, inputValues: Record<string, unknown>) => void;
+  lastError?: { set?: (message: string | null) => void };
 };
 
 export type LocalProjectForServerMigration = {
@@ -359,6 +360,7 @@ export function bindServerSemanticSync(input: {
     input.sdk.onSemanticResult?.((message) => {
       input.settlePendingCommand?.(message.requestId);
       if (!message.ok) {
+        input.nodeEngine.lastError?.set?.(message.error?.message ?? 'Semantic command rejected.');
         input.sdk.requestSemanticSnapshot(`semantic-result-rejected:${message.requestId}`);
         return;
       }

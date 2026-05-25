@@ -100,3 +100,44 @@ test('createNodeAdder uses expanded custom groupId hints for edge proxy nodes ou
   assert.equal(addedProjection.length, 1);
   assert.deepEqual(addedProjection[0]?.config, { groupId: 'group:expanded', direction: 'input' });
 });
+
+test('createNodeAdder assigns unique default variable names for boolean variable nodes', () => {
+  const added: NodeInstance[] = [];
+  const ids = ['set-a', 'get-a', 'set-b'];
+  const addNode = createNodeAdder({
+    nodeRegistry: {
+      get: () => ({
+        configSchema: [
+          { key: 'name', defaultValue: 'variable' },
+          { key: 'defaultValue', defaultValue: false },
+        ],
+      }),
+    },
+    nodeEngine: {
+      getNode: () => undefined,
+    },
+    customNodeTypePrefix: 'custom:',
+    getCustomNodeDefinition: () => undefined,
+    cloneInternalGraphForNewInstance: (graph) => graph,
+    generateCustomNodeGroupId: () => 'group:new',
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config) => config,
+    customNodeDefinitions: writable([]),
+    wouldCreateCycle: () => false,
+    getGroupFrames: () => [],
+    expandedCustomByGroupId: new Map(),
+    getGraphState: () => ({ nodes: added, connections: [] }),
+    getNodeCount: () => added.length,
+    generateId: () => ids[added.length] ?? `node-${added.length}`,
+    addNodeCommand: (node) => added.push(node),
+  });
+
+  addNode('set-boolean-variable');
+  addNode('get-boolean-variable');
+  addNode('set-boolean-variable');
+
+  assert.deepEqual(
+    added.map((node) => node.config.name),
+    ['variable', 'variable_1', 'variable_2']
+  );
+});

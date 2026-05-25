@@ -285,6 +285,56 @@ test('handleMessage audits accepted mutating manager commands', () => {
   });
 });
 
+test('handleMessage audits accepted semantic manager commands', () => {
+  const { gateway, routed } = createGateway();
+  const audits: unknown[][] = [];
+  const originalInfo = console.info;
+  console.info = (...args: unknown[]) => {
+    audits.push(args);
+  };
+  try {
+    gateway.handleMessage(
+      {
+        type: 'semantic',
+        version: 1,
+        target: { mode: 'server' },
+        actor: 'manager',
+        role: 'manager',
+        command: {
+          kind: 'node.add',
+          node: {
+            id: 'set-flag',
+            type: 'set-boolean-variable',
+            position: { x: 0, y: 0 },
+            config: { name: 'flag' },
+            inputValues: {},
+            outputValues: {},
+          },
+        },
+        requestId: 'semantic-add-set-flag',
+      },
+      { id: 'socket-semantic-audit' } as never
+    );
+  } finally {
+    console.info = originalInfo;
+  }
+
+  assert.equal(routed.length, 1);
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0]?.[0], '[Gateway] Command audit');
+  assert.deepEqual(audits[0]?.[1], {
+    actor: 'manager',
+    role: 'manager',
+    scopeGroupId: undefined,
+    type: 'semantic',
+    command: 'node.add',
+    target: { mode: 'server' },
+    correlationId: undefined,
+    idempotencyKey: undefined,
+    decision: 'accept',
+  });
+});
+
 test('handleMessage rejects partition deploy when target capabilities are missing', () => {
   const { gateway, routed } = createGateway();
   const warnings = captureWarns(() => {

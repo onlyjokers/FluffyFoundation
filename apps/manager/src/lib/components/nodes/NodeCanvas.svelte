@@ -162,7 +162,7 @@
     onPendingCommand: (command, requestId) => {
       serverSemanticSyncState.trackPendingCommand(requestId, command);
     },
-    onLocalCommand: (command, _requestId) => {
+    onLocalCommand: (command, _requestId, options) => {
       const bridge = createManagerSemanticBridge({
         nodeEngine,
         nodeRegistry,
@@ -171,7 +171,11 @@
         isRunningStore,
         lastErrorStore,
       });
-      return bridge.dispatch({ actor: { id: 'canvas', role: 'operator' }, command }).ok;
+      return bridge.dispatch({
+        actor: { id: 'canvas', role: 'operator' },
+        command,
+        dryRun: Boolean(options?.dryRun),
+      }).ok;
     },
   });
 
@@ -728,6 +732,7 @@
     wouldCreateCycle,
     getGroupFrames: () => get(groupFrames) ?? [],
     expandedCustomByGroupId,
+    getGraphState: () => graphState,
     getNodeCount: () => nodeCount,
     generateId,
     addNodeCommand: (node) => canvasCommands.addNode(node),

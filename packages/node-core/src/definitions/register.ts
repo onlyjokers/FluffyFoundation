@@ -40,12 +40,17 @@ import {
 } from './nodes/logic.js';
 import { createGroupGateNode, createGroupProxyNode } from './nodes/group.js';
 import {
+  createBooleanVariableNode,
   createBoolNode,
   createFloatNode,
+  createGetBooleanVariableNode,
   createIntNode,
   createNoteNode,
+  createNumberVariableNode,
+  createSetBooleanVariableNode,
   createShowAnythingNode,
   createStringNode,
+  createStringVariableNode,
 } from './nodes/values.js';
 import {
   createAudioDataNode,
@@ -147,6 +152,11 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createFloatNode,
     createStringNode,
     createBoolNode,
+    createSetBooleanVariableNode,
+    createGetBooleanVariableNode,
+    createBooleanVariableNode,
+    createNumberVariableNode,
+    createStringVariableNode,
     createNumberStabilizerNode,
     // Internal graph structure nodes (primarily for manager UI).
     createGroupGateNode,

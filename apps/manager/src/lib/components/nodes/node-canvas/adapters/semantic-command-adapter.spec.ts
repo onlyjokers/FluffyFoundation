@@ -215,9 +215,9 @@ test('NodeCanvas semantic commands send graph.replace payloads for canvas clear'
   });
 });
 
-test('NodeCanvas semantic commands optimistically apply structural graph commands after SDK send', () => {
+test('NodeCanvas semantic commands dry-run structural graph commands before SDK send and apply after send', () => {
   const events: string[] = [];
-  const localCommands: SemanticCommand[] = [];
+  const localCommands: Array<{ command: SemanticCommand; dryRun: boolean }> = [];
   const adapter = createNodeCanvasSemanticCommands({
     getSDK: () => ({
       sendSemanticCommand: () => {
@@ -225,22 +225,28 @@ test('NodeCanvas semantic commands optimistically apply structural graph command
         return true;
       },
     }),
-    onLocalCommand: (command) => {
-      events.push('local');
-      localCommands.push(command);
+    onLocalCommand: (command, _requestId, options) => {
+      events.push(options?.dryRun ? 'local:dry-run' : 'local:apply');
+      localCommands.push({ command, dryRun: Boolean(options?.dryRun) });
     },
   });
 
   assert.equal(adapter.addNode(numberNode), true);
-  assert.deepEqual(events, ['local', 'send']);
-  assert.deepEqual(localCommands, [{ type: 'node.add', node: numberNode }]);
+  assert.deepEqual(events, ['local:dry-run', 'send', 'local:apply']);
+  assert.deepEqual(localCommands, [
+    { command: { type: 'node.add', node: numberNode }, dryRun: true },
+    { command: { type: 'node.add', node: numberNode }, dryRun: false },
+  ]);
 
   events.length = 0;
   localCommands.length = 0;
 
   assert.equal(adapter.disconnect('c1'), true);
-  assert.deepEqual(events, ['local', 'send']);
-  assert.deepEqual(localCommands, [{ type: 'node.disconnect', connectionId: 'c1' }]);
+  assert.deepEqual(events, ['local:dry-run', 'send', 'local:apply']);
+  assert.deepEqual(localCommands, [
+    { command: { type: 'node.disconnect', connectionId: 'c1' }, dryRun: true },
+    { command: { type: 'node.disconnect', connectionId: 'c1' }, dryRun: false },
+  ]);
 
   events.length = 0;
   localCommands.length = 0;
@@ -260,8 +266,8 @@ test('NodeCanvas semantic commands do not send structural commands rejected by l
       },
     }),
     onPendingCommand: () => events.push('pending'),
-    onLocalCommand: () => {
-      events.push('local');
+    onLocalCommand: (_command, _requestId, options) => {
+      events.push(options?.dryRun ? 'local:dry-run' : 'local:apply');
       return false;
     },
   });
@@ -276,7 +282,28 @@ test('NodeCanvas semantic commands do not send structural commands rejected by l
     }),
     false
   );
-  assert.deepEqual(events, ['local']);
+  assert.deepEqual(events, ['local:dry-run']);
+});
+
+test('NodeCanvas semantic commands do not locally apply structural commands when SDK send fails', () => {
+  const events: string[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: () => {
+        events.push('send');
+        return false;
+      },
+    }),
+    onError: (message) => events.push(`error:${message}`),
+    onPendingCommand: () => events.push('pending'),
+    onLocalCommand: (_command, _requestId, options) => {
+      events.push(options?.dryRun ? 'local:dry-run' : 'local:apply');
+      return true;
+    },
+  });
+
+  assert.equal(adapter.addNode(numberNode), false);
+  assert.deepEqual(events, ['local:dry-run', 'send', 'error:Manager SDK is not connected']);
 });
 
 test('NodeCanvas semantic commands track node value commands after SDK send without local replay', () => {

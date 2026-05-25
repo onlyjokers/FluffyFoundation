@@ -2,7 +2,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { Connection, GraphState, NodeDefinition, NodeInstance, NodePort } from '$lib/nodes/types';
+import type {
+  Connection,
+  GraphState,
+  NodeDefinition,
+  NodeInstance,
+  NodePort,
+} from '$lib/nodes/types';
 import { resolvePatchDeploymentPlan } from './patch-deployment-plan';
 
 const definitions = new Map<string, NodeDefinition>();
@@ -88,6 +94,30 @@ test('resolvePatchDeploymentPlan routes a single patch root to a connected clien
   assert.equal(result.planKey, 'client-a=root');
 });
 
+test('resolvePatchDeploymentPlan falls back to connected client-loader when executor inputs are not computed yet', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [
+      node('root', 'image-out'),
+      node('loader-node', 'client-loader', { index: 1, range: 1, random: false }),
+      node('client-node', 'client-executor'),
+    ],
+    connections: [
+      connection('c1', 'root', 'cmd', 'client-node', 'in'),
+      connection('c2', 'loader-node', 'client', 'client-node', 'client'),
+    ],
+  };
+
+  const result = plan(graph, {
+    getLastComputedInputs: () => null,
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['client-a']);
+  assert.deepEqual(result.rootIdsByClientId.get('client-a'), ['root']);
+  assert.equal(result.planKey, 'client-a=root');
+});
+
 test('resolvePatchDeploymentPlan routes Static UI Player to a connected client-executor', () => {
   errors.length = 0;
   const graph: GraphState = {
@@ -112,6 +142,36 @@ test('resolvePatchDeploymentPlan routes Static UI Player to a connected client-e
   assert.equal(result.planKey, 'client-a=root');
 });
 
+test('resolvePatchDeploymentPlan keeps UI variable feedback patches targeted at client-executor', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [
+      node('button', 'client-button'),
+      node('pressed-set', 'set-boolean-variable', {}, { name: 'pressed', defaultValue: false }),
+      node('pressed-get', 'get-boolean-variable', {}, { name: 'pressed', defaultValue: false }),
+      node('not-pressed', 'logic-not'),
+      node('root', 'ui-out'),
+      node('loader-node', 'client-loader', {}, { clientId: 'client-a' }),
+      node('client-node', 'client-executor'),
+    ],
+    connections: [
+      connection('button-pressed', 'button', 'pressed', 'pressed-set', 'set'),
+      connection('pressed-not', 'pressed-get', 'value', 'not-pressed', 'in'),
+      connection('not-display', 'not-pressed', 'out', 'button', 'display'),
+      connection('button-ui', 'button', 'out', 'root', 'in'),
+      connection('root-command', 'root', 'cmd', 'client-node', 'in'),
+      connection('client-link', 'loader-node', 'client', 'client-node', 'client'),
+    ],
+  };
+
+  const result = plan(graph);
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['client-a']);
+  assert.deepEqual(result.rootIdsByClientId.get('client-a'), ['root']);
+  assert.equal(result.planKey, 'client-a=root');
+});
+
 test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch graph', () => {
   errors.length = 0;
   const editorGraph: GraphState = {
@@ -125,13 +185,7 @@ test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch grap
       node('cn:custom-1:client-node', 'client-executor'),
     ],
     connections: [
-      connection(
-        'compiled-cmd',
-        'cn:custom-1:root',
-        'cmd',
-        'cn:custom-1:client-node',
-        'in'
-      ),
+      connection('compiled-cmd', 'cn:custom-1:root', 'cmd', 'cn:custom-1:client-node', 'in'),
       connection(
         'compiled-client',
         'cn:custom-1:loader-node',
@@ -331,8 +385,54 @@ definitions.set('client-button', {
   type: 'client-button',
   label: 'Client Button',
   category: 'ClientUI',
-  inputs: [port('in', 'ui')],
-  outputs: [port('out', 'ui')],
+  inputs: [port('in', 'ui'), port('display', 'boolean')],
+  outputs: [port('out', 'ui'), port('pressed', 'boolean')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('boolean-variable', {
+  type: 'boolean-variable',
+  label: 'Boolean Variable',
+  category: 'Values',
+  inputs: [
+    { ...port('set', 'boolean'), kind: 'sink' },
+    { ...port('reset', 'boolean'), kind: 'sink' },
+  ],
+  outputs: [port('value', 'boolean')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('set-boolean-variable', {
+  type: 'set-boolean-variable',
+  label: 'Set Boolean Variable',
+  category: 'Values',
+  inputs: [
+    { ...port('set', 'boolean'), kind: 'sink' },
+    { ...port('reset', 'boolean'), kind: 'sink' },
+  ],
+  outputs: [],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('get-boolean-variable', {
+  type: 'get-boolean-variable',
+  label: 'Get Boolean Variable',
+  category: 'Values',
+  inputs: [],
+  outputs: [port('value', 'boolean')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('logic-not', {
+  type: 'logic-not',
+  label: 'NOT',
+  category: 'Gate',
+  inputs: [port('in', 'boolean')],
+  outputs: [port('out', 'boolean')],
   configSchema: [],
   process: () => ({}),
 });

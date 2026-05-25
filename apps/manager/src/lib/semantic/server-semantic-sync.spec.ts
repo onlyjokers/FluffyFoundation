@@ -937,6 +937,7 @@ test('bindServerSemanticSync requests a fresh snapshot when a pending command is
   let resultHandler: SnapshotRequestErrorHandler = noopSnapshotRequestErrorHandler;
   const requested: string[] = [];
   const settled: string[] = [];
+  const errors: Array<string | null> = [];
 
   bindServerSemanticSync({
     sdk: {
@@ -950,6 +951,7 @@ test('bindServerSemanticSync requests a fresh snapshot when a pending command is
     },
     nodeEngine: {
       loadGraph: () => undefined,
+      lastError: { set: (message) => errors.push(message) },
     },
     migrationCoordinator: { maybeImport: () => undefined },
     settlePendingCommand: (requestId) => settled.push(requestId),
@@ -963,6 +965,7 @@ test('bindServerSemanticSync requests a fresh snapshot when a pending command is
 
   assert.deepEqual(settled, ['canvas:node.add:bad']);
   assert.deepEqual(requested, ['semantic-result-rejected:canvas:node.add:bad']);
+  assert.deepEqual(errors, ['rejected']);
 });
 
 test('bindServerSemanticSync ignores stale semantic snapshots after a newer revision was applied', () => {

@@ -76,8 +76,10 @@ export function resolvePatchDeploymentPlan(
   const enabledRoots = roots.filter((root) => !disabledNodeIds.has(root.id));
   if (enabledRoots.length === 0) return null;
 
-  const connectedAll = new Set(clientIdsInOrder());
-  const connectedAudience = new Set(audienceClientIdsInOrder());
+  const connectedClientIds = clientIdsInOrder();
+  const connectedAudienceIds = audienceClientIdsInOrder();
+  const connectedAll = new Set(connectedClientIds);
+  const connectedAudience = new Set(connectedAudienceIds);
   const connections: Connection[] = planningGraph.connections ?? [];
 
   const activeRoots = enabledRoots.filter((root) =>
@@ -130,14 +132,73 @@ export function resolvePatchDeploymentPlan(
     return Boolean(port) && String(port?.type ?? '') === 'command';
   };
 
-  const resolveClientExecutorTargets = (nodeId: string): string[] => {
-    const computed = getLastComputedInputs(nodeId);
-    const clientInput = asRecord(computed?.client);
+  const connectedSourceFor = (targetNodeId: string, targetPortId: string): Connection | null =>
+    connections.find(
+      (c) =>
+        String(c.targetNodeId) === String(targetNodeId) &&
+        String(c.targetPortId) === String(targetPortId)
+    ) ?? null;
+
+  const clientIdsFromClientInput = (raw: unknown): string[] => {
+    const clientInput = asRecord(raw);
     const idsRaw = clientInput?.clientIds;
     const ids = Array.isArray(idsRaw) ? idsRaw.map(String).filter(Boolean) : [];
     if (ids.length > 0) return ids;
-    const clientId = typeof clientInput?.clientId === 'string' ? String(clientInput.clientId).trim() : '';
+    const clientId =
+      typeof clientInput?.clientId === 'string' ? String(clientInput.clientId).trim() : '';
     return clientId ? [clientId] : [];
+  };
+
+  const resolveClientLoaderTargets = (nodeId: string): string[] => {
+    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
+    const inputValues = asRecord(runtimeNode?.inputValues) ?? {};
+    const computed = getLastComputedInputs(nodeId);
+    const getEffectiveInput = (portId: 'loadIndexs' | 'index' | 'range' | 'random'): unknown => {
+      if (computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
+        return computed[portId];
+      }
+      return inputValues[portId];
+    };
+
+    const loadedRaw = getEffectiveInput('loadIndexs');
+    const loadedIds = Array.isArray(loadedRaw)
+      ? loadedRaw.map(String).filter((id) => connectedAudience.has(id))
+      : [];
+    const candidates = loadedIds.length > 0 ? loadedIds : connectedAudienceIds;
+    const total = candidates.length;
+    if (total === 0) return [];
+
+    const random = coerceBoolean(getEffectiveInput('random'), false);
+    const ordered = random ? buildStableRandomOrder(nodeId, candidates) : candidates;
+    const index = clampInt(toFiniteNumber(getEffectiveInput('index'), 1), 1, total);
+    const range = clampInt(toFiniteNumber(getEffectiveInput('range'), 1), 1, total);
+    const ids: string[] = [];
+    const start = index - 1;
+    for (let i = 0; i < range; i += 1) {
+      ids.push(ordered[(start + i) % total]);
+    }
+    return ids;
+  };
+
+  const resolveClientExecutorTargets = (nodeId: string): string[] => {
+    const computed = getLastComputedInputs(nodeId);
+    const computedTargets = clientIdsFromClientInput(computed?.client);
+    if (computedTargets.length > 0) return computedTargets;
+
+    const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
+    const inputTargets = clientIdsFromClientInput(asRecord(runtimeNode?.inputValues)?.client);
+    if (inputTargets.length > 0) return inputTargets;
+
+    const clientConnection = connectedSourceFor(nodeId, 'client');
+    if (!clientConnection) return [];
+    const sourceNodeId = String(clientConnection.sourceNodeId);
+    const sourceType = typeById.get(sourceNodeId) ?? '';
+    if (sourceType === 'client-loader') return resolveClientLoaderTargets(sourceNodeId);
+
+    const sourceNode = getRuntimeNode(sourceNodeId) ?? planningNodeById.get(sourceNodeId);
+    return clientIdsFromClientInput(
+      sourceNode?.outputValues?.[String(clientConnection.sourcePortId)]
+    );
   };
 
   const displayClientIdsInOrder = (): string[] =>

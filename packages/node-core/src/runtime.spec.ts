@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 import { registerDefaultNodeDefinitions } from './definitions/register.js';
 import { NodeRegistry } from './registry.js';
-import { NodeRuntime } from './runtime.js';
+import { NodeRuntime, type NodeRuntimeWatchdogInfo } from './runtime.js';
 import type { GraphState } from './types.js';
 import type { NodeCommand } from './definitions/types.js';
 import { createSemanticCommandBus } from './semantic-command-bus.js';
@@ -154,7 +154,13 @@ test('client loader selects client collections and executor routes command sink 
         type: 'proc-synth-update',
         position: { x: 0, y: 0 },
         config: {},
-        inputValues: { active: true, frequency: 440, volume: 0.7, waveform: 'square', durationMs: 200 },
+        inputValues: {
+          active: true,
+          frequency: 440,
+          volume: 0.7,
+          waveform: 'square',
+          durationMs: 200,
+        },
         outputValues: {},
       },
       {
@@ -205,10 +211,16 @@ test('client loader selects client collections and executor routes command sink 
   const loaderOutput = { ...loader.outputValues };
   runtime.stop();
 
-  assert.deepEqual(new Set(commands.map((entry) => entry.clientId)), new Set(['client-a', 'client-b']));
+  assert.deepEqual(
+    new Set(commands.map((entry) => entry.clientId)),
+    new Set(['client-a', 'client-b'])
+  );
   assert.deepEqual(loaderOutput.indexs, ['client-a', 'client-b']);
   assert.equal(loaderOutput.number, 2);
-  assert.deepEqual((loaderOutput.client as { clientIds?: string[] }).clientIds, ['client-a', 'client-b']);
+  assert.deepEqual((loaderOutput.client as { clientIds?: string[] }).clientIds, [
+    'client-a',
+    'client-b',
+  ]);
 });
 
 test('client executor clears old clients when target selection changes for long-lived text and image commands', async () => {
@@ -286,7 +298,9 @@ test('client executor clears old clients when target selection changes for long-
   });
 
   runtime.start();
-  await waitFor(() => commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage'));
+  await waitFor(() =>
+    commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage')
+  );
 
   commands.length = 0;
   const loader = runtime.getNode('loader');
@@ -302,12 +316,13 @@ test('client executor clears old clients when target selection changes for long-
   );
   runtime.stop();
 
-  assert.deepEqual(commands.slice(0, 4).map((entry) => `${entry.clientId}:${entry.cmd.action}`).sort(), [
-    'client-a:hideImage',
-    'client-a:hideText',
-    'client-b:showImage',
-    'client-b:showText',
-  ]);
+  assert.deepEqual(
+    commands
+      .slice(0, 4)
+      .map((entry) => `${entry.clientId}:${entry.cmd.action}`)
+      .sort(),
+    ['client-a:hideImage', 'client-a:hideText', 'client-b:showImage', 'client-b:showText']
+  );
 });
 
 test('client executor clears long-lived commands that disappear from an active command bundle', async () => {
@@ -389,12 +404,16 @@ test('client executor clears long-lived commands that disappear from an active c
 
   try {
     runtime.start();
-    await waitFor(() => commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage'));
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage')
+    );
 
     commands.length = 0;
     enabledByNode.set('image', false);
 
-    await waitFor(() => commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage'));
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage')
+    );
   } finally {
     runtime.stop();
   }
@@ -561,6 +580,318 @@ test('client UI nodes expose interaction state through runtime dependencies', ()
   assert.equal(runtime.getNode('button')?.outputValues.pressed, false);
 });
 
+test('set/get boolean variable latch client button feedback by variable name through a sink boundary', async () => {
+  let buttonPressed = false;
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    clientUi: {
+      consumeClientButtonPressed: (nodeId) => {
+        assert.equal(nodeId, 'button');
+        const current = buttonPressed;
+        buttonPressed = false;
+        return current;
+      },
+    },
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      testNode('button', 'client-button'),
+      {
+        ...testNode('pressed-set', 'set-boolean-variable'),
+        config: { name: 'pressed', defaultValue: false, mode: 'latchTrue' },
+      },
+      { ...testNode('pressed-get', 'get-boolean-variable'), config: { name: 'pressed', defaultValue: false } },
+      testNode('not-pressed', 'logic-not'),
+    ],
+    connections: [
+      {
+        id: 'button-pressed',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pressed-set',
+        targetPortId: 'set',
+      },
+      {
+        id: 'pressed-not',
+        sourceNodeId: 'pressed-get',
+        sourcePortId: 'value',
+        targetNodeId: 'not-pressed',
+        targetPortId: 'in',
+      },
+      {
+        id: 'not-display',
+        sourceNodeId: 'not-pressed',
+        sourcePortId: 'out',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(
+      () =>
+        runtime.getNode('pressed-get')?.outputValues.value === false &&
+        runtime.getNode('not-pressed')?.outputValues.out === true &&
+        runtime.getNode('button')?.outputValues.pressed === false
+    );
+
+    buttonPressed = true;
+    await waitFor(() => runtime.getNode('button')?.outputValues.pressed === true);
+    assert.equal(runtime.getNode('pressed-get')?.outputValues.value, false);
+
+    await waitFor(
+      () =>
+        runtime.getNode('pressed-get')?.outputValues.value === true &&
+        runtime.getNode('not-pressed')?.outputValues.out === false &&
+        runtime.getNode('button')?.outputValues.pressed === false
+    );
+
+    buttonPressed = false;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(runtime.getNode('pressed-get')?.outputValues.value, true);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('set boolean variable supports explicit pulse false writes and reset to default', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: true } },
+      { ...testNode('reset', 'bool'), inputValues: { value: false } },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'flag', defaultValue: false, mode: 'followInput' },
+      },
+      { ...testNode('getter', 'get-boolean-variable'), config: { name: 'flag', defaultValue: false } },
+    ],
+    connections: [
+      {
+        id: 'source-set',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'reset-set',
+        sourceNodeId: 'reset',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'reset',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === true);
+
+    const source = runtime.getNode('source');
+    assert.ok(source);
+    source.inputValues.value = false;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
+
+    source.inputValues.value = true;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === true);
+
+    const reset = runtime.getNode('reset');
+    assert.ok(reset);
+    reset.inputValues.value = true;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('named boolean variable state clears when variable nodes stop', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const first = new NodeRuntime(registry);
+  first.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: true } },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'session-flag', defaultValue: false, mode: 'followInput' },
+      },
+      { ...testNode('getter', 'get-boolean-variable'), config: { name: 'session-flag', defaultValue: false } },
+    ],
+    connections: [
+      {
+        id: 'source-set',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+    ],
+  });
+
+  first.start();
+  await waitFor(() => first.getNode('getter')?.outputValues.value === true);
+  first.stop();
+
+  const second = new NodeRuntime(registry);
+  second.loadGraph({
+    nodes: [
+      {
+        ...testNode('getter-again', 'get-boolean-variable'),
+        config: { name: 'session-flag', defaultValue: false },
+      },
+    ],
+    connections: [],
+  });
+  second.step();
+
+  assert.equal(second.getNode('getter-again')?.outputValues.value, false);
+});
+
+test('number and string variables commit on write pulses and reset to defaults', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('number-source', 'float'), inputValues: { value: 12.5 } },
+      { ...testNode('string-source', 'string'), inputValues: { value: 'alpha' } },
+      { ...testNode('write', 'bool'), inputValues: { value: true } },
+      { ...testNode('reset', 'bool'), inputValues: { value: false } },
+      { ...testNode('number-var', 'number-variable'), config: { defaultValue: 3 } },
+      { ...testNode('string-var', 'string-variable'), config: { defaultValue: 'idle' } },
+    ],
+    connections: [
+      {
+        id: 'number-value',
+        sourceNodeId: 'number-source',
+        sourcePortId: 'value',
+        targetNodeId: 'number-var',
+        targetPortId: 'value',
+      },
+      {
+        id: 'string-value',
+        sourceNodeId: 'string-source',
+        sourcePortId: 'value',
+        targetNodeId: 'string-var',
+        targetPortId: 'value',
+      },
+      {
+        id: 'number-write',
+        sourceNodeId: 'write',
+        sourcePortId: 'value',
+        targetNodeId: 'number-var',
+        targetPortId: 'write',
+      },
+      {
+        id: 'string-write',
+        sourceNodeId: 'write',
+        sourcePortId: 'value',
+        targetNodeId: 'string-var',
+        targetPortId: 'write',
+      },
+      {
+        id: 'number-reset',
+        sourceNodeId: 'reset',
+        sourcePortId: 'value',
+        targetNodeId: 'number-var',
+        targetPortId: 'reset',
+      },
+      {
+        id: 'string-reset',
+        sourceNodeId: 'reset',
+        sourcePortId: 'value',
+        targetNodeId: 'string-var',
+        targetPortId: 'reset',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(
+      () =>
+        runtime.getNode('number-var')?.outputValues.value === 12.5 &&
+        runtime.getNode('string-var')?.outputValues.value === 'alpha'
+    );
+
+    const write = runtime.getNode('write');
+    const numberSource = runtime.getNode('number-source');
+    const stringSource = runtime.getNode('string-source');
+    assert.ok(write);
+    assert.ok(numberSource);
+    assert.ok(stringSource);
+    write.inputValues.value = false;
+    numberSource.inputValues.value = 44;
+    stringSource.inputValues.value = 'beta';
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(runtime.getNode('number-var')?.outputValues.value, 12.5);
+    assert.equal(runtime.getNode('string-var')?.outputValues.value, 'alpha');
+
+    write.inputValues.value = true;
+    await waitFor(
+      () =>
+        runtime.getNode('number-var')?.outputValues.value === 44 &&
+        runtime.getNode('string-var')?.outputValues.value === 'beta'
+    );
+
+    const reset = runtime.getNode('reset');
+    assert.ok(reset);
+    reset.inputValues.value = true;
+    await waitFor(
+      () =>
+        runtime.getNode('number-var')?.outputValues.value === 3 &&
+        runtime.getNode('string-var')?.outputValues.value === 'idle'
+    );
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('default registry exposes split variable nodes', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  assert.ok(registry.get('set-boolean-variable'));
+  assert.ok(registry.get('get-boolean-variable'));
+  assert.ok(registry.get('number-variable'));
+  assert.ok(registry.get('string-variable'));
+});
+
 test('client loader applies index range and random to loaded client ids', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
@@ -587,7 +918,10 @@ test('client loader applies index range and random to loaded client ids', () => 
   assert.deepEqual(selected.indexs, ['client-b', 'client-c']);
   assert.equal(selected.number, 2);
   assert.equal((selected.client as { clientId?: string }).clientId, 'client-b');
-  assert.deepEqual((selected.client as { clientIds?: string[] }).clientIds, ['client-b', 'client-c']);
+  assert.deepEqual((selected.client as { clientIds?: string[] }).clientIds, [
+    'client-b',
+    'client-c',
+  ]);
 
   const selectedWithCachedClientId = loader.process(
     {
@@ -627,8 +961,16 @@ test('client loader applies index range and random to loaded client ids', () => 
   assert.equal((randomA.indexs as string[]).length, 2);
   assert.equal((randomB.indexs as string[]).length, 2);
   assert.notDeepEqual(randomA.indexs, randomB.indexs);
-  assert.ok((randomA.indexs as string[]).every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
-  assert.ok((randomB.indexs as string[]).every((clientId) => ['client-a', 'client-b', 'client-c'].includes(clientId)));
+  assert.ok(
+    (randomA.indexs as string[]).every((clientId) =>
+      ['client-a', 'client-b', 'client-c'].includes(clientId)
+    )
+  );
+  assert.ok(
+    (randomB.indexs as string[]).every((clientId) =>
+      ['client-a', 'client-b', 'client-c'].includes(clientId)
+    )
+  );
 });
 
 test('default registry replaces legacy client-object with loader and executor nodes', () => {
@@ -660,8 +1002,14 @@ test('default registry exposes int, float, and display-object for server semanti
 
   assert.equal(display?.label, 'Display');
   assert.equal(display?.metadata?.platformTargets.includes('display'), true);
-  assert.equal(display?.inputs.some((input) => input.id === 'in' && input.type === 'command'), true);
-  assert.equal(display?.configSchema.some((field) => field.key === 'displayId'), true);
+  assert.equal(
+    display?.inputs.some((input) => input.id === 'in' && input.type === 'command'),
+    true
+  );
+  assert.equal(
+    display?.configSchema.some((field) => field.key === 'displayId'),
+    true
+  );
   assert.equal(registry.get('number'), undefined);
   assert.equal(intNode?.label, 'Int');
   assert.equal(intNode?.configSchema.find((field) => field.key === 'value')?.step, 1);
@@ -679,8 +1027,14 @@ test('url to qr generator converts a string input into an image data url', () =>
   });
   const node = registry.get('url-to-qr-generator');
   assert.ok(node);
-  assert.deepEqual(node.inputs.map((input) => [input.id, input.type]), [['url', 'string']]);
-  assert.deepEqual(node.outputs.map((output) => [output.id, output.type]), [['image', 'image']]);
+  assert.deepEqual(
+    node.inputs.map((input) => [input.id, input.type]),
+    [['url', 'string']]
+  );
+  assert.deepEqual(
+    node.outputs.map((output) => [output.id, output.type]),
+    [['image', 'image']]
+  );
 
   const result = node.process(
     { url: 'https://fluffyfoundation.xyz/client?sessionId=session-a' },
@@ -707,24 +1061,28 @@ test('gpt image gen exposes prompt image trigger inputs and image asset outputs'
   const node = registry.get('gpt-image-gen');
   assert.ok(node);
   assert.equal(node.label, 'GPT Image Gen');
-  assert.deepEqual(node.inputs.map((input) => [input.id, input.type]), [
-    ['prompt', 'string'],
-    ['image', 'image'],
-    ['trigger', 'boolean'],
-    ['model', 'string'],
-    ['size', 'string'],
-    ['quality', 'string'],
-  ]);
-  assert.deepEqual(node.outputs.map((output) => [output.id, output.type]), [
-    ['image', 'image'],
-    ['assetId', 'string'],
-  ]);
   assert.deepEqual(
-    node.inputs.filter((input) => ['model', 'size', 'quality'].includes(input.id)).map((input) => [
-      input.id,
-      input.type,
-      input.options?.map((option) => option.value),
-    ]),
+    node.inputs.map((input) => [input.id, input.type]),
+    [
+      ['prompt', 'string'],
+      ['image', 'image'],
+      ['trigger', 'boolean'],
+      ['model', 'string'],
+      ['size', 'string'],
+      ['quality', 'string'],
+    ]
+  );
+  assert.deepEqual(
+    node.outputs.map((output) => [output.id, output.type]),
+    [
+      ['image', 'image'],
+      ['assetId', 'string'],
+    ]
+  );
+  assert.deepEqual(
+    node.inputs
+      .filter((input) => ['model', 'size', 'quality'].includes(input.id))
+      .map((input) => [input.id, input.type, input.options?.map((option) => option.value)]),
     [
       ['model', 'string', ['gpt-image-2']],
       ['size', 'string', ['1024x1024', '1024x1536', '1536x1024']],
@@ -736,7 +1094,10 @@ test('gpt image gen exposes prompt image trigger inputs and image asset outputs'
   const qualityField = node.configSchema.find((field) => field.key === 'quality');
   assert.equal(modelField?.type, 'select');
   assert.equal(modelField?.defaultValue, 'gpt-image-2');
-  assert.deepEqual(modelField?.options?.map((option) => option.value), ['gpt-image-2']);
+  assert.deepEqual(
+    modelField?.options?.map((option) => option.value),
+    ['gpt-image-2']
+  );
   assert.equal(modelField?.connectable, true);
   assert.equal(sizeField?.defaultValue, '1024x1024');
   assert.equal(sizeField?.connectable, true);
@@ -887,7 +1248,11 @@ test('client permission filter supports all and any permission matching', () => 
   assert.ok(node);
 
   assert.deepEqual(
-    node.process({}, { microphone: true, motion: true, matchMode: 'all' }, { nodeId: 'filter', time: 0, deltaTime: 0 }),
+    node.process(
+      {},
+      { microphone: true, motion: true, matchMode: 'all' },
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    ),
     {
       client: { clientId: 'client-a', clientIds: ['client-a'], sensors: null },
       indexs: ['client-a'],
@@ -896,7 +1261,11 @@ test('client permission filter supports all and any permission matching', () => 
     }
   );
   assert.deepEqual(
-    node.process({}, { microphone: true, motion: true, matchMode: 'any' }, { nodeId: 'filter', time: 0, deltaTime: 0 }),
+    node.process(
+      {},
+      { microphone: true, motion: true, matchMode: 'any' },
+      { nodeId: 'filter', time: 0, deltaTime: 0 }
+    ),
     {
       client: { clientId: 'client-a', clientIds: ['client-a', 'client-b'], sensors: null },
       indexs: ['client-a', 'client-b'],
@@ -1011,7 +1380,11 @@ test('url session node creates a new session only on trigger pulses', () => {
   assert.equal(idle.sessionId, '');
   assert.equal(idle.url, 'https://example.test/client');
 
-  const first = node.process({ trigger: true }, { baseUrl: 'https://example.test/client' }, context);
+  const first = node.process(
+    { trigger: true },
+    { baseUrl: 'https://example.test/client' },
+    context
+  );
   assert.match(String(first.sessionId), /^us_[a-z0-9]+$/);
   assert.equal(first.url, `https://example.test/client?sessionId=${first.sessionId}`);
 
@@ -1020,7 +1393,11 @@ test('url session node creates a new session only on trigger pulses', () => {
   assert.equal(held.url, first.url);
 
   node.process({ trigger: false }, { baseUrl: 'https://example.test/client' }, context);
-  const second = node.process({ trigger: true }, { baseUrl: 'https://example.test/client' }, context);
+  const second = node.process(
+    { trigger: true },
+    { baseUrl: 'https://example.test/client' },
+    context
+  );
   assert.notEqual(second.sessionId, first.sessionId);
 });
 
@@ -1130,10 +1507,14 @@ test('runtime watchdog reports compile errors without stopping an already runnin
     process: (inputs) => ({ out: inputs.in }),
   });
 
-  let watchdog = null;
+  const watchdogs: NodeRuntimeWatchdogInfo[] = [];
+  let tickCount = 0;
   const runtime = new NodeRuntime(registry, {
+    onTick: () => {
+      tickCount += 1;
+    },
     onWatchdog: (info) => {
-      watchdog = info;
+      watchdogs.push(info);
     },
   });
 
@@ -1148,8 +1529,9 @@ test('runtime watchdog reports compile errors without stopping an already runnin
   try {
     runtime.start();
     runtime.step();
-    assert.equal(watchdog?.reason, 'compile-error');
-    assert.notEqual(runtime.timer, null);
+    assert.equal(watchdogs.at(-1)?.reason, 'compile-error');
+    runtime.step();
+    assert.equal(tickCount, 2);
   } finally {
     runtime.stop();
   }
@@ -1177,11 +1559,15 @@ test('runtime watchdog reports sink bursts without stopping the active graph', (
     onSink: () => {},
   });
 
-  let watchdog = null;
+  const watchdogs: NodeRuntimeWatchdogInfo[] = [];
+  let tickCount = 0;
   const runtime = new NodeRuntime(registry, {
     watchdog: { maxSinkValuesPerTick: 1 },
+    onTick: () => {
+      tickCount += 1;
+    },
     onWatchdog: (info) => {
-      watchdog = info;
+      watchdogs.push(info);
     },
   });
 
@@ -1196,8 +1582,9 @@ test('runtime watchdog reports sink bursts without stopping the active graph', (
   try {
     runtime.start();
     runtime.step();
-    assert.equal(watchdog?.reason, 'sink-burst');
-    assert.notEqual(runtime.timer, null);
+    assert.equal(watchdogs.at(-1)?.reason, 'sink-burst');
+    runtime.step();
+    assert.equal(tickCount, 2);
   } finally {
     runtime.stop();
   }
@@ -1231,6 +1618,9 @@ test('loadGraph preserves the previous graph when the next graph is invalid', ()
   );
 
   const graph = runtime.exportGraph();
-  assert.deepEqual(graph.nodes.map((node) => node.id), ['good']);
+  assert.deepEqual(
+    graph.nodes.map((node) => node.id),
+    ['good']
+  );
   assert.deepEqual(graph.connections, []);
 });

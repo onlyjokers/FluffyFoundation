@@ -267,6 +267,49 @@ test('SemanticGraphAuthorityService accepts display text processor nodes for ser
   assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'proc-display-text'), true);
 });
 
+test('SemanticGraphAuthorityService exposes and accepts split boolean variable nodes', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  assert.ok(snapshot.definitions.some((definition) => definition.type === 'set-boolean-variable'));
+  assert.ok(snapshot.definitions.some((definition) => definition.type === 'get-boolean-variable'));
+
+  const setNode = {
+    id: 'set-flag',
+    type: 'set-boolean-variable',
+    position: { x: 10, y: 20 },
+    config: { name: 'flag', defaultValue: false },
+    inputValues: {},
+    outputValues: {},
+  };
+  const getNode = {
+    id: 'get-flag',
+    type: 'get-boolean-variable',
+    position: { x: 220, y: 20 },
+    config: { name: 'flag', defaultValue: false },
+    inputValues: {},
+    outputValues: {},
+  };
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: { type: 'node.add', node: setNode },
+    }).ok,
+    true
+  );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: { type: 'node.add', node: getNode },
+    }).ok,
+    true
+  );
+  assert.deepEqual(
+    service.getSnapshot().nodes.map((node) => node.type),
+    ['set-boolean-variable', 'get-boolean-variable']
+  );
+});
+
 test('SemanticGraphAuthorityService exposes display routing metadata for display-compatible processors', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();

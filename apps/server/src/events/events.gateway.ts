@@ -400,17 +400,17 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   private auditMutatingCommand(message: MessageWithoutServerTimestamp): void {
-    if (!isNonSystemMutatingCommandMessage(message)) return;
+    if (!isNonSystemMutatingCommandMessage(message) && message.type !== 'semantic') return;
 
     console.info('[Gateway] Command audit', {
       actor: message.actor,
       role: message.role,
-      scopeGroupId: message.scopeGroupId,
+      scopeGroupId: 'scopeGroupId' in message ? message.scopeGroupId : undefined,
       type: message.type,
       command: this.commandName(message),
       target: message.target as TargetSelector,
-      correlationId: message.correlationId,
-      idempotencyKey: message.idempotencyKey,
+      correlationId: 'correlationId' in message ? message.correlationId : undefined,
+      idempotencyKey: 'idempotencyKey' in message ? message.idempotencyKey : undefined,
       decision: 'accept',
     });
   }
@@ -419,6 +419,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     if (message.type === 'control') return message.action;
     if (message.type === 'plugin') return message.command;
     if (message.type === 'media') return message.mediaType;
+    if (message.type === 'semantic') {
+      const command = message.command as Record<string, unknown>;
+      return String(command.kind ?? command.type ?? message.type);
+    }
     return message.type;
   }
 

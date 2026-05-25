@@ -1610,3 +1610,51 @@ test('editor projection controls commit user changes through the projection call
     { nodeId: 'view:custom:custom-1:inner', portId: 'gain' },
   ]);
 });
+
+test('split boolean variable nodes build as concrete Rete nodes from default registry definitions', () => {
+  const nodeRegistry = new NodeRegistry();
+  registerDefaultNodeDefinitions(nodeRegistry);
+  const engineConfigUpdates: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: (nodeId, patch) => {
+        engineConfigUpdates.push({ nodeId, patch });
+      },
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      string: new ClassicPreset.Socket('string'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  const setNode = builder.buildReteNode({
+    id: 'set-flag',
+    type: 'set-boolean-variable',
+    config: { name: 'flag', defaultValue: false, mode: 'latchTrue' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+  const getNode = builder.buildReteNode({
+    id: 'get-flag',
+    type: 'get-boolean-variable',
+    config: { name: 'flag', defaultValue: false },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 240, y: 0 },
+  });
+
+  assert.deepEqual(Object.keys(setNode.inputs), ['set', 'reset']);
+  assert.deepEqual(Object.keys(setNode.outputs), []);
+  assert.deepEqual(Object.keys(setNode.controls), ['name', 'defaultValue', 'mode']);
+  assert.deepEqual(Object.keys(getNode.inputs), []);
+  assert.deepEqual(Object.keys(getNode.outputs), ['value']);
+  assert.deepEqual(Object.keys(getNode.controls), ['name', 'defaultValue']);
+  assert.deepEqual(engineConfigUpdates, []);
+});

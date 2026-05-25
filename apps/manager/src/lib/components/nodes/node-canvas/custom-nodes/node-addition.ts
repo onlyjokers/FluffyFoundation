@@ -23,6 +23,30 @@ type CustomNodeDefinition = {
   template: GraphState;
 };
 
+const BOOLEAN_VARIABLE_NODE_TYPES = new Set(['set-boolean-variable', 'get-boolean-variable']);
+
+function uniqueVariableName(
+  type: string,
+  config: Record<string, unknown>,
+  graph: GraphState | null
+): string | null {
+  if (!BOOLEAN_VARIABLE_NODE_TYPES.has(String(type))) return null;
+  const baseRaw = typeof config.name === 'string' ? config.name.trim() : '';
+  const base = baseRaw || 'variable';
+  const used = new Set<string>();
+  for (const node of graph?.nodes ?? []) {
+    if (!BOOLEAN_VARIABLE_NODE_TYPES.has(String(node.type))) continue;
+    const name = typeof node.config?.name === 'string' ? node.config.name.trim() : '';
+    if (name) used.add(name);
+  }
+  if (!used.has(base)) return base;
+  for (let index = 1; index < 10000; index += 1) {
+    const candidate = `${base}_${index}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${base}_${Date.now()}`;
+}
+
 export function createNodeAdder(opts: {
   nodeRegistry: NodeRegistryLike;
   nodeEngine: NodeEngineLike;
@@ -39,6 +63,7 @@ export function createNodeAdder(opts: {
   wouldCreateCycle: (definitions: unknown[], parentDefinitionId: string, childDefinitionId: string) => boolean;
   getGroupFrames: () => unknown[];
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;
+  getGraphState?: () => GraphState;
   getNodeCount: () => number;
   generateId: () => string;
   addNodeCommand: (node: NodeInstance) => void;
@@ -118,11 +143,14 @@ export function createNodeAdder(opts: {
     for (const field of def.configSchema) {
       config[field.key] = field.defaultValue;
     }
+    const nextConfig = { ...config, ...(configPatch ?? {}) };
+    const variableName = uniqueVariableName(type, nextConfig, opts.getGraphState?.() ?? null);
+    if (variableName) nextConfig.name = variableName;
     const newNode: NodeInstance = {
       id: opts.generateId(),
       type,
       position: position ?? fallback,
-      config: { ...config, ...(configPatch ?? {}) },
+      config: nextConfig,
       inputValues: {},
       outputValues: {},
     };
