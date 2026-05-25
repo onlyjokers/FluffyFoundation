@@ -1,5 +1,5 @@
 /**
- * Purpose: Nest module for Aliyun TTS proxy endpoints.
+ * Purpose: Nest module for persisted TTS audio asset generation.
  */
 import { Module } from '@nestjs/common';
 import { AssetsModule } from '../assets/assets.module.js';

@@ -40,7 +40,6 @@ export function capabilityForNodeType(type: string | undefined): string | null {
   if (type === 'audio-out') return 'sound';
   if (type === 'load-audio-from-assets') return 'sound';
   if (type === 'load-audio-from-local') return 'sound';
-  if (type === 'aliyun-tts') return 'sound';
   if (type === 'load-image-from-assets') return 'visual';
   if (type === 'load-image-from-local') return 'visual';
   if (type === 'load-video-from-assets') return 'visual';

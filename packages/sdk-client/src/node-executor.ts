@@ -284,7 +284,6 @@ export class NodeExecutor {
             'tone-reverb',
             'tone-granular',
             'tone-lfo',
-            'aliyun-tts',
           ].includes(node.type)
         )
         .map((node) => node.id)
@@ -379,7 +378,6 @@ export class NodeExecutor {
             'tone-reverb',
             'tone-granular',
             'tone-lfo',
-            'aliyun-tts',
           ].includes(node.type)
         )
         .map((node) => node.id)

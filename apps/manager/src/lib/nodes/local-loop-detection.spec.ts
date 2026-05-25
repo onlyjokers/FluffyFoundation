@@ -81,6 +81,6 @@ test('shouldComputeWhileOffloaded keeps ClientUI interaction output nodes live f
   assert.equal(shouldComputeWhileOffloaded('ui-out'), false);
 });
 
-test('capabilityForNodeType treats Aliyun TTS as a sound node', () => {
-  assert.equal(capabilityForNodeType('aliyun-tts'), 'sound');
+test('capabilityForNodeType ignores the legacy Aliyun TTS node', () => {
+  assert.equal(capabilityForNodeType('aliyun-tts'), null);
 });

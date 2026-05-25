@@ -165,8 +165,7 @@ export type ToneNodeKind =
   | 'audio-data'
   | 'tone-granular'
   | 'load-audio-from-assets'
-  | 'load-audio-from-local'
-  | 'aliyun-tts';
+  | 'load-audio-from-local';
 
 export type ToneEffectInstance = {
   nodeId: string;

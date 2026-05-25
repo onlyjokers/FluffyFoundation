@@ -1,5 +1,5 @@
 /**
- * Purpose: Unit tests for Aliyun TTS asset endpoint authorization.
+ * Purpose: Unit tests for TTS audio asset endpoint authorization.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

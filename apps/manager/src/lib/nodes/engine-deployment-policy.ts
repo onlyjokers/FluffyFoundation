@@ -33,7 +33,6 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'tone-reverb',
   'tone-granular',
   'play-media',
-  'aliyun-tts',
 ]);
 
 const PATCH_ROOT_TYPES = ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out', 'ui-out'] as const;
@@ -93,7 +92,6 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'tone-reverb',
   'tone-granular',
   'play-media',
-  'aliyun-tts',
   // Generators
   'number-script',
   // Patch root

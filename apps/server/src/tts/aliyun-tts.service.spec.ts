@@ -1,5 +1,5 @@
 /**
- * Purpose: Unit tests for Aliyun TTS request/response handling.
+ * Purpose: Unit tests for TTS request handling and persisted audio asset storage.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

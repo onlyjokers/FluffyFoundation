@@ -8,6 +8,9 @@ test('patch deployment policy allows FCT track scene chain nodes', () => {
   assert.doesNotThrow(() => assertPatchDeployableNodeType('scene-fct-track'));
 });
 
-test('patch deployment policy allows Aliyun TTS audio source nodes', () => {
-  assert.doesNotThrow(() => assertPatchDeployableNodeType('aliyun-tts'));
+test('patch deployment policy rejects the legacy Aliyun TTS audio source node', () => {
+  assert.throws(
+    () => assertPatchDeployableNodeType('aliyun-tts'),
+    /Patch contains non-deployable node type: aliyun-tts/
+  );
 });

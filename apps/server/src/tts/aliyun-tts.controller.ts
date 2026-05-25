@@ -1,5 +1,5 @@
 /**
- * Purpose: HTTP endpoint for Aliyun TTS synthesis.
+ * Purpose: HTTP endpoint for generating persisted TTS audio assets.
  */
 import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
@@ -17,11 +17,6 @@ export class AliyunTtsController {
     private readonly audioDropBox: AudioDropBoxService,
     private readonly managerAuth: ManagerAuthService
   ) {}
-
-  @Post('synthesize')
-  async synthesize(@Body() body: AliyunTtsRequest): Promise<{ url: string; mimeType: string; usage: Record<string, unknown> | null }> {
-    return await this.tts.synthesize(body ?? { text: '' });
-  }
 
   @Post('asset')
   async synthesizeAsset(

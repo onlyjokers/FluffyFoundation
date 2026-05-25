@@ -40,7 +40,6 @@ export const AUDIO_NODE_KINDS = new Set<ToneNodeKind>([
   'tone-granular',
   'load-audio-from-assets',
   'load-audio-from-local',
-  'aliyun-tts',
 ]);
 
 export const AUDIO_INPUT_PORTS = new Map<ToneNodeKind, string[]>([
@@ -61,7 +60,6 @@ export const AUDIO_OUTPUT_PORTS = new Map<ToneNodeKind, string[]>([
   ['tone-granular', ['value']],
   ['load-audio-from-assets', ['ref']],
   ['load-audio-from-local', ['ref']],
-  ['aliyun-tts', ['ref']],
 ]);
 
 export let toneModule: ToneModule | null = null;
