@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createLoopActions, type ManagerSdkLike } from './loop-helpers';
+import { createLoopActions, updateExecutorStatus, type ManagerSdkLike } from './loop-helpers';
 import type { LocalLoop } from '$lib/nodes';
 import type { GraphState } from '$lib/nodes/types';
 
@@ -81,6 +81,49 @@ test('deployLoop targets the managed client group instead of explicit client IDs
   assert.equal(sent[1].plugin, 'node-executor');
   assert.equal(sent[1].event, 'deploy');
   assert.deepEqual(sent[1].target, { mode: 'group', groupId: 'client:client-1' });
+});
+
+test('executor warning status keeps the previous running state', () => {
+  const running = updateExecutorStatus(new Map(), 'client-1', {
+    at: 1,
+    event: 'started',
+    loopId: 'loop-1',
+    error: null,
+    payload: {},
+  });
+
+  const warned = updateExecutorStatus(running, 'client-1', {
+    at: 2,
+    event: 'warning',
+    loopId: 'loop-1',
+    error: 'tick exceeded budget',
+    payload: { reason: 'watchdog' },
+  });
+
+  const status = warned.get('client-1');
+  assert.equal(status?.running, true);
+  assert.equal(status?.lastEvent, 'warning');
+  assert.equal(status?.lastError, 'tick exceeded budget');
+});
+
+test('executor warning status does not revive an explicitly stopped loop', () => {
+  const stopped = updateExecutorStatus(new Map(), 'client-1', {
+    at: 1,
+    event: 'stopped',
+    loopId: 'loop-1',
+    error: null,
+    payload: {},
+  });
+
+  const warned = updateExecutorStatus(stopped, 'client-1', {
+    at: 2,
+    event: 'warning',
+    loopId: 'loop-1',
+    error: 'deploy rejected',
+    payload: {},
+  });
+
+  assert.equal(warned.get('client-1')?.running, false);
 });
 
 test('deployLoop records pending state before dispatching deploy command', () => {

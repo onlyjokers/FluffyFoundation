@@ -64,6 +64,7 @@ export class NodeRuntime {
     windowMs: 1000,
   };
   private sinkSignatureHistory = new Map<string, { at: number; signature: string }[]>();
+  private lastWatchdogSignature: string | null = null;
   // Cache last computed non-sink inputs so sinks can react to connected values (which are not stored in node.inputValues).
   private lastComputedInputsByNode = new Map<string, Record<string, unknown>>();
   private lastOnSinkStateByNode = new Map<
@@ -151,19 +152,19 @@ export class NodeRuntime {
   }
 
   loadGraph(state: Pick<GraphState, 'nodes' | 'connections'>): void {
-    this.nodes.clear();
+    const nextNodes = new Map<string, NodeInstance>();
     for (const node of state.nodes ?? []) {
       if (!this.registry.get(node.type)) {
         throw new Error(`unknown node type: ${node.type}`);
       }
-      this.nodes.set(node.id, {
+      nextNodes.set(node.id, {
         ...node,
         config: { ...(node.config ?? {}) },
         inputValues: { ...(node.inputValues ?? {}) },
         outputValues: { ...(node.outputValues ?? {}) },
       });
     }
-    const nodeIds = new Set(this.nodes.keys());
+    const nodeIds = new Set(nextNodes.keys());
     const nextConnections: Connection[] = [];
     const connectedInputKeys = new Set<string>();
     for (const conn of state.connections ?? []) {
@@ -171,8 +172,8 @@ export class NodeRuntime {
         throw new Error(`invalid connection: ${conn.id}`);
       }
 
-      const sourceNode = this.nodes.get(conn.sourceNodeId);
-      const targetNode = this.nodes.get(conn.targetNodeId);
+      const sourceNode = nextNodes.get(conn.sourceNodeId);
+      const targetNode = nextNodes.get(conn.targetNodeId);
       const sourceDef = sourceNode ? this.registry.get(sourceNode.type) : undefined;
       const targetDef = targetNode ? this.registry.get(targetNode.type) : undefined;
       const sourcePort = sourceDef?.outputs.find((p) => p.id === conn.sourcePortId);
@@ -190,12 +191,14 @@ export class NodeRuntime {
       }
       nextConnections.push(conn);
     }
+    this.nodes = nextNodes;
     this.connections = nextConnections;
     this.executionOrder = [];
     this.needsRecompile = true;
     this.lastTickTime = 0;
     this.overridesByNode.clear();
     this.sinkSignatureHistory.clear();
+    this.lastWatchdogSignature = null;
     this.lastComputedInputsByNode.clear();
     this.lastOnSinkStateByNode.clear();
     this.lastEnabledStateByNode.clear();
@@ -272,6 +275,7 @@ export class NodeRuntime {
     this.lastTickTime = 0;
     this.overridesByNode.clear();
     this.sinkSignatureHistory.clear();
+    this.lastWatchdogSignature = null;
     this.lastComputedInputsByNode.clear();
     this.lastOnSinkStateByNode.clear();
     this.lastEnabledStateByNode.clear();
@@ -448,17 +452,16 @@ export class NodeRuntime {
   }
 
   private triggerWatchdog(info: NodeRuntimeWatchdogInfo): void {
+    const signature = `${info.reason}:${info.message}`;
+    if (signature === this.lastWatchdogSignature) return;
+    this.lastWatchdogSignature = signature;
     try {
       this.onWatchdog?.(info);
     } catch {
       // ignore
     }
-    // Only stop the runtime for critical errors.
-    // Oscillation warnings should not halt the runtime, especially during live performances
-    // where rapid parameter changes are expected user behavior.
-    if (info.reason !== 'oscillation') {
-      this.stop();
-    }
+    // Watchdogs are diagnostics only. A live show must remain fail-open; hosts may surface
+    // the warning, but the runtime keeps ticking unless the operator explicitly stops it.
   }
 
   private tick(): void {
@@ -473,7 +476,7 @@ export class NodeRuntime {
         this.compile();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error('[NodeRuntime] compile error', err);
+        console.warn('[NodeRuntime] compile warning', err);
         this.triggerWatchdog({
           reason: 'compile-error',
           message,

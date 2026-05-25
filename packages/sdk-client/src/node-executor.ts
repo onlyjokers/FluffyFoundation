@@ -173,11 +173,8 @@ export class NodeExecutor {
         }
 
         this.lastError = `tick exceeded budget (${next.toFixed(1)}ms) x${this.consecutiveSlowTicks}`;
-        console.warn('[node-executor] stopping due to slow tick', this.lastError);
-        this.runtime.stop();
-        this.clientUi?.clearClientUi?.();
-        this.running = false;
-        this.report('stopped', {
+        console.warn('[node-executor] slow tick watchdog warning', this.lastError);
+        this.report('warning', {
           loopId: this.loopId,
           reason: 'watchdog',
           watchdog: 'slow-tick',
@@ -192,10 +189,7 @@ export class NodeExecutor {
         const message =
           typeof info?.message === 'string' && info.message ? info.message : 'watchdog triggered';
         this.lastError = message;
-        this.runtime.stop();
-        this.clientUi?.clearClientUi?.();
-        this.running = false;
-        this.report('stopped', {
+        this.report('warning', {
           loopId: this.loopId,
           reason: 'watchdog',
           watchdog: typeof info?.reason === 'string' ? info.reason : 'unknown',
@@ -263,8 +257,8 @@ export class NodeExecutor {
       }
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
-      console.error('[node-executor] command failed', message.command, err);
-      this.report('error', { command: message.command, error: this.lastError });
+      console.warn('[node-executor] command warning', message.command, err);
+      this.report('warning', { command: message.command, error: this.lastError });
     }
   }
 
@@ -295,6 +289,10 @@ export class NodeExecutor {
         )
         .map((node) => node.id)
     );
+    const validationRuntime = new NodeRuntime(this.registry);
+    validationRuntime.loadGraph(next);
+    validationRuntime.compileNow();
+
     this.toneAdapter?.syncActiveNodes(toneNodeIds, next.nodes, next.connections);
     this.runtime.loadGraph(next);
     this.clearRemovedClientUiNodes(prev, next);
@@ -386,6 +384,10 @@ export class NodeExecutor {
         )
         .map((node) => node.id)
     );
+    const validationRuntime = new NodeRuntime(this.registry);
+    validationRuntime.loadGraph(parsed.graph);
+    validationRuntime.compileNow();
+
     this.toneAdapter?.syncActiveNodes(toneNodeIds, parsed.graph.nodes, parsed.graph.connections);
 
     this.runtime.stop();

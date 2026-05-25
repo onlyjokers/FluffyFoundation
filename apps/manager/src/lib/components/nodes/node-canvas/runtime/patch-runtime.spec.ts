@@ -217,6 +217,157 @@ test('patch runtime targets node-executor commands at the managed client group',
   runtime.destroy();
 });
 
+test('patch runtime preserves deployed patches when patch export starts failing', async () => {
+  let shouldThrow = false;
+  const graph: GraphState = {
+    nodes: [
+      node('scene', 'scene-fct-track'),
+      node('out', 'scene-out'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
+  };
+  const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
+  const lastError = writable<string | null>(null);
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+  ]);
+  const payload = basePayload();
+
+  const runtime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' ? { client: { clientId: 'client-1', clientIds: ['client-1'] } } : null,
+      exportGraphForPatchFromRootNodeIds: () => {
+        if (shouldThrow) throw new Error('export failed');
+        return payload;
+      },
+      lastError,
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => graph,
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (target, pluginName, command, nextPayload) => {
+        sent.push({ target, pluginName, command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+
+  sent.length = 0;
+  shouldThrow = true;
+  runtime.scheduleReconcile('export-failure', { immediate: true });
+
+  assert.deepEqual(sent.map((message) => message.command), []);
+  runtime.destroy();
+});
+
+test('patch runtime preserves deployed patches when desired targets temporarily disappear', () => {
+  let clients: Array<{ clientId: string; group: string; connected: boolean }> = [
+    { clientId: 'client-1', group: 'audience', connected: true },
+  ];
+  const graph: GraphState = {
+    nodes: [
+      node('scene', 'scene-fct-track'),
+      node('out', 'scene-out'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
+  };
+  const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+  ]);
+
+  const runtime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' ? { client: { clientId: 'client-1', clientIds: ['client-1'] } } : null,
+      exportGraphForPatchFromRootNodeIds: () => basePayload(),
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => graph,
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: {
+      subscribe: (run) => {
+        run({ clients, selectedClientIds: ['client-1'] });
+        return () => undefined;
+      },
+    },
+    displayTransport: {
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (target, pluginName, command, nextPayload) => {
+        sent.push({ target, pluginName, command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+
+  sent.length = 0;
+  clients = [];
+  runtime.scheduleReconcile('target-missing', { immediate: true });
+
+  assert.deepEqual(sent.map((message) => message.command), []);
+  runtime.destroy();
+});
+
 test('patch runtime deploys a compiled custom-node patch from a collapsed editor graph', () => {
   const { runtime, sent, setGraph } = createImmediateHarness();
 

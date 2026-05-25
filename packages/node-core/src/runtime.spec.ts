@@ -34,6 +34,15 @@ const waitFor = async (predicate: () => boolean, timeoutMs = 500): Promise<void>
 const payloadFrequency = (cmd: NodeCommand): number | undefined =>
   (cmd.payload as { frequency?: number } | undefined)?.frequency;
 
+const testNode = (id: string, type: string): GraphState['nodes'][number] => ({
+  id,
+  type,
+  position: { x: 0, y: 0 },
+  config: {},
+  inputValues: {},
+  outputValues: {},
+});
+
 test('input value changes retrigger command sink effects', async () => {
   const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
   const runtime = createCommandRuntime(commands);
@@ -1098,4 +1107,130 @@ test('semantic command normalization migrates legacy number source nodes to floa
   assert.equal(added.command.type, 'node.add');
   assert.equal(added.command.type === 'node.add' ? added.command.node.type : null, 'float');
   assert.equal(bus.getSnapshot().nodes[0]?.type, 'float');
+});
+
+test('runtime watchdog reports compile errors without stopping an already running graph', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'const',
+    label: 'Const',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+    process: () => ({ out: 1 }),
+  });
+  registry.register({
+    type: 'pass',
+    label: 'Pass',
+    category: 'Test',
+    inputs: [{ id: 'in', label: 'In', type: 'number' }],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+    process: (inputs) => ({ out: inputs.in }),
+  });
+
+  let watchdog = null;
+  const runtime = new NodeRuntime(registry, {
+    onWatchdog: (info) => {
+      watchdog = info;
+    },
+  });
+
+  runtime.loadGraph({
+    nodes: [testNode('a', 'pass'), testNode('b', 'pass')],
+    connections: [
+      { id: 'c1', sourceNodeId: 'a', sourcePortId: 'out', targetNodeId: 'b', targetPortId: 'in' },
+      { id: 'c2', sourceNodeId: 'b', sourcePortId: 'out', targetNodeId: 'a', targetPortId: 'in' },
+    ],
+  });
+
+  try {
+    runtime.start();
+    runtime.step();
+    assert.equal(watchdog?.reason, 'compile-error');
+    assert.notEqual(runtime.timer, null);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('runtime watchdog reports sink bursts without stopping the active graph', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'prod',
+    label: 'Prod',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'command' }],
+    configSchema: [],
+    process: () => ({ out: { action: 'flashlight', payload: { mode: 'on' } } }),
+  });
+  registry.register({
+    type: 'sink',
+    label: 'Sink',
+    category: 'Test',
+    inputs: [{ id: 'in', label: 'In', type: 'command', kind: 'sink' }],
+    outputs: [],
+    configSchema: [],
+    process: () => ({}),
+    onSink: () => {},
+  });
+
+  let watchdog = null;
+  const runtime = new NodeRuntime(registry, {
+    watchdog: { maxSinkValuesPerTick: 1 },
+    onWatchdog: (info) => {
+      watchdog = info;
+    },
+  });
+
+  runtime.loadGraph({
+    nodes: [testNode('p1', 'prod'), testNode('p2', 'prod'), testNode('s', 'sink')],
+    connections: [
+      { id: 'c1', sourceNodeId: 'p1', sourcePortId: 'out', targetNodeId: 's', targetPortId: 'in' },
+      { id: 'c2', sourceNodeId: 'p2', sourcePortId: 'out', targetNodeId: 's', targetPortId: 'in' },
+    ],
+  });
+
+  try {
+    runtime.start();
+    runtime.step();
+    assert.equal(watchdog?.reason, 'sink-burst');
+    assert.notEqual(runtime.timer, null);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('loadGraph preserves the previous graph when the next graph is invalid', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'const',
+    label: 'Const',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'number' }],
+    configSchema: [],
+    process: () => ({ out: 1 }),
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [testNode('good', 'const')],
+    connections: [],
+  });
+
+  assert.throws(
+    () =>
+      runtime.loadGraph({
+        nodes: [testNode('bad', 'missing-type')],
+        connections: [],
+      }),
+    /unknown node type/i
+  );
+
+  const graph = runtime.exportGraph();
+  assert.deepEqual(graph.nodes.map((node) => node.id), ['good']);
+  assert.deepEqual(graph.connections, []);
 });

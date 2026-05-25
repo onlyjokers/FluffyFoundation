@@ -294,7 +294,10 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     lastGraphTopologySignature = computeDesiredPatchTopologySignature();
     patchLastPlan = plan;
     if (!plan || plan.targetClientIds.length === 0) {
-      if (deployedPatchByClientId.size > 0) stopAllDeployedPatches();
+      if (deployedPatchByClientId.size > 0) {
+        nodeEngine.lastError.set('Patch target unavailable; keeping the previous deployment running.');
+        syncPatchVisualState();
+      }
       return;
     }
 
@@ -433,7 +436,10 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     if (desiredByClientId.size === 0) {
       if (retainedClientIds.size === 0) {
-        if (deployedPatchByClientId.size > 0) stopAllDeployedPatches();
+        if (deployedPatchByClientId.size > 0) {
+          nodeEngine.lastError.set('Patch reconcile produced no deployable targets; keeping the previous deployment running.');
+          syncPatchVisualState();
+        }
       } else {
         syncPatchOffloadState(desiredNodeIds);
         void applyPatchHighlights(desiredNodeIds);

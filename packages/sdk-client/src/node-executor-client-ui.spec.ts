@@ -108,16 +108,84 @@ describe('NodeExecutor ClientUI wiring', () => {
     }
   });
 
-  it('clears rendered UI when the runtime watchdog stops execution', async () => {
+  it('keeps rendered UI running when the runtime watchdog warns', async () => {
     const cleared: string[] = [];
     const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(cleared, 0));
 
     try {
       deployGraph(executor);
-      await waitFor(() => cleared.includes('*'));
+      await waitFor(() => executor.getStatus().lastError !== null);
 
-      assert.equal(executor.getStatus().running, false);
-      assert.equal(cleared.includes('*'), true);
+      assert.equal(executor.getStatus().running, true);
+      assert.equal(cleared.includes('*'), false);
+    } finally {
+      executor.destroy();
+    }
+  });
+
+  it('keeps the previous graph running when redeploy payload is invalid', async () => {
+    const cleared: string[] = [];
+    const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(cleared));
+
+    try {
+      deployGraph(executor);
+      assert.equal(executor.getStatus().running, true);
+
+      executor.handlePluginControl(
+        pluginMessage('deploy', {
+          graph: {
+            nodes: [
+              {
+                id: 'bad-node',
+                type: 'missing-node-type',
+                position: { x: 0, y: 0 },
+                config: {},
+                inputValues: {},
+                outputValues: {},
+              },
+            ],
+            connections: [],
+          },
+          meta: { loopId: 'loop-client-ui', tickIntervalMs: 33 },
+        })
+      );
+
+      assert.equal(executor.getStatus().running, true);
+      assert.match(String(executor.getStatus().lastError), /unknown node type/i);
+      assert.equal(cleared.includes('*'), false);
+    } finally {
+      executor.destroy();
+    }
+  });
+
+  it('keeps graph-change validation failures from touching audio runtime state', async () => {
+    const cleared: string[] = [];
+    const syncCalls: unknown[] = [];
+    const executor = new NodeExecutor(createSdk() as never, () => {}, createOptions(cleared));
+
+    try {
+      deployGraph(executor);
+      (executor as unknown as {
+        toneAdapter: {
+          syncActiveNodes: (activeNodeIds: Set<string>) => void;
+          disposeAll: () => void;
+          disposeNode: () => void;
+        };
+      }).toneAdapter = {
+        syncActiveNodes: (activeNodeIds) => syncCalls.push(Array.from(activeNodeIds)),
+        disposeAll: () => undefined,
+        disposeNode: () => undefined,
+      };
+
+      executor.handlePluginControl(
+        pluginMessage('graph-changes', {
+          changes: [{ type: 'add-node', node: { id: 'bad-node', type: 'missing-node-type' } }],
+        })
+      );
+
+      assert.equal(executor.getStatus().running, true);
+      assert.match(String(executor.getStatus().lastError), /unknown node type/i);
+      assert.deepEqual(syncCalls, []);
     } finally {
       executor.destroy();
     }

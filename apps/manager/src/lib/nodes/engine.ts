@@ -107,7 +107,13 @@ class NodeEngineClass {
   public deployedLoops: Writable<string[]> = writable([]);
 
   constructor() {
-    this.runtime = new NodeRuntime(nodeRegistry, {
+    this.runtime = this.createRuntime();
+    this.syncGraphState();
+    this.updateLocalLoops();
+  }
+
+  private createRuntime(): NodeRuntime {
+    return new NodeRuntime(nodeRegistry, {
       tickIntervalMs: TICK_INTERVAL,
       isNodeEnabled: (nodeId) => !this.disabledNodeIds.has(nodeId),
       isComputeEnabled: (nodeId) => {
@@ -149,14 +155,10 @@ class NodeEngineClass {
       },
       onWatchdog: (info) => {
         const message = info?.message ? String(info.message) : 'watchdog triggered';
-        console.warn('[NodeEngine] watchdog triggered:', info?.reason, message, info?.diagnostics);
+        console.warn('[NodeEngine] watchdog warning:', info?.reason, message, info?.diagnostics);
         this.lastError.set(message);
-        this.isRunning.set(false);
       },
     });
-
-    this.syncGraphState();
-    this.updateLocalLoops();
   }
 
   // ========== UI Playheads ==========
