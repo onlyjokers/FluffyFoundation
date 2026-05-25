@@ -49,6 +49,7 @@ export async function initReteCanvas(opts: {
   getProjectionState?: () => unknown;
   isProjectionId?: (id: string) => boolean;
   translateProjectionConnection?: (...args: any[]) => unknown;
+  updateProjectionNodePosition?: (...args: any[]) => unknown;
   getSelectedNodeId: () => string;
   syncSleepNodeSockets: (state: unknown) => void | Promise<void>;
   flushPendingCollapsedNodes: () => void | Promise<void>;
@@ -159,6 +160,9 @@ export async function initReteCanvas(opts: {
     isProjectionId: opts.isProjectionId,
     translateProjectionConnection: opts.translateProjectionConnection as
       | ((connection: EngineConnection) => EngineConnection | null)
+      | undefined,
+    updateProjectionNodePosition: opts.updateProjectionNodePosition as
+      | ((nodeId: string, position: { x: number; y: number }) => boolean)
       | undefined,
   });
 

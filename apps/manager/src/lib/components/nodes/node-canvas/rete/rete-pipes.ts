@@ -35,6 +35,7 @@ type RetePipeOptions = {
   requestMinimapUpdate: () => void;
   isProjectionId?: (id: string) => boolean;
   translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
+  updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
 };
 
 export function bindRetePipes(opts: RetePipeOptions) {
@@ -54,6 +55,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     requestMinimapUpdate,
     isProjectionId = () => false,
     translateProjectionConnection = () => null,
+    updateProjectionNodePosition = () => false,
   } = opts;
 
   let multiDragLeaderId: string | null = null;
@@ -91,6 +93,12 @@ export function bindRetePipes(opts: RetePipeOptions) {
         ? translateProjectionConnection(engineConn)
         : engineConn;
       if (!canonicalConn) return ctx;
+      if (
+        isProjectionConnection &&
+        (isProjectionId(canonicalConn.sourceNodeId) || isProjectionId(canonicalConn.targetNodeId))
+      ) {
+        return ctx;
+      }
       const accepted = canvasCommands.connect(canonicalConn);
       if (accepted) {
         if (!isProjectionConnection) {
@@ -230,7 +238,10 @@ export function bindRetePipes(opts: RetePipeOptions) {
       const y = Number(position.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return ctx;
       if (id && position) {
-        if (isProjectionId(String(id))) return ctx;
+        if (isProjectionId(String(id))) {
+          updateProjectionNodePosition(String(id), { x, y });
+          return ctx;
+        }
         // Ignore no-op translations (including NodeView's initial translate(0,0) on construction).
         if (
           previous &&

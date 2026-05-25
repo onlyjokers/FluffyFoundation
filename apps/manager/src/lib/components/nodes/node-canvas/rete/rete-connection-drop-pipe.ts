@@ -116,9 +116,6 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
     const initialSide = getString(initial.side, '');
     const initialKey = getString(initial.key, '');
     const socketProvided = Object.keys(socket).length > 0;
-    if (isProjectionId(initialNodeId)) {
-      return ctx;
-    }
     if (
       !initialNodeId ||
       !initialKey ||
@@ -227,7 +224,18 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
                 targetNodeId: initialSocket.nodeId,
                 targetPortId: initialSocket.key,
               };
-        options.canvasCommands.connect(conn);
+        const isProjectionConnection =
+          isProjectionId(conn.sourceNodeId) || isProjectionId(conn.targetNodeId);
+        const connectionToCreate = isProjectionConnection
+          ? (options.translateProjectionConnection?.(conn) ?? null)
+          : conn;
+        if (
+          connectionToCreate &&
+          !isProjectionId(connectionToCreate.sourceNodeId) &&
+          !isProjectionId(connectionToCreate.targetNodeId)
+        ) {
+          options.canvasCommands.connect(connectionToCreate);
+        }
         options.groupPortNodesController.scheduleAlign();
         options.groupPortNodesController.scheduleNormalizeProxies();
         return ctx;
@@ -275,11 +283,6 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
       const nodeId = getString(sock.nodeId, '');
       const sideRaw = getString(sock.side, '');
       const key = getString(sock.key, '');
-      if (isProjectionId(nodeId)) {
-        options.setConnectDraggingSocket(null);
-        options.setGroupEdgeHighlight(null);
-        return ctx;
-      }
       if (nodeId && key && (sideRaw === 'input' || sideRaw === 'output')) {
         options.setConnectDraggingSocket({ nodeId, side: sideRaw, key });
         const pointer = options.getLastPointerClient();

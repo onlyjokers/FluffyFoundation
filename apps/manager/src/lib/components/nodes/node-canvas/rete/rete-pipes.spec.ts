@@ -6,7 +6,10 @@ import { writable } from 'svelte/store';
 import { bindRetePipes } from './rete-pipes';
 
 function createHarness(
-  options: { translateProjectionConnection?: (connection: unknown) => unknown } = {}
+  options: {
+    translateProjectionConnection?: (connection: unknown) => unknown;
+    updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
+  } = {}
 ) {
   const editorPipes: Array<(ctx: Record<string, unknown>) => Promise<Record<string, unknown>>> = [];
   const areaPipes: Array<(ctx: Record<string, unknown>) => Promise<Record<string, unknown>>> = [];
@@ -29,6 +32,7 @@ function createHarness(
   const removedNodes: string[] = [];
   const movedNodes: Array<{ id: string; pos: { x: number; y: number } }> = [];
   const projectionConnectionTranslations: unknown[] = [];
+  const projectionPositionUpdates: unknown[] = [];
   const connectionMap = new Map();
 
   bindRetePipes({
@@ -66,6 +70,10 @@ function createHarness(
       projectionConnectionTranslations.push(connection);
       return options.translateProjectionConnection?.(connection) ?? null;
     },
+    updateProjectionNodePosition: (nodeId, position) => {
+      projectionPositionUpdates.push({ nodeId, position });
+      return options.updateProjectionNodePosition?.(nodeId, position) ?? true;
+    },
   });
 
   return {
@@ -76,6 +84,7 @@ function createHarness(
     removedNodes,
     movedNodes,
     projectionConnectionTranslations,
+    projectionPositionUpdates,
     connectionMap,
   };
 }
@@ -121,20 +130,10 @@ test('bindRetePipes routes connectionremoved through semantic canvas disconnect 
   assert.deepEqual(disconnected, ['c1']);
 });
 
-test('bindRetePipes ignores editor-only projection mutations', async () => {
-  const { editorPipes, areaPipes, connections, disconnected, removedNodes, movedNodes } =
+test('bindRetePipes keeps projection removals editor-only', async () => {
+  const { editorPipes, connections, disconnected, removedNodes } =
     createHarness();
 
-  await editorPipes[0]?.({
-    type: 'connectioncreated',
-    data: {
-      id: 'view:c1',
-      source: 'view:source',
-      sourceOutput: 'out',
-      target: 'view:target',
-      targetInput: 'in',
-    },
-  });
   await editorPipes[0]?.({
     type: 'connectionremoved',
     data: {
@@ -147,15 +146,56 @@ test('bindRetePipes ignores editor-only projection mutations', async () => {
     type: 'noderemoved',
     data: { id: 'view:node' },
   });
-  await areaPipes[0]?.({
-    type: 'nodetranslated',
-    data: { id: 'view:node', position: { x: 1, y: 2 }, previous: { x: 0, y: 0 } },
-  });
 
   assert.deepEqual(connections, []);
   assert.deepEqual(disconnected, []);
   assert.deepEqual(removedNodes, []);
+});
+
+test('bindRetePipes writes projection node movement through projection callback', async () => {
+  const { areaPipes, movedNodes, projectionPositionUpdates } = createHarness();
+
+  await areaPipes[0]?.({
+    type: 'nodetranslated',
+    data: {
+      id: 'view:custom:custom-1:inner',
+      position: { x: 1, y: 2 },
+      previous: { x: 0, y: 0 },
+    },
+  });
+
   assert.deepEqual(movedNodes, []);
+  assert.deepEqual(projectionPositionUpdates, [
+    { nodeId: 'view:custom:custom-1:inner', position: { x: 1, y: 2 } },
+  ]);
+});
+
+test('bindRetePipes writes same-owner projection connections through projection callback', async () => {
+  const { editorPipes, connections, projectionConnectionTranslations } = createHarness({
+    translateProjectionConnection: () => null,
+  });
+
+  await editorPipes[0]?.({
+    type: 'connectioncreated',
+    data: {
+      id: 'view:c1',
+      source: 'view:custom:custom-1:a',
+      sourceOutput: 'value',
+      target: 'view:custom:custom-1:b',
+      targetInput: 'value',
+    },
+  });
+
+  assert.deepEqual(projectionConnectionTranslations, [
+    {
+      id: 'view:c1',
+      sourceNodeId: 'view:custom:custom-1:a',
+      sourcePortId: 'value',
+      targetNodeId: 'view:custom:custom-1:b',
+      targetPortId: 'value',
+    },
+  ]);
+  assert.deepEqual(connections, []);
 });
 
 test('bindRetePipes translates external projection connections to custom node public ports', async () => {

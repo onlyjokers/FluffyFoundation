@@ -77,11 +77,15 @@
   import { readAreaTransform } from './node-canvas/utils/view-utils';
   import { type ExpandedCustomNodeFrame } from './node-canvas/custom-nodes/custom-node-expansion';
   import {
+    appendCustomNodeProjectionConnection,
+    appendCustomNodeProjectionNode,
     buildCustomNodeProjectionGraph,
     isCustomNodeProjectionId,
     mergeProjectionGraphs,
     parseCustomNodeProjectionNodeId,
     resolveCustomNodeProjectionPublicConnection,
+    translateCustomNodeProjectionNodePosition,
+    upsertCustomNodeProjectionPort,
     writeCustomNodeProjectionValue,
   } from './node-canvas/custom-nodes/custom-node-projection';
   import { buildCustomNodeProjectionFrame } from './node-canvas/custom-nodes/custom-node-projection-frame';
@@ -531,12 +535,37 @@
     const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
     const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
     if (!owner || !definition) return null;
+    if (source && target && source.customNodeId === target.customNodeId) {
+      const ok = appendCustomNodeProjectionConnection({
+        connection,
+        getOwnerNode: (candidateOwnerId) => nodeEngine.getNode(candidateOwnerId),
+        updateOwnerConfig: (candidateOwnerId, config) => {
+          nodeEngine.updateNodeConfig(candidateOwnerId, config);
+          canvasCommands.setNodeParams(candidateOwnerId, config);
+        },
+      });
+      return ok ? connection : null;
+    }
     return resolveCustomNodeProjectionPublicConnection({
       connection,
       customNode: owner,
       definition,
     });
   };
+
+  const updateCustomNodeProjectionPosition = (
+    projectionNodeId: string,
+    position: { x: number; y: number }
+  ): boolean =>
+    translateCustomNodeProjectionNodePosition({
+      projectionNodeId,
+      position,
+      getOwnerNode: (ownerId) => nodeEngine.getNode(ownerId),
+      updateOwnerConfig: (ownerId, config) => {
+        nodeEngine.updateNodeConfig(ownerId, config);
+        canvasCommands.setNodeParams(ownerId, config);
+      },
+    });
 
   const generateId = () => `node-${crypto.randomUUID?.() ?? Date.now()}`;
 
@@ -702,6 +731,32 @@
     getNodeCount: () => nodeCount,
     generateId,
     addNodeCommand: (node) => canvasCommands.addNode(node),
+    addProjectionNodeCommand: (ownerNodeId, node) =>
+      {
+        const owner = nodeEngine.getNode(ownerNodeId);
+        const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
+        const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
+        const projectionId = appendCustomNodeProjectionNode({
+        ownerNodeId,
+        node,
+        getOwnerNode: (candidateOwnerId) => nodeEngine.getNode(candidateOwnerId),
+        updateOwnerConfig: (candidateOwnerId, config) => {
+          nodeEngine.updateNodeConfig(candidateOwnerId, config);
+          canvasCommands.setNodeParams(candidateOwnerId, config);
+        },
+        });
+        if (projectionId && owner && definition && String(node.type ?? '') === 'group-proxy') {
+          const nextDefinition = upsertCustomNodeProjectionPort({ definition, ownerNode: owner, node });
+          if (nextDefinition) {
+            upsertCustomNodeDefinition(nextDefinition);
+            canvasCommands.dispatch({
+              type: 'definition.custom.upsert',
+              definition: nextDefinition,
+            });
+          }
+        }
+        return projectionId;
+      },
   });
 
   const clipboardController = createClipboardController({
@@ -722,6 +777,11 @@
     getAreaPlugin: () => areaPlugin,
     groupController,
     getLoopController: () => loopController,
+    getProjectionGroupNodeIds: (groupId) =>
+      getCustomNodeProjectionFrames()
+        .find((frame) => String(frame.group?.id ?? '') === String(groupId))
+        ?.group.nodeIds.map(String) ?? [],
+    updateProjectionNodePosition: updateCustomNodeProjectionPosition,
   });
 
   const groupFrameHeaderHandlers = createGroupFrameHeaderHandlers({
@@ -835,6 +895,7 @@
       setNodeCount: (count) => (nodeCount = count),
       getProjectionState: getCustomNodeProjectionState,
       translateProjectionConnection: translateCustomNodeProjectionConnection,
+      updateProjectionNodePosition: updateCustomNodeProjectionPosition,
       isProjectionId: isCustomNodeProjectionId,
       getSelectedNodeId: () => selectedNodeId,
       syncSleepNodeSockets,

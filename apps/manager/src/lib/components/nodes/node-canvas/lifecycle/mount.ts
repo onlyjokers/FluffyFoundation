@@ -109,6 +109,7 @@ export async function mountNodeCanvasResources(
     setNodeCount: opts.setNodeCount,
     getProjectionState: opts.getProjectionState,
     translateProjectionConnection: opts.translateProjectionConnection,
+    updateProjectionNodePosition: opts.updateProjectionNodePosition,
     getSelectedNodeId: opts.getSelectedNodeId,
     syncSleepNodeSockets: opts.syncSleepNodeSockets,
     flushPendingCollapsedNodes: opts.flushPendingCollapsedNodes,

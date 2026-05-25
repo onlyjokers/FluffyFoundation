@@ -42,6 +42,7 @@ export function createNodeAdder(opts: {
   getNodeCount: () => number;
   generateId: () => string;
   addNodeCommand: (node: NodeInstance) => void;
+  addProjectionNodeCommand?: (ownerNodeId: string, node: NodeInstance) => string | undefined;
 }) {
   const fallbackPosition = (): Position => {
     const nodeCount = opts.getNodeCount();
@@ -54,6 +55,19 @@ export function createNodeAdder(opts: {
     configPatch?: Record<string, unknown>
   ): string | undefined => {
     const fallback = fallbackPosition();
+    const hintedGroupId = String(asRecord(configPatch).groupId ?? '');
+    const hintedHost = hintedGroupId
+      ? (opts.expandedCustomByGroupId.get(hintedGroupId) ?? null)
+      : null;
+
+    const host = position
+      ? findExpandedCustomHost({
+          position,
+          frames: opts.getGroupFrames(),
+          expandedCustomByGroupId: opts.expandedCustomByGroupId,
+        })
+      : hintedHost;
+    const targetHost = host ?? hintedHost;
 
     if (String(type).startsWith(opts.customNodeTypePrefix)) {
       const definitionId = String(type).slice(opts.customNodeTypePrefix.length);
@@ -61,22 +75,14 @@ export function createNodeAdder(opts: {
       if (!def) return undefined;
 
       // Prevent cyclic nesting when creating custom nodes inside an expanded mother definition.
-      if (position) {
-        const host = findExpandedCustomHost({
-          position,
-          frames: opts.getGroupFrames(),
-          expandedCustomByGroupId: opts.expandedCustomByGroupId,
-        });
-
-        if (host) {
-          const hostNode = opts.nodeEngine.getNode(String(host.nodeId));
-          const hostState = hostNode ? opts.readCustomNodeState(asRecord(hostNode.config)) : null;
-          if (hostState) {
-            const defs = get(opts.customNodeDefinitions) ?? [];
-            if (opts.wouldCreateCycle(defs, hostState.definitionId, definitionId)) {
-              opts.nodeEngine.lastError?.set?.('Cyclic custom node nesting is not allowed.');
-              return undefined;
-            }
+      if (targetHost) {
+        const hostNode = opts.nodeEngine.getNode(String(targetHost.nodeId));
+        const hostState = hostNode ? opts.readCustomNodeState(asRecord(hostNode.config)) : null;
+        if (hostState) {
+          const defs = get(opts.customNodeDefinitions) ?? [];
+          if (opts.wouldCreateCycle(defs, hostState.definitionId, definitionId)) {
+            opts.nodeEngine.lastError?.set?.('Cyclic custom node nesting is not allowed.');
+            return undefined;
           }
         }
       }
@@ -99,6 +105,9 @@ export function createNodeAdder(opts: {
         inputValues: {},
         outputValues: {},
       };
+      if (targetHost && opts.addProjectionNodeCommand) {
+        return opts.addProjectionNodeCommand(String(targetHost.nodeId), newNode);
+      }
       opts.addNodeCommand(newNode);
       return newNode.id;
     }
@@ -117,6 +126,9 @@ export function createNodeAdder(opts: {
       inputValues: {},
       outputValues: {},
     };
+    if (targetHost && opts.addProjectionNodeCommand) {
+      return opts.addProjectionNodeCommand(String(targetHost.nodeId), newNode);
+    }
     opts.addNodeCommand(newNode);
     return newNode.id;
   };

@@ -19,6 +19,8 @@ export type CreateFrameDragControllerOptions = {
   getAreaPlugin: () => AnyAreaPlugin | null;
   groupController: GroupController;
   getLoopController: () => LoopController | null;
+  getProjectionGroupNodeIds?: (groupId: string) => string[];
+  updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
 };
 
 type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
@@ -65,13 +67,17 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
 
     const areaPlugin = getAreaPlugin();
     const group = get(groupController.nodeGroups).find((g) => String(g.id) === String(groupId));
-    if (!group?.nodeIds?.length) return;
+    const isProjectionGroup = !group?.nodeIds?.length;
+    const resolvedNodeIds = isProjectionGroup
+      ? (opts.getProjectionGroupNodeIds?.(String(groupId)) ?? [])
+      : (group?.nodeIds ?? []);
+    if (!resolvedNodeIds.length) return;
     if (!areaPlugin?.nodeViews) return;
 
     const t = readAreaTransform(areaPlugin);
     if (!t) return;
 
-    const nodeIds = group.nodeIds.map((id) => String(id));
+    const nodeIds = resolvedNodeIds.map((id) => String(id));
     const startPositions = new Map<string, { x: number; y: number }>();
     for (const id of nodeIds) {
       const view = areaPlugin.nodeViews.get(id);
@@ -109,7 +115,17 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
       groupHeaderDragUpHandler = null;
 
       if (!didMove) return;
-      groupController.handleDroppedNodesAfterDrag(Array.from(startPositions.keys()));
+      const movedIds = Array.from(startPositions.keys());
+      if (isProjectionGroup) {
+        for (const id of movedIds) {
+          const view = areaPlugin.nodeViews.get(id);
+          const pos = view?.position as { x: number; y: number } | undefined;
+          if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) continue;
+          opts.updateProjectionNodePosition?.(id, { x: pos.x, y: pos.y });
+        }
+      } else {
+        groupController.handleDroppedNodesAfterDrag(movedIds);
+      }
     };
 
     groupHeaderDragMoveHandler = onMove;
