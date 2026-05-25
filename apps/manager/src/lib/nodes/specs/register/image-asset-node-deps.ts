@@ -71,15 +71,17 @@ export function createManagerImageAssetNodeDeps(
     const serverUrl = getLocalStorageItem(STORAGE_SERVER_URL) ?? '';
     const url = buildUrl(serverUrl);
     const token = getLocalStorageItem(STORAGE_WRITE_TOKEN) ?? '';
-    if (!url || !token) return;
+    if (!url) return;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
 
     cache.set(signature, { status: 'pending', assetId: '', error: null });
     void fetchImpl(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      credentials: 'include',
+      headers,
       body: JSON.stringify(request),
     })
       .then(async (response) => {

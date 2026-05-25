@@ -5,6 +5,7 @@ import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { requireAssetWriteAuth } from '../assets/assets.auth.js';
 import { AssetsService } from '../assets/assets.service.js';
+import { ManagerAuthService } from '../manager-auth/manager-auth.service.js';
 import {
   OpenAiImageService,
   type OpenAiImageAssetRequest,
@@ -15,7 +16,8 @@ import {
 export class OpenAiImageController {
   constructor(
     private readonly images: OpenAiImageService,
-    private readonly assets: AssetsService
+    private readonly assets: AssetsService,
+    private readonly managerAuth: ManagerAuthService
   ) {}
 
   @Post('asset')
@@ -23,7 +25,7 @@ export class OpenAiImageController {
     @Body() body: OpenAiImageAssetRequest,
     @Req() req: Request
   ): Promise<OpenAiImageAssetResult> {
-    requireAssetWriteAuth(req, this.assets.config.writeToken);
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
     return await this.images.generateAsset(body ?? { prompt: '' });
   }
 }

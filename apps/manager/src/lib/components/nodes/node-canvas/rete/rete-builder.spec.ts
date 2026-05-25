@@ -4,7 +4,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ClassicPreset } from 'rete';
-import { NodeRegistry, type NodeDefinition, type NodeInstance } from '@shugu/node-core';
+import {
+  NodeRegistry,
+  registerDefaultNodeDefinitions,
+  type NodeDefinition,
+  type NodeInstance,
+} from '@shugu/node-core';
 import { createReteBuilder } from './rete-builder';
 
 const testDefinition: NodeDefinition = {
@@ -1094,6 +1099,72 @@ test('display-object routing inputs render inline controls and dispatch semantic
     { nodeId: 'display-1', portId: 'index', value: 2 },
     { nodeId: 'display-1', portId: 'range', value: 3 },
     { nodeId: 'display-1', portId: 'random', value: true },
+  ]);
+});
+
+test('gpt image gen trigger input renders as a momentary Generate button', () => {
+  const nodeRegistry = new NodeRegistry();
+  registerDefaultNodeDefinitions(nodeRegistry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    imageAssets: {},
+  });
+  const inputs: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'image-gen-1',
+        type: 'gpt-image-gen',
+        config: { model: 'gpt-image-2', size: '1024x1024', quality: 'low' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+      string: new ClassicPreset.Socket('string'),
+      boolean: new ClassicPreset.Socket('boolean'),
+      image: new ClassicPreset.Socket('image'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeInputs: (nodeId, patch) => {
+      inputs.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'image-gen-1',
+    type: 'gpt-image-gen',
+    config: { model: 'gpt-image-2', size: '1024x1024', quality: 'low' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const triggerControl = node.inputs.trigger?.control as {
+    button?: boolean;
+    buttonLabel?: string;
+    setValue(value: boolean): void;
+  };
+
+  assert.ok(triggerControl);
+  assert.equal(triggerControl.button, true);
+  assert.equal(triggerControl.buttonLabel, 'Generate');
+
+  triggerControl.setValue(true);
+  triggerControl.setValue(false);
+
+  assert.deepEqual(inputs, [
+    { nodeId: 'image-gen-1', patch: { trigger: true } },
+    { nodeId: 'image-gen-1', patch: { trigger: false } },
   ]);
 });
 

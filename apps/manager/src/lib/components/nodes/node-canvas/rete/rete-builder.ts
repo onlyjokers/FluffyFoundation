@@ -378,7 +378,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               }
             },
           });
-          if (instance.type === 'url-session' && input.id === 'trigger') {
+          if (input.buttonLabel) {
+            control.button = true;
+            control.buttonLabel = input.buttonLabel;
+          } else if (instance.type === 'url-session' && input.id === 'trigger') {
             control.button = true;
             control.buttonLabel = 'New URL';
           }

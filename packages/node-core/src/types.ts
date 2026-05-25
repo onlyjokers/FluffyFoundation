@@ -33,6 +33,10 @@ export interface NodePort {
   defaultValue?: unknown;
   options?: { value: string; label: string }[];
   /**
+   * Optional UI hint for momentary trigger controls.
+   */
+  buttonLabel?: string;
+  /**
    * Optional numeric UI hints.
    * Platforms may choose to enforce these limits (e.g. manager clamps inputs).
    */

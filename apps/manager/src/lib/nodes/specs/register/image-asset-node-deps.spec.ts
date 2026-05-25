@@ -60,7 +60,34 @@ test('image asset deps posts generation requests with asset write token and refr
   assert.equal(refreshCalls, 1);
 });
 
-test('image asset deps does not request without server URL or write token', () => {
+test('image asset deps posts generation requests with manager session cookies when no write token is configured', () => {
+  const fetchCalls: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const storage = new Map<string, string>([['shugu-server-url', 'https://localhost:3001']]);
+  const deps = createManagerImageAssetNodeDeps({
+    fetchImpl: async (url, init) => {
+      fetchCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ assetId: 'generated-image' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    getLocalStorageItem: (key) => storage.get(key) ?? null,
+    refreshAssets: async () => {},
+  });
+
+  const result = deps.getGeneratedImageAsset?.({
+    prompt: 'a cybernetic flower',
+    model: 'gpt-image-2',
+  });
+
+  assert.equal(result, '');
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'https://localhost:3001/api/ai/image/asset');
+  assert.equal(fetchCalls[0].init?.credentials, 'include');
+  assert.equal((fetchCalls[0].init?.headers as Record<string, string>).Authorization, undefined);
+});
+
+test('image asset deps does not request without server URL', () => {
   let fetchCalled = false;
   const deps = createManagerImageAssetNodeDeps({
     fetchImpl: async () => {

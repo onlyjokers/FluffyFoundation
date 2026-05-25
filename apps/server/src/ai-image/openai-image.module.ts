@@ -4,11 +4,12 @@
 import { Module } from '@nestjs/common';
 import { AssetsModule } from '../assets/assets.module.js';
 import { AssetsService } from '../assets/assets.service.js';
+import { ManagerAuthModule } from '../manager-auth/manager-auth.module.js';
 import { OpenAiImageController } from './openai-image.controller.js';
 import { OpenAiImageService } from './openai-image.service.js';
 
 @Module({
-  imports: [AssetsModule],
+  imports: [AssetsModule, ManagerAuthModule],
   controllers: [OpenAiImageController],
   providers: [
     {

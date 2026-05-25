@@ -79,7 +79,7 @@ export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
     inputs: [
       { id: 'prompt', label: 'Prompt', type: 'string', defaultValue: '' },
       { id: 'image', label: 'Image', type: 'image', defaultValue: '' },
-      { id: 'trigger', label: 'Generate', type: 'boolean', defaultValue: false },
+      { id: 'trigger', label: 'Generate', type: 'boolean', defaultValue: false, buttonLabel: 'Generate' },
     ],
     outputs: [
       { id: 'image', label: 'Image', type: 'image' },
