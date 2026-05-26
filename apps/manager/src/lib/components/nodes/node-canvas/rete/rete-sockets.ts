@@ -5,6 +5,7 @@ export const createReteSockets = () =>
   ({
     number: new ClassicPreset.Socket('number'),
     boolean: new ClassicPreset.Socket('boolean'),
+    pulse: new ClassicPreset.Socket('pulse'),
     string: new ClassicPreset.Socket('string'),
     asset: new ClassicPreset.Socket('asset'),
     color: new ClassicPreset.Socket('color'),

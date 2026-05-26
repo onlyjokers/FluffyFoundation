@@ -333,6 +333,7 @@ export function createGroupPortNodesController(
       const validPortTypes = new Set([
         'number',
         'boolean',
+        'pulse',
         'string',
         'asset',
         'color',

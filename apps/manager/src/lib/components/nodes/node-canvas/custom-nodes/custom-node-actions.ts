@@ -7,6 +7,7 @@ import type { NodeRegistry } from '@shugu/node-core';
 import { asRecord, getNumber, getString } from '../../../../utils/value-guards';
 import type { GroupFrame, NodeGroup } from '../controllers/group-controller';
 import { cloneGraphState } from './custom-node-graph';
+import { normalizeCustomNodePortType } from './custom-node-port-types';
 
 export type CustomNodeActions = {
   handleUncoupleCustomNode: (nodeId: string) => void;
@@ -57,24 +58,6 @@ type NodeEngine = {
   addConnection: (conn: Connection) => void;
   removeConnection: (connId: string) => void;
 };
-
-const validPortTypes = new Set([
-  'number',
-  'boolean',
-  'string',
-  'asset',
-  'color',
-  'audio',
-  'image',
-  'video',
-  'scene',
-  'effect',
-  'client',
-  'command',
-  'fuzzy',
-  'array',
-  'any',
-]);
 
 type CustomNodeActionsOptions = {
   nodeEngine: NodeEngine;
@@ -484,7 +467,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
 
       const portTypeRaw =
         typeof node.config?.portType === 'string' ? node.config.portType : 'any';
-      const type = validPortTypes.has(portTypeRaw) ? (portTypeRaw as PortType) : 'any';
+      const type = normalizeCustomNodePortType(portTypeRaw);
       const pinned = Boolean(node.config?.pinned);
 
       const pos = positionFor(id);

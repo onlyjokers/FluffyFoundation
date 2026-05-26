@@ -678,6 +678,102 @@ test('semantic command dry-run returns structured validation errors for incompat
   assert.equal(invalidTarget.validationErrors[0].path, 'partitions.partition:bad-target.targetPlatform');
 });
 
+test('semantic command validation keeps pulse events separate from boolean state', () => {
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'button',
+          type: 'client-button',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'toggle',
+          type: 'pulse-to-boolean',
+          position: { x: 200, y: 0 },
+          config: { mode: 'toggle', defaultValue: false },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'not',
+          type: 'logic-not',
+          position: { x: 400, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'client-button',
+        label: 'Client Button',
+        category: 'ClientUI',
+        inputs: [],
+        outputs: [{ id: 'pressed', label: 'Pressed', type: 'pulse' }],
+        configSchema: [],
+      },
+      {
+        type: 'pulse-to-boolean',
+        label: 'Pulse to Boolean',
+        category: 'Logic',
+        inputs: [{ id: 'pulse', label: 'Pulse', type: 'pulse' }],
+        outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+        configSchema: [],
+      },
+      {
+        type: 'logic-not',
+        label: 'NOT',
+        category: 'Logic',
+        inputs: [{ id: 'in', label: 'In', type: 'boolean' }],
+        outputs: [{ id: 'out', label: 'Out', type: 'boolean' }],
+        configSchema: [],
+      },
+    ],
+    revision: 1,
+  });
+
+  const direct = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.connect',
+      connection: {
+        id: 'direct',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'not',
+        targetPortId: 'in',
+      },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(direct.ok, false);
+  assert.equal(direct.validationErrors[0].code, 'GRAPH.PORT_INCOMPATIBLE');
+
+  const throughConverter = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.connect',
+      connection: {
+        id: 'button-toggle',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'toggle',
+        targetPortId: 'pulse',
+      },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(throughConverter.ok, true);
+});
+
 test('command bus returns current snapshot without mutation for graph.snapshot', () => {
   const bus = createSemanticCommandBus({
     graph: baseGraph,

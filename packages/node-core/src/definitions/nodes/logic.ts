@@ -9,6 +9,7 @@ export {
   createLogicNumberToBooleanNode,
   createLogicSubtractNode,
   createMathNode,
+  createPulseToBooleanNode,
 } from './logic/basic.js';
 export {
   createLogicForNode,

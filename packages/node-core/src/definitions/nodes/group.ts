@@ -26,6 +26,7 @@ export function createGroupProxyNode(): NodeDefinition {
   const portTypes: PortType[] = [
     'number',
     'boolean',
+    'pulse',
     'string',
     'asset',
     'color',

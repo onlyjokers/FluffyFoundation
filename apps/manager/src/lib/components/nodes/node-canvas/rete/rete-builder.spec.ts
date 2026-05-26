@@ -11,6 +11,7 @@ import {
   type NodeInstance,
 } from '@shugu/node-core';
 import { createReteBuilder } from './rete-builder';
+import { createReteSockets } from './rete-sockets';
 
 const testDefinition: NodeDefinition = {
   type: 'source-node',
@@ -258,6 +259,23 @@ test('inputAllowsMultiple preserves nodeEngine.getNode receiver context', () => 
   const builder = createBuilderWithThisBoundGetNode();
 
   assert.equal(builder.inputAllowsMultiple('node-1', 'sink'), true);
+});
+
+test('socketFor preserves pulse sockets instead of falling back to any', () => {
+  const nodeRegistry = new NodeRegistry();
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => undefined,
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: createReteSockets(),
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  assert.equal(builder.socketFor('pulse').name, 'pulse');
 });
 
 test('builder treats projection sockets as editor-only and not connectable semantic ports', () => {
@@ -1628,6 +1646,7 @@ test('split boolean variable nodes build as concrete Rete nodes from default reg
       any: new ClassicPreset.Socket('any'),
       boolean: new ClassicPreset.Socket('boolean'),
       string: new ClassicPreset.Socket('string'),
+      pulse: new ClassicPreset.Socket('pulse'),
     },
     getNumberParamOptions: () => [],
     sendNodeOverride: () => {},
@@ -1650,11 +1669,11 @@ test('split boolean variable nodes build as concrete Rete nodes from default reg
     position: { x: 240, y: 0 },
   });
 
-  assert.deepEqual(Object.keys(setNode.inputs), ['set', 'reset']);
+  assert.deepEqual(Object.keys(setNode.inputs), ['name', 'defaultValue', 'mode', 'set', 'reset']);
   assert.deepEqual(Object.keys(setNode.outputs), []);
-  assert.deepEqual(Object.keys(setNode.controls), ['name', 'defaultValue', 'mode']);
-  assert.deepEqual(Object.keys(getNode.inputs), []);
+  assert.deepEqual(Object.keys(setNode.controls), []);
+  assert.deepEqual(Object.keys(getNode.inputs), ['name']);
   assert.deepEqual(Object.keys(getNode.outputs), ['value']);
-  assert.deepEqual(Object.keys(getNode.controls), ['name', 'defaultValue']);
+  assert.deepEqual(Object.keys(getNode.controls), []);
   assert.deepEqual(engineConfigUpdates, []);
 });

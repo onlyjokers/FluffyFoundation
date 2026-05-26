@@ -352,12 +352,12 @@ export function createClientButtonNode(deps: ClientObjectDeps): NodeDefinition {
           repairHint: 'Connect the ClientUI node into a deployed patch subgraph.',
         },
       ],
-      examples: [
-        {
-          title: 'Trigger logic from Client',
-          summary: 'Connect Pressed to boolean logic that controls a Client patch.',
-        },
-      ],
+    examples: [
+      {
+        title: 'Trigger logic from Client',
+        summary: 'Connect Pressed to Pulse to Boolean before controlling boolean logic.',
+      },
+    ],
       risks: [],
       repairHints: ['Verify the Display input is true if the button is not visible.'],
     },
@@ -367,7 +367,7 @@ export function createClientButtonNode(deps: ClientObjectDeps): NodeDefinition {
     ],
     outputs: [
       { id: 'out', label: 'Out', type: 'ui' },
-      { id: 'pressed', label: 'Pressed', type: 'boolean' },
+      { id: 'pressed', label: 'Pressed', type: 'pulse' },
     ],
     configSchema: [],
     process: (inputs, _config, context) => {

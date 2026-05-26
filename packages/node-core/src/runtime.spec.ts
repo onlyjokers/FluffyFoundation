@@ -662,6 +662,127 @@ test('set/get boolean variable latch client button feedback by variable name thr
   }
 });
 
+test('pulse to boolean toggles client button pulses into stable boolean state', async () => {
+  let buttonPressed = false;
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    clientUi: {
+      consumeClientButtonPressed: () => {
+        const current = buttonPressed;
+        buttonPressed = false;
+        return current;
+      },
+    },
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      testNode('button', 'client-button'),
+      { ...testNode('toggle', 'pulse-to-boolean'), config: { mode: 'toggle', defaultValue: false } },
+    ],
+    connections: [
+      {
+        id: 'button-toggle',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'toggle',
+        targetPortId: 'pulse',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => runtime.getNode('toggle')?.outputValues.value === false);
+
+    buttonPressed = true;
+    await waitFor(() => runtime.getNode('toggle')?.outputValues.value === true);
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(runtime.getNode('toggle')?.outputValues.value, true);
+
+    buttonPressed = true;
+    await waitFor(() => runtime.getNode('toggle')?.outputValues.value === false);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('pulse to boolean supports latch and momentary modes', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('pulse', 'bool'), inputValues: { value: false } },
+      { ...testNode('latch-true', 'pulse-to-boolean'), config: { mode: 'latchTrue', defaultValue: false } },
+      { ...testNode('latch-false', 'pulse-to-boolean'), config: { mode: 'latchFalse', defaultValue: true } },
+      { ...testNode('momentary', 'pulse-to-boolean'), config: { mode: 'momentary', defaultValue: false } },
+    ],
+    connections: [
+      {
+        id: 'pulse-latch-true',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'latch-true',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pulse-latch-false',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'latch-false',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pulse-momentary',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'momentary',
+        targetPortId: 'pulse',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(
+      () =>
+        runtime.getNode('latch-true')?.outputValues.value === false &&
+        runtime.getNode('latch-false')?.outputValues.value === true &&
+        runtime.getNode('momentary')?.outputValues.value === false
+    );
+
+    const pulse = runtime.getNode('pulse');
+    assert.ok(pulse);
+    pulse.inputValues.value = true;
+    await waitFor(
+      () =>
+        runtime.getNode('latch-true')?.outputValues.value === true &&
+        runtime.getNode('latch-false')?.outputValues.value === false &&
+        runtime.getNode('momentary')?.outputValues.value === true
+    );
+
+    pulse.inputValues.value = false;
+    await waitFor(() => runtime.getNode('momentary')?.outputValues.value === false);
+    assert.equal(runtime.getNode('latch-true')?.outputValues.value, true);
+    assert.equal(runtime.getNode('latch-false')?.outputValues.value, false);
+  } finally {
+    runtime.stop();
+  }
+});
+
 test('set boolean variable supports explicit pulse false writes and reset to default', async () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
@@ -715,6 +836,166 @@ test('set boolean variable supports explicit pulse false writes and reset to def
     const reset = runtime.getNode('reset');
     assert.ok(reset);
     reset.inputValues.value = true;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('set boolean variable default initializes before any sink write', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('getter', 'get-boolean-variable'), config: { name: 'flag' } },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'flag', defaultValue: true, mode: 'latchTrue' },
+      },
+    ],
+    connections: [],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === true);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('boolean variable default can drive client button display and show anything', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'flag', defaultValue: true, mode: 'latchTrue' },
+      },
+      { ...testNode('getter', 'get-boolean-variable'), config: { name: 'flag' } },
+      testNode('button', 'client-button'),
+      testNode('preview', 'show-anything'),
+    ],
+    connections: [
+      {
+        id: 'value-display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'value-preview',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'preview',
+        targetPortId: 'in',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => {
+      const buttonOut = runtime.getNode('button')?.outputValues.out;
+      return (
+        runtime.getNode('getter')?.outputValues.value === true &&
+        runtime.getNode('preview')?.outputValues.value === 'true' &&
+        Array.isArray(buttonOut) &&
+        buttonOut.some((item) => (item as { type?: string }).type === 'button')
+      );
+    });
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('set and get boolean variable nodes accept connected name default and mode inputs', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('name-source', 'string'), inputValues: { value: 'dynamic-flag' } },
+      { ...testNode('mode-source', 'string'), inputValues: { value: 'followInput' } },
+      { ...testNode('default-source', 'bool'), inputValues: { value: true } },
+      { ...testNode('source', 'bool'), inputValues: { value: false } },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'config-flag', defaultValue: false, mode: 'latchTrue' },
+      },
+      { ...testNode('getter', 'get-boolean-variable'), config: { name: 'config-flag' } },
+    ],
+    connections: [
+      {
+        id: 'name-setter',
+        sourceNodeId: 'name-source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-getter',
+        sourceNodeId: 'name-source',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'mode-setter',
+        sourceNodeId: 'mode-source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'mode',
+      },
+      {
+        id: 'default-setter',
+        sourceNodeId: 'default-source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'defaultValue',
+      },
+      {
+        id: 'source-setter',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
+
+    const source = runtime.getNode('source');
+    assert.ok(source);
+    source.inputValues.value = true;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === true);
+
+    source.inputValues.value = false;
     await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
   } finally {
     runtime.stop();
@@ -890,6 +1171,22 @@ test('default registry exposes split variable nodes', () => {
   assert.ok(registry.get('get-boolean-variable'));
   assert.ok(registry.get('number-variable'));
   assert.ok(registry.get('string-variable'));
+});
+
+test('default registry exposes pulse event ports and pulse to boolean conversion', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  assert.equal(registry.get('client-button')?.outputs.find((port) => port.id === 'pressed')?.type, 'pulse');
+  const converter = registry.get('pulse-to-boolean');
+  assert.ok(converter);
+  assert.equal(converter.inputs.find((port) => port.id === 'pulse')?.type, 'pulse');
+  assert.equal(converter.outputs.find((port) => port.id === 'value')?.type, 'boolean');
 });
 
 test('client loader applies index range and random to loaded client ids', () => {

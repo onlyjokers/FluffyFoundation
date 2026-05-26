@@ -19,6 +19,7 @@ type LocalOnlyPatchRoutingOptions = {
 const VALID_PORT_TYPES = new Set<string>([
   'number',
   'boolean',
+  'pulse',
   'string',
   'asset',
   'color',

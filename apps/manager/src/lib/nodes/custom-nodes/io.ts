@@ -31,6 +31,7 @@ function asPortType(value: unknown): PortType {
     [
       'number',
       'boolean',
+      'pulse',
       'string',
       'asset',
       'color',

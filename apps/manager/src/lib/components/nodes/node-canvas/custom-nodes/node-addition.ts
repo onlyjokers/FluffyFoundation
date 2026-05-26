@@ -66,7 +66,7 @@ export function createNodeAdder(opts: {
   getGraphState?: () => GraphState;
   getNodeCount: () => number;
   generateId: () => string;
-  addNodeCommand: (node: NodeInstance) => void;
+  addNodeCommand: (node: NodeInstance) => boolean | void;
   addProjectionNodeCommand?: (ownerNodeId: string, node: NodeInstance) => string | undefined;
 }) {
   const fallbackPosition = (): Position => {
@@ -133,8 +133,7 @@ export function createNodeAdder(opts: {
       if (targetHost && opts.addProjectionNodeCommand) {
         return opts.addProjectionNodeCommand(String(targetHost.nodeId), newNode);
       }
-      opts.addNodeCommand(newNode);
-      return newNode.id;
+      return opts.addNodeCommand(newNode) === false ? undefined : newNode.id;
     }
 
     const def = opts.nodeRegistry.get(type);
@@ -157,8 +156,7 @@ export function createNodeAdder(opts: {
     if (targetHost && opts.addProjectionNodeCommand) {
       return opts.addProjectionNodeCommand(String(targetHost.nodeId), newNode);
     }
-    opts.addNodeCommand(newNode);
-    return newNode.id;
+    return opts.addNodeCommand(newNode) === false ? undefined : newNode.id;
   };
 }
 

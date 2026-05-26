@@ -16,6 +16,10 @@ test('patch deployment policy allows variable nodes as local patch state', () =>
   assert.doesNotThrow(() => assertPatchDeployableNodeType('string-variable'));
 });
 
+test('patch deployment policy allows pulse conversion nodes as local patch logic', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('pulse-to-boolean'));
+});
+
 test('patch deployment policy rejects the legacy Aliyun TTS audio source node', () => {
   assert.throws(
     () => assertPatchDeployableNodeType('aliyun-tts'),

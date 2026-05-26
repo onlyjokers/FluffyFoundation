@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   buildGroupFrameProxyPorts,
   formatPortValue,
+  hasPortValueText,
   inferBypassPorts,
   shouldUpdatePortValueText,
   resolveRenderedNodeType,
@@ -73,7 +74,17 @@ test('formatPortValue matches ReteNode live port display semantics', () => {
   assert.equal(formatPortValue('boolean', 'true'), null);
   assert.equal(formatPortValue('client', { clientId: 'client-1' }), 'client-1');
   assert.equal(formatPortValue('string', 'hello'), 'hello');
+  assert.equal(formatPortValue('any', false), 'false');
+  assert.equal(formatPortValue('any', { value: 1 }), '{"value":1}');
   assert.equal(formatPortValue('asset', undefined), null);
+});
+
+test('hasPortValueText treats rendered false and zero strings as visible values', () => {
+  assert.equal(hasPortValueText('false'), true);
+  assert.equal(hasPortValueText('0'), true);
+  assert.equal(hasPortValueText(''), true);
+  assert.equal(hasPortValueText(null), false);
+  assert.equal(hasPortValueText(undefined), false);
 });
 
 test('shouldUpdatePortValueText skips equal live port value snapshots', () => {

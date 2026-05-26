@@ -141,3 +141,29 @@ test('createNodeAdder assigns unique default variable names for boolean variable
     ['variable', 'variable_1', 'variable_2']
   );
 });
+
+test('createNodeAdder does not return a node id when semantic add rejects the node', () => {
+  const addNode = createNodeAdder({
+    nodeRegistry: {
+      get: () => ({ configSchema: [] }),
+    },
+    nodeEngine: {
+      getNode: () => undefined,
+    },
+    customNodeTypePrefix: 'custom:',
+    getCustomNodeDefinition: () => undefined,
+    cloneInternalGraphForNewInstance: (graph) => graph,
+    generateCustomNodeGroupId: () => 'group:new',
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config) => config,
+    customNodeDefinitions: writable([]),
+    wouldCreateCycle: () => false,
+    getGroupFrames: () => [],
+    expandedCustomByGroupId: new Map(),
+    getNodeCount: () => 0,
+    generateId: () => 'node-rejected',
+    addNodeCommand: () => false,
+  });
+
+  assert.equal(addNode('pulse-to-boolean'), undefined);
+});

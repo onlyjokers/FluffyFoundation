@@ -37,6 +37,7 @@ import {
   createMathNode,
   createNumberScriptNode,
   createNumberStabilizerNode,
+  createPulseToBooleanNode,
 } from './nodes/logic.js';
 import { createGroupGateNode, createGroupProxyNode } from './nodes/group.js';
 import {
@@ -145,6 +146,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createLogicForNode,
     createLogicSleepNode,
     createLogicNumberToBooleanNode,
+    createPulseToBooleanNode,
     createNumberScriptNode,
     createShowAnythingNode,
     createNoteNode,

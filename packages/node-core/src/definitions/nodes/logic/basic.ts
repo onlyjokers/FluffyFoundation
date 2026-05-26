@@ -2,10 +2,23 @@
  * Purpose: Basic array, math, and numeric logic node definitions.
  */
 import type { NodeDefinition } from '../../../types.js';
+import { coerceBoolean } from '../../utils.js';
 
 function finiteNumber(value: unknown, fallback = 0): number {
   const raw = typeof value === 'number' && Number.isFinite(value) ? value : Number(value ?? fallback);
   return Number.isFinite(raw) ? raw : fallback;
+}
+
+type PulseToBooleanState = {
+  value: boolean;
+  lastPulse: boolean;
+};
+
+const pulseToBooleanState = new Map<string, PulseToBooleanState>();
+
+function pulseToBooleanMode(value: unknown): 'toggle' | 'latchTrue' | 'latchFalse' | 'momentary' {
+  if (value === 'latchTrue' || value === 'latchFalse' || value === 'momentary') return value;
+  return 'toggle';
 }
 
 function createUnaryNumberNode(opts: {
@@ -175,6 +188,53 @@ export function createLogicNumberToBooleanNode(): NodeDefinition {
       const numberValue = finiteNumber(inputs.number, 0);
       const threshold = finiteNumber(inputs.trigger, 0.5);
       return { out: numberValue >= threshold };
+    },
+  };
+}
+
+export function createPulseToBooleanNode(): NodeDefinition {
+  return {
+    type: 'pulse-to-boolean',
+    label: 'Pulse to Boolean',
+    category: 'Logic',
+    inputs: [{ id: 'pulse', label: 'Pulse', type: 'pulse', defaultValue: false }],
+    outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+    configSchema: [
+      {
+        key: 'mode',
+        label: 'Mode',
+        type: 'select',
+        defaultValue: 'toggle',
+        options: [
+          { value: 'toggle', label: 'Toggle' },
+          { value: 'latchTrue', label: 'Latch True' },
+          { value: 'latchFalse', label: 'Latch False' },
+          { value: 'momentary', label: 'Momentary' },
+        ],
+      },
+      { key: 'defaultValue', label: 'Default', type: 'boolean', defaultValue: false },
+    ],
+    process: (inputs, config, context) => {
+      const mode = pulseToBooleanMode(config.mode);
+      const defaultValue = coerceBoolean(config.defaultValue);
+      const pulsed = coerceBoolean(inputs.pulse);
+      if (mode === 'momentary') return { value: pulsed };
+
+      const state = pulseToBooleanState.get(context.nodeId) ?? {
+        value: defaultValue,
+        lastPulse: false,
+      };
+      if (pulsed && !state.lastPulse) {
+        if (mode === 'toggle') state.value = !state.value;
+        if (mode === 'latchTrue') state.value = true;
+        if (mode === 'latchFalse') state.value = false;
+      }
+      state.lastPulse = pulsed;
+      pulseToBooleanState.set(context.nodeId, state);
+      return { value: state.value };
+    },
+    onDisable: (_inputs, _config, context) => {
+      pulseToBooleanState.delete(context.nodeId);
     },
   };
 }

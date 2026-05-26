@@ -4,24 +4,7 @@ import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
 import type { NodeGroup } from '../controllers/group-controller';
 import { asRecord, getBoolean, getString } from '../../../../utils/value-guards';
-
-const validPortTypes = new Set([
-  'number',
-  'boolean',
-  'string',
-  'asset',
-  'color',
-  'audio',
-  'image',
-  'video',
-  'scene',
-  'effect',
-  'client',
-  'command',
-  'fuzzy',
-  'array',
-  'any',
-]);
+import { normalizeCustomNodePortType } from './custom-node-port-types';
 
 function resolvePortLabel(
   nodeRegistry: NodeRegistry,
@@ -84,7 +67,7 @@ export function deriveCustomNodePortsFromProxies(opts: {
     const portKey = `p:${internalProxyId}`;
 
     const portTypeRaw = getString(config.portType, 'any');
-    const type = validPortTypes.has(portTypeRaw) ? (portTypeRaw as PortType) : 'any';
+    const type = normalizeCustomNodePortType(portTypeRaw);
     const pinned = getBoolean(config.pinned, false);
 
     const pos = proxy.position ?? { x: 0, y: 0 };

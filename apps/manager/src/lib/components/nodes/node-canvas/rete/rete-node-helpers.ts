@@ -54,6 +54,33 @@ export function formatNumber(value: number, maxDecimals = 3): string {
   return fixed.replace(/\.?0+$/, '');
 }
 
+function formatAnyValue(value: unknown): string {
+  const MAX_LEN = 160;
+  const clamp = (raw: string): string => {
+    const singleLine = raw.replace(/\s+/g, ' ').trim();
+    if (!singleLine) return '--';
+    return singleLine.length <= MAX_LEN ? singleLine : `${singleLine.slice(0, MAX_LEN - 1)}…`;
+  };
+
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return Number.isFinite(value) ? clamp(formatNumber(value)) : '--';
+  if (typeof value === 'string') return clamp(value);
+
+  try {
+    const json = JSON.stringify(value);
+    if (typeof json === 'string') return clamp(json);
+  } catch {
+    // Fall back to String(value) below.
+  }
+
+  try {
+    return clamp(String(value));
+  } catch {
+    return '--';
+  }
+}
+
 export function formatPortValue(portType: string, value: unknown): string | null {
   if (portType === 'number' || portType === 'fuzzy') {
     if (typeof value !== 'number') return '--';
@@ -62,6 +89,7 @@ export function formatPortValue(portType: string, value: unknown): string | null
 
   if (value === null || value === undefined) return null;
 
+  if (portType === 'any') return formatAnyValue(value);
   if (portType === 'boolean')
     return typeof value === 'boolean' ? (value ? 'true' : 'false') : null;
   if (portType === 'string' || portType === 'asset') return typeof value === 'string' ? value : null;
@@ -76,6 +104,10 @@ export function formatPortValue(portType: string, value: unknown): string | null
   }
 
   return null;
+}
+
+export function hasPortValueText(value: string | null | undefined): value is string {
+  return value !== null && value !== undefined;
 }
 
 type PortValueText = {
@@ -137,6 +169,7 @@ export function inferBypassPorts(def: NodeDefinitionLike | null | undefined): By
 const validPortTypes = new Set([
   'number',
   'boolean',
+  'pulse',
   'string',
   'asset',
   'color',

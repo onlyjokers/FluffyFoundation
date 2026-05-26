@@ -69,6 +69,7 @@ type ReteConnectionDropPipeOptions = {
 const validPortTypes = new Set([
   'number',
   'boolean',
+  'pulse',
   'string',
   'asset',
   'color',

@@ -5,7 +5,7 @@
     ClassicScheme,
     SvelteArea2D,
   } from 'rete-svelte-plugin/svelte/presets/classic/types';
-  import type { AnyRecord, GroupFrameProxyPort } from './rete-node-helpers';
+  import { hasPortValueText, type AnyRecord, type GroupFrameProxyPort } from './rete-node-helpers';
 
   type PortEntry = [string, AnyRecord];
   type ConnectionInfo = { sourceNodeId: string; sourcePortId: string };
@@ -41,6 +41,7 @@
   function shouldReserveOutputValue(portType: string): boolean {
     return portType === 'number' || portType === 'fuzzy';
   }
+
 </script>
 
 {#if !isCollapsed}
@@ -83,7 +84,7 @@
             <div class="port-body">
               <div class="port-title-line">
                 <div class="port-label" data-testid="input-title">{input.label || ''}</div>
-                {#if portValueText.inputs[String(key)] && (inputConnections[String(key)]?.length ?? 0) > 0}
+                {#if hasPortValueText(portValueText.inputs[String(key)]) && (inputConnections[String(key)]?.length ?? 0) > 0}
                   <div class="port-value input" data-testid={'input-value-' + key}>
                     {portValueText.inputs[String(key)]}
                   </div>
@@ -125,10 +126,10 @@
             <div class="port-body">
               <div class="output-line">
                 <div class="port-label" data-testid="output-title">{output.label || ''}</div>
-                {#if (outputValueText || shouldReserveOutputValue(outputPortType)) && !any(output).control}
+                {#if (hasPortValueText(outputValueText) || shouldReserveOutputValue(outputPortType)) && !any(output).control}
                   <div
                     class="port-value output"
-                    class:placeholder={!outputValueText}
+                    class:placeholder={!hasPortValueText(outputValueText)}
                     data-testid={'output-value-' + key}
                   >
                     {outputValueText ?? '--'}

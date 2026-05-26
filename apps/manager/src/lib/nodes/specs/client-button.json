@@ -9,7 +9,7 @@
   ],
   "outputs": [
     { "id": "out", "label": "Out", "type": "ui" },
-    { "id": "pressed", "label": "Pressed", "type": "boolean" }
+    { "id": "pressed", "label": "Pressed", "type": "pulse" }
   ],
   "configSchema": []
 }

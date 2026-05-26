@@ -10,6 +10,49 @@ import { createManagerImageAssetNodeDeps } from './image-asset-node-deps';
 
 export type CoreRuntimeImpl = Pick<NodeDefinition, 'process' | 'onSink'>;
 
+type PulseToBooleanState = {
+  value: boolean;
+  lastPulse: boolean;
+};
+
+const pulseToBooleanState = new Map<string, PulseToBooleanState>();
+
+const coerceBooleanInput = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value >= 0.5;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'on') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === 'off') return false;
+  }
+  return Boolean(value);
+};
+
+const pulseToBooleanFallback: CoreRuntimeImpl = {
+  process: (inputs, config, context) => {
+    const modeRaw = String(config.mode ?? 'toggle');
+    const mode =
+      modeRaw === 'latchTrue' || modeRaw === 'latchFalse' || modeRaw === 'momentary'
+        ? modeRaw
+        : 'toggle';
+    const pulsed = coerceBooleanInput(inputs.pulse);
+    if (mode === 'momentary') return { value: pulsed };
+
+    const state = pulseToBooleanState.get(context.nodeId) ?? {
+      value: coerceBooleanInput(config.defaultValue),
+      lastPulse: false,
+    };
+    if (pulsed && !state.lastPulse) {
+      if (mode === 'toggle') state.value = !state.value;
+      if (mode === 'latchTrue') state.value = true;
+      if (mode === 'latchFalse') state.value = false;
+    }
+    state.lastPulse = pulsed;
+    pulseToBooleanState.set(context.nodeId, state);
+    return { value: state.value };
+  },
+};
+
 export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
   const registry = new CoreNodeRegistry();
 
@@ -58,6 +101,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
 
   const pick = (type: string): CoreRuntimeImpl => {
     const def = registry.get(type);
+    if (!def && type === 'pulse-to-boolean') return pulseToBooleanFallback;
     if (!def) {
       throw new Error(`[node-specs] missing core runtime impl: ${type}`);
     }
@@ -84,6 +128,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     ['logic-if', pick('logic-if')],
     ['logic-for', pick('logic-for')],
     ['logic-sleep', pick('logic-sleep')],
+    ['pulse-to-boolean', pick('pulse-to-boolean')],
     ['number-script', pick('number-script')],
     ['client-count', pick('client-count')],
     ['array-filter', pick('array-filter')],

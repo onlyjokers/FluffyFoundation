@@ -270,8 +270,14 @@ test('SemanticGraphAuthorityService accepts display text processor nodes for ser
 test('SemanticGraphAuthorityService exposes and accepts split boolean variable nodes', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();
-  assert.ok(snapshot.definitions.some((definition) => definition.type === 'set-boolean-variable'));
-  assert.ok(snapshot.definitions.some((definition) => definition.type === 'get-boolean-variable'));
+  const setDefinition = snapshot.definitions.find((definition) => definition.type === 'set-boolean-variable');
+  const getDefinition = snapshot.definitions.find((definition) => definition.type === 'get-boolean-variable');
+  assert.ok(setDefinition);
+  assert.ok(getDefinition);
+  assert.equal(setDefinition.ports.inputs.some((port) => port.id === 'name' && port.type === 'string'), true);
+  assert.equal(setDefinition.ports.inputs.some((port) => port.id === 'defaultValue' && port.type === 'boolean'), true);
+  assert.equal(setDefinition.ports.inputs.some((port) => port.id === 'mode' && port.type === 'string'), true);
+  assert.equal(getDefinition.ports.inputs.some((port) => port.id === 'name' && port.type === 'string'), true);
 
   const setNode = {
     id: 'set-flag',
@@ -286,6 +292,14 @@ test('SemanticGraphAuthorityService exposes and accepts split boolean variable n
     type: 'get-boolean-variable',
     position: { x: 220, y: 20 },
     config: { name: 'flag', defaultValue: false },
+    inputValues: {},
+    outputValues: {},
+  };
+  const nameNode = {
+    id: 'name-source',
+    type: 'string',
+    position: { x: 10, y: 200 },
+    config: { value: 'flag' },
     inputValues: {},
     outputValues: {},
   };
@@ -304,10 +318,78 @@ test('SemanticGraphAuthorityService exposes and accepts split boolean variable n
     }).ok,
     true
   );
-  assert.deepEqual(
-    service.getSnapshot().nodes.map((node) => node.type),
-    ['set-boolean-variable', 'get-boolean-variable']
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: { type: 'node.add', node: nameNode },
+    }).ok,
+    true
   );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.connect',
+        connection: {
+          id: 'name-to-set',
+          sourceNodeId: 'name-source',
+          sourcePortId: 'value',
+          targetNodeId: 'set-flag',
+          targetPortId: 'name',
+        },
+      },
+    }).ok,
+    true
+  );
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.connect',
+        connection: {
+          id: 'name-to-get',
+          sourceNodeId: 'name-source',
+          sourcePortId: 'value',
+          targetNodeId: 'get-flag',
+          targetPortId: 'name',
+        },
+      },
+    }).ok,
+    true
+  );
+  assert.deepEqual(
+    [...service.getSnapshot().nodes.map((node) => node.type)].sort(),
+    ['get-boolean-variable', 'set-boolean-variable', 'string']
+  );
+});
+
+test('SemanticGraphAuthorityService exposes and accepts pulse conversion nodes', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  const clientButton = snapshot.definitions.find((definition) => definition.type === 'client-button');
+  const pulseToBoolean = snapshot.definitions.find((definition) => definition.type === 'pulse-to-boolean');
+
+  assert.equal(clientButton?.ports.outputs.some((port) => port.id === 'pressed' && port.type === 'pulse'), true);
+  assert.equal(pulseToBoolean?.ports.inputs.some((port) => port.id === 'pulse' && port.type === 'pulse'), true);
+  assert.equal(pulseToBoolean?.ports.outputs.some((port) => port.id === 'value' && port.type === 'boolean'), true);
+
+  const added = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.add',
+      node: {
+        id: 'pulse-toggle',
+        type: 'pulse-to-boolean',
+        position: { x: 10, y: 20 },
+        config: { mode: 'toggle', defaultValue: false },
+        inputValues: {},
+        outputValues: {},
+      },
+    },
+  });
+
+  assert.equal(added.ok, true);
+  assert.equal(service.getSnapshot().nodes[0]?.type, 'pulse-to-boolean');
 });
 
 test('SemanticGraphAuthorityService exposes display routing metadata for display-compatible processors', () => {

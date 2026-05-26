@@ -15,6 +15,7 @@ const normalizePortType = (value: unknown): PortType => {
   const allowed: PortType[] = [
     'number',
     'boolean',
+    'pulse',
     'string',
     'asset',
     'color',

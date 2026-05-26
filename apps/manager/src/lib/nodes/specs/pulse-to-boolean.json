@@ -1,0 +1,24 @@
+{
+  "__purpose": "Manager node spec for converting pulse events into boolean state.",
+  "type": "pulse-to-boolean",
+  "label": "Pulse to Boolean",
+  "category": "Logic",
+  "inputs": [{ "id": "pulse", "label": "Pulse", "type": "pulse", "defaultValue": false }],
+  "outputs": [{ "id": "value", "label": "Value", "type": "boolean" }],
+  "configSchema": [
+    {
+      "key": "mode",
+      "label": "Mode",
+      "type": "select",
+      "defaultValue": "toggle",
+      "options": [
+        { "value": "toggle", "label": "Toggle" },
+        { "value": "latchTrue", "label": "Latch True" },
+        { "value": "latchFalse", "label": "Latch False" },
+        { "value": "momentary", "label": "Momentary" }
+      ]
+    },
+    { "key": "defaultValue", "label": "Default", "type": "boolean", "defaultValue": false }
+  ],
+  "runtime": { "kind": "pulse-to-boolean" }
+}
