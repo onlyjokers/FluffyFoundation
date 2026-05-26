@@ -728,7 +728,7 @@ class NodeEngineClass {
 
   /**
    * Export a deployable patch subgraph rooted at one or more output sink nodes
-   * (`audio-out` / `scene-out` / `effect-out` / `ui-out`) for client-side execution.
+   * (`audio-out` / `scene-out` / `ui-out`) for client-side execution.
    * Throws if the patch contains node types outside the client whitelist.
    */
   exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): {

@@ -1,16 +1,81 @@
 /**
  * Purpose: Processor node definitions that emit control commands.
  */
+import type { ConvolutionPreset, VisualEffect } from '@shugu/protocol';
 import type { NodeDefinition } from '../../types.js';
 import type { NodeCommand } from '../types.js';
-import { coerceBooleanOr } from '../utils.js';
-import { getRecordString } from './node-definition-utils.js';
+import { clampInt, clampNumber, coerceBooleanOr, coerceNumber } from '../utils.js';
+import {
+  asRecord,
+  getArrayValue,
+  getRecordString,
+  getStringValue,
+} from './node-definition-utils.js';
 
 const FLASHLIGHT_MODE_OPTIONS = [
   { value: 'off', label: 'Off' },
   { value: 'on', label: 'On' },
   { value: 'blink', label: 'Blink' },
 ] as const satisfies { value: string; label: string }[];
+
+const coerceConvolutionPreset = (value: unknown): ConvolutionPreset | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const raw = value.trim();
+  if (!raw) return undefined;
+  const allowed: readonly ConvolutionPreset[] = [
+    'blur',
+    'gaussianBlur',
+    'sharpen',
+    'edge',
+    'emboss',
+    'sobelX',
+    'sobelY',
+    'custom',
+  ];
+  return allowed.includes(raw as ConvolutionPreset) ? (raw as ConvolutionPreset) : undefined;
+};
+
+const coerceEffectChain = (raw: unknown): VisualEffect[] => {
+  if (!Array.isArray(raw)) return [];
+  const effects: VisualEffect[] = [];
+
+  for (const item of raw) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const type = getStringValue(record.type) ?? '';
+    if (type === 'ascii') {
+      const cellSize = clampInt(record.cellSize, 11, 1, 100);
+      effects.push({ type: 'ascii', cellSize });
+      continue;
+    }
+    if (type === 'convolution') {
+      const preset = coerceConvolutionPreset(record.preset);
+      const kernelRaw = getArrayValue(record.kernel);
+      const kernel = kernelRaw
+        ? kernelRaw
+            .map((n: unknown) => (typeof n === 'number' ? n : Number(n)))
+            .filter((n: number) => Number.isFinite(n))
+            .slice(0, 9)
+        : undefined;
+      const mix = clampNumber(coerceNumber(record.mix, 1), 0, 1);
+      const bias = clampNumber(coerceNumber(record.bias, 0), -1, 1);
+      const normalize = coerceBooleanOr(record.normalize, true);
+      const scale = clampNumber(coerceNumber(record.scale, 0.5), 0.1, 1);
+
+      effects.push({
+        type: 'convolution',
+        ...(preset ? { preset } : {}),
+        ...(kernel && kernel.length === 9 ? { kernel } : {}),
+        mix,
+        bias,
+        normalize,
+        scale,
+      });
+    }
+  }
+
+  return effects;
+};
 
 type PushImageUploadRuntimeState = {
   active: boolean;
@@ -310,6 +375,45 @@ export function createPlayVideoProcessorNode(): NodeDefinition {
         },
       };
     },
+  };
+}
+
+export function createVisualEffectsProcessorNode(): NodeDefinition {
+  return {
+    type: 'proc-visual-effects',
+    label: 'Effect Player',
+    category: 'Player',
+    inputs: [{ id: 'in', label: 'In', type: 'effect' }],
+    outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Connect cmd output to Display to route visual effects to selected Display endpoints.',
+          repairHint:
+            'If effects are not visible on Display, confirm the Display node is connected and routed to the correct targets.',
+        },
+        {
+          target: 'client-executor',
+          rule: 'Connect cmd output to Client Executor to route visual effects to audience clients.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a visualEffects command from an effect chain input.',
+      repairHints: ['An empty effect input emits visualEffects with an empty effects array.'],
+    },
+    configSchema: [],
+    process: (inputs) => ({
+      cmd: {
+        action: 'visualEffects',
+        payload: { effects: coerceEffectChain(inputs.in) },
+      },
+    }),
   };
 }
 

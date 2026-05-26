@@ -134,6 +134,26 @@ test('getLocalOnlyPatchRoutingError allows local-only patch roots routed to disp
   assert.equal(getLocalOnlyPatchRoutingError({ graph, getNodeDefinition: def }), null);
 });
 
+test('getConnectionValidationError accepts dynamic effect player routing to display', () => {
+  const graph: GraphState = {
+    nodes: [
+      node('effect', 'effect-source'),
+      node('root', 'proc-visual-effects'),
+      node('display', 'display-object'),
+    ],
+    connections: [connection('c1', 'effect', 'out', 'root', 'in')],
+  };
+
+  assert.equal(
+    getConnectionValidationError({
+      graph,
+      connection: connection('c2', 'root', 'cmd', 'display', 'in'),
+      getNodeDefinition: def,
+    }),
+    null
+  );
+});
+
 registry.set('number', nodeDef({
   type: 'number',
   label: 'Number',
@@ -220,6 +240,24 @@ registry.set('proc-play-video', nodeDef({
   label: 'Video Player',
   category: 'Scene',
   inputs: [port('in', 'video')],
+  outputs: [port('cmd', 'command')],
+  process: () => ({}),
+}));
+
+registry.set('effect-source', nodeDef({
+  type: 'effect-source',
+  label: 'Effect',
+  category: 'Scene',
+  inputs: [],
+  outputs: [port('out', 'effect')],
+  process: () => ({}),
+}));
+
+registry.set('proc-visual-effects', nodeDef({
+  type: 'proc-visual-effects',
+  label: 'Effect Player',
+  category: 'Scene',
+  inputs: [port('in', 'effect')],
   outputs: [port('cmd', 'command')],
   process: () => ({}),
 }));

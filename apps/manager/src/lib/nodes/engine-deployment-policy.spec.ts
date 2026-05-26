@@ -34,3 +34,10 @@ test('patch deployment policy rejects legacy Static Video Player', () => {
     /Patch contains non-deployable node type: video-out/
   );
 });
+
+test('patch deployment policy rejects legacy Effect Layer Player', () => {
+  assert.throws(
+    () => assertPatchDeployableNodeType('effect-out'),
+    /Patch contains non-deployable node type: effect-out/
+  );
+});

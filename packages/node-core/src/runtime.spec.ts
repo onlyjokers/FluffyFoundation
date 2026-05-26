@@ -473,7 +473,7 @@ test('display-compatible command processors advertise display routing metadata',
     ['proc-screen-color', 'screenColor'],
     ['proc-display-text', 'showText'],
     ['play-media', 'playMedia'],
-    ['effect-out', 'visualEffects'],
+    ['proc-visual-effects', 'visualEffects'],
     ['scene-out', 'visualScenes'],
   ] as const;
 
@@ -566,6 +566,48 @@ test('video player emits dynamic video commands and stop commands', () => {
       { nodeId: 'video-player-1', time: 16, deltaTime: 16 }
     ),
     { cmd: { action: 'stopMedia', payload: {} } }
+  );
+});
+
+test('effect player replaces the legacy effect-out sink root', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  assert.equal(registry.get('effect-out'), undefined);
+
+  const definition = registry.get('proc-visual-effects');
+  assert.ok(definition, 'proc-visual-effects is registered');
+  assert.equal(definition.label, 'Effect Player');
+  assert.deepEqual(definition.inputs.map((port) => [port.id, port.type]), [['in', 'effect']]);
+  assert.deepEqual(definition.outputs.map((port) => [port.id, port.type]), [['cmd', 'command']]);
+
+  assert.deepEqual(
+    definition.process(
+      { in: [{ type: 'ascii', cellSize: 9 }] },
+      {},
+      { nodeId: 'effect-player-1', time: 0, deltaTime: 0 }
+    ),
+    {
+      cmd: {
+        action: 'visualEffects',
+        payload: { effects: [{ type: 'ascii', cellSize: 9 }] },
+      },
+    }
+  );
+
+  assert.deepEqual(
+    definition.process({ in: [] }, {}, { nodeId: 'effect-player-1', time: 16, deltaTime: 16 }),
+    {
+      cmd: {
+        action: 'visualEffects',
+        payload: { effects: [] },
+      },
+    }
   );
 });
 

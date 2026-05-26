@@ -6,7 +6,6 @@ import test from 'node:test';
 
 import {
   NodeRegistry,
-  NodeRuntime,
   registerDefaultNodeDefinitions,
 } from '../dist-node-core/index.js';
 
@@ -46,46 +45,31 @@ test('effect-ascii appends {type:\"ascii\"} to the chain', () => {
   assert.deepEqual(out, { out: [{ type: 'ascii', cellSize: 13 }] });
 });
 
-test('effect-out sends visualEffects and clears on stop', () => {
-  const sent = [];
-  const registry = buildRegistry({
-    onCommand: (cmd) => sent.push(cmd),
-  });
+test('effect player emits visualEffects command and clear command', () => {
+  const registry = buildRegistry();
+  const effect = registry.get('effect-ascii');
+  const player = registry.get('proc-visual-effects');
+  assert.ok(effect, 'expected effect-ascii definition');
+  assert.ok(player, 'expected proc-visual-effects definition');
 
-  const runtime = new NodeRuntime(registry);
-  runtime.loadGraph({
-    nodes: [
-      nodeInstance('fx', 'effect-ascii', { inputValues: { resolution: 9 } }),
-      nodeInstance('out', 'effect-out'),
-    ],
-    connections: [
-      {
-        id: 'c1',
-        sourceNodeId: 'fx',
-        sourcePortId: 'out',
-        targetNodeId: 'out',
-        targetPortId: 'in',
+  const chain = effect.process({ in: [], resolution: 9 }, {}, { nodeId: 'fx', time: 0, deltaTime: 0 });
+  assert.deepEqual(
+    player.process({ in: chain.out }, {}, { nodeId: 'out', time: 0, deltaTime: 0 }),
+    {
+      cmd: {
+        action: 'visualEffects',
+        payload: { effects: [{ type: 'ascii', cellSize: 9 }] },
       },
-    ],
-  });
-  runtime.compileNow();
+    }
+  );
 
-  // Start so sinks run (NodeRuntime skips sinks when timer is null).
-  runtime.start();
-  // Manually tick once (private in TS, accessible in JS).
-  runtime.tick();
-
-  assert.ok(sent.length >= 1);
-  assert.deepEqual(sent[0], {
-    action: 'visualEffects',
-    payload: { effects: [{ type: 'ascii', cellSize: 9 }] },
-  });
-
-  runtime.stop();
-
-  assert.ok(sent.length >= 2, 'expected a clear command on stop');
-  assert.deepEqual(sent[sent.length - 1], {
-    action: 'visualEffects',
-    payload: { effects: [] },
-  });
+  assert.deepEqual(
+    player.process({ in: [] }, {}, { nodeId: 'out', time: 16, deltaTime: 16 }),
+    {
+      cmd: {
+        action: 'visualEffects',
+        payload: { effects: [] },
+      },
+    }
+  );
 });

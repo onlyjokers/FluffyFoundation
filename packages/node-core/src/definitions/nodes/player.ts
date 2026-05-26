@@ -2,13 +2,10 @@
  * Purpose: Player/output nodes and command helpers.
  */
 import type {
-  ConvolutionPreset,
   FctTrackAudioSource,
   FctTrackBlend,
   FctTrackPalette,
   FctTrackVariant,
-  VisualEffect,
-  VisualEffectsPayload,
   VisualSceneLayerItem,
   VisualScenesPayload,
 } from '@shugu/protocol';
@@ -16,29 +13,11 @@ import { FCT_TRACK_PALETTES, FCT_TRACK_VARIANTS } from '@shugu/protocol';
 
 import type { NodeDefinition } from '../../types.js';
 import type { ClientObjectDeps, ClientUiLayerItem, NodeCommand } from '../types.js';
-import { clampInt, clampNumber, coerceBooleanOr, coerceNumber } from '../utils.js';
+import { clampNumber, coerceNumber } from '../utils.js';
 import {
   asRecord,
-  getArrayValue,
   getStringValue,
 } from './node-definition-utils.js';
-
-const coerceConvolutionPreset = (value: unknown): ConvolutionPreset | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const raw = value.trim();
-  if (!raw) return undefined;
-  const allowed: readonly ConvolutionPreset[] = [
-    'blur',
-    'gaussianBlur',
-    'sharpen',
-    'edge',
-    'emboss',
-    'sobelX',
-    'sobelY',
-    'custom',
-  ];
-  return allowed.includes(raw as ConvolutionPreset) ? (raw as ConvolutionPreset) : undefined;
-};
 
 const coerceFctVariant = (value: unknown): FctTrackVariant =>
   typeof value === 'string' && FCT_TRACK_VARIANTS.includes(value as FctTrackVariant)
@@ -107,92 +86,6 @@ export function createAudioOutNode(): NodeDefinition {
     },
     configSchema: [],
     process: () => ({}),
-  };
-}
-
-export function createEffectOutNode(deps: ClientObjectDeps): NodeDefinition {
-  const clear = () => {
-    const payload: VisualEffectsPayload = { effects: [] };
-    deps.executeCommand({ action: 'visualEffects', payload });
-  };
-
-  const coerceEffectChain = (raw: unknown): VisualEffect[] => {
-    if (!Array.isArray(raw)) return [];
-    const effects: VisualEffect[] = [];
-
-    for (const item of raw) {
-      const record = asRecord(item);
-      if (!record) continue;
-      const type = getStringValue(record.type) ?? '';
-      if (type === 'ascii') {
-        const cellSize = clampInt(record.cellSize, 11, 1, 100);
-        effects.push({ type: 'ascii', cellSize });
-        continue;
-      }
-      if (type === 'convolution') {
-        const preset = coerceConvolutionPreset(record.preset);
-        const kernelRaw = getArrayValue(record.kernel);
-        const kernel = kernelRaw
-          ? kernelRaw
-              .map((n: unknown) => (typeof n === 'number' ? n : Number(n)))
-              .filter((n: number) => Number.isFinite(n))
-              .slice(0, 9)
-          : undefined;
-        const mix = clampNumber(coerceNumber(record.mix, 1), 0, 1);
-        const bias = clampNumber(coerceNumber(record.bias, 0), -1, 1);
-        const normalize = coerceBooleanOr(record.normalize, true);
-        const scale = clampNumber(coerceNumber(record.scale, 0.5), 0.1, 1);
-
-        effects.push({
-          type: 'convolution',
-          ...(preset ? { preset } : {}),
-          ...(kernel && kernel.length === 9 ? { kernel } : {}),
-          mix,
-          bias,
-          normalize,
-          scale,
-        });
-      }
-    }
-
-    return effects;
-  };
-
-  return {
-    type: 'effect-out',
-    label: 'Effect Layer Player',
-    category: 'Player',
-    inputs: [{ id: 'in', label: 'In', type: 'effect', kind: 'sink' }],
-    outputs: [
-      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
-      // This output is not part of the exported client patch subgraph.
-      { id: 'cmd', label: 'Deploy', type: 'command' },
-    ],
-    metadata: {
-      version: '1.0.0',
-      platformTargets: ['manager', 'client', 'display'],
-      sideEffectClass: 'remote-control',
-      permissions: ['control:send'],
-      compatibility: [
-        {
-          target: 'display-object',
-          rule: 'Route this player through Display when effects should apply to selected Display endpoints.',
-        },
-      ],
-      examples: [],
-      risks: [],
-      description: 'Deploy visual effect layers to selected runtime endpoints.',
-    },
-    configSchema: [],
-    process: () => ({}),
-    onSink: (inputs) => {
-      const effects = coerceEffectChain(inputs.in);
-      const payload: VisualEffectsPayload = { effects };
-      deps.executeCommand({ action: 'visualEffects', payload });
-    },
-    onDisable: () => {
-      clear();
-    },
   };
 }
 

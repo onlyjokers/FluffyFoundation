@@ -278,7 +278,7 @@ Node 系统不是“一个编辑器功能”，而是 ShuGu 的创作与执行�
 |---|---|---|---|---|---|
 | Image Player | `proc-show-image` | 把图像输入转换成 show/hide image 命令。 | in:image | cmd:command | - |
 | Video Player | `proc-play-video` | 把视频输入转换成 play/stop media 命令。 | in:video | cmd:command | - |
-| Effect Layer Player | `effect-out` | 把视觉效果链输出为特效控制命令。 | in:effect(sink) | cmd:command | - |
+| Effect Player | `proc-visual-effects` | 把视觉效果链转换为可路由的特效控制命令。 | in:effect | cmd:command | - |
 | Scene Layer Player | `scene-out` | 把场景链输出为视觉场景控制命令。 | in:scene(sink) | cmd:command | - |
 | Static Audio Player | `audio-out` | 把音频链作为播放器命令输出。 | in:audio(sink) | cmd:command | - |
 

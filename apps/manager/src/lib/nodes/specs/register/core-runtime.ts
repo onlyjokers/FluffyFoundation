@@ -174,5 +174,6 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     ['tone-granular', pick('tone-granular')],
     ['play-media', pick('play-media')],
     ['proc-play-video', pick('proc-play-video')],
+    ['proc-visual-effects', pick('proc-visual-effects')],
   ]);
 })();

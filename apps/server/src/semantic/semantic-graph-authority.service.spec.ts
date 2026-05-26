@@ -498,6 +498,7 @@ test('SemanticGraphAuthorityService exposes and accepts visible manager utility 
     'midi-fuzzy',
     'midi-map',
     'midi-select-map',
+    'proc-visual-effects',
   ];
 
   for (const type of utilityTypes) {
@@ -535,7 +536,7 @@ test('SemanticGraphAuthorityService exposes display routing metadata for display
     'proc-show-image',
     'play-media',
     'scene-out',
-    'effect-out',
+    'proc-visual-effects',
   ];
 
   for (const type of displayTypes) {

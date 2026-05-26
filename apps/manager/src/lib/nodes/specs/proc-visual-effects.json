@@ -1,0 +1,28 @@
+{
+  "__purpose": "Player node: convert an incoming effect chain into visualEffects commands for routing to Client/Display sinks.",
+  "type": "proc-visual-effects",
+  "label": "Effect Player",
+  "category": "Player",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client", "display"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send"],
+    "description": "Converts an effect chain into visualEffects commands for Client or Display sinks.",
+    "compatibility": [
+      {
+        "target": "display-object",
+        "rule": "Connect cmd output to Display to route visual effects to selected Display endpoints.",
+        "repairHint": "If effects are not visible on Display, confirm the Display node is connected and routed to the correct targets."
+      },
+      {
+        "target": "client-executor",
+        "rule": "Connect cmd output to Client Executor to route visual effects to audience clients."
+      }
+    ],
+    "repairHints": ["An empty effect input emits visualEffects with an empty effects array."]
+  },
+  "inputs": [{ "id": "in", "label": "In", "type": "effect" }],
+  "outputs": [{ "id": "cmd", "label": "Cmd", "type": "command" }],
+  "runtime": { "kind": "proc-visual-effects" }
+}

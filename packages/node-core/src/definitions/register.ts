@@ -86,7 +86,6 @@ import {
 } from './nodes/image.js';
 import {
   createAudioOutNode,
-  createEffectOutNode,
   createPlayMediaNode,
   createSceneOutNode,
   createUiOutNode,
@@ -99,6 +98,7 @@ import {
   createScreenColorProcessorNode,
   createShowImageProcessorNode,
   createSynthUpdateProcessorNode,
+  createVisualEffectsProcessorNode,
 } from './nodes/processors.js';
 import {
   createSceneBackCameraNode,
@@ -206,12 +206,12 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createPlayMediaNode,
     // Patch root sinks (Max/MSP style).
     createAudioOutNode,
-    () => createEffectOutNode(deps),
     () => createSceneOutNode(deps),
     () => createUiOutNode(deps),
     createFlashlightProcessorNode,
     createShowImageProcessorNode,
     createPlayVideoProcessorNode,
+    createVisualEffectsProcessorNode,
     createDisplayTextProcessorNode,
     createPushImageUploadNode,
     createScreenColorProcessorNode,
