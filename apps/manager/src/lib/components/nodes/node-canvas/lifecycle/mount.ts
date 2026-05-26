@@ -115,7 +115,6 @@ export async function mountNodeCanvasResources(
     flushPendingCollapsedNodes: opts.flushPendingCollapsedNodes,
     minimapController: opts.minimapController,
     requestFramesUpdate: opts.requestFramesUpdate,
-    getNodeGroupIds: opts.getNodeGroupIds,
     loopController: opts.loopController,
     midiController: opts.midiController,
     applyStoppedHighlights: opts.applyStoppedHighlights,

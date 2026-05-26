@@ -278,34 +278,6 @@ test('socketFor preserves pulse sockets instead of falling back to any', () => {
   assert.equal(builder.socketFor('pulse').name, 'pulse');
 });
 
-test('getPortDefForSocket resolves group-proxy sockets from configured portType', () => {
-  const nodeRegistry = new NodeRegistry();
-  registerDefaultNodeDefinitions(nodeRegistry);
-  const builder = createReteBuilder({
-    nodeRegistry,
-    nodeEngine: {
-      getNode: () => ({
-        id: 'proxy-1',
-        type: 'group-proxy',
-        config: { direction: 'input', portType: 'pulse' },
-        inputValues: {},
-        outputValues: {},
-        position: { x: 0, y: 0 },
-      }),
-      updateNodeInputValue: () => {},
-      updateNodeConfig: () => {},
-    },
-    sockets: createReteSockets(),
-    getNumberParamOptions: () => [],
-    sendNodeOverride: () => {},
-  });
-
-  assert.equal(
-    builder.getPortDefForSocket({ nodeId: 'proxy-1', side: 'output', key: 'out' })?.type,
-    'pulse'
-  );
-});
-
 test('builder treats projection sockets as editor-only and not connectable semantic ports', () => {
   const builder = createReteBuilder({
     nodeRegistry: new NodeRegistry(),

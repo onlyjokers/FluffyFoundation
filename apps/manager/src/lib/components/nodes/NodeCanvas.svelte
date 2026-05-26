@@ -907,13 +907,6 @@
       flushPendingCollapsedNodes,
       minimapController,
       requestFramesUpdate,
-      getNodeGroupIds: (nodeId: string) =>
-        [...get(groupFrames), ...getCustomNodeProjectionFrames()]
-          .filter((frame) =>
-            (frame.group?.nodeIds ?? []).some((id) => String(id) === String(nodeId))
-          )
-          .map((frame) => String(frame.group?.id ?? ''))
-          .filter(Boolean),
       loopController,
       midiController,
       applyStoppedHighlights,

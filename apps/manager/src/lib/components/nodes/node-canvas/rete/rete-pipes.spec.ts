@@ -9,7 +9,6 @@ function createHarness(
   options: {
     translateProjectionConnection?: (connection: unknown) => unknown;
     updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
-    getNodeGroupIds?: (nodeId: string) => string[];
   } = {}
 ) {
   const editorPipes: Array<(ctx: Record<string, unknown>) => Promise<Record<string, unknown>>> = [];
@@ -66,7 +65,6 @@ function createHarness(
     handleDroppedNodesAfterDrag: () => undefined,
     requestFramesUpdate: () => undefined,
     requestMinimapUpdate: () => undefined,
-    getNodeGroupIds: options.getNodeGroupIds,
     isProjectionId: (id) => String(id).startsWith('view:'),
     translateProjectionConnection: (connection) => {
       projectionConnectionTranslations.push(connection);
@@ -258,35 +256,4 @@ test('bindRetePipes ignores malformed editor removal events instead of issuing s
 
   assert.deepEqual(disconnected, []);
   assert.deepEqual(removedNodes, []);
-});
-
-test('bindRetePipes keeps cross-group transient Rete connections out of semantic commands', async () => {
-  const { editorPipes, connections, disconnected, connectionMap } = createHarness({
-    getNodeGroupIds: (nodeId) => (nodeId === 'inside' ? ['group-1'] : []),
-  });
-
-  await editorPipes[0]?.({
-    type: 'connectioncreated',
-    data: {
-      id: 'rete-transient',
-      source: 'outside',
-      sourceOutput: 'out',
-      target: 'inside',
-      targetInput: 'in',
-    },
-  });
-  await editorPipes[0]?.({
-    type: 'connectionremoved',
-    data: {
-      id: 'rete-transient',
-      source: 'outside',
-      sourceOutput: 'out',
-      target: 'inside',
-      targetInput: 'in',
-    },
-  });
-
-  assert.deepEqual(connections, []);
-  assert.deepEqual(disconnected, []);
-  assert.equal(connectionMap.has('rete-transient'), false);
 });

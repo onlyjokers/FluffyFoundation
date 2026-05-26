@@ -33,7 +33,6 @@ type RetePipeOptions = {
   handleDroppedNodesAfterDrag: (nodeIds: string[]) => void;
   requestFramesUpdate: () => void;
   requestMinimapUpdate: () => void;
-  getNodeGroupIds?: (nodeId: string) => string[];
   isProjectionId?: (id: string) => boolean;
   translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
   updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
@@ -54,7 +53,6 @@ export function bindRetePipes(opts: RetePipeOptions) {
     handleDroppedNodesAfterDrag,
     requestFramesUpdate,
     requestMinimapUpdate,
-    getNodeGroupIds = () => [],
     isProjectionId = () => false,
     translateProjectionConnection = () => null,
     updateProjectionNodePosition = () => false,
@@ -63,23 +61,11 @@ export function bindRetePipes(opts: RetePipeOptions) {
   let multiDragLeaderId: string | null = null;
   let multiDragLeaderLastPos: { x: number; y: number } | null = null;
   let multiDragTranslateDepth = 0;
-  const transientGroupBoundaryConnectionIds = new Set<string>();
   const isMultiDragTranslate = () => multiDragTranslateDepth > 0;
   const validId = (value: unknown): string => {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
     return trimmed ? trimmed : '';
-  };
-  const crossesGroupBoundary = (sourceNodeId: string, targetNodeId: string): boolean => {
-    const sourceGroups = new Set((getNodeGroupIds(sourceNodeId) ?? []).map(String).filter(Boolean));
-    const targetGroups = new Set((getNodeGroupIds(targetNodeId) ?? []).map(String).filter(Boolean));
-    for (const groupId of sourceGroups) {
-      if (!targetGroups.has(groupId)) return true;
-    }
-    for (const groupId of targetGroups) {
-      if (!sourceGroups.has(groupId)) return true;
-    }
-    return false;
   };
 
   editor.addPipe(async (ctx) => {
@@ -101,10 +87,6 @@ export function bindRetePipes(opts: RetePipeOptions) {
         targetNodeId: target,
         targetPortId: targetInput,
       };
-      if (crossesGroupBoundary(source, target)) {
-        transientGroupBoundaryConnectionIds.add(id);
-        return ctx;
-      }
       const isProjectionConnection =
         isProjectionId(source) || isProjectionId(target) || isProjectionId(id);
       const canonicalConn = isProjectionConnection
@@ -149,10 +131,6 @@ export function bindRetePipes(opts: RetePipeOptions) {
       const targetId = validId(raw.target);
       const portId = validId(raw.targetInput);
       if (!id) return ctx;
-      if (transientGroupBoundaryConnectionIds.delete(id)) {
-        connectionMap.delete(id);
-        return ctx;
-      }
       if (isProjectionId(id) || isProjectionId(targetId)) {
         connectionMap.delete(id);
         return ctx;

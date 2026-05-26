@@ -22,66 +22,13 @@ type ReteConnectionDropPipeOptions = {
         group?: { minimized?: boolean };
       };
     } | null;
-    findGroupFrameForNodeAt?: (
-      nodeId: string,
-      clientX: number,
-      clientY: number
-    ) => {
-      groupId: string;
-      side: 'input' | 'output';
-      frame: {
-        left?: number;
-        top?: number;
-        width?: number;
-        height?: number;
-        group?: { minimized?: boolean };
-      };
-    } | null;
-    findGroupFrameForNode?: (
-      nodeId: string,
-      side: 'input' | 'output'
-    ) => {
-      groupId: string;
-      side: 'input' | 'output';
-      frame: {
-        left?: number;
-        top?: number;
-        width?: number;
-        height?: number;
-        group?: { minimized?: boolean };
-      };
-    } | null;
-    findGroupFrameAt?: (
-      clientX: number,
-      clientY: number,
-      side: 'input' | 'output'
-    ) => {
-      groupId: string;
-      side: 'input' | 'output';
-      frame: {
-        left?: number;
-        top?: number;
-        width?: number;
-        height?: number;
-        group?: { minimized?: boolean };
-      };
-    } | null;
     findGroupGateTargetAt: (clientX: number, clientY: number) => { groupId: string } | null;
   };
   groupController: {
     nodeGroups: Readable<Array<{ id?: string; nodeIds?: unknown[] }>>;
   };
   nodeEngine: {
-    exportGraph: () => {
-      nodes?: Array<{ id?: string; type?: string; config?: unknown }>;
-      connections?: Array<{
-        id?: string;
-        sourceNodeId?: string;
-        sourcePortId?: string;
-        targetNodeId?: string;
-        targetPortId?: string;
-      }>;
-    };
+    exportGraph: () => { nodes?: Array<{ id?: string; type?: string; config?: unknown }> };
     getNode: (nodeId: string) => { type?: string; config?: unknown } | null | undefined;
     lastError: { set: (message: string) => void };
   };
@@ -98,7 +45,6 @@ type ReteConnectionDropPipeOptions = {
   };
   canvasCommands: {
     connect: (connection: EngineConnection) => unknown;
-    disconnect?: (connectionId: string) => unknown;
   };
   groupPortNodesController: {
     scheduleAlign: () => void;
@@ -171,7 +117,13 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
     const initialSide = getString(initial.side, '');
     const initialKey = getString(initial.key, '');
     const socketProvided = Object.keys(socket).length > 0;
-    if (!initialNodeId || !initialKey || (initialSide !== 'input' && initialSide !== 'output')) {
+    if (
+      !initialNodeId ||
+      !initialKey ||
+      (initialSide !== 'input' && initialSide !== 'output') ||
+      socketProvided ||
+      created
+    ) {
       return ctx;
     }
 
@@ -181,36 +133,6 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
       key: initialKey,
     };
     const pointer = options.getLastPointerClient();
-    const droppedSocket: SocketData | null = socketProvided
-      ? {
-          nodeId: getString(socket.nodeId, ''),
-          side: getString(socket.side, '') as 'input' | 'output',
-          key: getString(socket.key, ''),
-        }
-      : null;
-    const hasValidDroppedSocket =
-      droppedSocket &&
-      droppedSocket.nodeId &&
-      droppedSocket.key &&
-      (droppedSocket.side === 'input' || droppedSocket.side === 'output');
-    const directCreatedConnection =
-      created && hasValidDroppedSocket
-        ? initialSocket.side === 'output' && droppedSocket.side === 'input'
-          ? {
-              sourceNodeId: initialSocket.nodeId,
-              sourcePortId: initialSocket.key,
-              targetNodeId: droppedSocket.nodeId,
-              targetPortId: droppedSocket.key,
-            }
-          : initialSocket.side === 'input' && droppedSocket.side === 'output'
-            ? {
-                sourceNodeId: droppedSocket.nodeId,
-                sourcePortId: droppedSocket.key,
-                targetNodeId: initialSocket.nodeId,
-                targetPortId: initialSocket.key,
-              }
-            : null
-        : null;
 
     const gateTarget = options.groupEdgeFinder.findGroupGateTargetAt(pointer.x, pointer.y);
     if (gateTarget && initialSocket.side === 'output') {
@@ -242,28 +164,7 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
       }
     }
 
-    const explicitEdgeTarget =
-      !created && !socketProvided
-        ? options.groupEdgeFinder.findGroupProxyEdgeTargetAt(pointer.x, pointer.y)
-        : null;
-    const groupExitTarget =
-      initialSocket.side === 'output'
-        ? (options.groupEdgeFinder.findGroupFrameForNodeAt?.(
-            initialSocket.nodeId,
-            pointer.x,
-            pointer.y
-          ) ?? null)
-        : null;
-    const groupEntryTarget =
-      directCreatedConnection && hasValidDroppedSocket && droppedSocket?.side === 'input'
-        ? (options.groupEdgeFinder.findGroupFrameForNode?.(droppedSocket.nodeId, 'input') ?? null)
-        : null;
-    const groupInteriorInputTarget =
-      !created && !socketProvided && initialSocket.side === 'output'
-        ? (options.groupEdgeFinder.findGroupFrameAt?.(pointer.x, pointer.y, 'input') ?? null)
-        : null;
-    const edgeTarget =
-      explicitEdgeTarget ?? groupExitTarget ?? groupEntryTarget ?? groupInteriorInputTarget;
+    const edgeTarget = options.groupEdgeFinder.findGroupProxyEdgeTargetAt(pointer.x, pointer.y);
     if (edgeTarget) {
       const frame = edgeTarget.frame;
       const groupId = edgeTarget.groupId;
@@ -300,11 +201,7 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
           ? left - proxyWidth / 2 - proxyEdgeNudge
           : right - proxyWidth / 2 + proxyEdgeNudge;
       const y = clampY(graphPos.y);
-      const proxyPortSource =
-        edgeTarget.side === 'input' && hasValidDroppedSocket && droppedSocket
-          ? droppedSocket
-          : initialSocket;
-      const portType = resolveTypeForSocket(proxyPortSource);
+      const portType = resolveTypeForSocket(initialSocket);
 
       const proxyId = options.addNode(
         'group-proxy',
@@ -312,20 +209,6 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
         { groupId, direction, portType, pinned: true }
       );
       if (proxyId) {
-        if (directCreatedConnection) {
-          const graph = options.nodeEngine.exportGraph();
-          const directConnectionId =
-            (graph.connections ?? []).find(
-              (conn) =>
-                String(conn.sourceNodeId) === directCreatedConnection.sourceNodeId &&
-                String(conn.sourcePortId) === directCreatedConnection.sourcePortId &&
-                String(conn.targetNodeId) === directCreatedConnection.targetNodeId &&
-                String(conn.targetPortId) === directCreatedConnection.targetPortId
-            )?.id ?? '';
-          if (directConnectionId) {
-            options.canvasCommands.disconnect?.(String(directConnectionId));
-          }
-        }
         const conn: EngineConnection =
           initialSocket.side === 'output'
             ? {
@@ -354,54 +237,10 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
         ) {
           options.canvasCommands.connect(connectionToCreate);
         }
-        const desiredSide = initialSocket.side === 'output' ? 'input' : 'output';
-        const snapped =
-          hasValidDroppedSocket && droppedSocket?.side === desiredSide
-            ? droppedSocket
-            : options.findPortRowSocketAt(pointer.x, pointer.y, desiredSide);
-        if (
-          snapped &&
-          initialSocket.side === 'output' &&
-          snapped.side === 'input' &&
-          String(snapped.nodeId) !== String(proxyId) &&
-          !isProjectionId(proxyId) &&
-          !isProjectionId(snapped.nodeId)
-        ) {
-          options.canvasCommands.connect({
-            id: connectionId(),
-            sourceNodeId: proxyId,
-            sourcePortId: 'out',
-            targetNodeId: snapped.nodeId,
-            targetPortId: snapped.key,
-          });
-        }
-        if (
-          snapped &&
-          initialSocket.side === 'input' &&
-          snapped.side === 'output' &&
-          String(snapped.nodeId) !== String(proxyId) &&
-          !isProjectionId(proxyId) &&
-          !isProjectionId(snapped.nodeId)
-        ) {
-          options.canvasCommands.connect({
-            id: connectionId(),
-            sourceNodeId: snapped.nodeId,
-            sourcePortId: snapped.key,
-            targetNodeId: proxyId,
-            targetPortId: 'in',
-          });
-        }
         options.groupPortNodesController.scheduleAlign();
         options.groupPortNodesController.scheduleNormalizeProxies();
         return ctx;
       }
-      options.groupPortNodesController.scheduleAlign();
-      options.groupPortNodesController.scheduleNormalizeProxies();
-      return ctx;
-    }
-
-    if (created || socketProvided) {
-      return ctx;
     }
 
     const desiredSide = initialSocket.side === 'output' ? 'input' : 'output';

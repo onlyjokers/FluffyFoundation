@@ -14,98 +14,6 @@ export type GroupGateTarget = { groupId: string };
 export type GroupEdgeTarget = { groupId: string; side: 'input' | 'output'; frame: GroupFrame };
 
 export const createGroupEdgeFinder = (opts: GroupEdgeFinderOptions) => {
-  const findBestFrameForNode = (
-    nodeId: string,
-    predicate?: (frame: GroupFrame) => boolean
-  ): { frame: GroupFrame; groupId: string; depth: number; area: number } | null => {
-    const memberNodeId = String(nodeId ?? '');
-    if (!memberNodeId) return null;
-    const frames = opts.getFrames() ?? [];
-    if (frames.length === 0) return null;
-
-    let best: { frame: GroupFrame; groupId: string; depth: number; area: number } | null = null;
-    for (const frame of frames) {
-      const groupId = String(frame?.group?.id ?? '');
-      if (!groupId) continue;
-      const nodeIds = new Set((frame.group?.nodeIds ?? []).map((id) => String(id)));
-      if (!nodeIds.has(memberNodeId)) continue;
-      if (predicate && !predicate(frame)) continue;
-
-      const width = Number(frame.width ?? 0);
-      const height = Number(frame.height ?? 0);
-      const depth = Number(frame.depth ?? 0) || 0;
-      const area = Math.max(0, width) * Math.max(0, height);
-      if (!best || depth > best.depth || (depth === best.depth && area < best.area)) {
-        best = { frame, groupId, depth, area };
-      }
-    }
-
-    return best;
-  };
-
-  const containsGraphPosition = (frame: GroupFrame, pos: { x: number; y: number }): boolean => {
-    const left = Number(frame.left ?? 0);
-    const top = Number(frame.top ?? 0);
-    const width = Number(frame.width ?? 0);
-    const height = Number(frame.height ?? 0);
-    const right = left + width;
-    const bottom = top + height;
-    return (
-      Number.isFinite(left) &&
-      Number.isFinite(top) &&
-      Number.isFinite(right) &&
-      Number.isFinite(bottom) &&
-      pos.x >= left &&
-      pos.x <= right &&
-      pos.y >= top &&
-      pos.y <= bottom
-    );
-  };
-
-  const findGroupFrameForNodeAt = (
-    nodeId: string,
-    clientX: number,
-    clientY: number
-  ): GroupEdgeTarget | null => {
-    const pos = opts.clientToGraph(clientX, clientY);
-    const best = findBestFrameForNode(nodeId, (frame) => !containsGraphPosition(frame, pos));
-
-    return best ? { groupId: best.groupId, side: 'output', frame: best.frame } : null;
-  };
-
-  const findGroupFrameForNode = (
-    nodeId: string,
-    side: 'input' | 'output'
-  ): GroupEdgeTarget | null => {
-    const best = findBestFrameForNode(nodeId);
-    return best ? { groupId: best.groupId, side, frame: best.frame } : null;
-  };
-
-  const findGroupFrameAt = (
-    clientX: number,
-    clientY: number,
-    side: 'input' | 'output'
-  ): GroupEdgeTarget | null => {
-    const pos = opts.clientToGraph(clientX, clientY);
-    const frames = opts.getFrames() ?? [];
-    let best: { frame: GroupFrame; groupId: string; depth: number; area: number } | null = null;
-    for (const frame of frames) {
-      const groupId = String(frame?.group?.id ?? '');
-      if (!groupId) continue;
-      if (!containsGraphPosition(frame, pos)) continue;
-
-      const width = Number(frame.width ?? 0);
-      const height = Number(frame.height ?? 0);
-      const depth = Number(frame.depth ?? 0) || 0;
-      const area = Math.max(0, width) * Math.max(0, height);
-      if (!best || depth > best.depth || (depth === best.depth && area < best.area)) {
-        best = { frame, groupId, depth, area };
-      }
-    }
-
-    return best ? { groupId: best.groupId, side, frame: best.frame } : null;
-  };
-
   const findGroupGateTargetAt = (clientX: number, clientY: number): GroupGateTarget | null => {
     const frames = opts.getFrames() ?? [];
     if (frames.length === 0) return null;
@@ -219,11 +127,5 @@ export const createGroupEdgeFinder = (opts: GroupEdgeFinderOptions) => {
     return best ? { groupId: best.groupId, side: best.side, frame: best.frame } : null;
   };
 
-  return {
-    findGroupGateTargetAt,
-    findGroupProxyEdgeTargetAt,
-    findGroupFrameForNodeAt,
-    findGroupFrameForNode,
-    findGroupFrameAt,
-  };
+  return { findGroupGateTargetAt, findGroupProxyEdgeTargetAt };
 };
