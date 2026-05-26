@@ -210,8 +210,22 @@ export class MessageRouterService {
       }
     }
 
-    // Forward allowed sensor data to managers
     const managerSocketIds = this.clientRegistry.getAllManagerSocketIds();
+    if (sensorType === 'custom') {
+      const payload = message.payload as Record<string, unknown> | undefined;
+      if (payload?.kind === 'client-ui-interaction') {
+        console.info('[Gateway] ClientUI interaction', {
+          clientId: message.clientId,
+          nodeId: typeof payload.nodeId === 'string' ? payload.nodeId : undefined,
+          uiKind: typeof payload.uiKind === 'string' ? payload.uiKind : undefined,
+          pressed: Boolean(payload.pressed),
+          firstInputed: Boolean(payload.firstInputed),
+          managerCount: managerSocketIds.length,
+        });
+      }
+    }
+
+    // Forward allowed sensor data to managers
     this.emitToSockets(managerSocketIds, message);
   }
 

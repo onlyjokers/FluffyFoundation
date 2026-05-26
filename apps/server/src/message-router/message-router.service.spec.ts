@@ -90,23 +90,45 @@ test('MessageRouterService drops volatile telemetry under backpressure and recor
 
 test('MessageRouterService forwards ClientUI interaction sensor events to managers', () => {
   const { router, reliableMessages } = createRouter(1, 1);
+  const info = console.info;
+  const logs: unknown[][] = [];
+  console.info = (...args: unknown[]) => {
+    logs.push(args);
+  };
 
-  router.routeMessage(
-    createSensorDataMessage('client-1', 'custom', {
-      kind: 'client-ui-interaction',
-      nodeId: 'client-button-1',
-      uiKind: 'button',
-      pressed: true,
-      inputContent: '',
-      firstInputed: false,
-    }),
-    'socket-client-1'
-  );
+  try {
+    router.routeMessage(
+      createSensorDataMessage('client-1', 'custom', {
+        kind: 'client-ui-interaction',
+        nodeId: 'client-button-1',
+        uiKind: 'button',
+        pressed: true,
+        inputContent: '',
+        firstInputed: false,
+      }),
+      'socket-client-1'
+    );
+  } finally {
+    console.info = info;
+  }
 
   assert.equal(reliableMessages.length, 1);
   assert.equal(reliableMessages[0]?.type, 'data');
   assert.equal((reliableMessages[0] as { payload?: { kind?: string } }).payload?.kind, 'client-ui-interaction');
   assert.equal(router.getDeliveryMetrics().rejected, 0);
+  assert.deepEqual(logs, [
+    [
+      '[Gateway] ClientUI interaction',
+      {
+        clientId: 'client-1',
+        nodeId: 'client-button-1',
+        uiKind: 'button',
+        pressed: true,
+        firstInputed: false,
+        managerCount: 1,
+      },
+    ],
+  ]);
 });
 
 test('MessageRouterService routes semantic graph commands only to manager sockets', () => {

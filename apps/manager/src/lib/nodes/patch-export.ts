@@ -108,11 +108,24 @@ export function exportGraphForPatch(
   })();
 
   const incomingByTarget = new Map<string, { sourceNodeId: string; targetPortId: string }[]>();
+  const outgoingBySource = new Map<
+    string,
+    { targetNodeId: string; targetPortId: string; sourcePortId: string }[]
+  >();
   for (const c of connections) {
     const targetNodeId = String(c.targetNodeId);
     const list = incomingByTarget.get(targetNodeId) ?? [];
     list.push({ sourceNodeId: String(c.sourceNodeId), targetPortId: String(c.targetPortId) });
     incomingByTarget.set(targetNodeId, list);
+
+    const sourceNodeId = String(c.sourceNodeId);
+    const outgoing = outgoingBySource.get(sourceNodeId) ?? [];
+    outgoing.push({
+      targetNodeId,
+      targetPortId: String(c.targetPortId),
+      sourcePortId: String(c.sourcePortId),
+    });
+    outgoingBySource.set(sourceNodeId, outgoing);
   }
   for (const list of incomingByTarget.values()) {
     list.sort(
@@ -153,6 +166,103 @@ export function exportGraphForPatch(
   };
   for (const rootId of rootNodeIds) visit(rootId);
 
+  const shouldStartFromClientUiOutput = (sourceNodeId: string, sourcePortId: string): boolean => {
+    const node = byId.get(sourceNodeId);
+    const type = String(node?.type ?? '');
+    if (type === 'client-button') return sourcePortId === 'pressed';
+    if (type === 'client-input-box') return sourcePortId === 'inputContent' || sourcePortId === 'firstInputed';
+    return false;
+  };
+  const shouldTraverseDownstreamTarget = (targetNodeId: string, targetPortId: string): boolean => {
+    if (!registry) return true;
+    const node = byId.get(targetNodeId);
+    if (!node) return true;
+    if (String(node.type) === 'show-anything') return false;
+    const def = registry.get(String(node.type));
+    const port = def?.inputs?.find((p) => String(p.id) === String(targetPortId));
+    const type = String(port?.type ?? 'any');
+    if (type === 'client' || type === 'command') return false;
+    return true;
+  };
+  const visitDownstream = (nodeId: string) => {
+    const id = String(nodeId);
+    if (!id || !keep.has(id)) return;
+    const outgoing = outgoingBySource.get(id) ?? [];
+    for (const edge of outgoing) {
+      if (!shouldTraverseDownstreamTarget(String(edge.targetNodeId), String(edge.targetPortId))) continue;
+      const before = keep.size;
+      visit(String(edge.targetNodeId));
+      if (keep.size !== before || keep.has(String(edge.targetNodeId))) {
+        visitDownstream(String(edge.targetNodeId));
+      }
+    }
+  };
+  const addClientUiOutputDependencies = () => {
+    let changed = false;
+    const exported = Array.from(keep);
+    for (const id of exported) {
+      const outgoing = outgoingBySource.get(id) ?? [];
+      for (const edge of outgoing) {
+        if (!shouldStartFromClientUiOutput(id, edge.sourcePortId)) continue;
+        if (!shouldTraverseDownstreamTarget(String(edge.targetNodeId), String(edge.targetPortId))) continue;
+        const before = keep.size;
+        visit(String(edge.targetNodeId));
+        visitDownstream(String(edge.targetNodeId));
+        if (keep.size !== before) changed = true;
+      }
+    }
+    return changed;
+  };
+
+  while (addClientUiOutputDependencies()) {
+    // Adding a downstream UI interaction consumer can expose another exported ClientUI node.
+  }
+
+  const normalizeVariableName = (value: unknown, fallback = 'variable'): string => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    return raw || fallback;
+  };
+  const readNodeInputConnectionValue = (nodeId: string, portId: string): unknown => {
+    const conn = connections.find(
+      (candidate) =>
+        String(candidate.targetNodeId) === nodeId && String(candidate.targetPortId) === portId
+    );
+    if (!conn) return undefined;
+    const source = byId.get(String(conn.sourceNodeId));
+    const sourcePortId = String(conn.sourcePortId);
+    const outputValue = source?.outputValues?.[sourcePortId];
+    if (outputValue !== undefined) return outputValue;
+    if (sourcePortId === 'value' && String(source?.type ?? '') === 'string') {
+      return source?.inputValues?.value ?? source?.config?.value;
+    }
+    return undefined;
+  };
+  const booleanVariableNameFor = (node: GraphState['nodes'][number]): string =>
+    normalizeVariableName(readNodeInputConnectionValue(String(node.id), 'name') ?? node.config?.name);
+  const addBooleanVariableSettersForExportedGetters = () => {
+    let changed = false;
+    const exportedGetterNames = new Set<string>();
+    for (const id of keep) {
+      const node = byId.get(id);
+      if (!node || String(node.type) !== 'get-boolean-variable') continue;
+      exportedGetterNames.add(booleanVariableNameFor(node));
+    }
+    if (exportedGetterNames.size === 0) return false;
+
+    for (const node of nodes) {
+      if (String(node.type) !== 'set-boolean-variable') continue;
+      if (!exportedGetterNames.has(booleanVariableNameFor(node))) continue;
+      const before = keep.size;
+      visit(String(node.id));
+      if (keep.size !== before) changed = true;
+    }
+    return changed;
+  };
+
+  while (addBooleanVariableSettersForExportedGetters()) {
+    // Adding a setter can add another exported getter through connected config inputs.
+  }
+
   const keptNodes = nodes
     .filter((n) => keep.has(String(n.id)))
     .map((n) => ({ ...n, config: { ...(n.config ?? {}) }, inputValues: { ...(n.inputValues ?? {}) } }));
@@ -160,6 +270,24 @@ export function exportGraphForPatch(
   let keptConnections = connections.filter(
     (c) => keptNodeIds.has(String(c.sourceNodeId)) && keptNodeIds.has(String(c.targetNodeId))
   );
+
+  const keptNodeById = new Map(keptNodes.map((node) => [String(node.id), node]));
+  for (const node of keptNodes) {
+    if (String(node.type) !== 'set-boolean-variable') continue;
+    const setInput = keptConnections.find(
+      (connection) =>
+        String(connection.targetNodeId) === String(node.id) &&
+        String(connection.targetPortId) === 'set'
+    );
+    if (!setInput) continue;
+    const source = keptNodeById.get(String(setInput.sourceNodeId));
+    if (!source || String(source.type) !== 'pulse-to-boolean') continue;
+    if (String(source.config?.mode ?? 'toggle') !== 'toggle') continue;
+    if (String(node.config?.mode ?? 'latchTrue') !== 'latchTrue') continue;
+    // Toggle mode outputs a persistent boolean state. Deployed variable setters must follow
+    // that state, otherwise the default pulse-latch setter ignores the false half of the toggle.
+    node.config = { ...(node.config ?? {}), mode: 'followInput' };
+  }
 
   const snapshotOnlyNodeIds = new Set(
     keptNodes
@@ -332,8 +460,24 @@ export function exportGraphForPatch(
     }
   }
 
-  effectiveNodes.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-  keptConnections.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const nodeExecutionPriority = (nodeId: string): number => {
+    const type = String(byId.get(String(nodeId))?.type ?? '');
+    if (type === 'set-boolean-variable') return 0;
+    if (type === 'get-boolean-variable') return 1;
+    return 2;
+  };
+
+  effectiveNodes.sort(
+    (a, b) =>
+      nodeExecutionPriority(String(a.id)) - nodeExecutionPriority(String(b.id)) ||
+      String(a.id).localeCompare(String(b.id))
+  );
+  keptConnections.sort(
+    (a, b) =>
+      String(a.sourceNodeId).localeCompare(String(b.sourceNodeId)) ||
+      nodeExecutionPriority(String(a.targetNodeId)) - nodeExecutionPriority(String(b.targetNodeId)) ||
+      String(a.id).localeCompare(String(b.id))
+  );
 
   const assetRefs: string[] = [];
   const seen = new Set<string>();
