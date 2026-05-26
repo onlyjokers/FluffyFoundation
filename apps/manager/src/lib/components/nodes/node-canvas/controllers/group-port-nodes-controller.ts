@@ -18,8 +18,6 @@ import {
 } from '../utils/group-port-utils';
 import { GROUP_FRAME_NODE_TYPE, syncGroupFrameNodes } from './group-frame-node-sync';
 import { alignGroupProxyNodes } from './group-proxy-alignment';
-import type { Connection } from '$lib/nodes/types';
-import type { GroupFrame } from './group-types';
 const isGroupDecorationNodeType = (type: string) => isGroupPortNodeType(type) || type === GROUP_FRAME_NODE_TYPE;
 
 export type GroupPortNodesController = {
@@ -320,16 +318,6 @@ export function createGroupPortNodesController(
         return bestId;
       };
 
-      const arraysEqual = (a: readonly string[], b: readonly string[]) =>
-        a.length === b.length && a.every((v, i) => v === b[i]);
-
-      const commonPrefixLen = (a: readonly string[], b: readonly string[]) => {
-        const len = Math.min(a.length, b.length);
-        let i = 0;
-        for (; i < len; i += 1) if (a[i] !== b[i]) break;
-        return i;
-      };
-
       const validPortTypes = new Set([
         'number',
         'boolean',
@@ -366,14 +354,6 @@ export function createGroupPortNodesController(
         return validPortTypes.has(t) ? t : 'any';
       };
 
-      const wireTypeFor = (conn: AnyRecord): string => {
-        const sourceType = portTypeFor(String(conn.sourceNodeId), 'output', String(conn.sourcePortId));
-        const targetType = portTypeFor(String(conn.targetNodeId), 'input', String(conn.targetPortId));
-        if (sourceType !== 'any') return sourceType;
-        if (targetType !== 'any') return targetType;
-        return 'any';
-      };
-
       const portContext = (nodeId: string, side: 'input' | 'output', portId: string): string[] => {
         const node = nodeById.get(String(nodeId));
         if (!node) return [];
@@ -404,81 +384,6 @@ export function createGroupPortNodesController(
         return primary ? getPath(primary) : [];
       };
 
-      const frameByGroupId = new Map<string, GroupFrame>();
-      for (const frame of get(groupController.groupFrames) ?? []) {
-        const gid = String(frame?.group?.id ?? '');
-        if (gid) frameByGroupId.set(gid, frame);
-      }
-
-      const PROXY_NODE_WIDTH = 48;
-      const PROXY_NODE_HALF_HEIGHT = 10;
-      const PROXY_SOCKET_OUTSET = 10;
-      const PROXY_EDGE_NUDGE = 12;
-
-      const proxyPosition = (groupId: string, direction: 'input' | 'output', hintNodeId?: string | null) => {
-        const frame = frameByGroupId.get(String(groupId)) ?? null;
-        const baseX = frame ? frame.left : 120 + getNodeCount() * 10;
-        const baseY = frame ? frame.top + frame.height / 2 : 120 + getNodeCount() * 6;
-        const x = frame
-          ? (() => {
-              const isMinimized = Boolean(frame.group?.minimized);
-              if (isMinimized) {
-                const right = frame.left + frame.width;
-                return direction === 'input'
-                  ? frame.left - PROXY_SOCKET_OUTSET
-                  : right + PROXY_SOCKET_OUTSET - PROXY_NODE_WIDTH;
-              }
-              return direction === 'input'
-                ? frame.left - PROXY_NODE_WIDTH / 2 - PROXY_EDGE_NUDGE
-                : frame.left + frame.width - PROXY_NODE_WIDTH / 2 + PROXY_EDGE_NUDGE;
-            })()
-          : direction === 'input'
-            ? baseX - 60
-            : baseX + 60;
-
-        let y = baseY;
-        if (hintNodeId) {
-          const b = adapter.getNodeBounds(String(hintNodeId));
-          if (b) y = (b.top + b.bottom) / 2;
-          else {
-            const pos = adapter.getNodePosition(String(hintNodeId));
-            if (pos) y = pos.y;
-          }
-        }
-
-        if (frame) {
-          const isMinimized = Boolean(frame.group?.minimized);
-          const minimizedHeaderHeight = 44;
-          const minimizedRowHeight = 28;
-          const minimizedPad = 6;
-
-          const topPad = isMinimized
-            ? minimizedHeaderHeight + minimizedPad + minimizedRowHeight / 2
-            : (() => {
-                const h = Number(frame.height ?? 0);
-                if (!Number.isFinite(h) || h <= 0) return 56;
-                return Math.max(24, Math.min(56, Math.max(0, h / 2 - 18)));
-              })();
-          const bottomPad = isMinimized ? minimizedPad + minimizedRowHeight / 2 : topPad;
-          const top = frame.top + topPad;
-          const bottom = frame.top + frame.height - bottomPad;
-          if (bottom > top) y = Math.max(top, Math.min(bottom, y));
-        }
-
-        return { x, y: y - PROXY_NODE_HALF_HEIGHT };
-      };
-
-      const addProxyNode = (groupId: string, direction: 'input' | 'output', portType: string) => {
-        const pos = proxyPosition(groupId, direction);
-        return addNode(GROUP_PROXY_NODE_TYPE, pos, { groupId, direction, portType, pinned: false });
-      };
-
-      const toRewrite: {
-        conn: Connection;
-        sourceCtx: string[];
-        targetCtx: string[];
-        wireType: string;
-      }[] = [];
       for (const conn of connections) {
         const connId = String(conn.id ?? '');
         if (!connId) continue;
@@ -498,61 +403,6 @@ export function createGroupPortNodesController(
             nodeEngine.lastError?.set?.('Group gate input cannot originate from inside the group.');
             continue;
           }
-        }
-
-        if (arraysEqual(sourceCtx, targetCtx)) continue;
-
-        toRewrite.push({
-          conn,
-          sourceCtx,
-          targetCtx,
-          wireType: wireTypeFor(conn),
-        });
-      }
-
-      if (toRewrite.length > 0) {
-        for (const entry of toRewrite) {
-          const conn = entry.conn;
-          const connId = String(conn.id ?? '');
-          if (!connId) continue;
-          const sourceNodeId = String(conn.sourceNodeId ?? '');
-          const sourcePortId = String(conn.sourcePortId ?? '');
-          const targetNodeId = String(conn.targetNodeId ?? '');
-          const targetPortId = String(conn.targetPortId ?? '');
-          if (!sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) continue;
-
-          nodeEngine.removeConnection(connId);
-
-          const sourceCtx = entry.sourceCtx;
-          const targetCtx = entry.targetCtx;
-          const wireType: string = validPortTypes.has(entry.wireType) ? entry.wireType : 'any';
-
-          const prefixLen = commonPrefixLen(sourceCtx, targetCtx);
-
-          let currentNodeId = sourceNodeId;
-          let currentPortId = sourcePortId;
-
-          for (let i = sourceCtx.length - 1; i >= prefixLen; i -= 1) {
-            const gid = String(sourceCtx[i] ?? '');
-            if (!gid) continue;
-            const proxyId = addProxyNode(gid, 'output', wireType);
-            if (!proxyId) continue;
-            addConnection(currentNodeId, currentPortId, proxyId, 'in');
-            currentNodeId = proxyId;
-            currentPortId = 'out';
-          }
-
-          for (let i = prefixLen; i < targetCtx.length; i += 1) {
-            const gid = String(targetCtx[i] ?? '');
-            if (!gid) continue;
-            const proxyId = addProxyNode(gid, 'input', wireType);
-            if (!proxyId) continue;
-            addConnection(currentNodeId, currentPortId, proxyId, 'in');
-            currentNodeId = proxyId;
-            currentPortId = 'out';
-          }
-
-          addConnection(currentNodeId, currentPortId, targetNodeId, targetPortId);
         }
       }
 

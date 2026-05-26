@@ -153,6 +153,12 @@
     box-shadow: 0 18px 52px rgba(99, 102, 241, 0.18) !important;
   }
 
+  :global(.node-canvas-container .node.group-port.selected) {
+    outline: 2px solid rgba(99, 102, 241, 0.95) !important;
+    outline-offset: 4px !important;
+    border-radius: 999px !important;
+  }
+
   :global(.node-canvas-container .node.local-loop) {
     border-color: rgba(236, 72, 153, 0.85) !important;
     box-shadow: 0 18px 56px rgba(236, 72, 153, 0.16) !important;

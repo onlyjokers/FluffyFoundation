@@ -93,10 +93,15 @@ export function createNodeDragInteractions(options: NodeDragInteractionsOptions)
       Boolean(target?.closest?.('.port-control')) ||
       Boolean(target?.closest?.('.cmd-aggregator-controls'));
 
-    if (!nodeEl || !nodeId || isOnSocket || isEditing) return false;
+    if (!nodeEl || !nodeId || isEditing) return false;
 
     const node = options.getNodeEngine().getNode(nodeId);
     if (node?.type !== 'group-proxy') return false;
+
+    options.getGroupController().clearSelection();
+    options.setSelectedNode(nodeId);
+
+    if (isOnSocket) return false;
 
     const groupId = getString(asRecord(node.config).groupId, '');
     if (!groupId) return true;
