@@ -33,7 +33,7 @@ test('exportGraphForPatch snapshots URL Session output into URL to QR input', ()
     nodes: [
       node('session', 'url-session', { url: 'https://fluffyfoundation.xyz/client?sessionId=abc' }),
       node('qr', 'url-to-qr-generator'),
-      node('out', 'image-out'),
+      node('out', 'proc-show-image'),
     ],
     connections: [
       { id: 'url', sourceNodeId: 'session', sourcePortId: 'url', targetNodeId: 'qr', targetPortId: 'url' },
@@ -43,7 +43,7 @@ test('exportGraphForPatch snapshots URL Session output into URL to QR input', ()
 
   const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: registry });
 
-  assert.deepEqual(result.graph.nodes.map((item) => item.type).sort(), ['image-out', 'url-to-qr-generator']);
+  assert.deepEqual(result.graph.nodes.map((item) => item.type).sort(), ['proc-show-image', 'url-to-qr-generator']);
   assert.equal(
     result.graph.nodes.find((item) => item.id === 'qr')?.inputValues.url,
     'https://fluffyfoundation.xyz/client?sessionId=abc'

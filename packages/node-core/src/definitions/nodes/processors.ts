@@ -171,7 +171,7 @@ export function createShowImageProcessorNode(): NodeDefinition {
 
   return {
     type: 'proc-show-image',
-    label: 'Dynamic Image Player',
+    label: 'Image Player',
     category: 'Player',
     inputs: [{ id: 'in', label: 'In', type: 'image' }],
     outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
@@ -211,6 +211,104 @@ export function createShowImageProcessorNode(): NodeDefinition {
     },
     onDisable: (_inputs, _config, context) => {
       showImageCommandCache.delete(context.nodeId);
+    },
+  };
+}
+
+const parseHashParams = (url: string): URLSearchParams => {
+  const index = url.indexOf('#');
+  const paramsRaw = index >= 0 ? url.slice(index + 1) : '';
+  return new URLSearchParams(paramsRaw);
+};
+
+const parseBooleanParam = (params: URLSearchParams, key: string): boolean | null => {
+  const value = params.get(key);
+  if (value === null) return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'true' || normalized === '1' || normalized === 'on') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'off') return false;
+  const numeric = Number(normalized);
+  if (Number.isFinite(numeric)) return numeric >= 0.5;
+  return null;
+};
+
+const parseNumberParam = (params: URLSearchParams, keys: string[]): number | null => {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value === null) continue;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) continue;
+    return Math.max(0, Math.min(100, numeric));
+  }
+  return null;
+};
+
+export function createPlayVideoProcessorNode(): NodeDefinition {
+  const resolveUrl = (raw: unknown): string => {
+    if (typeof raw === 'string') return raw.trim();
+    if (Array.isArray(raw)) {
+      for (let i = raw.length - 1; i >= 0; i--) {
+        const item = raw[i];
+        if (typeof item === 'string' && item.trim()) return item.trim();
+        const url = getRecordString(item, 'url');
+        if (url) return url;
+      }
+      return '';
+    }
+    const url = getRecordString(raw, 'url');
+    if (url) return url;
+    return '';
+  };
+
+  return {
+    type: 'proc-play-video',
+    label: 'Video Player',
+    category: 'Player',
+    inputs: [{ id: 'in', label: 'In', type: 'video' }],
+    outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager', 'client', 'display'],
+      sideEffectClass: 'remote-control',
+      permissions: ['control:send'],
+      compatibility: [
+        {
+          target: 'display-object',
+          rule: 'Connect cmd output to Display to route video playback commands to selected Display endpoints.',
+          repairHint: 'If the video is not visible on Display, confirm the Display node is connected and routed to the correct targets.',
+        },
+        {
+          target: 'client-executor',
+          rule: 'Connect cmd output to Client Executor to route video playback commands to audience clients.',
+        },
+      ],
+      examples: [],
+      risks: [],
+      description: 'Build a video playback command from a video input.',
+      repairHints: ['An empty video input emits stopMedia.'],
+    },
+    configSchema: [],
+    process: (inputs) => {
+      const url = resolveUrl(inputs.in);
+      if (!url) return { cmd: { action: 'stopMedia', payload: {} } };
+
+      const params = parseHashParams(url);
+      const loop = parseBooleanParam(params, 'loop');
+      const muted = parseBooleanParam(params, 'muted');
+      const volume = parseNumberParam(params, ['vol', 'volume']);
+      return {
+        cmd: {
+          action: 'playMedia',
+          payload: {
+            url,
+            mediaType: 'video',
+            ...(loop === null ? {} : { loop }),
+            ...(muted === null ? {} : { muted }),
+            ...(volume === null ? {} : { volume }),
+          },
+        },
+      };
     },
   };
 }

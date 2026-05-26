@@ -129,10 +129,6 @@ export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
           target: 'proc-show-image',
           rule: 'Outputs an Asset Service image reference such as asset:<id>.',
         },
-        {
-          target: 'image-out',
-          rule: 'Can feed the Static Image Player through the normal image chain.',
-        },
       ],
       examples: [
         {

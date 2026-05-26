@@ -1,7 +1,7 @@
 {
   "__purpose": "Player node: convert an incoming image url (including data URLs) into showImage/hideImage commands for routing to Client/Display sinks.",
   "type": "proc-show-image",
-  "label": "Dynamic Image Player",
+  "label": "Image Player",
   "category": "Player",
   "metadata": {
     "version": "1.0.0",

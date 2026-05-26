@@ -276,11 +276,11 @@ Node 系统不是“一个编辑器功能”，而是 ShuGu 的创作与执行�
 
 | 节点 | Type | 体验作用 | 输入 | 输出 | 关键配置 |
 |---|---|---|---|---|---|
-| Dynamic Image Player | `proc-show-image` | 把图像输入转换成 show/hide image 命令。 | in:image | cmd:command | - |
+| Image Player | `proc-show-image` | 把图像输入转换成 show/hide image 命令。 | in:image | cmd:command | - |
+| Video Player | `proc-play-video` | 把视频输入转换成 play/stop media 命令。 | in:video | cmd:command | - |
 | Effect Layer Player | `effect-out` | 把视觉效果链输出为特效控制命令。 | in:effect(sink) | cmd:command | - |
 | Scene Layer Player | `scene-out` | 把场景链输出为视觉场景控制命令。 | in:scene(sink) | cmd:command | - |
 | Static Audio Player | `audio-out` | 把音频链作为播放器命令输出。 | in:audio(sink) | cmd:command | - |
-| Static Image Player | `image-out` | 把图像链作为播放器命令输出。 | in:image(sink) | cmd:command | - |
 | Static Video Player | `video-out` | 把视频链作为播放器命令输出。 | in:video(sink) | cmd:command | - |
 
 ### Processors（把输入处理成控制命令，5）

@@ -231,6 +231,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
     case 'array-filter':
     case 'tone-osc':
     case 'play-media':
+    case 'proc-play-video':
     {
       const impl = coreRuntimeImplByKind.get(spec.runtime.kind);
       if (!impl) {

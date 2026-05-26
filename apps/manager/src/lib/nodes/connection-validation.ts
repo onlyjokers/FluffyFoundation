@@ -37,7 +37,6 @@ const VALID_PORT_TYPES = new Set<string>([
   'any',
 ]);
 
-const PATCH_ROOT_TYPES = new Set(['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out', 'ui-out']);
 const LOCAL_ONLY_NODE_TYPES = new Set(['load-audio-from-local', 'load-image-from-local', 'load-video-from-local']);
 
 const resolveProxyPortType = (node: NodeInstance): PortType => {
@@ -147,9 +146,6 @@ export function getLocalOnlyPatchRoutingError({
   const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
   const typeById = new Map(nodes.map((n) => [String(n.id), String(n.type)]));
 
-  const patchRoots = nodes.filter((n) => PATCH_ROOT_TYPES.has(String(n.type)));
-  if (patchRoots.length === 0) return null;
-
   const incomingByTarget = new Map<string, { sourceNodeId: string; targetPortId: string }[]>();
   const outgoingBySourceKey = new Map<string, { targetNodeId: string; targetPortId: string }[]>();
   for (const c of connections) {
@@ -177,7 +173,7 @@ export function getLocalOnlyPatchRoutingError({
     return portType !== 'client' && portType !== 'command';
   };
 
-  const rootContainsLocalOnlyNodes = (rootNodeId: string): boolean => {
+  const commandSourceContainsLocalOnlyNodes = (sourceNodeId: string): boolean => {
     const keep = new Set<string>();
     const visit = (nodeId: string) => {
       const id = String(nodeId);
@@ -191,7 +187,7 @@ export function getLocalOnlyPatchRoutingError({
         visit(inc.sourceNodeId);
       }
     };
-    visit(rootNodeId);
+    visit(sourceNodeId);
     for (const id of keep) {
       const type = String(typeById.get(id) ?? '');
       if (LOCAL_ONLY_NODE_TYPES.has(type)) return true;
@@ -210,14 +206,8 @@ export function getLocalOnlyPatchRoutingError({
     return Boolean(port) && String(port?.type) === 'command';
   };
 
-  const rootRoutesToClientExecutor = (rootNodeId: string): boolean => {
-    const rootType = String(typeById.get(rootNodeId) ?? '');
-    if (!rootType) return false;
-
-    const queue: { nodeId: string; portId: string }[] = getCommandOutputPorts(rootType).map((portId) => ({
-      nodeId: rootNodeId,
-      portId,
-    }));
+  const commandSourceRoutesToClientExecutor = (sourceNodeId: string, sourcePortId: string): boolean => {
+    const queue: { nodeId: string; portId: string }[] = [{ nodeId: sourceNodeId, portId: sourcePortId }];
     const visited = new Set<string>();
 
     while (queue.length > 0) {
@@ -247,12 +237,15 @@ export function getLocalOnlyPatchRoutingError({
     return false;
   };
 
-  for (const root of patchRoots) {
-    const rootId = String(root.id);
-    if (!rootId) continue;
-    if (!rootContainsLocalOnlyNodes(rootId)) continue;
-    if (rootRoutesToClientExecutor(rootId)) {
-      return 'Load * From Local(Display) can only connect Deploy to Display (not Client Executor).';
+  for (const node of nodes) {
+    const nodeId = String(node.id);
+    const nodeType = String(node.type);
+    if (!nodeId || !nodeType) continue;
+    for (const portId of getCommandOutputPorts(nodeType)) {
+      if (!commandSourceContainsLocalOnlyNodes(nodeId)) continue;
+      if (commandSourceRoutesToClientExecutor(nodeId, portId)) {
+        return 'Load * From Local(Display) can only connect Deploy to Display (not Client Executor).';
+      }
     }
   }
 

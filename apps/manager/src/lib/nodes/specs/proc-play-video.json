@@ -1,0 +1,28 @@
+{
+  "__purpose": "Player node: convert an incoming video ref into playMedia/stopMedia commands for routing to Client/Display sinks.",
+  "type": "proc-play-video",
+  "label": "Video Player",
+  "category": "Player",
+  "metadata": {
+    "version": "1.0.0",
+    "platformTargets": ["manager", "client", "display"],
+    "sideEffectClass": "remote-control",
+    "permissions": ["control:send"],
+    "description": "Converts a video ref into playMedia/stopMedia commands for Client or Display sinks.",
+    "compatibility": [
+      {
+        "target": "display-object",
+        "rule": "Connect cmd output to Display to route video playback commands to selected Display endpoints.",
+        "repairHint": "If the video is not visible on Display, confirm the Display node is connected and routed to the correct targets."
+      },
+      {
+        "target": "client-executor",
+        "rule": "Connect cmd output to Client Executor to route video playback commands to audience clients."
+      }
+    ],
+    "repairHints": ["An empty video input emits stopMedia."]
+  },
+  "inputs": [{ "id": "in", "label": "In", "type": "video" }],
+  "outputs": [{ "id": "cmd", "label": "Cmd", "type": "command" }],
+  "runtime": { "kind": "proc-play-video" }
+}

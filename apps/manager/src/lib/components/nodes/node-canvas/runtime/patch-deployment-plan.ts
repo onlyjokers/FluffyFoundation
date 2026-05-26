@@ -38,7 +38,6 @@ export type PatchDeploymentPlanOptions = {
 
 const PATCH_ROOT_TYPES = new Set([
   'audio-out',
-  'image-out',
   'video-out',
   'effect-out',
   'scene-out',

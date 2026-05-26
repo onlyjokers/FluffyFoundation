@@ -87,7 +87,6 @@ import {
 import {
   createAudioOutNode,
   createEffectOutNode,
-  createImageOutNode,
   createPlayMediaNode,
   createSceneOutNode,
   createUiOutNode,
@@ -96,6 +95,7 @@ import {
 import {
   createDisplayTextProcessorNode,
   createFlashlightProcessorNode,
+  createPlayVideoProcessorNode,
   createPushImageUploadNode,
   createScreenColorProcessorNode,
   createShowImageProcessorNode,
@@ -207,13 +207,13 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createPlayMediaNode,
     // Patch root sinks (Max/MSP style).
     createAudioOutNode,
-    () => createImageOutNode(deps),
     () => createVideoOutNode(deps),
     () => createEffectOutNode(deps),
     () => createSceneOutNode(deps),
     () => createUiOutNode(deps),
     createFlashlightProcessorNode,
     createShowImageProcessorNode,
+    createPlayVideoProcessorNode,
     createDisplayTextProcessorNode,
     createPushImageUploadNode,
     createScreenColorProcessorNode,

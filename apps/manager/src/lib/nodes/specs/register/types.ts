@@ -114,6 +114,7 @@ export type NodeRuntime =
   | { kind: 'tone-reverb' }
   | { kind: 'tone-granular' }
   | { kind: 'play-media' }
+  | { kind: 'proc-play-video' }
   | { kind: 'midi-fuzzy' }
   | { kind: 'midi-boolean' }
   | { kind: 'midi-map' }

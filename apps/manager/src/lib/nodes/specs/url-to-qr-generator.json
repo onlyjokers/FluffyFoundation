@@ -11,8 +11,8 @@
     "description": "Converts a URL string into a QR code image.",
     "compatibility": [
       {
-        "target": "Dynamic Image Player",
-        "rule": "Connect Image Out to Dynamic Image Player to show the generated QR code.",
+        "target": "Image Player",
+        "rule": "Connect Image Out to Image Player to show the generated QR code.",
         "repairHint": "Feed this node from URL Session.url when generating audience session QR codes."
       }
     ]

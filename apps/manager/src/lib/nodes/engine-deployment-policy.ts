@@ -30,6 +30,8 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'string-variable',
   'number-stabilizer',
   'proc-flashlight',
+  'proc-show-image',
+  'proc-play-video',
   'proc-screen-color',
   'proc-synth-update',
   'proc-scene-switch',
@@ -42,7 +44,7 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'play-media',
 ]);
 
-const PATCH_ROOT_TYPES = ['audio-out', 'image-out', 'video-out', 'effect-out', 'scene-out', 'ui-out'] as const;
+const PATCH_ROOT_TYPES = ['audio-out', 'video-out', 'effect-out', 'scene-out', 'ui-out'] as const;
 const PATCH_ROOT_TYPE_SET = new Set<string>(PATCH_ROOT_TYPES);
 
 const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
@@ -106,6 +108,8 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'tone-reverb',
   'tone-granular',
   'play-media',
+  'proc-show-image',
+  'proc-play-video',
   // Generators
   'number-script',
   // Patch root

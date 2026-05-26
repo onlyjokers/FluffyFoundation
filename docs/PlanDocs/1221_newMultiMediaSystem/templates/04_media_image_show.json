@@ -1,13 +1,13 @@
 {
   "kind": "node-graph",
   "version": 1,
-  "title": "Patch: Load Image From Remote → Image to Client",
-  "purpose": "体验 asset:<id> 引用 + client 侧 MediaEngine(showImage) 播放链路（Graph-driven Patch）",
+  "title": "Patch: Load Image From Remote → Image Player to Client",
+  "purpose": "体验 asset:<id> 引用 + client 侧 MediaEngine(showImage) 播放链路（Graph-driven command）",
   "howTo": [
     "1) 打开 client。",
     "2) manager Node Graph 点 ▶ Start。",
     "3) 先在 Assets Manager 上传图片，然后在 Load Image From Remote 里选择该图片。",
-    "4) 通过 `Image to Client(Deploy) → Client(In)` 指定播放目标。"
+    "4) 通过 `Image Player(Cmd) → Client(In)` 指定播放目标。"
   ],
   "graph": {
     "nodes": [
@@ -28,8 +28,8 @@
         "outputValues": {}
       },
       {
-        "id": "node-image-out",
-        "type": "image-out",
+        "id": "node-image-player",
+        "type": "proc-show-image",
         "position": { "x": 520, "y": 260 },
         "config": {},
         "inputValues": {},
@@ -38,15 +38,15 @@
     ],
     "connections": [
       {
-        "id": "conn-image-out",
+        "id": "conn-image-player",
         "sourceNodeId": "node-load-image",
         "sourcePortId": "ref",
-        "targetNodeId": "node-image-out",
+        "targetNodeId": "node-image-player",
         "targetPortId": "in"
       },
       {
         "id": "conn-deploy",
-        "sourceNodeId": "node-image-out",
+        "sourceNodeId": "node-image-player",
         "sourcePortId": "cmd",
         "targetNodeId": "node-client",
         "targetPortId": "in"

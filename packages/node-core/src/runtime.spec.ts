@@ -469,6 +469,7 @@ test('display-compatible command processors advertise display routing metadata',
 
   const displayCommands = [
     ['proc-show-image', 'showImage'],
+    ['proc-play-video', 'playMedia'],
     ['proc-screen-color', 'screenColor'],
     ['proc-display-text', 'showText'],
     ['play-media', 'playMedia'],
@@ -508,6 +509,64 @@ test('client-only command processors do not advertise Display support', () => {
       `${type} should document Client routing through client-executor`
     );
   }
+});
+
+test('image player replaces the legacy static image player', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  assert.equal(registry.get('image-out'), undefined);
+  assert.equal(registry.get('proc-show-image')?.label, 'Image Player');
+});
+
+test('video player emits dynamic video commands and stop commands', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const definition = registry.get('proc-play-video');
+  assert.ok(definition, 'proc-play-video is registered');
+  assert.equal(definition.label, 'Video Player');
+  assert.deepEqual(definition.inputs.map((port) => [port.id, port.type]), [['in', 'video']]);
+  assert.deepEqual(definition.outputs.map((port) => [port.id, port.type]), [['cmd', 'command']]);
+
+  assert.deepEqual(
+    definition.process(
+      { in: 'asset:clip#muted=true&vol=42&loop=1' },
+      {},
+      { nodeId: 'video-player-1', time: 0, deltaTime: 0 }
+    ),
+    {
+      cmd: {
+        action: 'playMedia',
+        payload: {
+          url: 'asset:clip#muted=true&vol=42&loop=1',
+          mediaType: 'video',
+          loop: true,
+          muted: true,
+          volume: 42,
+        },
+      },
+    }
+  );
+
+  assert.deepEqual(
+    definition.process(
+      { in: '' },
+      {},
+      { nodeId: 'video-player-1', time: 16, deltaTime: 16 }
+    ),
+    { cmd: { action: 'stopMedia', payload: {} } }
+  );
 });
 
 test('client UI nodes expose interaction state through runtime dependencies', () => {

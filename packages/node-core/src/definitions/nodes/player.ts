@@ -111,69 +111,6 @@ export function createAudioOutNode(): NodeDefinition {
   };
 }
 
-export function createImageOutNode(deps: ClientObjectDeps): NodeDefinition {
-  const resolveUrl = (raw: unknown): string => {
-    if (typeof raw === 'string') return raw.trim();
-    if (Array.isArray(raw)) {
-      // If upstream provides a queue/array, prefer the latest value (pipeline semantics).
-      for (let i = raw.length - 1; i >= 0; i--) {
-        const item = raw[i];
-        if (typeof item === 'string' && item.trim()) return item.trim();
-        const url = getRecordString(item, 'url');
-        if (url) return url;
-      }
-      return '';
-    }
-    const url = getRecordString(raw, 'url');
-    if (url) return url;
-    return '';
-  };
-
-  const hide = () => {
-    deps.executeCommand({ action: 'hideImage', payload: {} });
-  };
-
-  return {
-    type: 'image-out',
-    label: 'Static Image Player',
-    category: 'Player',
-    inputs: [{ id: 'in', label: 'In', type: 'image', kind: 'sink' }],
-    outputs: [
-      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
-      // This output is not part of the exported client patch subgraph.
-      { id: 'cmd', label: 'Deploy', type: 'command' },
-    ],
-    metadata: {
-      version: '1.0.0',
-      platformTargets: ['manager', 'client', 'display'],
-      sideEffectClass: 'remote-control',
-      permissions: ['control:send'],
-      compatibility: [
-        {
-          target: 'display-object',
-          rule: 'Route this player through Display when image output should appear on selected Display endpoints.',
-        },
-      ],
-      examples: [],
-      risks: [],
-      description: 'Deploy static image playback to selected runtime endpoints.',
-    },
-    configSchema: [],
-    process: () => ({}),
-    onSink: (inputs) => {
-      const url = resolveUrl(inputs.in);
-      if (!url) {
-        hide();
-        return;
-      }
-      deps.executeCommand({ action: 'showImage', payload: { url } });
-    },
-    onDisable: () => {
-      hide();
-    },
-  };
-}
-
 export function createVideoOutNode(deps: ClientObjectDeps): NodeDefinition {
   const resolveUrl = (raw: unknown): string => {
     if (typeof raw === 'string') return raw.trim();

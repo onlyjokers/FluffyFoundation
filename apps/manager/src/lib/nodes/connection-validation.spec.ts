@@ -103,11 +103,11 @@ test('getLocalOnlyPatchRoutingError blocks local-only patch roots routed to clie
   const graph: GraphState = {
     nodes: [
       node('asset', 'load-image-from-local'),
-      node('root', 'image-out'),
+      node('root', 'proc-show-image'),
       node('client', 'client-executor'),
     ],
     connections: [
-      connection('c1', 'asset', 'image', 'root', 'image'),
+      connection('c1', 'asset', 'image', 'root', 'in'),
       connection('c2', 'root', 'cmd', 'client', 'in'),
     ],
   };
@@ -206,11 +206,11 @@ registry.set('load-video-from-local', nodeDef({
   process: () => ({}),
 }));
 
-registry.set('image-out', nodeDef({
-  type: 'image-out',
-  label: 'Image Out',
+registry.set('proc-show-image', nodeDef({
+  type: 'proc-show-image',
+  label: 'Image Player',
   category: 'Scene',
-  inputs: [port('image', 'image')],
+  inputs: [port('in', 'image')],
   outputs: [port('cmd', 'command')],
   process: () => ({}),
 }));
