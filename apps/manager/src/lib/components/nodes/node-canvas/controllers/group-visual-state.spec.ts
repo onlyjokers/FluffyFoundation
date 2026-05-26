@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { computeGroupVisualStatePlan } from './group-visual-state';
 import type { NodeGroup } from './group-types';
 
-test('minimized parent group hides child group decoration nodes and attached connections', () => {
+test('minimized parent group keeps child group gate sockets connectable', () => {
   const groups: NodeGroup[] = [
     {
       id: 'parent',
@@ -34,15 +34,16 @@ test('minimized parent group hides child group decoration nodes and attached con
     graph: {
       nodes: [
         { id: 'worker', type: 'number', position: { x: 0, y: 0 }, config: {} },
+        { id: 'external', type: 'boolean', position: { x: -100, y: 0 }, config: {} },
         { id: 'child-gate', type: 'group-gate', position: { x: 0, y: 0 }, config: { groupId: 'child' } },
       ],
       connections: [
         {
           id: 'conn',
-          sourceNodeId: 'worker',
+          sourceNodeId: 'external',
           sourcePortId: 'out',
           targetNodeId: 'child-gate',
-          targetPortId: 'in',
+          targetPortId: 'active',
         },
       ],
     },
@@ -52,7 +53,6 @@ test('minimized parent group hides child group decoration nodes and attached con
 
   assert.deepEqual(plan.nodePatches, [
     { nodeId: 'worker', hidden: true, groupSelected: true },
-    { nodeId: 'child-gate', hidden: true },
   ]);
-  assert.deepEqual(plan.connectionPatches, [{ connectionId: 'conn', hidden: true }]);
+  assert.deepEqual(plan.connectionPatches, []);
 });

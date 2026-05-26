@@ -95,10 +95,6 @@
   import { createCustomNodeMotherInstance } from './node-canvas/custom-nodes/custom-node-mother';
   import { createGroupEdgeFinder } from './node-canvas/groups/group-edge-finder';
   import { createGroupFrameHeaderHandlers } from './node-canvas/groups/group-frame-header';
-  import {
-    deriveGateModeGroupIds,
-    deriveGroupGateNodeIdByGroupId,
-  } from './node-canvas/groups/group-gate-state';
   import { buildGroupPortIndex, groupIdFromNode } from './node-canvas/utils/group-port-utils';
   import { createMinimapProjection } from './node-canvas/utils/minimap-projection';
   import { initNodeCanvasRuntime } from './node-canvas/runtime/runtime-init';
@@ -268,10 +264,6 @@
     groupSelectionNodeIds,
     marqueeRect,
   } = groupController;
-
-  $: gateModeGroupIds = deriveGateModeGroupIds(graphState.nodes, graphState.connections);
-
-  $: groupGateNodeIdByGroupId = deriveGroupGateNodeIdByGroupId(graphState.nodes);
 
   const { minimap, minimapUi } = minimapController;
 
@@ -1037,8 +1029,6 @@
   selectedGroupId={$selectedGroupId}
   groupEditToast={$groupEditToast}
   {groupEdgeHighlight}
-  {gateModeGroupIds}
-  {groupGateNodeIdByGroupId}
   {expandedCustomGroupIds}
   groupOverlayActions={{
     onToggleDisabled: handleToggleGroupDisabled,

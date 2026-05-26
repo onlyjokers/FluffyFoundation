@@ -60,8 +60,6 @@
   export let selectedGroupId = null;
   export let groupEditToast = null;
   export let groupEdgeHighlight = null;
-  export let gateModeGroupIds = null;
-  export let groupGateNodeIdByGroupId = null;
   export let expandedCustomGroupIds: Set<string> = new Set();
   export let groupOverlayActions;
 
@@ -186,8 +184,6 @@
       {selectedGroupId}
       toast={groupEditToast}
       edgeHighlight={groupEdgeHighlight}
-      {gateModeGroupIds}
-      {groupGateNodeIdByGroupId}
       customNodeGroupIds={expandedCustomGroupIds}
       onToggleDisabled={groupOverlayActions.onToggleDisabled}
       onToggleMinimized={groupOverlayActions.onToggleMinimized}

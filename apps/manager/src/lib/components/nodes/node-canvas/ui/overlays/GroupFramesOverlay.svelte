@@ -3,7 +3,7 @@
   // @ts-nocheck
   import { tick } from 'svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { createObserveActionOverflow, mountGateSockets } from './group-frame-actions';
+  import { createObserveActionOverflow } from './group-frame-actions';
 
   type GroupFrame = {
     group: {
@@ -27,8 +27,6 @@
   export let editModeGroupId: string | null = null;
   export let selectedGroupId: string | null = null;
   export let toast: { groupId: string; message: string } | null = null;
-  export let gateModeGroupIds: Set<string> | null = null;
-  export let groupGateNodeIdByGroupId: Map<string, string> | null = null;
   export let customNodeGroupIds: Set<string> | null = null;
   export let onToggleDisabled: (groupId: string) => void = () => undefined;
   export let onToggleMinimized: (groupId: string) => void = () => undefined;
@@ -137,11 +135,6 @@
         >
           <div class="group-frame-header">
             <div class="group-frame-title-row">
-              <div
-                class="group-frame-gate-sockets"
-                aria-hidden="true"
-                use:mountGateSockets={groupGateNodeIdByGroupId?.get(String(group.id)) ?? null}
-              />
               <button
                 type="button"
                 class="group-frame-drag-handle"
@@ -383,6 +376,8 @@
     min-width: 0;
     flex: 1 1 auto;
     overflow: hidden;
+    /* Reserve the native Rete Group Gate socket anchored at the header start. */
+    padding-left: 32px;
   }
 
   .group-frame-drag-handle {
@@ -408,45 +403,6 @@
 
   .group-frame-drag-handle:active {
     cursor: grabbing;
-  }
-
-  .group-frame-gate-sockets {
-    display: inline-flex;
-    align-items: center;
-    pointer-events: auto;
-  }
-
-  .group-frame-gate-sockets :global(.collapsed-sockets) {
-    position: static;
-    inset: auto;
-    display: inline-flex;
-    align-items: center;
-    pointer-events: auto;
-  }
-
-  .group-frame-gate-sockets :global(.collapsed-socket) {
-    position: static;
-    transform: none;
-    width: 26px;
-    height: 26px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  .group-frame-gate-sockets :global(.socket) {
-    width: 14px !important;
-    height: 14px !important;
-    margin: 0 !important;
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .group-frame-gate-sockets :global(.input-socket),
-  .group-frame-gate-sockets :global(.output-socket) {
-    margin: 0 !important;
   }
 
   .group-frame-header:active,

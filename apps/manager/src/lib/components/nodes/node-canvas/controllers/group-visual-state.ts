@@ -3,7 +3,7 @@
  */
 import type { GraphState } from '$lib/nodes/types';
 import { isGroupDecorationNodeType } from '../groups/group-node-types';
-import { groupIdFromNode, isGroupPortNodeType } from '../utils/group-port-utils';
+import { GROUP_GATE_NODE_TYPE, groupIdFromNode, isGroupPortNodeType } from '../utils/group-port-utils';
 import { buildGroupIndex } from './group-bounds';
 import type { NodeGroup } from './group-types';
 
@@ -74,10 +74,11 @@ export function computeGroupVisualStatePlan(options: GroupVisualStatePlanOptions
     if (!id) continue;
 
     const type = String(node.type ?? '');
+    const isGroupGateNode = type === GROUP_GATE_NODE_TYPE;
     const nextHidden =
       forcedHiddenNodeIds.has(id) ||
-      hiddenNodeIds.has(id) ||
-      (isGroupDecorationNodeType(type) && hiddenGroupIds.has(groupIdFromNode(node)));
+      (!isGroupGateNode && hiddenNodeIds.has(id)) ||
+      (!isGroupGateNode && isGroupDecorationNodeType(type) && hiddenGroupIds.has(groupIdFromNode(node)));
     if (nextHidden) hiddenNodesEffective.add(id);
 
     const nextDisabled = disabledNodeIds.has(id);

@@ -139,9 +139,12 @@
 
   :global(.node-canvas-container .node.group-port .title),
   :global(.node-canvas-container .node.group-port .controls),
-  :global(.node-canvas-container .node.group-port .ports),
   :global(.node-canvas-container .node.group-port .cmd-aggregator-controls) {
     display: none !important;
+  }
+
+  :global(.node-canvas-container .node.group-port .ports) {
+    display: block !important;
   }
 
   :global(.node-canvas-container .node:hover) {
