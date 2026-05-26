@@ -55,6 +55,7 @@ export async function initReteCanvas(opts: {
   flushPendingCollapsedNodes: () => void | Promise<void>;
   minimapController: any;
   requestFramesUpdate: () => void;
+  getNodeGroupIds?: (nodeId: string) => string[];
   loopController: any;
   midiController: any;
   applyStoppedHighlights: (running: boolean) => void;
@@ -157,6 +158,7 @@ export async function initReteCanvas(opts: {
     handleDroppedNodesAfterDrag: opts.groupController.handleDroppedNodesAfterDrag,
     requestFramesUpdate: opts.requestFramesUpdate,
     requestMinimapUpdate: opts.minimapController.requestUpdate,
+    getNodeGroupIds: opts.getNodeGroupIds,
     isProjectionId: opts.isProjectionId,
     translateProjectionConnection: opts.translateProjectionConnection as
       | ((connection: EngineConnection) => EngineConnection | null)

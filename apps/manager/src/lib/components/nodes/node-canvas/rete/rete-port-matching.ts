@@ -3,6 +3,7 @@
  */
 import type { NodeInstance, NodePort, PortType } from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
+import { getProxyPortType } from './rete-node-build-options';
 
 export function isCompatiblePortType(sourceType: PortType, targetType: PortType): boolean {
   if (sourceType === 'asset' || targetType === 'asset') {
@@ -54,8 +55,12 @@ export function getPortDefForSocket(
   if (!instance) return null;
   const def = nodeRegistry.get(instance.type);
   if (!def) return null;
-  if (socket.side === 'output') return (def.outputs ?? []).find((p) => p.id === socket.key) ?? null;
-  return (def.inputs ?? []).find((p) => p.id === socket.key) ?? null;
+  const port =
+    socket.side === 'output'
+      ? ((def.outputs ?? []).find((p) => p.id === socket.key) ?? null)
+      : ((def.inputs ?? []).find((p) => p.id === socket.key) ?? null);
+  const proxyPortType = getProxyPortType(instance);
+  return port && proxyPortType ? { ...port, type: proxyPortType as PortType } : port;
 }
 
 export function inputAllowsMultiple(
