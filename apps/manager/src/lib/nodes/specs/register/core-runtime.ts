@@ -15,7 +15,14 @@ type PulseToBooleanState = {
   lastPulse: boolean;
 };
 
+type BooleanToPulseState = {
+  initialized: boolean;
+  lastValue: boolean;
+  pulseUntil: number;
+};
+
 const pulseToBooleanState = new Map<string, PulseToBooleanState>();
+const booleanToPulseState = new Map<string, BooleanToPulseState>();
 
 const coerceBooleanInput = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value;
@@ -50,6 +57,31 @@ const pulseToBooleanFallback: CoreRuntimeImpl = {
     state.lastPulse = pulsed;
     pulseToBooleanState.set(context.nodeId, state);
     return { value: state.value };
+  },
+};
+
+const booleanToPulseFallback: CoreRuntimeImpl = {
+  process: (inputs, _config, context) => {
+    const current = coerceBooleanInput(inputs.value);
+    const state = booleanToPulseState.get(context.nodeId) ?? {
+      initialized: false,
+      lastValue: current,
+      pulseUntil: 0,
+    };
+
+    if (!state.initialized) {
+      state.initialized = true;
+      state.lastValue = current;
+      state.pulseUntil = 0;
+    } else if (current !== state.lastValue) {
+      state.lastValue = current;
+      state.pulseUntil = context.time + Math.max(1, context.deltaTime);
+    }
+
+    const pulse = state.pulseUntil > 0 && context.time <= state.pulseUntil;
+    if (!pulse) state.pulseUntil = 0;
+    booleanToPulseState.set(context.nodeId, state);
+    return { pulse };
   },
 };
 
@@ -101,6 +133,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
 
   const pick = (type: string): CoreRuntimeImpl => {
     const def = registry.get(type);
+    if (!def && type === 'boolean-to-pulse') return booleanToPulseFallback;
     if (!def && type === 'pulse-to-boolean') return pulseToBooleanFallback;
     if (!def) {
       throw new Error(`[node-specs] missing core runtime impl: ${type}`);

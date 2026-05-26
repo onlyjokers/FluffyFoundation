@@ -178,22 +178,37 @@ test('SemanticGraphAuthorityService exposes Arduino UNO plugin node definitions 
     'plugin:arduino-uno:pwm',
     'static-serial-player',
   ]);
-  const pwm = snapshot.definitions.find((definition) => definition.type === 'plugin:arduino-uno:pwm');
+  const pwm = snapshot.definitions.find(
+    (definition) => definition.type === 'plugin:arduino-uno:pwm'
+  );
   assert.equal(pwm?.aiSummary?.platforms.includes('manager'), true);
   assert.equal(pwm?.aiSummary?.permissions.includes('hardware:serial'), true);
   const arduino = snapshot.definitions.find((definition) => definition.type === 'arduino-object');
   assert.equal(arduino?.aiSummary?.category, 'Objects');
-  assert.equal(arduino?.aiSummary?.ports.inputs.some((port) => port.id === 'in' && port.type === 'command'), true);
-  const serialPlayer = snapshot.definitions.find((definition) => definition.type === 'static-serial-player');
+  assert.equal(
+    arduino?.aiSummary?.ports.inputs.some((port) => port.id === 'in' && port.type === 'command'),
+    true
+  );
+  const serialPlayer = snapshot.definitions.find(
+    (definition) => definition.type === 'static-serial-player'
+  );
   assert.equal(serialPlayer?.aiSummary?.category, 'Player');
-  assert.equal(serialPlayer?.aiSummary?.ports.outputs.some((port) => port.id === 'cmd' && port.type === 'command'), true);
+  assert.equal(
+    serialPlayer?.aiSummary?.ports.outputs.some(
+      (port) => port.id === 'cmd' && port.type === 'command'
+    ),
+    true
+  );
 });
 
 test('SemanticGraphAuthorityService exposes and accepts printer plugin node definitions', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();
   const printerTypes = snapshot.definitions
-    .filter((definition) => definition.type.startsWith('plugin:printer:') || definition.type === 'printer-object')
+    .filter(
+      (definition) =>
+        definition.type.startsWith('plugin:printer:') || definition.type === 'printer-object'
+    )
     .map((definition) => definition.type)
     .sort();
 
@@ -202,11 +217,21 @@ test('SemanticGraphAuthorityService exposes and accepts printer plugin node defi
     'plugin:printer:print-text',
     'printer-object',
   ]);
-  const printText = snapshot.definitions.find((definition) => definition.type === 'plugin:printer:print-text');
-  assert.equal(printText?.aiSummary?.ports.outputs.some((port) => port.id === 'print' && port.type === 'print'), true);
+  const printText = snapshot.definitions.find(
+    (definition) => definition.type === 'plugin:printer:print-text'
+  );
+  assert.equal(
+    printText?.aiSummary?.ports.outputs.some(
+      (port) => port.id === 'print' && port.type === 'print'
+    ),
+    true
+  );
   const printer = snapshot.definitions.find((definition) => definition.type === 'printer-object');
   assert.equal(printer?.aiSummary?.category, 'Objects');
-  assert.equal(printer?.aiSummary?.ports.inputs.some((port) => port.id === 'in' && port.type === 'print'), true);
+  assert.equal(
+    printer?.aiSummary?.ports.inputs.some((port) => port.id === 'in' && port.type === 'print'),
+    true
+  );
 
   const added = service.dispatch({
     actor: { id: 'canvas', role: 'operator' },
@@ -243,7 +268,10 @@ test('SemanticGraphAuthorityService accepts display-object nodes for server-owne
 
   assert.equal(added.ok, true);
   assert.equal(service.getSnapshot().nodes[0]?.id, 'display-1');
-  assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'display-object'), true);
+  assert.equal(
+    service.getSnapshot().definitions.some((definition) => definition.type === 'display-object'),
+    true
+  );
 });
 
 test('SemanticGraphAuthorityService accepts display text processor nodes for server-owned snapshots', () => {
@@ -264,20 +292,41 @@ test('SemanticGraphAuthorityService accepts display text processor nodes for ser
 
   assert.equal(added.ok, true);
   assert.equal(service.getSnapshot().nodes[0]?.id, 'display-text-1');
-  assert.equal(service.getSnapshot().definitions.some((definition) => definition.type === 'proc-display-text'), true);
+  assert.equal(
+    service.getSnapshot().definitions.some((definition) => definition.type === 'proc-display-text'),
+    true
+  );
 });
 
 test('SemanticGraphAuthorityService exposes and accepts split boolean variable nodes', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();
-  const setDefinition = snapshot.definitions.find((definition) => definition.type === 'set-boolean-variable');
-  const getDefinition = snapshot.definitions.find((definition) => definition.type === 'get-boolean-variable');
+  const setDefinition = snapshot.definitions.find(
+    (definition) => definition.type === 'set-boolean-variable'
+  );
+  const getDefinition = snapshot.definitions.find(
+    (definition) => definition.type === 'get-boolean-variable'
+  );
   assert.ok(setDefinition);
   assert.ok(getDefinition);
-  assert.equal(setDefinition.ports.inputs.some((port) => port.id === 'name' && port.type === 'string'), true);
-  assert.equal(setDefinition.ports.inputs.some((port) => port.id === 'defaultValue' && port.type === 'boolean'), true);
-  assert.equal(setDefinition.ports.inputs.some((port) => port.id === 'mode' && port.type === 'string'), true);
-  assert.equal(getDefinition.ports.inputs.some((port) => port.id === 'name' && port.type === 'string'), true);
+  assert.equal(
+    setDefinition.ports.inputs.some((port) => port.id === 'name' && port.type === 'string'),
+    true
+  );
+  assert.equal(
+    setDefinition.ports.inputs.some(
+      (port) => port.id === 'defaultValue' && port.type === 'boolean'
+    ),
+    true
+  );
+  assert.equal(
+    setDefinition.ports.inputs.some((port) => port.id === 'mode' && port.type === 'string'),
+    true
+  );
+  assert.equal(
+    getDefinition.ports.inputs.some((port) => port.id === 'name' && port.type === 'string'),
+    true
+  );
 
   const setNode = {
     id: 'set-flag',
@@ -357,21 +406,63 @@ test('SemanticGraphAuthorityService exposes and accepts split boolean variable n
     }).ok,
     true
   );
-  assert.deepEqual(
-    [...service.getSnapshot().nodes.map((node) => node.type)].sort(),
-    ['get-boolean-variable', 'set-boolean-variable', 'string']
-  );
+  assert.deepEqual([...service.getSnapshot().nodes.map((node) => node.type)].sort(), [
+    'get-boolean-variable',
+    'set-boolean-variable',
+    'string',
+  ]);
 });
 
 test('SemanticGraphAuthorityService exposes and accepts pulse conversion nodes', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();
-  const clientButton = snapshot.definitions.find((definition) => definition.type === 'client-button');
-  const pulseToBoolean = snapshot.definitions.find((definition) => definition.type === 'pulse-to-boolean');
+  const clientButton = snapshot.definitions.find(
+    (definition) => definition.type === 'client-button'
+  );
+  const booleanToPulse = snapshot.definitions.find(
+    (definition) => definition.type === 'boolean-to-pulse'
+  );
+  const pulseToBoolean = snapshot.definitions.find(
+    (definition) => definition.type === 'pulse-to-boolean'
+  );
 
-  assert.equal(clientButton?.ports.outputs.some((port) => port.id === 'pressed' && port.type === 'pulse'), true);
-  assert.equal(pulseToBoolean?.ports.inputs.some((port) => port.id === 'pulse' && port.type === 'pulse'), true);
-  assert.equal(pulseToBoolean?.ports.outputs.some((port) => port.id === 'value' && port.type === 'boolean'), true);
+  assert.equal(
+    clientButton?.ports.outputs.some((port) => port.id === 'pressed' && port.type === 'pulse'),
+    true
+  );
+  assert.equal(
+    booleanToPulse?.ports.inputs.some((port) => port.id === 'value' && port.type === 'boolean'),
+    true
+  );
+  assert.equal(
+    booleanToPulse?.ports.outputs.some((port) => port.id === 'pulse' && port.type === 'pulse'),
+    true
+  );
+  assert.equal(
+    pulseToBoolean?.ports.inputs.some((port) => port.id === 'pulse' && port.type === 'pulse'),
+    true
+  );
+  assert.equal(
+    pulseToBoolean?.ports.outputs.some((port) => port.id === 'value' && port.type === 'boolean'),
+    true
+  );
+
+  const pulseAdded = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.add',
+      node: {
+        id: 'bool-pulse',
+        type: 'boolean-to-pulse',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    },
+  });
+
+  assert.equal(pulseAdded.ok, true);
 
   const added = service.dispatch({
     actor: { id: 'canvas', role: 'operator' },
@@ -389,18 +480,72 @@ test('SemanticGraphAuthorityService exposes and accepts pulse conversion nodes',
   });
 
   assert.equal(added.ok, true);
-  assert.equal(service.getSnapshot().nodes[0]?.type, 'pulse-to-boolean');
+  assert.deepEqual(
+    service
+      .getSnapshot()
+      .nodes.map((node) => node.type)
+      .sort(),
+    ['boolean-to-pulse', 'pulse-to-boolean']
+  );
+});
+
+test('SemanticGraphAuthorityService exposes and accepts visible manager utility nodes', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  const utilityTypes = [
+    'midi-boolean',
+    'midi-color-map',
+    'midi-fuzzy',
+    'midi-map',
+    'midi-select-map',
+  ];
+
+  for (const type of utilityTypes) {
+    assert.equal(
+      snapshot.definitions.some((definition) => definition.type === type),
+      true,
+      `${type} should be exposed to semantic snapshots`
+    );
+
+    const added = service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'node.add',
+        node: {
+          id: `${type}-1`,
+          type,
+          position: { x: 10, y: 20 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      },
+    });
+
+    assert.equal(added.ok, true, `${type} should be accepted by semantic authority`);
+  }
 });
 
 test('SemanticGraphAuthorityService exposes display routing metadata for display-compatible processors', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();
-  const displayTypes = ['proc-display-text', 'proc-screen-color', 'proc-show-image', 'play-media', 'scene-out', 'effect-out'];
+  const displayTypes = [
+    'proc-display-text',
+    'proc-screen-color',
+    'proc-show-image',
+    'play-media',
+    'scene-out',
+    'effect-out',
+  ];
 
   for (const type of displayTypes) {
     const definition = snapshot.definitions.find((entry) => entry.type === type);
     assert.ok(definition, `${type} definition should be exposed`);
-    assert.equal(definition.aiSummary?.platforms.includes('display'), true, `${type} should support Display`);
+    assert.equal(
+      definition.aiSummary?.platforms.includes('display'),
+      true,
+      `${type} should support Display`
+    );
     assert.equal(
       definition.aiSummary?.compatibility.some((rule) => rule.target === 'display-object'),
       true,
@@ -411,7 +556,11 @@ test('SemanticGraphAuthorityService exposes display routing metadata for display
   for (const type of ['proc-flashlight', 'proc-synth-update', 'proc-push-image-upload']) {
     const definition = snapshot.definitions.find((entry) => entry.type === type);
     assert.ok(definition, `${type} definition should be exposed`);
-    assert.equal(definition.aiSummary?.platforms.includes('display'), false, `${type} should not claim Display support`);
+    assert.equal(
+      definition.aiSummary?.platforms.includes('display'),
+      false,
+      `${type} should not claim Display support`
+    );
     assert.equal(
       definition.aiSummary?.compatibility.some((rule) => rule.target === 'client-executor'),
       true,
@@ -483,12 +632,13 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
   };
   assert.equal(snapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
   assert.deepEqual(
-    snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.ports.outputs,
+    snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.ports
+      .outputs,
     [{ id: 'value', label: 'Value', type: 'number', defaultValue: 0, step: 0.01 }]
   );
   assert.match(
-    snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')?.aiSummary
-      ?.description ?? '',
+    snapshot.definitions?.find((definition) => definition.type === 'custom:triplet-pulse')
+      ?.aiSummary?.description ?? '',
     /wraps 1 internal nodes/
   );
   assert.deepEqual(snapshot.agentCapabilities?.nodes, [
@@ -506,7 +656,10 @@ test('SemanticGraphAuthorityService persists custom node definitions and AI capa
 
   const restarted = SemanticGraphAuthorityService.withStoragePath(path);
   const restartedSnapshot = restarted.getSnapshot() as never as typeof snapshot;
-  assert.equal(restartedSnapshot.customDefinitions?.[0]?.['definitionId' as never], 'triplet-pulse');
+  assert.equal(
+    restartedSnapshot.customDefinitions?.[0]?.['definitionId' as never],
+    'triplet-pulse'
+  );
   assert.equal(
     restartedSnapshot.definitions?.some((definition) => definition.type === 'custom:triplet-pulse'),
     true

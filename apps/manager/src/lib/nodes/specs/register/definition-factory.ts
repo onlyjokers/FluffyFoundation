@@ -4,8 +4,7 @@
 import { get } from 'svelte/store';
 import { getCommandArrayDiffMetadata } from '@shugu/node-core';
 import { type ControlAction, type ControlPayload } from '@shugu/protocol';
-import type { NodeDefinition, ProcessContext } from '../../types';
-import { parameterRegistry } from '$lib/parameters/registry';
+import type { NodeDefinition } from '../../types';
 import { displayTransport, getSDK, state } from '$lib/stores/manager';
 import { nodeEngine } from '$lib/nodes/engine';
 import { midiNodeBridge, type MidiSource } from '$lib/features/midi/midi-node-bridge';
@@ -256,50 +255,6 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
         ...base,
         process: impl.process,
         ...(impl.onSink ? { onSink: impl.onSink } : {}),
-      };
-    }
-    case 'param-get': {
-      return {
-        ...base,
-        process: (_inputs, config) => {
-          const path = String(config.path ?? '');
-          if (!path) return { value: 0 };
-          const param = parameterRegistry.get<number>(path);
-          if (!param) return { value: 0 };
-          return { value: param.effectiveValue };
-        },
-      };
-    }
-    case 'param-set': {
-      return {
-        ...base,
-        process: (inputs, config, context: ProcessContext) => {
-          const path = String(config.path ?? '');
-          const modeRaw =
-            typeof inputs.mode === 'string' && String(inputs.mode).trim()
-              ? String(inputs.mode).trim()
-              : String(config.mode ?? 'REMOTE');
-          const mode = modeRaw === 'MODULATION' ? 'MODULATION' : 'REMOTE';
-          const value =
-            typeof inputs.value === 'number' && Number.isFinite(inputs.value)
-              ? inputs.value
-              : Number(inputs.value ?? 0);
-          const bypass = typeof inputs.bypass === 'boolean' ? inputs.bypass : Boolean(inputs.bypass ?? false);
-
-          if (!path || bypass) return { value };
-
-          const param = parameterRegistry.get<number>(path);
-          if (!param) return { value };
-
-          if (mode === 'REMOTE') {
-            param.setValue(value, 'NODE');
-          } else {
-            const offset = value - param.baseValue;
-            param.setModulation(`node-${context.nodeId}`, offset, 'NODE');
-          }
-
-          return { value };
-        },
       };
     }
     case 'midi-fuzzy': {

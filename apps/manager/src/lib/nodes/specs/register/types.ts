@@ -6,7 +6,12 @@ import type { ConfigField, NodeDefinition, NodePort } from '../../types';
 
 export type WhenOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte';
 export type WhenSource = 'input' | 'config' | 'payload';
-export type WhenCondition = { source: WhenSource; key: string; op: WhenOp; value: string | number | boolean };
+export type WhenCondition = {
+  source: WhenSource;
+  key: string;
+  op: WhenOp;
+  value: string | number | boolean;
+};
 
 export type ClampSpec = { min?: number; max?: number };
 
@@ -83,8 +88,6 @@ export type NodeRuntime =
   | { kind: 'client-url-session-filter' }
   | { kind: 'display-object' }
   | { kind: 'proc-client-sensors' }
-  | { kind: 'param-get' }
-  | { kind: 'param-set' }
   | { kind: 'float' }
   | { kind: 'int' }
   | { kind: 'number-stabilizer' }

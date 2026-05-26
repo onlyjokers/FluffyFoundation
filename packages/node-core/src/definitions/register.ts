@@ -110,6 +110,13 @@ import {
 } from './nodes/scenes.js';
 import { createEffectAsciiNode, createEffectConvolutionNode } from './nodes/effects.js';
 import { createAiModelRefNode } from './nodes/ai.js';
+import {
+  createMidiBooleanNode,
+  createMidiColorMapNode,
+  createMidiFuzzyNode,
+  createMidiMapNode,
+  createMidiSelectMapNode,
+} from './nodes/manager-utility.js';
 
 export function registerDefaultNodeDefinitions(
   registry: NodeRegistry,
@@ -161,6 +168,11 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createBooleanVariableNode,
     createNumberVariableNode,
     createStringVariableNode,
+    createMidiFuzzyNode,
+    createMidiBooleanNode,
+    createMidiMapNode,
+    createMidiSelectMapNode,
+    createMidiColorMapNode,
     createNumberStabilizerNode,
     // Internal graph structure nodes (primarily for manager UI).
     createGroupGateNode,

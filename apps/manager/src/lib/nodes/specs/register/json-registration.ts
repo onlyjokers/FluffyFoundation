@@ -7,6 +7,14 @@ import { createDefinition } from './definition-factory';
 import { loadSpecs } from './spec-loader';
 import type { NodeRuntime, NodeSpec } from './types';
 
+const MANAGER_RUNTIME_OVERRIDE_TYPES = new Set([
+  'midi-boolean',
+  'midi-color-map',
+  'midi-fuzzy',
+  'midi-map',
+  'midi-select-map',
+]);
+
 export function registerJsonSpecs(): void {
   for (const spec of loadSpecs()) {
     try {
@@ -15,7 +23,11 @@ export function registerJsonSpecs(): void {
 
       const existing = nodeRegistry.get(type);
       const runtimeRecord = asRecord(spec.runtime);
-      if (existing && runtimeRecord?.kind !== 'display-object') {
+      if (
+        existing &&
+        runtimeRecord?.kind !== 'display-object' &&
+        !MANAGER_RUNTIME_OVERRIDE_TYPES.has(type)
+      ) {
         nodeRegistry.load({ overlays: [spec] });
         continue;
       }
