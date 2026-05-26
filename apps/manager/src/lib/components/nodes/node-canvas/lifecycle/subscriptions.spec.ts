@@ -228,6 +228,85 @@ test('bindGraphStateSubscription reconciles patch runtime when custom node gate 
   assert.deepEqual(patchRuntimeCalls, ['patch']);
 });
 
+test('bindGraphStateSubscription reconciles patch runtime when custom internal graph changes', () => {
+  const customNode = {
+    id: 'custom-1',
+    type: 'custom:def-1',
+    position: { x: 0, y: 0 },
+    config: {
+      customNode: {
+        definitionId: 'def-1',
+        groupId: 'group-1',
+        role: 'mother',
+        manualGate: true,
+        internal: {
+          nodes: [
+            {
+              id: 'button',
+              type: 'client-button',
+              position: { x: 0, y: 0 },
+              config: {},
+              inputValues: {},
+              outputValues: {},
+            },
+          ],
+          connections: [],
+        },
+      },
+    },
+    inputValues: { gate: true },
+    outputValues: {},
+  };
+  const graphState = writable({ nodes: [customNode], connections: [] });
+  const patchRuntimeCalls: string[] = [];
+
+  const unsubscribe = bindGraphStateSubscription({
+    graphStateStore: graphState,
+    graphSync: { schedule: () => undefined },
+    groupController: { reconcileGraphNodes: () => [] },
+    groupPortNodesController: {
+      removeGroupPortNodesForGroupIds: () => 0,
+      scheduleNormalizeProxies: () => patchRuntimeCalls.push('normalize'),
+    },
+    patchRuntime: { onGraphStateChanged: () => patchRuntimeCalls.push('patch') },
+    syncCustomGateInputs: () => undefined,
+    rehydrateExpandedCustomFrames: () => undefined,
+    isApplyingServerSemanticSnapshot: () => false,
+  });
+  patchRuntimeCalls.length = 0;
+
+  graphState.set({
+    nodes: [
+      {
+        ...customNode,
+        config: {
+          customNode: {
+            ...customNode.config.customNode,
+            internal: {
+              nodes: [
+                ...customNode.config.customNode.internal.nodes,
+                {
+                  id: 'get-variable',
+                  type: 'get-boolean-variable',
+                  position: { x: 100, y: 0 },
+                  config: { name: 'flag' },
+                  inputValues: {},
+                  outputValues: {},
+                },
+              ],
+              connections: [],
+            },
+          },
+        },
+      },
+    ],
+    connections: [],
+  });
+
+  unsubscribe?.();
+  assert.deepEqual(patchRuntimeCalls, ['patch']);
+});
+
 test('bindManagerClientSubscription refreshes graph runtime when client permissions change', () => {
   const managerState = writable({
     clients: [

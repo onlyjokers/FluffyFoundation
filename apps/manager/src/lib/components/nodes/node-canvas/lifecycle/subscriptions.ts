@@ -76,6 +76,31 @@ export function bindGraphStateSubscription(opts: {
   };
 
   const compiledTopologyAffectingKey = (state: any): string => {
+    const internalKey = (customState: Record<string, unknown>): unknown => {
+      const internal = asRecord(customState.internal);
+      const nodes = Array.isArray(internal.nodes) ? internal.nodes : [];
+      const connections = Array.isArray(internal.connections) ? internal.connections : [];
+      return {
+        nodes: nodes
+          .map((node: any) => ({
+            id: String(node?.id ?? ''),
+            type: String(node?.type ?? ''),
+            config: asRecord(node?.config),
+            inputValues: asRecord(node?.inputValues),
+          }))
+          .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)),
+        connections: connections
+          .map((connection: any) => ({
+            id: String(connection?.id ?? ''),
+            sourceNodeId: String(connection?.sourceNodeId ?? ''),
+            sourcePortId: String(connection?.sourcePortId ?? ''),
+            targetNodeId: String(connection?.targetNodeId ?? ''),
+            targetPortId: String(connection?.targetPortId ?? ''),
+          }))
+          .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)),
+      };
+    };
+
     const nodes = (state.nodes ?? [])
       .map((node: any) => {
         const type = String(node.type ?? '');
@@ -86,6 +111,7 @@ export function bindGraphStateSubscription(opts: {
           id: String(node.id ?? ''),
           gate: node.inputValues?.gate === false ? false : true,
           manualGate: customState.manualGate === false ? false : true,
+          internal: internalKey(customState),
         };
       })
       .filter(Boolean)

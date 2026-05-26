@@ -334,6 +334,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     const state = opts.nodeEngine.exportGraph();
     const nodes = Array.isArray(state.nodes) ? state.nodes : [];
     const connections = Array.isArray(state.connections) ? state.connections : [];
+    const frame = (get(opts.groupFrames) ?? []).find((f) => f.group.id === rootId) ?? null;
 
     // Collect subtree group ids so we can remove all group metadata + port nodes.
     const subtreeGroupIds = new Set<string>();
@@ -375,6 +376,45 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
       toRemove.add(String(node.id));
     }
 
+    // Group membership can lag behind the rendered frame after marquee/editing
+    // operations. Nodelization is a visual "turn this framed graph into one
+    // node" action, so capture ordinary nodes that are still enclosed by the
+    // root frame before taking the Custom Node template snapshot.
+    if (frame) {
+      const left = Number(frame.left ?? 0);
+      const top = Number(frame.top ?? 0);
+      const right = left + Number(frame.width ?? 0);
+      const bottom = top + Number(frame.height ?? 0);
+      const frameIsValid =
+        Number.isFinite(left) &&
+        Number.isFinite(top) &&
+        Number.isFinite(right) &&
+        Number.isFinite(bottom) &&
+        right >= left &&
+        bottom >= top;
+      if (frameIsValid) {
+        const decorationTypes = new Set(['group-frame', 'group-gate', 'group-activate']);
+        const tolerance = 1;
+        for (const node of nodes) {
+          const id = String(node.id ?? '');
+          if (!id || toRemove.has(id)) continue;
+          if (decorationTypes.has(String(node.type ?? ''))) continue;
+          const pos = opts.viewAdapter.getNodePosition(id) ?? node.position ?? { x: 0, y: 0 };
+          const x = Number(pos.x ?? 0);
+          const y = Number(pos.y ?? 0);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          if (
+            x >= left - tolerance &&
+            x <= right + tolerance &&
+            y >= top - tolerance &&
+            y <= bottom + tolerance
+          ) {
+            toRemove.add(id);
+          }
+        }
+      }
+    }
+
     // Template includes all nodes we remove except group frames + group gate/activate nodes (editor affordances).
     const excludedTypes = new Set(['group-frame', 'group-gate', 'group-activate']);
     const templateNodeIds = new Set<string>();
@@ -385,7 +425,6 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
       templateNodeIds.add(String(nodeId));
     }
 
-    const frame = (get(opts.groupFrames) ?? []).find((f) => f.group.id === rootId) ?? null;
     const originX = frame ? Number(frame.left ?? 0) : 0;
     const originY = frame ? Number(frame.top ?? 0) : 0;
 

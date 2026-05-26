@@ -475,3 +475,157 @@ test('handleNodelizeGroup publishes the post-nodelization graph to server author
     delete (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm;
   }
 });
+
+test('handleNodelizeGroup captures ordinary nodes enclosed by the group frame even when membership lags', () => {
+  const makeInstance = (
+    id: string,
+    type: string,
+    position: { x: number; y: number },
+    config: Record<string, unknown> = {}
+  ): NodeInstance => ({
+    id,
+    type,
+    position,
+    config,
+    inputValues: {},
+    outputValues: {},
+  });
+  const nodes = new Map<string, NodeInstance>([
+    ['button', makeInstance('button', 'client-button', { x: 80, y: 100 })],
+    ['ui-out', makeInstance('ui-out', 'ui-out', { x: 260, y: 100 })],
+    ['name', makeInstance('name', 'string', { x: 20, y: 20 }, { value: 'flag' })],
+    ['setter', makeInstance('setter', 'set-boolean-variable', { x: 160, y: 20 })],
+    ['getter', makeInstance('getter', 'get-boolean-variable', { x: 20, y: 180 })],
+  ]);
+  const connections: Connection[] = [
+    { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'ui-out', targetPortId: 'in' },
+    { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
+    { id: 'name-get', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'getter', targetPortId: 'name' },
+    { id: 'display', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'button', targetPortId: 'display' },
+  ];
+  const groupStore = writable([
+    {
+      id: 'group-1',
+      parentId: null,
+      name: 'Client UI Group',
+      // This mimics the stale membership failure: the visible frame encloses
+      // the variable helper nodes, but the group's nodeIds has not caught up.
+      nodeIds: ['button', 'ui-out'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+  const definitions: CustomNodeDefinition[] = [];
+
+  const originalConfirm = globalThis.confirm;
+  (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm = () => true;
+
+  const actions = createCustomNodeActions({
+    nodeEngine: {
+      getNode: (nodeId) => nodes.get(nodeId) ?? null,
+      exportGraph: () => ({
+        nodes: Array.from(nodes.values()).map((node) => ({ ...node })),
+        connections: [...connections],
+      }),
+      updateNodeType: () => {},
+      updateNodeConfig: () => {},
+      updateNodeInputValue: () => {},
+      updateNodePosition: () => {},
+      addNode: (node) => {
+        nodes.set(node.id, node);
+      },
+      removeNode: (nodeId) => {
+        nodes.delete(nodeId);
+        for (let index = connections.length - 1; index >= 0; index -= 1) {
+          const connection = connections[index];
+          if (connection.sourceNodeId === nodeId || connection.targetNodeId === nodeId) {
+            connections.splice(index, 1);
+          }
+        }
+      },
+      addConnection: (connection) => {
+        connections.push(connection);
+      },
+      removeConnection: () => {},
+    },
+    nodeRegistry: {
+      get: (type: string) => {
+        if (type === 'client-button') {
+          return {
+            inputs: [{ id: 'display', label: 'Display', type: 'boolean' }],
+            outputs: [{ id: 'out', label: 'Out', type: 'ui' }],
+          };
+        }
+        if (type === 'ui-out') {
+          return { inputs: [{ id: 'in', label: 'In', type: 'ui' }], outputs: [] };
+        }
+        if (type === 'string') {
+          return { inputs: [], outputs: [{ id: 'value', label: 'Value', type: 'string' }] };
+        }
+        if (type === 'set-boolean-variable') {
+          return { inputs: [{ id: 'name', label: 'Name', type: 'string' }], outputs: [] };
+        }
+        if (type === 'get-boolean-variable') {
+          return {
+            inputs: [{ id: 'name', label: 'Name', type: 'string' }],
+            outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+          };
+        }
+        return null;
+      },
+    } as NodeRegistry,
+    groupController: {
+      nodeGroups: groupStore,
+      setGroups: (groups) => groupStore.set(groups),
+      disassembleGroup: (groupId) =>
+        groupStore.update((groups) => groups.filter((group) => group.id !== groupId)),
+      scheduleHighlight: () => {},
+    },
+    groupPortNodesController: {
+      ensureGroupPortNodes: () => {},
+      disassembleGroupAndPorts: () => {},
+      scheduleNormalizeProxies: () => {},
+    },
+    groupFrames: writable([
+      {
+        group: { id: 'group-1' },
+        left: 0,
+        top: 0,
+        width: 420,
+        height: 320,
+      } as never,
+    ]),
+    viewAdapter: {
+      getNodePosition: (nodeId) => nodes.get(nodeId)?.position ?? null,
+    },
+    buildGroupPortIndex: () => new Map([['group-1', { proxyIds: [], legacyActivateIds: [] }]]),
+    groupIdFromNode: () => null,
+    customNodeType: (definitionId) => `custom:${definitionId}`,
+    addCustomNodeDefinition: (definition) => definitions.push(definition),
+    upsertCustomNodeDefinitionCommand: () => {},
+    replaceSemanticGraphCommand: () => {},
+    removeCustomNodeDefinition: () => {},
+    getCustomNodeDefinition: () => null,
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config, state) => ({ ...config, customNode: state }),
+    expandedCustomByGroupId: new Map(),
+    forcedHiddenNodeIds: new Set(),
+    refreshExpandedCustomGroupIds: () => {},
+    requestFramesUpdate: () => {},
+    setSelectedNode: () => {},
+  });
+
+  actions.handleNodelizeGroup('group-1');
+
+  const internalTypes = definitions[0]?.template.nodes.map((node) => String(node.type)).sort();
+  assert.deepEqual(
+    internalTypes,
+    ['client-button', 'get-boolean-variable', 'set-boolean-variable', 'string', 'ui-out'].sort()
+  );
+
+  if (originalConfirm) {
+    globalThis.confirm = originalConfirm;
+  } else {
+    delete (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm;
+  }
+});
