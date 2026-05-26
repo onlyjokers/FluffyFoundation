@@ -90,7 +90,6 @@ import {
   createPlayMediaNode,
   createSceneOutNode,
   createUiOutNode,
-  createVideoOutNode,
 } from './nodes/player.js';
 import {
   createDisplayTextProcessorNode,
@@ -207,7 +206,6 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createPlayMediaNode,
     // Patch root sinks (Max/MSP style).
     createAudioOutNode,
-    () => createVideoOutNode(deps),
     () => createEffectOutNode(deps),
     () => createSceneOutNode(deps),
     () => createUiOutNode(deps),

@@ -122,11 +122,11 @@ test('getLocalOnlyPatchRoutingError allows local-only patch roots routed to disp
   const graph: GraphState = {
     nodes: [
       node('asset', 'load-video-from-local'),
-      node('root', 'video-out'),
+      node('root', 'proc-play-video'),
       node('display', 'display-object'),
     ],
     connections: [
-      connection('c1', 'asset', 'video', 'root', 'video'),
+      connection('c1', 'asset', 'video', 'root', 'in'),
       connection('c2', 'root', 'cmd', 'display', 'in'),
     ],
   };
@@ -215,11 +215,11 @@ registry.set('proc-show-image', nodeDef({
   process: () => ({}),
 }));
 
-registry.set('video-out', nodeDef({
-  type: 'video-out',
-  label: 'Video Out',
+registry.set('proc-play-video', nodeDef({
+  type: 'proc-play-video',
+  label: 'Video Player',
   category: 'Scene',
-  inputs: [port('video', 'video')],
+  inputs: [port('in', 'video')],
   outputs: [port('cmd', 'command')],
   process: () => ({}),
 }));

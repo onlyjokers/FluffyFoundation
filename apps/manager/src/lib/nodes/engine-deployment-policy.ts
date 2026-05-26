@@ -44,7 +44,7 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'play-media',
 ]);
 
-const PATCH_ROOT_TYPES = ['audio-out', 'video-out', 'effect-out', 'scene-out', 'ui-out'] as const;
+const PATCH_ROOT_TYPES = ['audio-out', 'effect-out', 'scene-out', 'ui-out'] as const;
 const PATCH_ROOT_TYPE_SET = new Set<string>(PATCH_ROOT_TYPES);
 
 const PATCH_DEPLOYABLE_NODE_TYPES = new Set([

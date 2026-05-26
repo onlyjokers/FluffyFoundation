@@ -27,3 +27,10 @@ test('patch deployment policy rejects the legacy Aliyun TTS audio source node', 
     /Patch contains non-deployable node type: aliyun-tts/
   );
 });
+
+test('patch deployment policy rejects legacy Static Video Player', () => {
+  assert.throws(
+    () => assertPatchDeployableNodeType('video-out'),
+    /Patch contains non-deployable node type: video-out/
+  );
+});

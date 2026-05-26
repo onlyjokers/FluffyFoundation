@@ -76,7 +76,7 @@ test('resolvePatchDeploymentPlan routes a single patch root to a connected clien
   errors.length = 0;
   const graph: GraphState = {
     nodes: [
-      node('root', 'video-out'),
+      node('root', 'audio-out'),
       node('loader-node', 'client-loader', {}, { clientId: 'client-a' }),
       node('client-node', 'client-executor'),
     ],
@@ -98,7 +98,7 @@ test('resolvePatchDeploymentPlan falls back to connected client-loader when exec
   errors.length = 0;
   const graph: GraphState = {
     nodes: [
-      node('root', 'video-out'),
+      node('root', 'audio-out'),
       node('loader-node', 'client-loader', { index: 1, range: 1, random: false }),
       node('client-node', 'client-executor'),
     ],
@@ -180,7 +180,7 @@ test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch grap
   };
   const compiledGraph: GraphState = {
     nodes: [
-      node('cn:custom-1:root', 'video-out'),
+      node('cn:custom-1:root', 'audio-out'),
       node('cn:custom-1:loader-node', 'client-loader', {}, { clientId: 'client-a' }),
       node('cn:custom-1:client-node', 'client-executor'),
     ],
@@ -270,7 +270,7 @@ test('resolvePatchDeploymentPlan clears transient unavailable-target errors afte
 test('resolvePatchDeploymentPlan routes display-object to local display before remote display clients', () => {
   errors.length = 0;
   const graph: GraphState = {
-    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    nodes: [node('root', 'scene-out'), node('display-node', 'display-object')],
     connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
   };
 
@@ -287,7 +287,7 @@ test('resolvePatchDeploymentPlan routes display-object to local display before r
 test('resolvePatchDeploymentPlan ignores disconnected remote displays', () => {
   errors.length = 0;
   const graph: GraphState = {
-    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    nodes: [node('root', 'scene-out'), node('display-node', 'display-object')],
     connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
   };
 
@@ -312,7 +312,7 @@ test('resolvePatchDeploymentPlan ignores disconnected remote displays', () => {
 test('resolvePatchDeploymentPlan records target revisions for reconnect redeploys', () => {
   errors.length = 0;
   const graph: GraphState = {
-    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    nodes: [node('root', 'scene-out'), node('display-node', 'display-object')],
     connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
   };
 
@@ -338,7 +338,7 @@ test('resolvePatchDeploymentPlan records target revisions for reconnect redeploy
 test('resolvePatchDeploymentPlan avoids local display when the paired session is not ready', () => {
   errors.length = 0;
   const graph: GraphState = {
-    nodes: [node('root', 'video-out'), node('display-node', 'display-object')],
+    nodes: [node('root', 'scene-out'), node('display-node', 'display-object')],
     connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
   };
 
@@ -359,7 +359,7 @@ test('resolvePatchDeploymentPlan routes display-object to the selected display c
   errors.length = 0;
   const graph: GraphState = {
     nodes: [
-      node('root', 'video-out'),
+      node('root', 'scene-out'),
       node('display-node', 'display-object', {}, { displayId: 'display-2' }),
     ],
     connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
@@ -379,7 +379,7 @@ test('resolvePatchDeploymentPlan lets display-object index and range override th
   errors.length = 0;
   const graph: GraphState = {
     nodes: [
-      node('root', 'video-out'),
+      node('root', 'scene-out'),
       node('display-node', 'display-object', { index: 1, range: 2 }, { displayId: 'display-2' }),
     ],
     connections: [connection('c1', 'root', 'cmd', 'display-node', 'in')],
@@ -398,7 +398,7 @@ test('resolvePatchDeploymentPlan lets display-object index and range override th
 test('resolvePatchDeploymentPlan reports multiple enabled roots without active deploy routing', () => {
   errors.length = 0;
   const graph: GraphState = {
-    nodes: [node('root-a', 'audio-out'), node('root-b', 'video-out')],
+    nodes: [node('root-a', 'audio-out'), node('root-b', 'scene-out')],
     connections: [],
   };
 
@@ -407,7 +407,7 @@ test('resolvePatchDeploymentPlan reports multiple enabled roots without active d
   assert.equal(result, null);
   assert.equal(
     errors[0],
-    'Multiple patch roots found (audio-out:root-a, video-out:root-b). Connect Deploy on one or more roots (or delete the others).'
+    'Multiple patch roots found (audio-out:root-a, scene-out:root-b). Connect Deploy on one or more roots (or delete the others).'
   );
 });
 
@@ -421,9 +421,9 @@ definitions.set('audio-out', {
   process: () => ({}),
 });
 
-definitions.set('video-out', {
-  type: 'video-out',
-  label: 'Video Out',
+definitions.set('scene-out', {
+  type: 'scene-out',
+  label: 'Scene Out',
   category: 'Scene',
   inputs: [],
   outputs: [port('cmd', 'command')],

@@ -20,7 +20,6 @@ import { clampInt, clampNumber, coerceBooleanOr, coerceNumber } from '../utils.j
 import {
   asRecord,
   getArrayValue,
-  getRecordString,
   getStringValue,
 } from './node-definition-utils.js';
 
@@ -108,113 +107,6 @@ export function createAudioOutNode(): NodeDefinition {
     },
     configSchema: [],
     process: () => ({}),
-  };
-}
-
-export function createVideoOutNode(deps: ClientObjectDeps): NodeDefinition {
-  const resolveUrl = (raw: unknown): string => {
-    if (typeof raw === 'string') return raw.trim();
-    if (Array.isArray(raw)) {
-      for (const item of raw) {
-        if (typeof item === 'string' && item.trim()) return item.trim();
-        const url = getRecordString(item, 'url');
-        if (url) return url;
-      }
-      return '';
-    }
-    const url = getRecordString(raw, 'url');
-    if (url) return url;
-    return '';
-  };
-
-  const parseMutedFromUrl = (url: string): boolean | null => {
-    const trimmed = url.trim();
-    if (!trimmed) return null;
-
-    const index = trimmed.indexOf('#');
-    const paramsRaw = index >= 0 ? trimmed.slice(index + 1) : '';
-    if (!paramsRaw) return null;
-
-    const params = new URLSearchParams(paramsRaw);
-    const value = params.get('muted');
-    if (value === null) return null;
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) return null;
-    if (normalized === 'true') return true;
-    if (normalized === 'false') return false;
-    const n = Number(normalized);
-    if (Number.isFinite(n)) return n >= 0.5;
-    return null;
-  };
-
-  const parseVolumeFromUrl = (url: string): number | null => {
-    const trimmed = url.trim();
-    if (!trimmed) return null;
-
-    const index = trimmed.indexOf('#');
-    const paramsRaw = index >= 0 ? trimmed.slice(index + 1) : '';
-    if (!paramsRaw) return null;
-
-    const params = new URLSearchParams(paramsRaw);
-    const value = params.get('vol') ?? params.get('volume');
-    if (value === null) return null;
-    const n = Number(value);
-    if (!Number.isFinite(n)) return null;
-    return Math.max(0, Math.min(100, n));
-  };
-
-  const stop = () => {
-    deps.executeCommand({ action: 'stopMedia', payload: {} });
-  };
-
-  return {
-    type: 'video-out',
-    label: 'Static Video Player',
-    category: 'Player',
-    inputs: [{ id: 'in', label: 'In', type: 'video', kind: 'sink' }],
-    outputs: [
-      // Manager-only routing: connect to `client-executor(in)` to indicate patch target(s).
-      // This output is not part of the exported client patch subgraph.
-      { id: 'cmd', label: 'Deploy', type: 'command' },
-    ],
-    metadata: {
-      version: '1.0.0',
-      platformTargets: ['manager', 'client', 'display'],
-      sideEffectClass: 'remote-control',
-      permissions: ['control:send'],
-      compatibility: [
-        {
-          target: 'display-object',
-          rule: 'Route this player through Display when video playback should run on selected Display endpoints.',
-        },
-      ],
-      examples: [],
-      risks: [],
-      description: 'Deploy static video playback to selected runtime endpoints.',
-    },
-    configSchema: [],
-    process: () => ({}),
-    onSink: (inputs) => {
-      const url = resolveUrl(inputs.in);
-      if (!url) {
-        stop();
-        return;
-      }
-      const muted = parseMutedFromUrl(url);
-      const volume = parseVolumeFromUrl(url);
-      deps.executeCommand({
-        action: 'playMedia',
-        payload: {
-          url,
-          mediaType: 'video',
-          ...(volume === null ? {} : { volume }),
-          ...(muted === null ? {} : { muted }),
-        },
-      });
-    },
-    onDisable: () => {
-      stop();
-    },
   };
 }
 

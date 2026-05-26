@@ -46,7 +46,6 @@ export function capabilityForNodeType(type: string | undefined): string | null {
   if (type === 'load-video-from-local') return 'visual';
   if (type === 'proc-show-image') return 'visual';
   if (type === 'proc-play-video') return 'visual';
-  if (type === 'video-out') return 'visual';
   if (type === 'effect-out') return 'visual';
   if (type === 'scene-out') return 'visual';
   if (type === 'ui-out') return 'visual';

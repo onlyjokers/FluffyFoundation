@@ -1,13 +1,13 @@
 {
   "kind": "node-graph",
   "version": 1,
-  "title": "Patch: Load Video From Remote → Video to Client",
-  "purpose": "体验 Load Video From Remote 的 Timeline 双游标/Play/Loop/Reverse/Seek（clip hash）+ client 侧 MediaEngine(video) 播放链路（Graph-driven Patch）",
+  "title": "Patch: Load Video From Remote → Video Player to Client",
+  "purpose": "体验 Load Video From Remote 的 Timeline 双游标/Play/Loop/Reverse/Seek（clip hash）+ client 侧 MediaEngine(video) 播放链路（Graph-driven command）",
   "howTo": [
     "1) 打开 client。",
     "2) manager Node Graph 点 ▶ Start。",
     "3) 先在 Assets Manager 上传视频，然后在 Load Video From Remote 里选择该视频。",
-    "4) 通过 `Video to Client(Deploy) → Client(In)` 指定播放目标。",
+    "4) 通过 `Video Player(Cmd) → Client(In)` 指定播放目标。",
     "5) client 会播放视频；可在 Load Video From Remote 里调 Timeline/Loop/Play/Reverse/Seek。"
   ],
   "graph": {
@@ -36,8 +36,8 @@
         "outputValues": {}
       },
       {
-        "id": "node-video-out",
-        "type": "video-out",
+        "id": "node-video-player",
+        "type": "proc-play-video",
         "position": { "x": 520, "y": 260 },
         "config": {},
         "inputValues": {},
@@ -46,15 +46,15 @@
     ],
     "connections": [
       {
-        "id": "conn-video-out",
+        "id": "conn-video-player",
         "sourceNodeId": "node-load-video",
         "sourcePortId": "ref",
-        "targetNodeId": "node-video-out",
+        "targetNodeId": "node-video-player",
         "targetPortId": "in"
       },
       {
         "id": "conn-deploy",
-        "sourceNodeId": "node-video-out",
+        "sourceNodeId": "node-video-player",
         "sourcePortId": "cmd",
         "targetNodeId": "node-client",
         "targetPortId": "in"
