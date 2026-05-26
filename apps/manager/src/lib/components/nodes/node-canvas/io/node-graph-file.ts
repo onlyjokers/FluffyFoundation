@@ -10,12 +10,14 @@ type NodeGraphFileV2 = {
   kind: 'node-graph';
   graph: unknown;
   groups?: unknown;
+  customNodes?: unknown;
   ui?: unknown;
 };
 
 type ParsedNodeGraphFile = {
   graph: { nodes: unknown[]; connections: unknown[] };
   groups: NodeGroup[];
+  customNodes: unknown[];
   collapsedNodeIds: string[];
 };
 
@@ -97,6 +99,7 @@ export function parseNodeGraphFile(payload: unknown): ParsedNodeGraphFile | null
     return {
       graph: graphValue as { nodes: unknown[]; connections: unknown[] },
       groups: parseNodeGroups(wrapped.groups),
+      customNodes: Array.isArray(wrapped.customNodes) ? wrapped.customNodes : [],
       collapsedNodeIds: parseCollapsedNodeIds(wrapped.ui),
     };
   }
@@ -108,6 +111,9 @@ export function parseNodeGraphFile(payload: unknown): ParsedNodeGraphFile | null
     return {
       graph: payload as { nodes: unknown[]; connections: unknown[] },
       groups: parseNodeGroups((payload as Record<string, unknown>).groups),
+      customNodes: Array.isArray((payload as Record<string, unknown>).customNodes)
+        ? ((payload as Record<string, unknown>).customNodes as unknown[])
+        : [],
       collapsedNodeIds: parseCollapsedNodeIds((payload as Record<string, unknown>).ui),
     };
   }

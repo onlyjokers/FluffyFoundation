@@ -783,6 +783,50 @@ test('pulse to boolean supports latch and momentary modes', async () => {
   }
 });
 
+test('boolean to pulse emits one pulse when the boolean input changes', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: false } },
+      testNode('pulse', 'boolean-to-pulse'),
+    ],
+    connections: [
+      {
+        id: 'source-pulse',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'pulse',
+        targetPortId: 'value',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => runtime.getNode('pulse')?.outputValues.pulse === false);
+
+    const source = runtime.getNode('source');
+    assert.ok(source);
+    source.inputValues.value = true;
+    await waitFor(() => runtime.getNode('pulse')?.outputValues.pulse === true);
+    await waitFor(() => runtime.getNode('pulse')?.outputValues.pulse === false);
+
+    source.inputValues.value = false;
+    await waitFor(() => runtime.getNode('pulse')?.outputValues.pulse === true);
+    await waitFor(() => runtime.getNode('pulse')?.outputValues.pulse === false);
+  } finally {
+    runtime.stop();
+  }
+});
+
 test('set boolean variable supports explicit pulse false writes and reset to default', async () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
@@ -836,6 +880,65 @@ test('set boolean variable supports explicit pulse false writes and reset to def
     const reset = runtime.getNode('reset');
     assert.ok(reset);
     reset.inputValues.value = true;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('set boolean variable reset accepts pulse input', async () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: true } },
+      { ...testNode('reset-source', 'bool'), inputValues: { value: false } },
+      testNode('reset-pulse', 'boolean-to-pulse'),
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'flag', defaultValue: false, mode: 'followInput' },
+      },
+      { ...testNode('getter', 'get-boolean-variable'), config: { name: 'flag' } },
+    ],
+    connections: [
+      {
+        id: 'source-set',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'reset-source-pulse',
+        sourceNodeId: 'reset-source',
+        sourcePortId: 'value',
+        targetNodeId: 'reset-pulse',
+        targetPortId: 'value',
+      },
+      {
+        id: 'reset-pulse-setter',
+        sourceNodeId: 'reset-pulse',
+        sourcePortId: 'pulse',
+        targetNodeId: 'setter',
+        targetPortId: 'reset',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === true);
+
+    const resetSource = runtime.getNode('reset-source');
+    assert.ok(resetSource);
+    resetSource.inputValues.value = true;
     await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
   } finally {
     runtime.stop();
@@ -1187,6 +1290,10 @@ test('default registry exposes pulse event ports and pulse to boolean conversion
   assert.ok(converter);
   assert.equal(converter.inputs.find((port) => port.id === 'pulse')?.type, 'pulse');
   assert.equal(converter.outputs.find((port) => port.id === 'value')?.type, 'boolean');
+  const booleanToPulse = registry.get('boolean-to-pulse');
+  assert.ok(booleanToPulse);
+  assert.equal(booleanToPulse.inputs.find((port) => port.id === 'value')?.type, 'boolean');
+  assert.equal(booleanToPulse.outputs.find((port) => port.id === 'pulse')?.type, 'pulse');
 });
 
 test('client loader applies index range and random to loaded client ids', () => {

@@ -14,7 +14,14 @@ type PulseToBooleanState = {
   lastPulse: boolean;
 };
 
+type BooleanToPulseState = {
+  initialized: boolean;
+  lastValue: boolean;
+  pulseUntil: number;
+};
+
 const pulseToBooleanState = new Map<string, PulseToBooleanState>();
+const booleanToPulseState = new Map<string, BooleanToPulseState>();
 
 function pulseToBooleanMode(value: unknown): 'toggle' | 'latchTrue' | 'latchFalse' | 'momentary' {
   if (value === 'latchTrue' || value === 'latchFalse' || value === 'momentary') return value;
@@ -235,6 +242,42 @@ export function createPulseToBooleanNode(): NodeDefinition {
     },
     onDisable: (_inputs, _config, context) => {
       pulseToBooleanState.delete(context.nodeId);
+    },
+  };
+}
+
+export function createBooleanToPulseNode(): NodeDefinition {
+  return {
+    type: 'boolean-to-pulse',
+    label: 'Boolean to Pulse',
+    category: 'Logic',
+    inputs: [{ id: 'value', label: 'Boolean', type: 'boolean', defaultValue: false }],
+    outputs: [{ id: 'pulse', label: 'Pulse', type: 'pulse' }],
+    configSchema: [],
+    process: (inputs, _config, context) => {
+      const current = coerceBoolean(inputs.value);
+      const state = booleanToPulseState.get(context.nodeId) ?? {
+        initialized: false,
+        lastValue: current,
+        pulseUntil: 0,
+      };
+
+      if (!state.initialized) {
+        state.initialized = true;
+        state.lastValue = current;
+        state.pulseUntil = 0;
+      } else if (current !== state.lastValue) {
+        state.lastValue = current;
+        state.pulseUntil = context.time + Math.max(1, context.deltaTime);
+      }
+
+      const pulse = state.pulseUntil > 0 && context.time <= state.pulseUntil;
+      if (!pulse) state.pulseUntil = 0;
+      booleanToPulseState.set(context.nodeId, state);
+      return { pulse };
+    },
+    onDisable: (_inputs, _config, context) => {
+      booleanToPulseState.delete(context.nodeId);
     },
   };
 }

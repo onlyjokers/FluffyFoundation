@@ -3,6 +3,7 @@
  */
 import type { NodeRegistry } from '@shugu/node-core';
 import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
+import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeGroup } from '../controllers/group-controller';
 import { remapImportedGroups, type ParsedNodeGraphFile } from './node-graph-file.js';
 
@@ -29,6 +30,7 @@ export type NodeGraphImportExecutorOptions = {
   getViewportCenterGraphPos: () => { x: number; y: number };
   createId: (prefix: string) => string;
   getDefaultNodeConfig?: (type: string) => Record<string, unknown>;
+  addCustomNodeDefinition?: (definition: CustomNodeDefinition) => void;
   setNodeCollapsed?: (nodeId: string, collapsed: boolean) => Promise<void> | void;
   onSelectNodeIds?: (nodeIds: string[]) => void;
   onGraphImported?: (snapshot: { graph: GraphState; groups: NodeGroup[] }) => void | Promise<void>;
@@ -64,6 +66,30 @@ function computeTemplateOffset(nodes: unknown[], anchor: { x: number; y: number 
   return { dx: anchor.x - centerX, dy: anchor.y - centerY };
 }
 
+function parseCustomNodeDefinitions(value: unknown): CustomNodeDefinition[] {
+  if (!Array.isArray(value)) return [];
+  const out: CustomNodeDefinition[] = [];
+  for (const item of value) {
+    const record = isRecord(item) ? item : null;
+    const definitionId = typeof record?.definitionId === 'string' ? record.definitionId : '';
+    if (!definitionId) continue;
+    const template = isRecord(record?.template) ? record.template : {};
+    const nodes = Array.isArray(template.nodes) ? template.nodes : [];
+    const connections = Array.isArray(template.connections) ? template.connections : [];
+    const ports = Array.isArray(record?.ports) ? record.ports : [];
+    out.push({
+      definitionId,
+      name: typeof record?.name === 'string' ? record.name : '',
+      template: {
+        nodes: nodes as GraphState['nodes'],
+        connections: connections as GraphState['connections'],
+      },
+      ports: ports as CustomNodeDefinition['ports'],
+    });
+  }
+  return out;
+}
+
 export async function executeParsedNodeGraphImport(
   opts: NodeGraphImportExecutorOptions
 ): Promise<NodeGraphImportResult> {
@@ -72,6 +98,10 @@ export async function executeParsedNodeGraphImport(
   const sourceConnections = Array.isArray(sourceGraph.connections)
     ? sourceGraph.connections
     : [];
+
+  for (const definition of parseCustomNodeDefinitions(opts.parsedFile.customNodes)) {
+    opts.addCustomNodeDefinition?.(definition);
+  }
 
   const importableNodes = sourceNodes.filter((node) => {
     const nodeRecord = isRecord(node) ? node : {};

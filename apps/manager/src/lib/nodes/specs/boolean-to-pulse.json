@@ -1,0 +1,10 @@
+{
+  "__purpose": "Manager node spec for converting boolean changes into pulse events.",
+  "type": "boolean-to-pulse",
+  "label": "Boolean to Pulse",
+  "category": "Logic",
+  "inputs": [{ "id": "value", "label": "Boolean", "type": "boolean", "defaultValue": false }],
+  "outputs": [{ "id": "pulse", "label": "Pulse", "type": "pulse" }],
+  "configSchema": [],
+  "runtime": { "kind": "boolean-to-pulse" }
+}

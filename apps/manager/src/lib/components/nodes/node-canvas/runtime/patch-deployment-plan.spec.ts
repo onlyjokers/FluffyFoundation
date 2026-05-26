@@ -207,6 +207,66 @@ test('resolvePatchDeploymentPlan can plan from a compiled custom-node patch grap
   assert.equal(result.planKey, 'client-a=cn:custom-1:root');
 });
 
+test('resolvePatchDeploymentPlan routes compiled custom UI patches through command aggregators', () => {
+  errors.length = 0;
+  const editorGraph: GraphState = {
+    nodes: [node('custom-ui', 'custom:def-ui')],
+    connections: [],
+  };
+  const compiledGraph: GraphState = {
+    nodes: [
+      node('cn:custom-ui:button', 'client-button', { display: true }),
+      node('cn:custom-ui:root', 'ui-out'),
+      node('cn:custom-ui:aggregator', 'cmd-aggregator'),
+      node('cn:custom-ui:loader', 'client-loader', { index: 1, range: 1, random: false }),
+      node('cn:custom-ui:executor', 'client-executor'),
+    ],
+    connections: [
+      connection('button-ui', 'cn:custom-ui:button', 'out', 'cn:custom-ui:root', 'in'),
+      connection('root-command', 'cn:custom-ui:root', 'cmd', 'cn:custom-ui:aggregator', 'in1'),
+      connection('aggregated-command', 'cn:custom-ui:aggregator', 'cmd', 'cn:custom-ui:executor', 'in'),
+      connection('client-link', 'cn:custom-ui:loader', 'client', 'cn:custom-ui:executor', 'client'),
+    ],
+  };
+
+  const result = plan(editorGraph, {
+    compiledGraph,
+    getRuntimeNode: (id) => editorGraph.nodes.find((candidate) => candidate.id === id),
+    getLastComputedInputs: () => null,
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['client-a']);
+  assert.deepEqual(result.rootIdsByClientId.get('client-a'), ['cn:custom-ui:root']);
+  assert.equal(result.planKey, 'client-a=cn:custom-ui:root');
+});
+
+test('resolvePatchDeploymentPlan clears transient unavailable-target errors after targets recover', () => {
+  errors.length = 0;
+  errors.push('Patch target unavailable; keeping the previous deployment running.');
+  const graph: GraphState = {
+    nodes: [
+      node('root', 'ui-out'),
+      node('loader-node', 'client-loader', { index: 1, range: 1, random: false }),
+      node('client-node', 'client-executor'),
+    ],
+    connections: [
+      connection('root-command', 'root', 'cmd', 'client-node', 'in'),
+      connection('client-link', 'loader-node', 'client', 'client-node', 'client'),
+    ],
+  };
+
+  const result = plan(graph, {
+    getLastComputedInputs: () => null,
+    setLastError: (message) => {
+      errors.push(message ?? '');
+    },
+  });
+
+  assert.ok(result);
+  assert.equal(errors.at(-1), '');
+});
+
 test('resolvePatchDeploymentPlan routes display-object to local display before remote display clients', () => {
   errors.length = 0;
   const graph: GraphState = {
@@ -453,6 +513,16 @@ definitions.set('client-executor', {
   category: 'Objects',
   inputs: [port('client', 'client'), port('in', 'command')],
   outputs: [port('imageOut', 'image')],
+  configSchema: [],
+  process: () => ({}),
+});
+
+definitions.set('cmd-aggregator', {
+  type: 'cmd-aggregator',
+  label: 'Cmd Aggregator',
+  category: 'Objects',
+  inputs: [port('in1', 'command'), port('in2', 'command'), port('in3', 'command')],
+  outputs: [port('cmd', 'command')],
   configSchema: [],
   process: () => ({}),
 });

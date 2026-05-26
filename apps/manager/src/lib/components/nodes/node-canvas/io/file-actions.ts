@@ -3,6 +3,8 @@
  */
 import { nodeRegistry } from '$lib/nodes/registry';
 import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
+import { customNodeDefinitions } from '$lib/nodes/custom-nodes/store';
+import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeGroup } from '../controllers/group-controller';
 import {
   exportMidiTemplateFile,
@@ -18,6 +20,7 @@ import {
   type NodeGraphFileV2,
 } from './node-graph-file.js';
 import { executeParsedNodeGraphImport } from './node-graph-import-executor.js';
+import { get } from 'svelte/store';
 
 type FileActionsOptions = {
   nodeEngine: {
@@ -67,6 +70,34 @@ function generateId(prefix: string): string {
   return prefix.endsWith(':') ? `${prefix}${token}` : `${prefix}-${token}`;
 }
 
+function cloneCustomNodeDefinitionsForGraphFile(): CustomNodeDefinition[] {
+  return (get(customNodeDefinitions) ?? []).map((def) => ({
+    definitionId: String(def.definitionId ?? ''),
+    name: String(def.name ?? ''),
+    template: {
+      nodes: (def.template?.nodes ?? []).map((node) => ({
+        ...node,
+        config: { ...(node.config ?? {}) },
+        inputValues: { ...(node.inputValues ?? {}) },
+        outputValues: {},
+      })),
+      connections: (def.template?.connections ?? []).map((connection) => ({ ...connection })),
+    },
+    ports: (def.ports ?? []).map((port) => ({
+      portKey: String(port.portKey ?? ''),
+      side: port.side === 'input' ? 'input' : 'output',
+      label: String(port.label ?? ''),
+      type: port.type,
+      pinned: Boolean(port.pinned),
+      y: typeof port.y === 'number' ? port.y : Number(port.y ?? 0),
+      binding: {
+        nodeId: String(port.binding?.nodeId ?? ''),
+        portId: String(port.binding?.portId ?? ''),
+      },
+    })),
+  }));
+}
+
 export function createFileActions(opts: FileActionsOptions) {
   const exportGraph = () => {
     const raw = opts.nodeEngine.exportGraph();
@@ -88,7 +119,15 @@ export function createFileActions(opts: FileActionsOptions) {
       collapsedNodeIds.length > 0
         ? { collapsedNodeIds: Array.from(new Set(collapsedNodeIds)) }
         : undefined;
-    const file: NodeGraphFileV2 = { version: 2, kind: 'node-graph', graph, groups, ui };
+    const customNodes = cloneCustomNodeDefinitionsForGraphFile();
+    const file: NodeGraphFileV2 = {
+      version: 2,
+      kind: 'node-graph',
+      graph,
+      groups,
+      ...(customNodes.length > 0 ? { customNodes } : {}),
+      ui,
+    };
     downloadJson(file, 'shugu-node-graph.json');
   };
 
@@ -109,6 +148,7 @@ export function createFileActions(opts: FileActionsOptions) {
       getViewportCenterGraphPos: opts.getViewportCenterGraphPos,
       createId: generateId,
       getDefaultNodeConfig: defaultNodeConfig,
+      addCustomNodeDefinition: opts.addCustomNodeDefinition,
       setNodeCollapsed: opts.setNodeCollapsed,
       onSelectNodeIds: opts.onSelectNodeIds,
       onGraphImported: opts.onGraphImported,

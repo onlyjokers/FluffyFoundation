@@ -20,6 +20,7 @@ import {
 } from './nodes/client.js';
 import {
   createArrayFilterNode,
+  createBooleanToPulseNode,
   createLogicAddNode,
   createLogicAndNode,
   createLogicDivideNode,
@@ -146,6 +147,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createLogicForNode,
     createLogicSleepNode,
     createLogicNumberToBooleanNode,
+    createBooleanToPulseNode,
     createPulseToBooleanNode,
     createNumberScriptNode,
     createShowAnythingNode,

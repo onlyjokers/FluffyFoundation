@@ -421,7 +421,9 @@ export function resolvePatchDeploymentPlan(
     typeof prevError === 'string' &&
     (prevError.startsWith('Multiple patch roots found') ||
       prevError.startsWith('Multiple active patch roots found') ||
-      prevError.startsWith('Multiple active patch roots have different targets'))
+      prevError.startsWith('Multiple active patch roots have different targets') ||
+      prevError.startsWith('Patch target unavailable') ||
+      prevError.startsWith('Patch reconcile produced no deployable targets'))
   ) {
     setLastError(null);
   }

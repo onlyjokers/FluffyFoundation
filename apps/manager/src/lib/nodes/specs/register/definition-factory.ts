@@ -225,6 +225,7 @@ export function createDefinition(spec: NodeSpec & { runtime: NodeRuntime }): Nod
     case 'logic-if':
     case 'logic-for':
     case 'logic-sleep':
+    case 'boolean-to-pulse':
     case 'pulse-to-boolean':
     case 'number-script':
     case 'client-count':

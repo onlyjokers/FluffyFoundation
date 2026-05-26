@@ -97,6 +97,7 @@ export type NodeRuntime =
   | { kind: 'logic-for' }
   | { kind: 'logic-sleep' }
   | { kind: 'logic-number-to-boolean' }
+  | { kind: 'boolean-to-pulse' }
   | { kind: 'pulse-to-boolean' }
   | { kind: 'number-script' }
   | { kind: 'client-count' }

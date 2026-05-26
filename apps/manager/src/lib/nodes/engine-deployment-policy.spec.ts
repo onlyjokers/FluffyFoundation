@@ -17,6 +17,7 @@ test('patch deployment policy allows variable nodes as local patch state', () =>
 });
 
 test('patch deployment policy allows pulse conversion nodes as local patch logic', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('boolean-to-pulse'));
   assert.doesNotThrow(() => assertPatchDeployableNodeType('pulse-to-boolean'));
 });
 

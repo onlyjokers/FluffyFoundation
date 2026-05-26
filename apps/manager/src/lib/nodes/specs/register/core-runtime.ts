@@ -128,6 +128,7 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     ['logic-if', pick('logic-if')],
     ['logic-for', pick('logic-for')],
     ['logic-sleep', pick('logic-sleep')],
+    ['boolean-to-pulse', pick('boolean-to-pulse')],
     ['pulse-to-boolean', pick('pulse-to-boolean')],
     ['number-script', pick('number-script')],
     ['client-count', pick('client-count')],

@@ -176,3 +176,68 @@ test('executeParsedNodeGraphImport can import the AI agent demo template without
   assert.equal(importedGroups[0].agentPolicy?.enabled, true);
   assert.equal(importedGroups[0].agentInterface?.eventBindings?.includes('client.text.final'), true);
 });
+
+test('executeParsedNodeGraphImport restores embedded custom node definitions before importing nodes', async () => {
+  const graph: GraphState = { nodes: [], connections: [] };
+  const registry = registryWithTypes(['custom:def-1']);
+  let addedDefinition: unknown = null;
+  let importedGraph: GraphState | null = null;
+
+  const result = await executeParsedNodeGraphImport({
+    parsedFile: {
+      graph: {
+        nodes: [
+          {
+            id: 'custom-node',
+            type: 'custom:def-1',
+            position: { x: 0, y: 0 },
+            config: {},
+            inputValues: {},
+            outputValues: {},
+          },
+        ],
+        connections: [],
+      },
+      groups: [],
+      customNodes: [
+        {
+          definitionId: 'def-1',
+          name: 'Nested',
+          template: { nodes: [], connections: [] },
+          ports: [],
+        },
+      ],
+      collapsedNodeIds: [],
+    },
+    nodeRegistry: registry,
+    nodeEngine: {
+      exportGraph: () => ({
+        nodes: graph.nodes.map((node) => ({ ...node })),
+        connections: graph.connections.map((connection) => ({ ...connection })),
+      }),
+      addNode: (node) => {
+        graph.nodes.push(node);
+      },
+      addConnection: (connection) => {
+        graph.connections.push(connection);
+        return true;
+      },
+      updateNodeConfig: () => undefined,
+    },
+    getNodeGroups: () => [],
+    appendNodeGroups: () => undefined,
+    getViewportCenterGraphPos: () => ({ x: 0, y: 0 }),
+    createId: (prefix) => `${prefix}fixed`,
+    addCustomNodeDefinition: (definition) => {
+      addedDefinition = definition;
+    },
+    onGraphImported: (snapshot) => {
+      importedGraph = snapshot.graph;
+    },
+  });
+
+  assert.equal(result.importedNodes, 1);
+  assert.ok(addedDefinition);
+  assert.ok(importedGraph);
+  assert.equal(importedGraph?.nodes[0].type, 'custom:def-1');
+});

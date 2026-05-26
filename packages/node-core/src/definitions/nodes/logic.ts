@@ -3,6 +3,7 @@
  */
 export {
   createArrayFilterNode,
+  createBooleanToPulseNode,
   createLogicAddNode,
   createLogicDivideNode,
   createLogicMultipleNode,

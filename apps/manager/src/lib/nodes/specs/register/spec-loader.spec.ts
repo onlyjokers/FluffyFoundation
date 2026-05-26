@@ -11,3 +11,17 @@ test('loadSpecs glob includes top-level manager node specs', () => {
 
   assert.match(source, /['"]\.\.\/\*\.json['"]/);
 });
+
+test('loadSpecs includes Boolean to Pulse manager spec', () => {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const spec = JSON.parse(readFileSync(join(currentDir, '..', 'boolean-to-pulse.json'), 'utf8')) as {
+    type?: string;
+    runtime?: { kind?: string };
+    outputs?: Array<{ id?: string; type?: string }>;
+  };
+
+  assert.ok(spec);
+  assert.equal(spec.type, 'boolean-to-pulse');
+  assert.equal(spec.runtime?.kind, 'boolean-to-pulse');
+  assert.equal(spec.outputs?.find((port) => port.id === 'pulse')?.type, 'pulse');
+});

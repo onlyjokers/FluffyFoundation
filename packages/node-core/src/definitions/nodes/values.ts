@@ -172,7 +172,7 @@ export function createBooleanVariableNode(): NodeDefinition {
     category: 'Internal',
     inputs: [
       { id: 'set', label: 'Set', type: 'boolean', kind: 'sink' },
-      { id: 'reset', label: 'Reset', type: 'boolean', kind: 'sink' },
+      { id: 'reset', label: 'Reset', type: 'pulse', kind: 'sink' },
     ],
     outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
     configSchema: [{ key: 'defaultValue', label: 'Default', type: 'boolean', defaultValue: false }],
@@ -217,7 +217,7 @@ export function createSetBooleanVariableNode(): NodeDefinition {
         ],
       },
       { id: 'set', label: 'Set', type: 'boolean', kind: 'sink' },
-      { id: 'reset', label: 'Reset', type: 'boolean', kind: 'sink' },
+      { id: 'reset', label: 'Reset', type: 'pulse', kind: 'sink' },
     ],
     outputs: [],
     configSchema: [

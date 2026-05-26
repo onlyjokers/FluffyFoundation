@@ -110,6 +110,41 @@ test('template import payload classifier recognizes the AI Agent demo as a node 
   assert.equal(getTemplateImportPayloadKind(parsed), 'node-graph');
 });
 
+test('parsed node graph files preserve embedded custom node definitions', () => {
+  const parsed = parseNodeGraphFile({
+    version: 2,
+    kind: 'node-graph',
+    graph: {
+      nodes: [
+        {
+          id: 'custom-1',
+          type: 'custom:def-1',
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+      ],
+      connections: [],
+    },
+    customNodes: [
+      {
+        definitionId: 'def-1',
+        name: 'Nested UI',
+        template: { nodes: [], connections: [] },
+        ports: [],
+      },
+    ],
+  });
+
+  assert.ok(parsed);
+  assert.equal(parsed.customNodes.length, 1);
+  assert.deepEqual(parsed.customNodes[0], {
+    definitionId: 'def-1',
+    name: 'Nested UI',
+    template: { nodes: [], connections: [] },
+    ports: [],
+  });
+});
+
 test('AI Agent demo template uses current display-object routing defaults', () => {
   const parsed = readAiAgentDemoTemplate() as {
     graph?: { nodes?: Array<{ id?: string; type?: string; config?: unknown; inputValues?: unknown }> };
