@@ -1478,6 +1478,39 @@ test('client loader applies index range and random to loaded client ids', () => 
   );
 });
 
+test('client loader loadAll takes precedence over loaded ids index range and random', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a', 'client-b', 'client-c', 'client-d'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const loader = registry.get('client-loader');
+  assert.ok(loader);
+
+  const selected = loader.process(
+    {
+      loadIndexs: ['client-b', 'client-c'],
+      loadAll: true,
+      index: 2,
+      range: 1,
+      random: true,
+    },
+    {},
+    { nodeId: 'loader-load-all', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(selected.indexs, ['client-a', 'client-b', 'client-c', 'client-d']);
+  assert.equal(selected.number, 4);
+  assert.deepEqual((selected.client as { clientIds?: string[] }).clientIds, [
+    'client-a',
+    'client-b',
+    'client-c',
+    'client-d',
+  ]);
+});
+
 test('default registry replaces legacy client-object with loader and executor nodes', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {

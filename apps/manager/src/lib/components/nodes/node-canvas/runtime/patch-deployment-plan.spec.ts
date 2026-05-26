@@ -72,6 +72,35 @@ const plan = (
     ...opts,
   });
 
+test('resolvePatchDeploymentPlan lets client-loader loadAll override index and range fallback', () => {
+  errors.length = 0;
+  const graph: GraphState = {
+    nodes: [
+      node('root', 'audio-out'),
+      node('loader-node', 'client-loader', { loadAll: true, index: 2, range: 1, random: false }),
+      node('client-node', 'client-executor'),
+    ],
+    connections: [
+      connection('c1', 'root', 'cmd', 'client-node', 'in'),
+      connection('c2', 'loader-node', 'client', 'client-node', 'client'),
+    ],
+  };
+
+  const result = plan(graph, {
+    audienceClientIdsInOrder: () => ['client-a', 'client-b', 'client-c'],
+    getManagerClients: () => [
+      { clientId: 'client-a', group: 'audience' },
+      { clientId: 'client-b', group: 'audience' },
+      { clientId: 'client-c', group: 'audience' },
+    ],
+    getLastComputedInputs: () => null,
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.targetClientIds, ['client-a', 'client-b', 'client-c']);
+  assert.equal(result.planKey, 'client-a=root|client-b=root|client-c=root');
+});
+
 test('resolvePatchDeploymentPlan routes a single patch root to a connected client-executor', () => {
   errors.length = 0;
   const graph: GraphState = {

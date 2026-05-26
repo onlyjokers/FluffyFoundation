@@ -150,12 +150,16 @@ export function resolvePatchDeploymentPlan(
     const runtimeNode = getRuntimeNode(nodeId) ?? planningNodeById.get(nodeId);
     const inputValues = asRecord(runtimeNode?.inputValues) ?? {};
     const computed = getLastComputedInputs(nodeId);
-    const getEffectiveInput = (portId: 'loadIndexs' | 'index' | 'range' | 'random'): unknown => {
+    const getEffectiveInput = (portId: 'loadIndexs' | 'loadAll' | 'index' | 'range' | 'random'): unknown => {
       if (computed && Object.prototype.hasOwnProperty.call(computed, portId)) {
         return computed[portId];
       }
       return inputValues[portId];
     };
+
+    if (coerceBoolean(getEffectiveInput('loadAll'), false)) {
+      return connectedAudienceIds;
+    }
 
     const loadedRaw = getEffectiveInput('loadIndexs');
     const loadedIds = Array.isArray(loadedRaw)
