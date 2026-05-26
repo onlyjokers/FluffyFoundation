@@ -138,7 +138,8 @@ export function exportGraphForPatch(
     if (!registry) return true;
     const node = nodes.find((n) => String(n.id) === String(targetNodeId));
     if (!node) return true;
-    if (String(node.type) === 'load-audio-from-assets' && String(targetPortId) === 'asset') return false;
+    if (String(node.type) === 'load-audio-from-assets' && String(targetPortId) === 'asset')
+      return false;
     const def = registry.get(String(node.type));
     const port = def?.inputs?.find((p) => String(p.id) === String(targetPortId));
     const type = (port?.type ?? 'any') as string;
@@ -170,7 +171,8 @@ export function exportGraphForPatch(
     const node = byId.get(sourceNodeId);
     const type = String(node?.type ?? '');
     if (type === 'client-button') return sourcePortId === 'pressed';
-    if (type === 'client-input-box') return sourcePortId === 'inputContent' || sourcePortId === 'firstInputed';
+    if (type === 'client-input-box')
+      return sourcePortId === 'inputContent' || sourcePortId === 'firstInputed';
     return false;
   };
   const shouldTraverseDownstreamTarget = (targetNodeId: string, targetPortId: string): boolean => {
@@ -189,7 +191,8 @@ export function exportGraphForPatch(
     if (!id || !keep.has(id)) return;
     const outgoing = outgoingBySource.get(id) ?? [];
     for (const edge of outgoing) {
-      if (!shouldTraverseDownstreamTarget(String(edge.targetNodeId), String(edge.targetPortId))) continue;
+      if (!shouldTraverseDownstreamTarget(String(edge.targetNodeId), String(edge.targetPortId)))
+        continue;
       const before = keep.size;
       visit(String(edge.targetNodeId));
       if (keep.size !== before || keep.has(String(edge.targetNodeId))) {
@@ -204,7 +207,8 @@ export function exportGraphForPatch(
       const outgoing = outgoingBySource.get(id) ?? [];
       for (const edge of outgoing) {
         if (!shouldStartFromClientUiOutput(id, edge.sourcePortId)) continue;
-        if (!shouldTraverseDownstreamTarget(String(edge.targetNodeId), String(edge.targetPortId))) continue;
+        if (!shouldTraverseDownstreamTarget(String(edge.targetNodeId), String(edge.targetPortId)))
+          continue;
         const before = keep.size;
         visit(String(edge.targetNodeId));
         visitDownstream(String(edge.targetNodeId));
@@ -238,7 +242,9 @@ export function exportGraphForPatch(
     return undefined;
   };
   const booleanVariableNameFor = (node: GraphState['nodes'][number]): string =>
-    normalizeVariableName(readNodeInputConnectionValue(String(node.id), 'name') ?? node.config?.name);
+    normalizeVariableName(
+      readNodeInputConnectionValue(String(node.id), 'name') ?? node.config?.name
+    );
   const addBooleanVariableSettersForExportedGetters = () => {
     let changed = false;
     const exportedGetterNames = new Set<string>();
@@ -265,11 +271,75 @@ export function exportGraphForPatch(
 
   const keptNodes = nodes
     .filter((n) => keep.has(String(n.id)))
-    .map((n) => ({ ...n, config: { ...(n.config ?? {}) }, inputValues: { ...(n.inputValues ?? {}) } }));
+    .map((n) => ({
+      ...n,
+      config: { ...(n.config ?? {}) },
+      inputValues: { ...(n.inputValues ?? {}) },
+    }));
   const keptNodeIds = new Set(keptNodes.map((n) => String(n.id)));
   let keptConnections = connections.filter(
     (c) => keptNodeIds.has(String(c.sourceNodeId)) && keptNodeIds.has(String(c.targetNodeId))
   );
+
+  const bypassGroupProxyNodes = () => {
+    const proxyIds = keptNodes
+      .filter((node) => String(node.type) === 'group-proxy')
+      .map((node) => String(node.id))
+      .filter(Boolean);
+    if (proxyIds.length === 0) return;
+
+    const connectionKey = (c: {
+      sourceNodeId: string;
+      sourcePortId: string;
+      targetNodeId: string;
+      targetPortId: string;
+    }) => `${c.sourceNodeId}|${c.sourcePortId}|${c.targetNodeId}|${c.targetPortId}`;
+    const dedupe = new Set(keptConnections.map(connectionKey));
+    const rewired: GraphState['connections'] = [];
+
+    for (const proxyId of proxyIds) {
+      const incoming = keptConnections.filter(
+        (connection) =>
+          String(connection.targetNodeId) === proxyId && String(connection.targetPortId) === 'in'
+      );
+      const outgoing = keptConnections.filter(
+        (connection) =>
+          String(connection.sourceNodeId) === proxyId && String(connection.sourcePortId) === 'out'
+      );
+
+      for (const inc of incoming) {
+        for (const out of outgoing) {
+          if (String(inc.sourceNodeId) === String(out.targetNodeId)) continue;
+          const next = {
+            id: `bypass:${proxyId}:${String(inc.id)}->${String(out.id)}`,
+            sourceNodeId: String(inc.sourceNodeId),
+            sourcePortId: String(inc.sourcePortId),
+            targetNodeId: String(out.targetNodeId),
+            targetPortId: String(out.targetPortId),
+          };
+          const key = connectionKey(next);
+          if (dedupe.has(key)) continue;
+          dedupe.add(key);
+          rewired.push(next);
+        }
+      }
+    }
+
+    const proxyIdSet = new Set(proxyIds);
+    for (const proxyId of proxyIds) keptNodeIds.delete(proxyId);
+    for (let i = keptNodes.length - 1; i >= 0; i -= 1) {
+      if (proxyIdSet.has(String(keptNodes[i]?.id))) keptNodes.splice(i, 1);
+    }
+    keptConnections = keptConnections
+      .filter(
+        (connection) =>
+          !proxyIdSet.has(String(connection.sourceNodeId)) &&
+          !proxyIdSet.has(String(connection.targetNodeId))
+      )
+      .concat(rewired);
+  };
+
+  bypassGroupProxyNodes();
 
   const keptNodeById = new Map(keptNodes.map((node) => [String(node.id), node]));
   for (const node of keptNodes) {
@@ -330,7 +400,9 @@ export function exportGraphForPatch(
     if (!assetInput) continue;
     const source = allNodeById.get(String(assetInput.sourceNodeId));
     const raw = source?.outputValues?.[String(assetInput.sourcePortId)];
-    const id = assetIdFromRef(raw) ?? (typeof raw === 'string' && raw.trim() ? raw.trim().split(/[?#]/)[0] : '');
+    const id =
+      assetIdFromRef(raw) ??
+      (typeof raw === 'string' && raw.trim() ? raw.trim().split(/[?#]/)[0] : '');
     if (id) {
       node.config = { ...(node.config ?? {}), assetId: id };
     }
@@ -420,7 +492,11 @@ export function exportGraphForPatch(
       if (incoming.length === 0 || outgoing.length === 0) {
         // Special case: a disabled chain head (no upstream) should be dropped for "empty chain" ports
         // so the patch can still deploy and downstream nodes can start from identity.
-        if (incoming.length === 0 && outgoing.length > 0 && shouldDropWhenDisabledStart(type, ports))
+        if (
+          incoming.length === 0 &&
+          outgoing.length > 0 &&
+          shouldDropWhenDisabledStart(type, ports)
+        )
           removed.add(nodeId);
         continue;
       }
@@ -475,7 +551,8 @@ export function exportGraphForPatch(
   keptConnections.sort(
     (a, b) =>
       String(a.sourceNodeId).localeCompare(String(b.sourceNodeId)) ||
-      nodeExecutionPriority(String(a.targetNodeId)) - nodeExecutionPriority(String(b.targetNodeId)) ||
+      nodeExecutionPriority(String(a.targetNodeId)) -
+        nodeExecutionPriority(String(b.targetNodeId)) ||
       String(a.id).localeCompare(String(b.id))
   );
 
@@ -489,7 +566,8 @@ export function exportGraphForPatch(
         const fieldRecord =
           field && typeof field === 'object' ? (field as unknown as Record<string, unknown>) : null;
         if (fieldRecord?.type !== 'asset-picker') continue;
-        const key = typeof fieldRecord.key === 'string' ? fieldRecord.key : String(fieldRecord?.key ?? '');
+        const key =
+          typeof fieldRecord.key === 'string' ? fieldRecord.key : String(fieldRecord?.key ?? '');
         if (!key) continue;
         const configRecord =
           n.config && typeof n.config === 'object' ? (n.config as Record<string, unknown>) : null;

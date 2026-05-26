@@ -56,6 +56,7 @@ export class MessageRouterService {
   > = new Map();
   private readonly semanticRequesterByRequestId: Map<string, string> = new Map();
   private readonly deliveryMetrics: DeliveryMetrics = createDeliveryMetrics();
+  private readonly booleanVariables: Map<string, boolean> = new Map();
 
   constructor(
     private readonly clientRegistry: ClientRegistryService,
@@ -321,9 +322,16 @@ export class MessageRouterService {
   /**
    * Route system message
    */
-  private routeSystemMessage(_message: SystemMessage, _fromSocketId: string): void {
-    // System messages are typically handled by the gateway directly
-    // console.log(`[Router] System message: ${message.action}`);
+  private routeSystemMessage(message: SystemMessage, _fromSocketId: string): void {
+    if (message.action !== 'booleanVariables.update') return;
+
+    const updates = message.payload?.updates ?? {};
+    for (const [name, value] of Object.entries(updates)) {
+      const key = String(name).trim();
+      if (!key) continue;
+      this.booleanVariables.set(key, Boolean(value));
+    }
+    this.broadcastBooleanVariables(this.readBooleanVariableAudience(message));
   }
 
   /**
@@ -378,6 +386,36 @@ export class MessageRouterService {
     this.emitToSockets(managerSocketIds, message);
   }
 
+  private readBooleanVariableAudience(message: SystemMessage): string[] | null {
+    const clientIds = message.payload?.clientIds;
+    if (!Array.isArray(clientIds)) return null;
+    const out = clientIds
+      .map(String)
+      .map((id) => id.trim())
+      .filter(Boolean);
+    return out.length > 0 ? Array.from(new Set(out)).sort() : [];
+  }
+
+  private broadcastBooleanVariables(clientIds: string[] | null = null): void {
+    const socketIds = [
+      ...(clientIds
+        ? this.clientRegistry.getSocketIds(clientIds)
+        : this.clientRegistry.getAllClientSocketIds()),
+      ...this.clientRegistry.getAllManagerSocketIds(),
+    ];
+    if (socketIds.length === 0) return;
+    const snapshot = Object.fromEntries(
+      Array.from(this.booleanVariables.entries()).sort(([a], [b]) => a.localeCompare(b))
+    );
+    const message = addServerTimestamp(
+      createSystemMessage('booleanVariables', {
+        booleanVariables: snapshot,
+      }),
+      Date.now()
+    ) as SystemMessage;
+    this.emitToSockets(socketIds, message);
+  }
+
   /**
    * Broadcast client list update to all managers
    */
@@ -405,6 +443,7 @@ export class MessageRouterService {
     );
 
     this.emitToSockets(managerSocketIds, message);
+    this.broadcastBooleanVariables();
   }
 
   /**

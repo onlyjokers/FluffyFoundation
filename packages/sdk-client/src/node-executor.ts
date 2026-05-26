@@ -20,6 +20,7 @@ export type NodeExecutorDeployPayload = {
     tickIntervalMs?: number;
     protocolVersion?: number;
     executorVersion?: string;
+    targetClientIds?: string[];
   };
 };
 
@@ -66,6 +67,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
+type BooleanVariableClientSDK = ClientSDK & {
+  sendBooleanVariableUpdates?: (updates: Record<string, boolean>, clientIds?: string[]) => void;
+};
+
 export class NodeExecutor {
   private registry = new NodeRegistry();
   private runtime: NodeRuntime;
@@ -78,6 +83,8 @@ export class NodeExecutor {
   private consecutiveSlowTicks = 0;
   private recentTickDurationsMs: number[] = [];
   private clientUi: ClientUiDeps | null = null;
+  private readonly booleanVariables = new Map<string, boolean>();
+  private booleanVariableTargetClientIds: string[] | undefined;
 
   private options: {
     isEnabled: () => boolean;
@@ -152,6 +159,16 @@ export class NodeExecutor {
     });
 
     this.runtime = new NodeRuntime(this.registry, {
+      booleanVariables: {
+        get: (name) => this.booleanVariables.get(name),
+        set: (name, value) => {
+          this.booleanVariables.set(name, value);
+          (this.sdk as BooleanVariableClientSDK).sendBooleanVariableUpdates?.(
+            { [name]: value },
+            this.booleanVariableTargetClientIds
+          );
+        },
+      },
       onTick: ({ durationMs }) => {
         const next = Number(durationMs);
         if (Number.isFinite(next) && next >= 0) {
@@ -205,6 +222,14 @@ export class NodeExecutor {
 
   getStatus(): NodeExecutorStatus {
     return { running: this.running, loopId: this.loopId, lastError: this.lastError };
+  }
+
+  applyBooleanVariables(snapshot: Record<string, boolean>): void {
+    for (const [name, value] of Object.entries(snapshot ?? {})) {
+      const key = String(name).trim();
+      if (!key) continue;
+      this.booleanVariables.set(key, Boolean(value));
+    }
   }
 
   destroy(): void {
@@ -391,6 +416,9 @@ export class NodeExecutor {
     this.runtime.stop();
     this.runtime.clear();
     this.runtime.setTickIntervalMs(clampedTick);
+    this.booleanVariableTargetClientIds = Array.isArray(parsed.meta.targetClientIds)
+      ? Array.from(new Set(parsed.meta.targetClientIds.map(String).filter(Boolean))).sort()
+      : undefined;
     this.runtime.loadGraph(parsed.graph);
 
     this.loopId = parsed.meta.loopId;

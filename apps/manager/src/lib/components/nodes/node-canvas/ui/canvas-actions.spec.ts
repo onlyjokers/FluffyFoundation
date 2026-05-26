@@ -25,7 +25,11 @@ test('handleClear clears local graph and sends empty graph.replace to server sem
     isRunningStore: writable(false),
     getLoopController: () => null,
     groupController: {
-      nodeGroups: { set: (value: unknown[]) => { groupsReset = value.length === 0; } },
+      nodeGroups: {
+        set: (value: unknown[]) => {
+          groupsReset = value.length === 0;
+        },
+      },
       groupFrames: { set: () => undefined },
       groupDisabledNodeIds: { set: () => undefined },
       editModeGroupId: { set: () => undefined },
@@ -46,4 +50,57 @@ test('handleClear clears local graph and sends empty graph.replace to server sem
   assert.equal(localCleared, true);
   assert.equal(groupsReset, true);
   assert.deepEqual(replaced, [{ nodes: [], connections: [] }]);
+});
+
+test('handleClear calls browser confirm without illegal invocation', () => {
+  let localCleared = false;
+  const previousConfirm = (
+    globalThis as typeof globalThis & { confirm?: (message: string) => boolean }
+  ).confirm;
+  const browserLikeConfirm = function (this: typeof globalThis, _message: string): boolean {
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    return true;
+  };
+  (globalThis as typeof globalThis & { confirm?: (message: string) => boolean }).confirm =
+    browserLikeConfirm;
+
+  try {
+    const { handleClear } = createCanvasActions({
+      nodeEngine: {
+        clear: () => {
+          localCleared = true;
+        },
+        start: () => undefined,
+        stop: () => undefined,
+      } as never,
+      replaceGraphCommand: () => true,
+      isRunningStore: writable(false),
+      getLoopController: () => null,
+      groupController: {
+        nodeGroups: { set: () => undefined },
+        groupFrames: { set: () => undefined },
+        groupDisabledNodeIds: { set: () => undefined },
+        editModeGroupId: { set: () => undefined },
+        groupEditToast: { set: () => undefined },
+        clearSelection: () => undefined,
+        scheduleHighlight: () => undefined,
+      } as never,
+      getContainer: () => null,
+      getNodeCount: () => 0,
+      computeGraphPosition: () => ({ x: 0, y: 0 }),
+      schedulePatchReconcile: () => undefined,
+      stopAllDeployedPatches: () => undefined,
+      confirm: browserLikeConfirm,
+    });
+
+    assert.doesNotThrow(() => handleClear());
+    assert.equal(localCleared, true);
+  } finally {
+    if (previousConfirm) {
+      (globalThis as typeof globalThis & { confirm?: (message: string) => boolean }).confirm =
+        previousConfirm;
+    } else {
+      delete (globalThis as typeof globalThis & { confirm?: (message: string) => boolean }).confirm;
+    }
+  }
 });

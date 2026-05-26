@@ -7,6 +7,7 @@ export function mountGateSockets(node: HTMLElement, nodeId: string | null) {
   let retries = 0;
   const maxRetries = 10;
   let attached = false;
+  let observer: MutationObserver | null = null;
 
   const attachSockets = () => {
     if (!currentId) return;
@@ -14,9 +15,16 @@ export function mountGateSockets(node: HTMLElement, nodeId: string | null) {
       `.collapsed-sockets[data-rete-node-id="${currentId}"]`
     ) as HTMLElement | null;
     if (!target) return;
-    if (target.parentElement === node) return;
+    if (target.parentElement === node) {
+      attached = true;
+      observer?.disconnect();
+      observer = null;
+      return;
+    }
     node.appendChild(target);
     attached = true;
+    observer?.disconnect();
+    observer = null;
   };
 
   const scheduleAttach = () => {
@@ -29,7 +37,19 @@ export function mountGateSockets(node: HTMLElement, nodeId: string | null) {
     });
   };
 
+  const observeSocketMounts = () => {
+    observer?.disconnect();
+    observer = null;
+    if (!currentId || typeof MutationObserver === 'undefined') return;
+    observer = new MutationObserver(() => {
+      if (attached) return;
+      attachSockets();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  };
+
   attachSockets();
+  observeSocketMounts();
   scheduleAttach();
 
   return {
@@ -38,10 +58,12 @@ export function mountGateSockets(node: HTMLElement, nodeId: string | null) {
       retries = 0;
       attached = false;
       attachSockets();
+      observeSocketMounts();
       scheduleAttach();
     },
     destroy() {
       if (rafId) cancelAnimationFrame(rafId);
+      observer?.disconnect();
     },
   };
 }

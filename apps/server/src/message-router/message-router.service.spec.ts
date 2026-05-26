@@ -46,6 +46,7 @@ const waitFor = async (condition: () => boolean): Promise<void> => {
 function createRouter(clientCount = 51, managerCount = 1) {
   const reliableMessages: Message[] = [];
   const volatileMessages: Message[] = [];
+  const delivered: Array<{ socketIds: string[]; message: Message }> = [];
   const clientSocketIds = Array.from(
     { length: clientCount },
     (_, index) => `client-socket-${index}`
@@ -55,25 +56,37 @@ function createRouter(clientCount = 51, managerCount = 1) {
     (_, index) => `manager-socket-${index}`
   );
   const registry = {
+    getAllClients: () =>
+      clientSocketIds.map((socketId, index) => ({
+        clientId: `client-${index}`,
+        socketId,
+      })),
     getAllClientSocketIds: () => clientSocketIds,
     getAllManagerSocketIds: () => managerSocketIds,
+    getAllGroupOwnershipEntries: () => [],
     getSocketIds: (ids: string[]) => ids.map((id) => `${id}-socket`),
     getClientsByGroup: (_groupId: string) =>
       clientSocketIds.map((socketId, index) => ({ clientId: `client-${index}`, socketId })),
   };
   const router = new MessageRouterService(registry as never);
   const server = {
-    to: (_socketIds: string[]) => ({
-      emit: (_event: string, message: Message) => reliableMessages.push(message),
+    to: (socketIds: string[]) => ({
+      emit: (_event: string, message: Message) => {
+        reliableMessages.push(message);
+        delivered.push({ socketIds, message });
+      },
     }),
     volatile: {
-      to: (_socketIds: string[]) => ({
-        emit: (_event: string, message: Message) => volatileMessages.push(message),
+      to: (socketIds: string[]) => ({
+        emit: (_event: string, message: Message) => {
+          volatileMessages.push(message);
+          delivered.push({ socketIds, message });
+        },
       }),
     },
   };
   router.setServer(server as never);
-  return { router, reliableMessages, volatileMessages };
+  return { router, reliableMessages, volatileMessages, delivered };
 }
 
 test('MessageRouterService drops volatile telemetry under backpressure and records metrics', () => {
@@ -129,6 +142,85 @@ test('MessageRouterService forwards ClientUI interaction sensor events to manage
       },
     ],
   ]);
+});
+
+test('MessageRouterService stores boolean variable updates on the server and broadcasts snapshots', () => {
+  const { router, reliableMessages } = createRouter(2, 1);
+
+  router.routeMessage(
+    {
+      type: 'system',
+      version: 1,
+      action: 'booleanVariables.update',
+      payload: { updates: { visible: true } },
+      clientTimestamp: Date.now(),
+    },
+    'client-socket-0'
+  );
+
+  const snapshots = reliableMessages.filter(
+    (message) =>
+      message.type === 'system' &&
+      (message as { action?: string }).action === 'booleanVariables'
+  );
+  assert.equal(snapshots.length, 1);
+  assert.deepEqual(
+    (snapshots[0] as { payload?: { booleanVariables?: Record<string, boolean> } }).payload
+      ?.booleanVariables,
+    { visible: true }
+  );
+});
+
+test('MessageRouterService scopes boolean variable snapshots to selected client ids', () => {
+  const { router, delivered } = createRouter(2, 1);
+
+  router.routeMessage(
+    {
+      type: 'system',
+      version: 1,
+      action: 'booleanVariables.update',
+      payload: { updates: { visible: true }, clientIds: ['client-1'] },
+      clientTimestamp: Date.now(),
+    },
+    'client-socket-0'
+  );
+
+  const snapshot = delivered.find(
+    (entry) =>
+      entry.message.type === 'system' &&
+      (entry.message as { action?: string }).action === 'booleanVariables'
+  );
+  assert.deepEqual(snapshot?.socketIds, ['client-1-socket', 'manager-socket-0']);
+});
+
+test('MessageRouterService rebroadcasts boolean variables with client list updates', () => {
+  const { router, reliableMessages } = createRouter(2, 1);
+
+  router.routeMessage(
+    {
+      type: 'system',
+      version: 1,
+      action: 'booleanVariables.update',
+      payload: { updates: { visible: true } },
+      clientTimestamp: Date.now(),
+    },
+    'client-socket-0'
+  );
+  reliableMessages.length = 0;
+
+  router.broadcastClientListUpdate();
+
+  const snapshots = reliableMessages.filter(
+    (message) =>
+      message.type === 'system' &&
+      (message as { action?: string }).action === 'booleanVariables'
+  );
+  assert.equal(snapshots.length, 1);
+  assert.deepEqual(
+    (snapshots[0] as { payload?: { booleanVariables?: Record<string, boolean> } }).payload
+      ?.booleanVariables,
+    { visible: true }
+  );
 });
 
 test('MessageRouterService routes semantic graph commands only to manager sockets', () => {

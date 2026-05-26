@@ -5,7 +5,11 @@ import { NodeRegistry, registerDefaultNodeDefinitions } from '@shugu/node-core';
 import { exportGraphForPatch } from './patch-export';
 import type { GraphState, NodeInstance } from './types';
 
-const node = (id: string, type: string, inputValues: Record<string, unknown> = {}): NodeInstance => ({
+const node = (
+  id: string,
+  type: string,
+  inputValues: Record<string, unknown> = {}
+): NodeInstance => ({
   id,
   type,
   position: { x: 0, y: 0 },
@@ -38,8 +42,20 @@ test('exportGraphForPatch includes ClientUI chain nodes when they feed ui-out pa
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'c1', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'input', targetPortId: 'in' },
-      { id: 'c2', sourceNodeId: 'input', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'c1',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'input',
+        targetPortId: 'in',
+      },
+      {
+        id: 'c2',
+        sourceNodeId: 'input',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 
@@ -65,11 +81,41 @@ test('exportGraphForPatch includes boolean variable setters used by exported get
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
-      { id: 'name-get', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'getter', targetPortId: 'name' },
-      { id: 'display', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'button', targetPortId: 'display' },
-      { id: 'preview', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'preview', targetPortId: 'in' },
-      { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'preview',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'preview',
+        targetPortId: 'in',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 
@@ -104,12 +150,48 @@ test('exportGraphForPatch includes Client Button pressed feedback used by export
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
-      { id: 'name-get', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'getter', targetPortId: 'name' },
-      { id: 'display', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'button', targetPortId: 'display' },
-      { id: 'pressed-pulse', sourceNodeId: 'button', sourcePortId: 'pressed', targetNodeId: 'pulse', targetPortId: 'pulse' },
-      { id: 'pulse-set', sourceNodeId: 'pulse', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'set' },
-      { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'pressed-pulse',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pulse',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pulse-set',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 
@@ -139,6 +221,95 @@ test('exportGraphForPatch includes Client Button pressed feedback used by export
   );
 });
 
+test('exportGraphForPatch bypasses group proxy ports in boolean variable reset feedback', () => {
+  const graph: GraphState = {
+    nodes: [
+      node('name', 'string', { value: 'flag' }),
+      {
+        ...node('setter', 'set-boolean-variable'),
+        config: { name: 'setter-fallback', defaultValue: true, mode: 'latchTrue' },
+      },
+      { ...node('getter', 'get-boolean-variable'), config: { name: 'getter-fallback' } },
+      node('button', 'client-button'),
+      node('reset-bool', 'bool', { value: false }),
+      node('reset-pulse', 'boolean-to-pulse'),
+      {
+        ...node('reset-port', 'group-proxy'),
+        config: { groupId: 'group:demo', direction: 'input', portType: 'pulse', pinned: true },
+      },
+      node('out', 'ui-out'),
+    ],
+    connections: [
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
+      {
+        id: 'reset-source',
+        sourceNodeId: 'reset-bool',
+        sourcePortId: 'value',
+        targetNodeId: 'reset-pulse',
+        targetPortId: 'value',
+      },
+      {
+        id: 'reset-proxy-in',
+        sourceNodeId: 'reset-pulse',
+        sourcePortId: 'pulse',
+        targetNodeId: 'reset-port',
+        targetPortId: 'in',
+      },
+      {
+        id: 'reset-proxy-out',
+        sourceNodeId: 'reset-port',
+        sourcePortId: 'out',
+        targetNodeId: 'setter',
+        targetPortId: 'reset',
+      },
+    ],
+  };
+
+  const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: registry });
+
+  assert.equal(
+    result.graph.nodes.some((item) => item.type === 'group-proxy'),
+    false
+  );
+  assert.ok(result.graph.nodes.some((item) => item.id === 'reset-bool'));
+  assert.ok(
+    result.graph.connections.some(
+      (connection) =>
+        connection.sourceNodeId === 'reset-pulse' &&
+        connection.sourcePortId === 'pulse' &&
+        connection.targetNodeId === 'setter' &&
+        connection.targetPortId === 'reset'
+    )
+  );
+});
+
 test('exportGraphForPatch includes Client Button pressed feedback even when getter only feeds debug preview', () => {
   const graph: GraphState = {
     nodes: [
@@ -154,12 +325,48 @@ test('exportGraphForPatch includes Client Button pressed feedback even when gett
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
-      { id: 'name-get', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'getter', targetPortId: 'name' },
-      { id: 'getter-preview', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'preview', targetPortId: 'in' },
-      { id: 'pressed-pulse', sourceNodeId: 'button', sourcePortId: 'pressed', targetNodeId: 'pulse', targetPortId: 'pulse' },
-      { id: 'pulse-set', sourceNodeId: 'pulse', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'set' },
-      { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'getter-preview',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'preview',
+        targetPortId: 'in',
+      },
+      {
+        id: 'pressed-pulse',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pulse',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pulse-set',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 
@@ -195,12 +402,48 @@ test('exportGraphForPatch excludes debug-only consumers from Client Button press
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
-      { id: 'pressed-pulse', sourceNodeId: 'button', sourcePortId: 'pressed', targetNodeId: 'pulse', targetPortId: 'pulse' },
-      { id: 'pressed-preview', sourceNodeId: 'button', sourcePortId: 'pressed', targetNodeId: 'pressed-preview', targetPortId: 'in' },
-      { id: 'pulse-set', sourceNodeId: 'pulse', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'set' },
-      { id: 'pulse-preview', sourceNodeId: 'pulse', sourcePortId: 'value', targetNodeId: 'pulse-preview', targetPortId: 'in' },
-      { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'pressed-pulse',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pulse',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pressed-preview',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pressed-preview',
+        targetPortId: 'in',
+      },
+      {
+        id: 'pulse-set',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'pulse-preview',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'pulse-preview',
+        targetPortId: 'in',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 
@@ -227,12 +470,48 @@ test('exported Client Button toggle feedback can hide the button through a boole
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
-      { id: 'name-get', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'getter', targetPortId: 'name' },
-      { id: 'display', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'button', targetPortId: 'display' },
-      { id: 'pressed-pulse', sourceNodeId: 'button', sourcePortId: 'pressed', targetNodeId: 'pulse', targetPortId: 'pulse' },
-      { id: 'pulse-set', sourceNodeId: 'pulse', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'set' },
-      { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'pressed-pulse',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pulse',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pulse-set',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 
@@ -245,8 +524,14 @@ test('exported Client Button toggle feedback can hide the button through a boole
     getSelectedClientIds: () => [],
     executeCommand: () => {},
   });
-  const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: runtimeRegistry });
-  assert.equal(result.graph.nodes.find((item) => item.id === 'setter')?.config?.mode, 'followInput');
+  const result = exportGraphForPatch(graph, {
+    rootNodeIds: ['out'],
+    nodeRegistry: runtimeRegistry,
+  });
+  assert.equal(
+    result.graph.nodes.find((item) => item.id === 'setter')?.config?.mode,
+    'followInput'
+  );
   const runtime = new NodeRuntime(runtimeRegistry);
   runtimeRegistry.register({
     ...runtimeRegistry.get('client-button')!,
@@ -286,10 +571,34 @@ test('exported boolean variable client UI patch runs with setter defaults', asyn
       node('out', 'ui-out'),
     ],
     connections: [
-      { id: 'name-set', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'setter', targetPortId: 'name' },
-      { id: 'name-get', sourceNodeId: 'name', sourcePortId: 'value', targetNodeId: 'getter', targetPortId: 'name' },
-      { id: 'display', sourceNodeId: 'getter', sourcePortId: 'value', targetNodeId: 'button', targetPortId: 'display' },
-      { id: 'ui', sourceNodeId: 'button', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
     ],
   };
 

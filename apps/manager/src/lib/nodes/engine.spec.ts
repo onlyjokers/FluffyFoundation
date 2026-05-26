@@ -5,6 +5,8 @@ import { get } from 'svelte/store';
 
 import type { NodeDefinition } from '@shugu/node-core';
 import { nodeEngine } from './engine';
+import { addCustomNodeDefinition, removeCustomNodeDefinition } from './custom-nodes/store';
+import { writeCustomNodeState } from './custom-nodes/instance';
 import { nodeRegistry } from './registry';
 
 const type = 'test-bounded-config';
@@ -115,5 +117,160 @@ test('manager watchdog warnings do not stop the running show', async () => {
     nodeEngine.loadGraph({ nodes: [], connections: [] });
     nodeEngine.lastError.set(null);
     nodeRegistry.unregister('test-pass-cycle');
+  }
+});
+
+test('patch export uses connected runtime gate values for Custom Node Active', async () => {
+  const definitionId = 'test-connected-gate';
+  const registeredTypes: string[] = [];
+  const registerIfMissing = (definition: NodeDefinition) => {
+    if (nodeRegistry.get(definition.type)) return;
+    nodeRegistry.register(definition);
+    registeredTypes.push(definition.type);
+  };
+  registerIfMissing({
+    type: 'bool',
+    label: 'Bool',
+    category: 'Test',
+    inputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+    outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+    configSchema: [],
+    process: (inputs, config) => ({
+      value: typeof inputs.value === 'boolean' ? inputs.value : Boolean(config.value),
+    }),
+  });
+  registerIfMissing({
+    type: 'scene-box',
+    label: 'Scene Box',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+    configSchema: [],
+    process: () => ({ out: [{ type: 'box' }] }),
+  });
+  registerIfMissing({
+    type: 'scene-out',
+    label: 'Scene Out',
+    category: 'Test',
+    inputs: [{ id: 'in', label: 'In', type: 'scene', kind: 'sink' }],
+    outputs: [{ id: 'cmd', label: 'Deploy', type: 'command' }],
+    configSchema: [],
+    process: () => ({}),
+  });
+  addCustomNodeDefinition({
+    definitionId,
+    name: 'Connected Gate Custom',
+    template: {
+      nodes: [
+        {
+          id: 'inner-scene',
+          type: 'scene-box',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'inner-out',
+          type: 'scene-out',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'inner-scene-out',
+          sourceNodeId: 'inner-scene',
+          sourcePortId: 'out',
+          targetNodeId: 'inner-out',
+          targetPortId: 'in',
+        },
+      ],
+    },
+    ports: [],
+  });
+
+  try {
+    nodeEngine.loadGraph({
+      nodes: [
+        {
+          id: 'gate-source',
+          type: 'bool',
+          position: { x: 0, y: 0 },
+          config: { value: false },
+          inputValues: { value: false },
+          outputValues: {},
+        },
+        {
+          id: 'custom-1',
+          type: `custom:${definitionId}`,
+          position: { x: 0, y: 0 },
+          config: writeCustomNodeState(
+            {},
+            {
+              definitionId,
+              groupId: 'group-1',
+              role: 'mother',
+              manualGate: true,
+              internal: {
+                nodes: [
+                  {
+                    id: 'inner-scene',
+                    type: 'scene-box',
+                    position: { x: 0, y: 0 },
+                    config: {},
+                    inputValues: {},
+                    outputValues: {},
+                  },
+                  {
+                    id: 'inner-out',
+                    type: 'scene-out',
+                    position: { x: 0, y: 0 },
+                    config: {},
+                    inputValues: {},
+                    outputValues: {},
+                  },
+                ],
+                connections: [
+                  {
+                    id: 'inner-scene-out',
+                    sourceNodeId: 'inner-scene',
+                    sourcePortId: 'out',
+                    targetNodeId: 'inner-out',
+                    targetPortId: 'in',
+                  },
+                ],
+              },
+            }
+          ),
+          inputValues: { gate: true },
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'gate-to-custom',
+          sourceNodeId: 'gate-source',
+          sourcePortId: 'value',
+          targetNodeId: 'custom-1',
+          targetPortId: 'gate',
+        },
+      ],
+    });
+
+    nodeEngine.start();
+    await waitFor(() => nodeEngine.getLastComputedInputs('custom-1')?.gate === false);
+
+    const compiled = nodeEngine.exportCompiledGraphForPatchPlanning();
+    assert.deepEqual(compiled.nodes.map((node) => String(node.id)), ['gate-source']);
+    assert.deepEqual(compiled.connections, []);
+  } finally {
+    nodeEngine.stop();
+    nodeEngine.isRunning.set(false);
+    nodeEngine.loadGraph({ nodes: [], connections: [] });
+    removeCustomNodeDefinition(definitionId);
+    for (const type of registeredTypes) nodeRegistry.unregister(type);
   }
 });

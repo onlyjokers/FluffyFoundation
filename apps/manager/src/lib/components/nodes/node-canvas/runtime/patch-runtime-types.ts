@@ -15,6 +15,7 @@ export type PatchPayload = {
     tickIntervalMs: number;
     protocolVersion: string;
     executorVersion: string;
+    targetClientIds?: string[];
   };
   assetRefs: string[];
 };

@@ -928,6 +928,141 @@ test('boolean to pulse emits one pulse when the boolean input changes', async ()
   }
 });
 
+test('boolean to pulse emits only one tick for a boolean edge', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: false } },
+      testNode('pulse', 'boolean-to-pulse'),
+    ],
+    connections: [
+      {
+        id: 'source-pulse',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'pulse',
+        targetPortId: 'value',
+      },
+    ],
+  });
+
+  runtime.step();
+  assert.equal(runtime.getNode('pulse')?.outputValues.pulse, false);
+
+  const source = runtime.getNode('source');
+  assert.ok(source);
+  source.inputValues.value = true;
+  runtime.step();
+  assert.equal(runtime.getNode('pulse')?.outputValues.pulse, true);
+
+  runtime.step();
+  assert.equal(runtime.getNode('pulse')?.outputValues.pulse, false);
+});
+
+test('boolean to pulse emits one startup pulse when initial input is true', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: true } },
+      testNode('startup-pulse', 'boolean-to-pulse'),
+    ],
+    connections: [
+      {
+        id: 'source-pulse',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'startup-pulse',
+        targetPortId: 'value',
+      },
+    ],
+  });
+
+  runtime.step();
+  assert.equal(runtime.getNode('startup-pulse')?.outputValues.pulse, true);
+
+  runtime.step();
+  assert.equal(runtime.getNode('startup-pulse')?.outputValues.pulse, false);
+});
+
+test('boolean variables can use an injected shared store across runtimes', async () => {
+  const shared = new Map<string, boolean>();
+  const createRuntime = () => {
+    const registry = new NodeRegistry();
+    registerDefaultNodeDefinitions(registry, {
+      getClientId: () => null,
+      getAllClientIds: () => ['client-a'],
+      getSelectedClientIds: () => [],
+      executeCommand: () => {},
+    });
+    return new NodeRuntime(registry, {
+      booleanVariables: {
+        get: (name) => shared.get(name),
+        set: (name, value) => {
+          shared.set(name, value);
+        },
+        delete: (name) => {
+          shared.delete(name);
+        },
+      },
+    });
+  };
+
+  const writer = createRuntime();
+  writer.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: true } },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'global-visible', defaultValue: false, mode: 'followInput' },
+      },
+    ],
+    connections: [
+      {
+        id: 'source-set',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+    ],
+  });
+  try {
+    writer.start();
+    await waitFor(() => shared.get('global-visible') === true);
+  } finally {
+    writer.stop();
+  }
+
+  const reader = createRuntime();
+  reader.loadGraph({
+    nodes: [
+      {
+        ...testNode('getter', 'get-boolean-variable'),
+        config: { name: 'global-visible' },
+      },
+    ],
+    connections: [],
+  });
+  reader.step();
+  assert.equal(reader.getNode('getter')?.outputValues.value, true);
+});
+
 test('set boolean variable supports explicit pulse false writes and reset to default', async () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {

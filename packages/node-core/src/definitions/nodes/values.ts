@@ -40,6 +40,16 @@ const booleanVariableOwnerNameByNode = new Map<string, string>();
 const numberVariableState = new Map<string, number>();
 const stringVariableState = new Map<string, string>();
 
+type BooleanVariableContext = {
+  variableStore?: {
+    boolean?: {
+      get?: (name: string) => boolean | undefined;
+      set?: (name: string, value: boolean) => void;
+      delete?: (name: string) => void;
+    };
+  };
+};
+
 const normalizeVariableName = (value: unknown, fallback: string): string => {
   const raw = typeof value === 'string' ? value.trim() : '';
   return raw || fallback;
@@ -67,6 +77,43 @@ const ensureNamedBooleanVariable = (name: string, defaultValue: boolean): void =
   if (!namedBooleanVariableState.has(name)) {
     namedBooleanVariableState.set(name, defaultValue);
   }
+};
+
+const getBooleanVariableStore = (context: BooleanVariableContext | undefined) =>
+  context?.variableStore?.boolean;
+
+const ensureBooleanVariable = (
+  context: BooleanVariableContext | undefined,
+  name: string,
+  defaultValue: boolean
+): void => {
+  const store = getBooleanVariableStore(context);
+  if (store?.get && store.set) {
+    const existing = store.get(name);
+    if (existing === undefined) {
+      store.set(name, defaultValue);
+    }
+    return;
+  }
+  ensureNamedBooleanVariable(name, defaultValue);
+};
+
+const readBooleanVariable = (
+  context: BooleanVariableContext | undefined,
+  name: string
+): boolean | undefined => {
+  const store = context?.variableStore?.boolean;
+  return store?.get ? store.get(name) : namedBooleanVariableState.get(name);
+};
+
+const writeBooleanVariable = (
+  context: BooleanVariableContext | undefined,
+  name: string,
+  value: boolean
+): void => {
+  const store = context?.variableStore?.boolean;
+  if (store?.set) store.set(name, value);
+  else namedBooleanVariableState.set(name, value);
 };
 
 const getNumberDefault = (config: Record<string, unknown>): number =>
@@ -222,7 +269,13 @@ export function createSetBooleanVariableNode(): NodeDefinition {
     outputs: [],
     configSchema: [
       { key: 'name', label: 'Name', type: 'string', defaultValue: 'variable', connectable: true },
-      { key: 'defaultValue', label: 'Default', type: 'boolean', defaultValue: false, connectable: true },
+      {
+        key: 'defaultValue',
+        label: 'Default',
+        type: 'boolean',
+        defaultValue: false,
+        connectable: true,
+      },
       {
         key: 'mode',
         label: 'Mode',
@@ -238,29 +291,31 @@ export function createSetBooleanVariableNode(): NodeDefinition {
     process: (inputs, config, context) => {
       const name = getBooleanVariableName(inputs, config);
       registerBooleanVariableOwner(name, context.nodeId);
-      ensureNamedBooleanVariable(name, getBooleanDefault(config, inputs));
+      ensureBooleanVariable(context, name, getBooleanDefault(config, inputs));
       return {};
     },
     onSink: (inputs, config, context) => {
       const name = getBooleanVariableName(inputs, config);
       const defaultValue = getBooleanDefault(config, inputs);
       registerBooleanVariableOwner(name, context.nodeId);
-      ensureNamedBooleanVariable(name, defaultValue);
+      ensureBooleanVariable(context, name, defaultValue);
 
       if (coerceBoolean(inputs.reset)) {
-        namedBooleanVariableState.set(name, defaultValue);
+        writeBooleanVariable(context, name, defaultValue);
         return;
       }
 
       const next = coerceBoolean(inputs.set);
       if (getBooleanVariableMode(inputs, config) === 'followInput') {
-        namedBooleanVariableState.set(name, next);
+        writeBooleanVariable(context, name, next);
         return;
       }
-      if (next) namedBooleanVariableState.set(name, true);
+      if (next) writeBooleanVariable(context, name, true);
     },
     onDisable: (inputs, config, context) => {
-      unregisterBooleanVariableOwner(getBooleanVariableName(inputs, config), context.nodeId);
+      if (!getBooleanVariableStore(context)) {
+        unregisterBooleanVariableOwner(getBooleanVariableName(inputs, config), context.nodeId);
+      }
     },
   };
 }
@@ -272,10 +327,12 @@ export function createGetBooleanVariableNode(): NodeDefinition {
     category: 'Values',
     inputs: [{ id: 'name', label: 'Name', type: 'string' }],
     outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
-    configSchema: [{ key: 'name', label: 'Name', type: 'string', defaultValue: 'variable', connectable: true }],
-    process: (inputs, config) => {
+    configSchema: [
+      { key: 'name', label: 'Name', type: 'string', defaultValue: 'variable', connectable: true },
+    ],
+    process: (inputs, config, context) => {
       const name = getBooleanVariableName(inputs, config);
-      return { value: namedBooleanVariableState.get(name) ?? false };
+      return { value: readBooleanVariable(context, name) ?? false };
     },
   };
 }

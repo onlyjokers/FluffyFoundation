@@ -36,6 +36,7 @@ type FileActionsOptions = {
   getImportTemplatesInput: () => HTMLInputElement | null;
   getNodeGroups: () => NodeGroup[];
   appendNodeGroups: (groups: NodeGroup[]) => void;
+  addCustomNodeDefinition?: (definition: CustomNodeDefinition) => void;
   onSelectNodeIds?: (nodeIds: string[]) => void;
   onGraphImported?: (snapshot: { graph: GraphState; groups: NodeGroup[] }) => void | Promise<void>;
   getViewportCenterGraphPos: () => { x: number; y: number };

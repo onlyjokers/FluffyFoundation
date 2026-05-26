@@ -18,7 +18,7 @@ import {
   type NodeCommand,
   type ClientSDKConfig,
 } from '@shugu/sdk-client';
-import type { ClientPermissions } from '@shugu/protocol';
+import type { ClientPermissions, SystemMessage } from '@shugu/protocol';
 import { MultimediaCore, toneAudioEngine, type MediaEngineState } from '@shugu/multimedia-core';
 import { permissions, state, latency } from './client-state';
 import { clientControlTransfer } from './client-transfer';
@@ -191,6 +191,11 @@ export function initialize(config: ClientSDKConfig, options?: { autoConnect?: bo
   // Subscribe to control messages
   sdk.onControl(controlHandlers.handleControlMessage);
   sdk.onPluginControl(controlHandlers.handlePluginControlMessage);
+  sdk.onMessage<SystemMessage>('system', (message) => {
+    if (message.action !== 'booleanVariables') return;
+    const snapshot = message.payload?.booleanVariables ?? {};
+    nodeExecutor?.applyBooleanVariables(snapshot);
+  });
 
   // MultimediaCore: asset resolver + preload/cache + readiness reporting (no UI).
   // Reuse existing instance if startEarlyPreload was called.

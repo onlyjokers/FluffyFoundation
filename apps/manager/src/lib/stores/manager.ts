@@ -234,6 +234,9 @@ export function connect(config: ManagerSDKConfig): void {
 
     const sdk = new ManagerSDK(config);
     setManagerSDK(sdk);
+    nodeEngine.setBooleanVariableReporter((updates) => {
+        sdk.sendBooleanVariableUpdates(updates);
+    });
 
     const migrationCoordinator = createServerSemanticMigrationCoordinator({
         storage: typeof window === 'undefined' ? null : window.localStorage,
@@ -258,6 +261,9 @@ export function connect(config: ManagerSDKConfig): void {
         getPendingCommands: () => serverSemanticSyncState.getPendingCommands(),
         settlePendingCommand: (requestId) => serverSemanticSyncState.settlePendingCommand(requestId),
         clearPendingCommands: () => serverSemanticSyncState.clearPendingCommands(),
+    });
+    sdk.onBooleanVariables((snapshot) => {
+        nodeEngine.applyBooleanVariables(snapshot);
     });
 
     // Subscribe to state changes

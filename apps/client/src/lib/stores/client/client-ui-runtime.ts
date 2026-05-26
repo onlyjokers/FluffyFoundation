@@ -57,7 +57,10 @@ export const clientUiRuntime = {
     const rawItems = Array.isArray(payload?.items) ? payload.items : [];
     clientUiNodes.update((prev) => {
       const next = new Map<string, ClientUiNodeState>(
-        Array.from(prev.entries()).map(([nodeId, state]) => [nodeId, { ...state, displayed: false }])
+        Array.from(prev.entries()).map(([nodeId, state]) => [
+          nodeId,
+          { ...state, displayed: false, pressed: false },
+        ])
       );
       for (const item of rawItems) {
         const nodeId = typeof item?.nodeId === 'string' ? item.nodeId.trim() : '';
@@ -87,7 +90,11 @@ export const clientUiRuntime = {
 
   pressButton(nodeId: string): void {
     const id = String(nodeId ?? '').trim();
-    const state = updateNode(id, 'button', (current) => ({ ...current, displayed: true, pressed: true }));
+    const state = updateNode(id, 'button', (current) => ({
+      ...current,
+      displayed: true,
+      pressed: true,
+    }));
     if (id && state) emitInteraction(id, state);
   },
 

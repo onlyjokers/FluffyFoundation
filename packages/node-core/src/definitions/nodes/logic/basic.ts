@@ -17,7 +17,6 @@ type PulseToBooleanState = {
 type BooleanToPulseState = {
   initialized: boolean;
   lastValue: boolean;
-  pulseUntil: number;
 };
 
 const pulseToBooleanState = new Map<string, PulseToBooleanState>();
@@ -259,20 +258,18 @@ export function createBooleanToPulseNode(): NodeDefinition {
       const state = booleanToPulseState.get(context.nodeId) ?? {
         initialized: false,
         lastValue: current,
-        pulseUntil: 0,
       };
 
+      let pulse = false;
       if (!state.initialized) {
         state.initialized = true;
         state.lastValue = current;
-        state.pulseUntil = 0;
+        pulse = current;
       } else if (current !== state.lastValue) {
         state.lastValue = current;
-        state.pulseUntil = context.time + Math.max(1, context.deltaTime);
+        pulse = true;
       }
 
-      const pulse = state.pulseUntil > 0 && context.time <= state.pulseUntil;
-      if (!pulse) state.pulseUntil = 0;
       booleanToPulseState.set(context.nodeId, state);
       return { pulse };
     },

@@ -296,6 +296,23 @@ export class ClientSDK {
         );
     }
 
+    sendBooleanVariableUpdates(updates: Record<string, boolean>, clientIds?: string[]): void {
+        if (!this.socket?.connected || !this.state.clientId) return;
+        const targetClientIds = Array.isArray(clientIds)
+            ? Array.from(new Set(clientIds.map(String).filter(Boolean))).sort()
+            : undefined;
+        this.socket.emit(SOCKET_EVENTS.MSG, {
+            type: 'system' as const,
+            version: 1 as const,
+            action: 'booleanVariables.update' as const,
+            payload: {
+                updates: { ...updates },
+                ...(targetClientIds && targetClientIds.length > 0 ? { clientIds: targetClientIds } : {}),
+            },
+            clientTimestamp: Date.now(),
+        });
+    }
+
     /**
      * Send a scoped mutating command as an accepted client controller.
      */

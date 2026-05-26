@@ -9,6 +9,7 @@ import type {
   MediaMetaMessage,
   PlayMediaPayload,
   PluginControlMessage,
+  SystemMessage,
 } from '@shugu/protocol';
 import type { GraphChange } from '@shugu/node-core';
 import { ClientSDK, NodeExecutor, type ClientState, type NodeCommand } from '@shugu/sdk-client';
@@ -42,6 +43,7 @@ export type DisplayServerTransport = {
     control: () => void;
     plugin: () => void;
     media: () => void;
+    system: () => void;
   };
 };
 
@@ -115,6 +117,12 @@ export function createDisplayServerTransport(
     deps.executeControl('playMedia', payload, toLocalExecuteAt(message.executeAt, sdk.getOffset()));
   });
 
+  const systemUnsub = sdk.onMessage<SystemMessage>('system', (message) => {
+    if (!shouldApplyDisplayServerMessages(deps.getTransportDecision())) return;
+    if (message.action !== 'booleanVariables') return;
+    nodeExecutor.applyBooleanVariables(message.payload?.booleanVariables ?? {});
+  });
+
   return {
     sdk,
     nodeExecutor,
@@ -123,6 +131,7 @@ export function createDisplayServerTransport(
       control: controlUnsub,
       plugin: pluginUnsub,
       media: mediaUnsub,
+      system: systemUnsub,
     },
   };
 }

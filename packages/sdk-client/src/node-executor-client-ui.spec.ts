@@ -5,10 +5,15 @@ import { NodeExecutor, type NodeExecutorOptions } from './node-executor';
 import type { PluginControlMessage } from '@shugu/protocol';
 
 function createSdk() {
+  const booleanUpdates: Array<{ updates: Record<string, boolean>; clientIds?: string[] }> = [];
   return {
     getState: () => ({ clientId: 'client-a' }),
     getLatestSensorData: () => null,
     sendSensorData: () => {},
+    sendBooleanVariableUpdates: (updates: Record<string, boolean>, clientIds?: string[]) => {
+      booleanUpdates.push({ updates, clientIds });
+    },
+    booleanUpdates,
   };
 }
 
@@ -58,7 +63,13 @@ function deployGraph(executor: NodeExecutor): void {
           },
         ],
         connections: [
-          { id: 'c1', sourceNodeId: 'button-1', sourcePortId: 'out', targetNodeId: 'ui-out-1', targetPortId: 'in' },
+          {
+            id: 'c1',
+            sourceNodeId: 'button-1',
+            sourcePortId: 'out',
+            targetNodeId: 'ui-out-1',
+            targetPortId: 'in',
+          },
         ],
       },
       meta: { loopId: 'loop-client-ui', tickIntervalMs: 33 },
@@ -67,13 +78,15 @@ function deployGraph(executor: NodeExecutor): void {
 }
 
 describe('NodeExecutor ClientUI wiring', () => {
-  function createOptions(
-    cleared: string[],
-    maxTickDurationMs = 200
-  ): NodeExecutorOptions {
+  function createOptions(cleared: string[], maxTickDurationMs = 200): NodeExecutorOptions {
     return {
       clientUi: {
-        getClientUiState: () => ({ displayed: true, pressed: false, inputContent: '', firstInputed: false }),
+        getClientUiState: () => ({
+          displayed: true,
+          pressed: false,
+          inputContent: '',
+          firstInputed: false,
+        }),
         consumeClientButtonPressed: () => false,
         clearClientUiNode: (nodeId: string) => cleared.push(nodeId),
         clearClientUi: () => cleared.push('*'),
@@ -165,13 +178,15 @@ describe('NodeExecutor ClientUI wiring', () => {
 
     try {
       deployGraph(executor);
-      (executor as unknown as {
-        toneAdapter: {
-          syncActiveNodes: (activeNodeIds: Set<string>) => void;
-          disposeAll: () => void;
-          disposeNode: () => void;
-        };
-      }).toneAdapter = {
+      (
+        executor as unknown as {
+          toneAdapter: {
+            syncActiveNodes: (activeNodeIds: Set<string>) => void;
+            disposeAll: () => void;
+            disposeNode: () => void;
+          };
+        }
+      ).toneAdapter = {
         syncActiveNodes: (activeNodeIds) => syncCalls.push(Array.from(activeNodeIds)),
         disposeAll: () => undefined,
         disposeNode: () => undefined,
@@ -315,30 +330,26 @@ describe('NodeExecutor ClientUI wiring', () => {
     const cleared: string[] = [];
     const commands: unknown[] = [];
     let buttonPressed = false;
-    const executor = new NodeExecutor(
-      createSdk() as never,
-      (cmd) => commands.push(cmd),
-      {
-        ...createOptions(cleared),
-        clientUi: {
-          getClientUiState: () => ({
-            displayed: true,
-            kind: 'button',
-            pressed: buttonPressed,
-            inputContent: '',
-            firstInputed: false,
-          }),
-          consumeClientButtonPressed: (nodeId) => {
-            assert.equal(nodeId, 'button-1');
-            const current = buttonPressed;
-            buttonPressed = false;
-            return current;
-          },
-          clearClientUiNode: (nodeId: string) => cleared.push(nodeId),
-          clearClientUi: () => cleared.push('*'),
+    const executor = new NodeExecutor(createSdk() as never, (cmd) => commands.push(cmd), {
+      ...createOptions(cleared),
+      clientUi: {
+        getClientUiState: () => ({
+          displayed: true,
+          kind: 'button',
+          pressed: buttonPressed,
+          inputContent: '',
+          firstInputed: false,
+        }),
+        consumeClientButtonPressed: (nodeId) => {
+          assert.equal(nodeId, 'button-1');
+          const current = buttonPressed;
+          buttonPressed = false;
+          return current;
         },
-      }
-    );
+        clearClientUiNode: (nodeId: string) => cleared.push(nodeId),
+        clearClientUi: () => cleared.push('*'),
+      },
+    });
 
     try {
       executor.handlePluginControl({
@@ -445,13 +456,128 @@ describe('NodeExecutor ClientUI wiring', () => {
 
       buttonPressed = true;
       await waitFor(() => {
-        const runtime = (executor as unknown as { runtime: { getNode: (id: string) => { outputValues?: Record<string, unknown> } | undefined } }).runtime;
+        const runtime = (
+          executor as unknown as {
+            runtime: {
+              getNode: (id: string) => { outputValues?: Record<string, unknown> } | undefined;
+            };
+          }
+        ).runtime;
         return runtime.getNode('pressed-as-bool')?.outputValues?.value === true;
       });
       await waitFor(() => {
-        const runtime = (executor as unknown as { runtime: { getNode: (id: string) => { outputValues?: Record<string, unknown> } | undefined } }).runtime;
+        const runtime = (
+          executor as unknown as {
+            runtime: {
+              getNode: (id: string) => { outputValues?: Record<string, unknown> } | undefined;
+            };
+          }
+        ).runtime;
         return runtime.getNode('get-visible')?.outputValues?.value === true;
       });
+    } finally {
+      executor.destroy();
+    }
+  });
+
+  it('reports boolean variable writes through the client sdk', async () => {
+    const sdk = createSdk();
+    const executor = new NodeExecutor(sdk as never, () => {}, createOptions([]));
+
+    try {
+      executor.handlePluginControl(
+        pluginMessage('deploy', {
+          graph: {
+            nodes: [
+              {
+                id: 'source',
+                type: 'bool',
+                position: { x: 0, y: 0 },
+                config: {},
+                inputValues: { value: true },
+                outputValues: {},
+              },
+              {
+                id: 'setter',
+                type: 'set-boolean-variable',
+                position: { x: 100, y: 0 },
+                config: { name: 'visible', defaultValue: false, mode: 'followInput' },
+                inputValues: {},
+                outputValues: {},
+              },
+            ],
+            connections: [
+              {
+                id: 'source-set',
+                sourceNodeId: 'source',
+                sourcePortId: 'value',
+                targetNodeId: 'setter',
+                targetPortId: 'set',
+              },
+            ],
+          },
+          meta: { loopId: 'loop-boolean-variable', tickIntervalMs: 33 },
+        })
+      );
+
+      await waitFor(() => sdk.booleanUpdates.some((entry) => entry.updates.visible === true));
+    } finally {
+      executor.destroy();
+    }
+  });
+
+  it('reports boolean variable writes with deployed target client ids', async () => {
+    const sdk = createSdk();
+    const executor = new NodeExecutor(sdk as never, () => {}, createOptions([]));
+
+    try {
+      executor.handlePluginControl({
+        ...pluginMessage('deploy', {
+          graph: {
+            nodes: [
+              {
+                id: 'source',
+                type: 'bool',
+                position: { x: 0, y: 0 },
+                config: {},
+                inputValues: { value: true },
+                outputValues: {},
+              },
+              {
+                id: 'set',
+                type: 'set-boolean-variable',
+                position: { x: 100, y: 0 },
+                config: { name: 'visible', defaultValue: false, mode: 'latchTrue' },
+                inputValues: {},
+                outputValues: {},
+              },
+            ],
+            connections: [
+              {
+                id: 'source-set',
+                sourceNodeId: 'source',
+                sourcePortId: 'value',
+                targetNodeId: 'set',
+                targetPortId: 'set',
+              },
+            ],
+          },
+          meta: {
+            loopId: 'loop-boolean-targeted',
+            tickIntervalMs: 33,
+            targetClientIds: ['client-a', 'client-b'],
+          },
+        }),
+      });
+
+      await waitFor(() =>
+        sdk.booleanUpdates.some(
+          (entry) =>
+            entry.updates.visible === true &&
+            Array.isArray(entry.clientIds) &&
+            entry.clientIds.join(',') === 'client-a,client-b'
+        )
+      );
     } finally {
       executor.destroy();
     }

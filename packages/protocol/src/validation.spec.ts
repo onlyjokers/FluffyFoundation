@@ -49,6 +49,10 @@ const validFixtures = [
   createSystemMessage('clientList', {
     clients: [{ clientId: 'client-1', connectedAt: 1000, selected: true }],
   }),
+  createSystemMessage('booleanVariables.update', {
+    updates: { visible: true },
+    clientIds: ['client-1'],
+  }),
   createSemanticMessage({
     target: { mode: 'manager' },
     actor: 'agent-1',

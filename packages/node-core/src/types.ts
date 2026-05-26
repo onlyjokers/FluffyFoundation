@@ -85,7 +85,18 @@ export interface ProcessContext {
   nodeId: string;
   time: number;
   deltaTime: number;
+  variableStore?: NodeVariableStore;
 }
+
+export type BooleanVariableStore = {
+  get: (name: string) => boolean | undefined;
+  set: (name: string, value: boolean) => void;
+  delete?: (name: string) => void;
+};
+
+export type NodeVariableStore = {
+  boolean?: BooleanVariableStore;
+};
 
 export type NodePlatformTarget = 'manager' | 'client' | 'display' | 'server' | 'worker' | 'local-only';
 

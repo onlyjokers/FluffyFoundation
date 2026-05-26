@@ -21,6 +21,7 @@ export interface ManagerState {
 export type MessageHandler<T = Message> = (message: T) => void;
 
 export type SemanticSnapshotHandler = (snapshot: SemanticGraphSnapshot) => void;
+export type BooleanVariablesHandler = (snapshot: Record<string, boolean>) => void;
 
 export type SocketTransport = 'polling' | 'websocket';
 

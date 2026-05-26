@@ -55,6 +55,16 @@ describe('clientUiRuntime', () => {
     assert.equal(clientUiRuntime.getClientUiState('input-1')?.firstInputed, true);
   });
 
+  it('clears stale button presses when a button is hidden and rendered again', () => {
+    resetClientUiRuntime();
+    clientUiRuntime.applyPayload({ items: [{ type: 'button', nodeId: 'button-1' }] });
+    clientUiRuntime.pressButton('button-1');
+    clientUiRuntime.applyPayload({ items: [] });
+    clientUiRuntime.applyPayload({ items: [{ type: 'button', nodeId: 'button-1' }] });
+
+    assert.equal(clientUiRuntime.consumeClientButtonPressed('button-1'), false);
+  });
+
   it('notifies subscribers when ClientUI controls are used', () => {
     resetClientUiRuntime();
     const events: ClientUiInteractionEvent[] = [];

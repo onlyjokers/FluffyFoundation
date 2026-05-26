@@ -19,6 +19,14 @@ type CanvasActionsOptions = {
   confirm: (message?: string) => boolean;
 };
 
+const callConfirm = (confirm: (message?: string) => boolean, message: string): boolean => {
+  const globalConfirm = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+  if (globalConfirm && confirm === globalConfirm) {
+    return globalConfirm.call(globalThis, message);
+  }
+  return confirm(message);
+};
+
 export function createCanvasActions(opts: CanvasActionsOptions) {
   const resetGroups = () => {
     opts.groupController.nodeGroups.set([]);
@@ -44,7 +52,7 @@ export function createCanvasActions(opts: CanvasActionsOptions) {
   };
 
   const handleClear = () => {
-    if (!opts.confirm('Clear all nodes?')) return;
+    if (!callConfirm(opts.confirm, 'Clear all nodes?')) return;
     opts.nodeEngine.clear();
     resetGroups();
     opts.replaceGraphCommand?.({ nodes: [], connections: [] });

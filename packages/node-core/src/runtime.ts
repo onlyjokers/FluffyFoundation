@@ -3,6 +3,7 @@ import type {
   GraphState,
   NodeDefinition,
   NodeInstance,
+  NodeVariableStore,
   ProcessContext,
 } from './types.js';
 import type { NodeRegistry } from './registry.js';
@@ -47,6 +48,7 @@ export class NodeRuntime {
   private isNodeEnabled: ((nodeId: string) => boolean) | null = null;
   private isComputeEnabled: ((nodeId: string) => boolean) | null = null;
   private isSinkEnabled: ((nodeId: string) => boolean) | null = null;
+  private variableStore: NodeVariableStore | undefined;
   private lastEnabledStateByNode = new Map<string, boolean>();
 
   // Remote overrides (manager-driven) that take precedence over connections and local inputs.
@@ -82,6 +84,8 @@ export class NodeRuntime {
       tickIntervalMs?: number;
       onTick?: (info: { durationMs: number; time: number }) => void;
       onWatchdog?: (info: NodeRuntimeWatchdogInfo) => void;
+      booleanVariables?: NonNullable<NodeVariableStore['boolean']>;
+      variableStore?: NodeVariableStore;
       /**
        * Gate for compute execution only. When false, compute and sinks are skipped and outputs are cleared,
        * but the node is not considered "disabled" for lifecycle purposes.
@@ -111,6 +115,9 @@ export class NodeRuntime {
     this.isComputeEnabled = options?.isComputeEnabled ?? null;
     this.isNodeEnabled = options?.isNodeEnabled ?? null;
     this.isSinkEnabled = options?.isSinkEnabled ?? null;
+    this.variableStore =
+      options?.variableStore ??
+      (options?.booleanVariables ? { boolean: options.booleanVariables } : undefined);
 
     const maxSink = options?.watchdog?.maxSinkValuesPerTick;
     if (typeof maxSink === 'number' && Number.isFinite(maxSink) && maxSink > 0) {
@@ -285,7 +292,7 @@ export class NodeRuntime {
   private runDisableHooks(now: number): void {
     const nodesInOrder =
       this.executionOrder.length > 0 ? this.executionOrder : Array.from(this.nodes.values());
-    const context: ProcessContext = { nodeId: '', time: now, deltaTime: 0 };
+    const context: ProcessContext = { nodeId: '', time: now, deltaTime: 0, variableStore: this.variableStore };
 
     for (const node of nodesInOrder) {
       const def = this.registry.get(node.type);
@@ -492,7 +499,7 @@ export class NodeRuntime {
     const deltaTime = this.lastTickTime > 0 ? now - this.lastTickTime : this.tickIntervalMs;
     this.lastTickTime = now;
 
-    const context: ProcessContext = { nodeId: '', time: now, deltaTime };
+    const context: ProcessContext = { nodeId: '', time: now, deltaTime, variableStore: this.variableStore };
 
     // Compute pass
     for (const node of this.executionOrder) {

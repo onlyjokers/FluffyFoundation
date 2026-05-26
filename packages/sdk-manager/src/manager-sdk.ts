@@ -47,7 +47,7 @@ import {
     type ManagerSocketListenerHost,
 } from './manager-sdk/socket-listeners.js';
 import { createInitialManagerState, notifyManagerStateListeners } from './manager-sdk/state.js';
-import type { ManagerSDKConfig, ManagerState, MessageHandler, SemanticSnapshotHandler } from './manager-sdk/types.js';
+import type { BooleanVariablesHandler, ManagerSDKConfig, ManagerState, MessageHandler, SemanticSnapshotHandler } from './manager-sdk/types.js';
 export type {
     ConnectionStatus,
     ManagerSDKConfig,
@@ -72,6 +72,7 @@ export class ManagerSDK {
     private semanticCommandHandlers: Set<MessageHandler<SemanticMessage>> = new Set();
     private semanticResultHandlers: Set<MessageHandler<SemanticResultMessage>> = new Set();
     private semanticSnapshotHandlers: Set<SemanticSnapshotHandler> = new Set();
+    private booleanVariablesHandlers: Set<BooleanVariablesHandler> = new Set();
     private timeSyncIntervalId: ReturnType<typeof setInterval> | null = null;
     private readonly deliveryQueue: ManagerDeliveryQueue;
 
@@ -187,6 +188,21 @@ export class ManagerSDK {
     onSemanticSnapshot(handler: SemanticSnapshotHandler): () => void {
         this.semanticSnapshotHandlers.add(handler);
         return () => this.semanticSnapshotHandlers.delete(handler);
+    }
+
+    onBooleanVariables(handler: BooleanVariablesHandler): () => void {
+        this.booleanVariablesHandlers.add(handler);
+        return () => this.booleanVariablesHandlers.delete(handler);
+    }
+
+    sendBooleanVariableUpdates(updates: Record<string, boolean>): void {
+        this.socket?.emit(SOCKET_EVENTS.MSG, {
+            type: 'system' as const,
+            version: 1 as const,
+            action: 'booleanVariables.update' as const,
+            payload: { updates: { ...updates } },
+            clientTimestamp: Date.now(),
+        });
     }
 
     /**
@@ -634,6 +650,7 @@ export class ManagerSDK {
             getSemanticCommandHandlers: () => this.semanticCommandHandlers,
             getSemanticResultHandlers: () => this.semanticResultHandlers,
             getSemanticSnapshotHandlers: () => this.semanticSnapshotHandlers,
+            getBooleanVariablesHandlers: () => this.booleanVariablesHandlers,
         };
     }
 }

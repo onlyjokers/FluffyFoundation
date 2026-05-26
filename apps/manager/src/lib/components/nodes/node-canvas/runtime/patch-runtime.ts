@@ -59,6 +59,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   const OVERRIDE_TTL_MS = 1500;
   const PATCH_RUNTIME_TARGETS_CHECK_INTERVAL_MS = 200;
   const LOCAL_DISPLAY_TARGET_ID = 'local:display';
+  const PATCH_ROOT_TYPES = new Set(['audio-out', 'effect-out', 'scene-out', 'ui-out']);
 
   const clientIdsInOrder = () =>
     (get(managerState).clients ?? [])
@@ -86,6 +87,14 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
   const isLocalDisplayTarget = (id: string): boolean => id === LOCAL_DISPLAY_TARGET_ID;
 
+  const isConnectedTarget = (id: string): boolean => {
+    if (isLocalDisplayTarget(id)) return true;
+    return (get(managerState).clients ?? []).some((client) => {
+      const record = asRecord(client);
+      return String(record?.clientId ?? '') === id && record?.connected !== false;
+    });
+  };
+
   const isDisplayTarget = (id: string): boolean => {
     if (isLocalDisplayTarget(id)) return true;
     const clients = get(managerState).clients ?? [];
@@ -102,10 +111,11 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
   let lastGraphTopologySignature = '';
   let patchLastPlan: PatchDeploymentPlan | null = null;
   let patchRuntimeTargetsLastCheckAt = 0;
-  let cachedCompiledPlanningGraph: ReturnType<
-    NonNullable<typeof nodeEngine.exportCompiledGraphForPatchPlanning>
-  > | undefined;
+  let cachedCompiledPlanningGraph:
+    | ReturnType<NonNullable<typeof nodeEngine.exportCompiledGraphForPatchPlanning>>
+    | undefined;
   let isCompiledPlanningGraphDirty = true;
+  let lastRuntimeCustomGateSignature = '';
 
   // ────────────────────────────────────────────────────────────────────────────
   // node-executor control transport
@@ -216,6 +226,28 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     return cachedCompiledPlanningGraph;
   };
 
+  const computeRuntimeCustomGateSignature = (): string => {
+    const nodes = (getGraphState().nodes ?? [])
+      .filter((node) => String(node.type ?? '').startsWith('custom:'))
+      .map((node) => {
+        const id = String(node.id ?? '');
+        const computed = id ? nodeEngine.getLastComputedInputs(id) : null;
+        const hasRuntimeGate = Boolean(
+          computed && Object.prototype.hasOwnProperty.call(computed, 'gate')
+        );
+        const gate = hasRuntimeGate ? computed?.gate : asRecord(node.inputValues)?.gate;
+        return { id, gate };
+      })
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return JSON.stringify(nodes);
+  };
+
+  const compiledGraphHasPatchRoot = (): boolean => {
+    const compiledGraph = getCompiledPlanningGraph();
+    const graph = compiledGraph ?? getGraphState();
+    return (graph.nodes ?? []).some((node) => PATCH_ROOT_TYPES.has(String(node.type ?? '')));
+  };
+
   const resolvePatchDeploymentPlan = (): PatchDeploymentPlan | null => {
     const compiledGraph = getCompiledPlanningGraph();
 
@@ -291,11 +323,15 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (!getSDK()) return;
 
     const plan = resolvePatchDeploymentPlan();
+    lastRuntimeCustomGateSignature = computeRuntimeCustomGateSignature();
     lastGraphTopologySignature = computeDesiredPatchTopologySignature();
     patchLastPlan = plan;
     if (!plan || plan.targetClientIds.length === 0) {
+      if (!compiledGraphHasPatchRoot()) {
+        stopAllDeployedPatches();
+        return;
+      }
       if (deployedPatchByClientId.size > 0) {
-        nodeEngine.lastError.set('Patch target unavailable; keeping the previous deployment running.');
         syncPatchVisualState();
       }
       return;
@@ -359,6 +395,16 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       };
 
       if (!applyLocalOnlyTargetFilter() || targets.length === 0) continue;
+      payload = {
+        ...payload,
+        meta: {
+          ...payload.meta,
+          targetClientIds: targets
+            .filter((id) => !isDisplayTarget(id))
+            .map(String)
+            .filter(Boolean),
+        },
+      };
 
       let nodeIds = new Set((payload?.graph?.nodes ?? []).map((node) => String(node.id)));
       let hasDisabledNodes = Array.from(nodeIds).some((id) => disabled.has(id));
@@ -437,7 +483,9 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (desiredByClientId.size === 0) {
       if (retainedClientIds.size === 0) {
         if (deployedPatchByClientId.size > 0) {
-          nodeEngine.lastError.set('Patch reconcile produced no deployable targets; keeping the previous deployment running.');
+          nodeEngine.lastError.set(
+            'Patch reconcile produced no deployable targets; keeping the previous deployment running.'
+          );
           syncPatchVisualState();
         }
       } else {
@@ -580,6 +628,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     const nodeKey = String(nodeId);
     const patchTargets: { clientId: string; patch: DeployedPatch }[] = [];
     for (const [clientId, patch] of deployedPatchByClientId.entries()) {
+      if (!isConnectedTarget(clientId)) continue;
       if (patch.nodeIds.has(nodeKey)) patchTargets.push({ clientId, patch });
     }
     if (patchTargets.length === 0) return;
@@ -638,6 +687,18 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     if (now - patchRuntimeTargetsLastCheckAt < PATCH_RUNTIME_TARGETS_CHECK_INTERVAL_MS) return;
     patchRuntimeTargetsLastCheckAt = now;
 
+    const runtimeCustomGateSignature = computeRuntimeCustomGateSignature();
+    if (runtimeCustomGateSignature !== lastRuntimeCustomGateSignature) {
+      lastRuntimeCustomGateSignature = runtimeCustomGateSignature;
+      invalidateCompiledPlanningGraph();
+      const nextTopologySignature = computeDesiredPatchTopologySignature();
+      if (nextTopologySignature !== lastGraphTopologySignature || !compiledGraphHasPatchRoot()) {
+        lastGraphTopologySignature = nextTopologySignature;
+        scheduleReconcile('runtime-custom-gate', { immediate: true });
+      }
+      return;
+    }
+
     const plan = resolvePatchDeploymentPlan();
     const shouldUpdate = shouldUpdatePatchDeploymentPlan(patchLastPlan, plan);
     if (shouldUpdate) {
@@ -647,6 +708,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
   const onGraphStateChanged = () => {
     invalidateCompiledPlanningGraph();
+    lastRuntimeCustomGateSignature = computeRuntimeCustomGateSignature();
     const nextTopologySignature = computeDesiredPatchTopologySignature();
     const topologyChanged =
       lastGraphTopologySignature === '' || nextTopologySignature !== lastGraphTopologySignature;

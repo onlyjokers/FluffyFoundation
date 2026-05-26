@@ -55,6 +55,8 @@ export const SYSTEM_ACTIONS = [
   'clientJoined',
   'clientLeft',
   'clientPermissions',
+  'booleanVariables',
+  'booleanVariables.update',
   'semanticSnapshot',
   'error',
   'ping',

@@ -19,7 +19,7 @@ import {
 } from '@shugu/protocol';
 import type { Socket } from 'socket.io-client';
 import { createStateSnapshotPatch } from '../state-snapshot.js';
-import type { ManagerState, MessageHandler, SemanticSnapshotHandler } from './types.js';
+import type { BooleanVariablesHandler, ManagerState, MessageHandler, SemanticSnapshotHandler } from './types.js';
 
 export type ManagerSocketListenerHost = {
     getSocket(): Socket | null;
@@ -33,6 +33,7 @@ export type ManagerSocketListenerHost = {
     getSemanticCommandHandlers(): Set<MessageHandler<SemanticMessage>>;
     getSemanticResultHandlers(): Set<MessageHandler<SemanticResultMessage>>;
     getSemanticSnapshotHandlers(): Set<SemanticSnapshotHandler>;
+    getBooleanVariablesHandlers(): Set<BooleanVariablesHandler>;
 };
 
 export function setupManagerSocketListeners(host: ManagerSocketListenerHost): void {
@@ -144,6 +145,17 @@ export function handleManagerSystemMessage(
                         handler(message.payload.semanticSnapshot as never);
                     } catch (error) {
                         console.error('[SDK Manager] Semantic snapshot handler error:', error);
+                    }
+                });
+            }
+            break;
+        case 'booleanVariables':
+            if (message.payload.booleanVariables) {
+                host.getBooleanVariablesHandlers().forEach(handler => {
+                    try {
+                        handler(message.payload.booleanVariables as Record<string, boolean>);
+                    } catch (error) {
+                        console.error('[SDK Manager] Boolean variable handler error:', error);
                     }
                 });
             }

@@ -592,6 +592,8 @@ export type SystemAction =
   | 'clientJoined'
   | 'clientLeft'
   | 'clientPermissions'
+  | 'booleanVariables'
+  | 'booleanVariables.update'
   | 'semanticSnapshot'
   | 'error'
   | 'ping'
@@ -632,6 +634,9 @@ export interface SystemMessage extends BaseMessage {
     stateStrategy?: import('./state-strategy.js').StateStrategyStatus;
     controlPlane?: import('./state-strategy.js').ControlPlaneSnapshot;
     semanticSnapshot?: Record<string, unknown>;
+    booleanVariables?: Record<string, boolean>;
+    updates?: Record<string, boolean>;
+    clientIds?: string[];
   };
 }
 

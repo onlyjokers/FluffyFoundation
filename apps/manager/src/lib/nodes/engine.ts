@@ -93,6 +93,8 @@ class NodeEngineClass {
   private offloadedPatchNodeIds = new Set<string>();
   private deployedLoopIds = new Set<string>();
   private disabledNodeIds = new Set<string>();
+  private booleanVariables = new Map<string, boolean>();
+  private booleanVariableReporter: ((updates: Record<string, boolean>) => void) | null = null;
   // Track UI-only playheads for time-range controls (e.g. asset playback) so patch retargets can resume mid-play.
   private timeRangePlayheadSecByNodeId = new Map<string, number>();
 
@@ -115,6 +117,14 @@ class NodeEngineClass {
   private createRuntime(): NodeRuntime {
     return new NodeRuntime(nodeRegistry, {
       tickIntervalMs: TICK_INTERVAL,
+      booleanVariables: {
+        get: (name) => this.booleanVariables.get(name),
+        set: (name, value) => {
+          this.booleanVariables.set(name, value);
+          this.booleanVariableReporter?.({ [name]: value });
+          this.tickTime.set(Date.now());
+        },
+      },
       isNodeEnabled: (nodeId) => !this.disabledNodeIds.has(nodeId),
       isComputeEnabled: (nodeId) => {
         if (this.offloadedNodeIds.has(nodeId)) {
@@ -159,6 +169,19 @@ class NodeEngineClass {
         this.lastError.set(message);
       },
     });
+  }
+
+  applyBooleanVariables(snapshot: Record<string, boolean>): void {
+    this.booleanVariables = new Map(
+      Object.entries(snapshot ?? {})
+        .map(([name, value]) => [String(name).trim(), Boolean(value)] as const)
+        .filter(([name]) => Boolean(name))
+    );
+    this.tickTime.set(Date.now());
+  }
+
+  setBooleanVariableReporter(reporter: ((updates: Record<string, boolean>) => void) | null): void {
+    this.booleanVariableReporter = reporter;
   }
 
   // ========== UI Playheads ==========
@@ -590,6 +613,25 @@ class NodeEngineClass {
     return get(this.graphState);
   }
 
+  private exportGraphWithRuntimeCustomGateInputs(): GraphState {
+    const snapshot = asManagerGraph(this.runtime.exportGraph());
+    return {
+      nodes: (snapshot.nodes ?? []).map((node) => {
+        if (!String(node.type ?? '').startsWith('custom:')) return node;
+        const computed = this.runtime.getLastComputedInputs(String(node.id));
+        if (!computed || !Object.prototype.hasOwnProperty.call(computed, 'gate')) return node;
+        return {
+          ...node,
+          inputValues: {
+            ...(node.inputValues ?? {}),
+            gate: computed.gate,
+          },
+        };
+      }),
+      connections: snapshot.connections ?? [],
+    };
+  }
+
   // ========== Group / Disable Nodes ==========
 
   setNodesDisabled(nodeIds: string[], disabled: boolean): void {
@@ -743,7 +785,7 @@ class NodeEngineClass {
     assetRefs: string[];
   } {
     const snapshot = asManagerGraph(compileGraphForPatch(
-      asManagerGraph(this.runtime.exportGraph()),
+      this.exportGraphWithRuntimeCustomGateInputs(),
       get(customNodeDefinitions) ?? []
     ));
     const ids = Array.from(new Set((rootNodeIds ?? []).map(String).filter(Boolean))).sort();
@@ -804,7 +846,7 @@ class NodeEngineClass {
 
   exportCompiledGraphForPatchPlanning(): GraphState {
     return asManagerGraph(compileGraphForPatch(
-      asManagerGraph(this.runtime.exportGraph()),
+      this.exportGraphWithRuntimeCustomGateInputs(),
       get(customNodeDefinitions) ?? []
     ));
   }
