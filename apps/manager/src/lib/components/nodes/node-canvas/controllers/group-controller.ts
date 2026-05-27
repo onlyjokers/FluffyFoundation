@@ -39,7 +39,12 @@ import {
   shouldEnforceFrameForMovedNodes,
 } from './group-drop-helpers';
 import { computeGroupVisualStatePlan } from './group-visual-state';
-import { easeOutCubic, planNodesOutOfBounds, type NodeTranslation } from './group-node-motion';
+import {
+  easeOutCubic,
+  persistFinalNodeTranslations,
+  planNodesOutOfBounds,
+  type NodeTranslation,
+} from './group-node-motion';
 import { createGroupMarqueeController } from './group-marquee';
 export type { FrameMoveContext, GroupController, GroupFrame, NodeGroup } from './group-types';
 
@@ -230,6 +235,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
       }
 
       programmaticTranslateDepth = Math.max(0, programmaticTranslateDepth - 1);
+      persistFinalNodeTranslations(updates, opts.updateNodePosition);
       opts.requestLoopFramesUpdate();
       opts.requestMinimapUpdate();
     };

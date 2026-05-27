@@ -102,6 +102,16 @@ export function planNodesOutOfBounds(options: PlanNodesOutOfBoundsOptions): Node
   return updates;
 }
 
+export function persistFinalNodeTranslations(
+  updates: NodeTranslation[],
+  updateNodePosition?: (nodeId: string, pos: { x: number; y: number }) => void
+): void {
+  if (!updateNodePosition) return;
+  for (const update of updates) {
+    updateNodePosition(update.id, { x: update.to.x, y: update.to.y });
+  }
+}
+
 export function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }

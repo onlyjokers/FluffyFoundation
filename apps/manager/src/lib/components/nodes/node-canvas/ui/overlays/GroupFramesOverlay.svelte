@@ -195,6 +195,17 @@
                       ? 'Editing…'
                       : 'Edit node'}{/if}
                 </Button>
+                {#if isCustomNodeEditing}
+                  <Button
+                    variant={isEditing ? 'primary' : 'ghost'}
+                    size="sm"
+                    ariaLabel={isEditing ? 'Editing group' : 'Edit Group'}
+                    title={isEditing ? 'Editing group' : 'Edit Group'}
+                    on:click={() => onToggleEditMode(group.id)}
+                  >
+                    {#if isActionsCompact}◇{:else}{isEditing ? 'Editing group…' : 'Edit Group'}{/if}
+                  </Button>
+                {/if}
                 <Button
                   variant="ghost"
                   size="sm"

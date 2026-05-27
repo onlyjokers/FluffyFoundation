@@ -300,17 +300,9 @@
     pointer-events: auto;
   }
 
-  :global(.node.group-port.group-proxy-input) .collapsed-sockets,
-  :global(.node.group-port.group-proxy-output) .collapsed-sockets {
-    position: relative;
-    inset: auto;
-    pointer-events: auto;
-  }
-
   :global(.node.group-port.group-proxy-input) .collapsed-socket,
   :global(.node.group-port.group-proxy-output) .collapsed-socket {
-    position: static;
-    transform: none;
+    top: 50%;
   }
 
   :global(.node.group-port.group-proxy-input) .collapsed-sockets :global(.socket),

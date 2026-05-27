@@ -45,6 +45,32 @@ test('deleteNodeWithRules delegates local removal to a successful semantic remov
   assert.deepEqual(localRemovals, []);
 });
 
+test('deleteNodeWithRules removes editable projection nodes through projection callback', () => {
+  const projectionRemovals: string[] = [];
+  const localRemovals: string[] = [];
+  const deleteNode = createDeleteNodeWithRules({
+    nodeEngine: {
+      getNode: () => undefined,
+      removeNode: (id) => localRemovals.push(id),
+      exportGraph: () => ({ nodes: [] }),
+    },
+    readCustomNodeState: () => null,
+    getCustomNodeDefinition: () => undefined,
+    getSelectedNodeId: () => 'view:custom:owner:inner',
+    setSelectedNode: (id) => projectionRemovals.push(`select:${id}`),
+    confirm: () => true,
+    removeProjectionNode: (id) => {
+      projectionRemovals.push(id);
+      return true;
+    },
+  });
+
+  deleteNode('view:custom:owner:inner');
+
+  assert.deepEqual(projectionRemovals, ['view:custom:owner:inner', 'select:']);
+  assert.deepEqual(localRemovals, []);
+});
+
 test('deleteNodeWithRules removes only the mother instance and keeps definition plus children', () => {
   const mother: NodeInstance = {
     id: 'mother-1',

@@ -252,11 +252,6 @@ export function bindRetePipes(opts: RetePipeOptions) {
       const y = Number(position.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return ctx;
       if (id && position) {
-        if (isProjectionId(String(id))) {
-          if (!isProjectionEditable(String(id))) return ctx;
-          updateProjectionNodePosition(String(id), { x, y });
-          return ctx;
-        }
         // Ignore no-op translations (including NodeView's initial translate(0,0) on construction).
         if (
           previous &&
@@ -265,6 +260,11 @@ export function bindRetePipes(opts: RetePipeOptions) {
           previous.x === position.x &&
           previous.y === position.y
         ) {
+          return ctx;
+        }
+        if (isProjectionId(String(id))) {
+          if (!isProjectionEditable(String(id))) return ctx;
+          updateProjectionNodePosition(String(id), { x, y });
           return ctx;
         }
 

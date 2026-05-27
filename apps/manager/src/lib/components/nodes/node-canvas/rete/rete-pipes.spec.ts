@@ -171,6 +171,22 @@ test('bindRetePipes writes projection node movement through projection callback'
   ]);
 });
 
+test('bindRetePipes ignores no-op projection node translations', async () => {
+  const { areaPipes, movedNodes, projectionPositionUpdates } = createHarness();
+
+  await areaPipes[0]?.({
+    type: 'nodetranslated',
+    data: {
+      id: 'view:custom:custom-1:inner',
+      position: { x: 120, y: 240 },
+      previous: { x: 120, y: 240 },
+    },
+  });
+
+  assert.deepEqual(movedNodes, []);
+  assert.deepEqual(projectionPositionUpdates, []);
+});
+
 test('bindRetePipes keeps read-only projection movement editor-only', async () => {
   const { areaPipes, movedNodes, projectionPositionUpdates } = createHarness({
     isProjectionEditable: () => false,

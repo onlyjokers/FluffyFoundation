@@ -15,6 +15,9 @@ export const isCustomNodeProjectionId = (id: string): boolean =>
 export const customNodeProjectionNodeId = (customNodeId: string, internalNodeId: string): string =>
   `${CUSTOM_NODE_PROJECTION_PREFIX}${String(customNodeId ?? '')}:${String(internalNodeId ?? '')}`;
 
+export const customNodeProjectionGroupId = (customNodeId: string, internalGroupId: string): string =>
+  `${CUSTOM_NODE_PROJECTION_PREFIX}${String(customNodeId ?? '')}:group:${String(internalGroupId ?? '')}`;
+
 const cloneInternalGroups = (internal: GraphState | null | undefined): GraphState['groups'] | undefined =>
   Array.isArray(internal?.groups)
     ? internal.groups.map((group) => ({
@@ -50,6 +53,27 @@ export function parseCustomNodeProjectionNodeId(
     customNodeId: rest.slice(0, splitAt),
     internalNodeId: rest.slice(splitAt + 1),
   };
+}
+
+export function parseCustomNodeProjectionGroupId(
+  id: string
+): { customNodeId: string; internalGroupId: string } | null {
+  const raw = String(id ?? '');
+  if (!raw.startsWith(CUSTOM_NODE_PROJECTION_PREFIX)) return null;
+  const rest = raw.slice(CUSTOM_NODE_PROJECTION_PREFIX.length);
+  const marker = ':group:';
+  const splitAt = rest.indexOf(marker);
+  if (splitAt <= 0 || splitAt >= rest.length - marker.length) return null;
+  return {
+    customNodeId: rest.slice(0, splitAt),
+    internalGroupId: rest.slice(splitAt + marker.length),
+  };
+}
+
+export function customNodeInternalGroupIdForProjection(ownerNodeId: string, groupId: string): string {
+  const parsed = parseCustomNodeProjectionGroupId(String(groupId ?? ''));
+  if (!parsed) return String(groupId ?? '');
+  return parsed.customNodeId === String(ownerNodeId ?? '') ? parsed.internalGroupId : String(groupId ?? '');
 }
 
 export function resolveCustomNodeProjectionPublicConnection(input: {
@@ -187,9 +211,22 @@ function updateCustomNodeProjectionState(input: {
   return true;
 }
 
+function normalizeProjectionNodeForInternal(ownerId: string, node: NodeInstance): NodeInstance {
+  const config = { ...(node.config ?? {}) };
+  if (String(node.type ?? '') === 'group-proxy' || String(node.type ?? '') === 'group-gate') {
+    const rawGroupId = String(config.groupId ?? '');
+    if (rawGroupId) config.groupId = customNodeInternalGroupIdForProjection(ownerId, rawGroupId);
+  }
+  delete config.editorProjection;
+  delete config.projectionOwnerNodeId;
+  delete config.projectionInternalNodeId;
+  return { ...node, config };
+}
+
 export function appendCustomNodeProjectionNode(input: {
   ownerNodeId: string;
   node: NodeInstance;
+  ownerViewPosition?: { x: number; y: number } | null;
   getOwnerNode: (nodeId: string) => NodeInstance | null | undefined;
   updateOwnerConfig: (nodeId: string, config: Record<string, unknown>) => void;
 }): string | undefined {
@@ -206,10 +243,11 @@ export function appendCustomNodeProjectionNode(input: {
       const internal = state.internal ?? { nodes: [], connections: [] };
       const nodes = Array.isArray(internal.nodes) ? internal.nodes : [];
       if (nodes.some((node) => String(node?.id ?? '') === nodeId)) return null;
-      const ownerX = Number(owner.position?.x ?? 0);
-      const ownerY = Number(owner.position?.y ?? 0);
+      const ownerX = Number(input.ownerViewPosition?.x ?? owner.position?.x ?? 0);
+      const ownerY = Number(input.ownerViewPosition?.y ?? owner.position?.y ?? 0);
       const x = Number(input.node.position?.x ?? ownerX);
       const y = Number(input.node.position?.y ?? ownerY);
+      const internalNode = normalizeProjectionNodeForInternal(ownerId, input.node);
       return {
         ...state,
         internal: cloneInternalGraph({
@@ -217,15 +255,15 @@ export function appendCustomNodeProjectionNode(input: {
           nodes: [
             ...nodes.map((node) => ({ ...node })),
             {
-              ...input.node,
+              ...internalNode,
               id: nodeId,
               type,
               position: {
                 x: Number.isFinite(x) ? x - ownerX : 0,
                 y: Number.isFinite(y) ? y - ownerY : 0,
               },
-              config: { ...(input.node.config ?? {}) },
-              inputValues: { ...(input.node.inputValues ?? {}) },
+              config: { ...(internalNode.config ?? {}) },
+              inputValues: { ...(internalNode.inputValues ?? {}) },
               outputValues: {},
             },
           ],
@@ -235,6 +273,56 @@ export function appendCustomNodeProjectionNode(input: {
   });
 
   return ok ? customNodeProjectionNodeId(ownerId, nodeId) : undefined;
+}
+
+export function removeCustomNodeProjectionNode(input: {
+  projectionNodeId: string;
+  getOwnerNode: (nodeId: string) => NodeInstance | null | undefined;
+  updateOwnerConfig: (nodeId: string, config: Record<string, unknown>) => void;
+}): boolean {
+  const projection = parseCustomNodeProjectionNodeId(String(input.projectionNodeId ?? ''));
+  if (!projection) return false;
+  const ownerId = String(projection.customNodeId ?? '');
+  const internalNodeId = String(projection.internalNodeId ?? '');
+  if (!ownerId || !internalNodeId) return false;
+
+  return updateCustomNodeProjectionState({
+    ownerNodeId: ownerId,
+    getOwnerNode: input.getOwnerNode,
+    updateOwnerConfig: input.updateOwnerConfig,
+    mutate: (state) => {
+      const internal = state.internal ?? { nodes: [], connections: [] };
+      const nodes = Array.isArray(internal.nodes) ? internal.nodes : [];
+      if (!nodes.some((node) => String(node?.id ?? '') === internalNodeId)) return null;
+
+      const connections = Array.isArray(internal.connections) ? internal.connections : [];
+      const groups = Array.isArray(internal.groups)
+        ? internal.groups
+            .map((group) => ({
+              ...group,
+              nodeIds: (Array.isArray(group?.nodeIds) ? group.nodeIds : [])
+                .map(String)
+                .filter((nodeId) => nodeId !== internalNodeId),
+            }))
+            .filter((group) => (group.nodeIds ?? []).length > 0)
+        : undefined;
+
+      return {
+        ...state,
+        internal: {
+          nodes: nodes.filter((node) => String(node?.id ?? '') !== internalNodeId).map((node) => ({ ...node })),
+          connections: connections
+            .filter(
+              (connection) =>
+                String(connection?.sourceNodeId ?? '') !== internalNodeId &&
+                String(connection?.targetNodeId ?? '') !== internalNodeId
+            )
+            .map((connection) => ({ ...connection })),
+          ...(groups && groups.length > 0 ? { groups } : {}),
+        },
+      };
+    },
+  });
 }
 
 export function upsertCustomNodeProjectionPort(input: {
@@ -273,9 +361,136 @@ export function upsertCustomNodeProjectionPort(input: {
   };
 }
 
+function resolvePortDef(
+  nodeRegistry: {
+    get: (type: string) =>
+      | { inputs?: { id: string; label?: string; type?: string }[]; outputs?: { id: string; label?: string; type?: string }[] }
+      | undefined;
+  },
+  nodeType: string,
+  side: 'input' | 'output',
+  portId: string
+): { label: string; type: string } {
+  const def = nodeRegistry.get(String(nodeType ?? ''));
+  const ports = side === 'input' ? def?.inputs : def?.outputs;
+  const port = (ports ?? []).find((candidate) => String(candidate.id) === String(portId)) ?? null;
+  return { label: String(port?.label ?? portId), type: String(port?.type ?? 'any') };
+}
+
+function resolveProxyBoundaryPortMeta(input: {
+  proxyId: string;
+  side: 'input' | 'output';
+  fallbackType: string;
+  connections: Connection[];
+  nodeById: Map<string, NodeInstance>;
+  nodeRegistry: Parameters<typeof resolvePortDef>[0];
+}): { label: string; type: string } {
+  const visited = new Set<string>();
+  const resolveInput = (proxyId: string): { label: string; type: string } => {
+    if (visited.has(`in:${proxyId}`)) return { label: 'In', type: input.fallbackType };
+    visited.add(`in:${proxyId}`);
+    const inner = input.connections.find(
+      (connection) => String(connection.sourceNodeId) === proxyId && String(connection.sourcePortId) === 'out'
+    );
+    if (!inner) return { label: 'In', type: input.fallbackType };
+    const targetNode = input.nodeById.get(String(inner.targetNodeId));
+    if (!targetNode) return { label: String(inner.targetPortId ?? 'In'), type: input.fallbackType };
+    if (String(targetNode.type ?? '') === 'group-proxy' && String(inner.targetPortId ?? '') === 'in') {
+      return resolveInput(String(targetNode.id ?? ''));
+    }
+    return resolvePortDef(
+      input.nodeRegistry,
+      String(targetNode.type),
+      'input',
+      String(inner.targetPortId)
+    );
+  };
+
+  const resolveOutput = (proxyId: string): { label: string; type: string } => {
+    if (visited.has(`out:${proxyId}`)) return { label: 'Out', type: input.fallbackType };
+    visited.add(`out:${proxyId}`);
+    const inner = input.connections.find(
+      (connection) => String(connection.targetNodeId) === proxyId && String(connection.targetPortId) === 'in'
+    );
+    if (!inner) return { label: 'Out', type: input.fallbackType };
+    const sourceNode = input.nodeById.get(String(inner.sourceNodeId));
+    if (!sourceNode) return { label: String(inner.sourcePortId ?? 'Out'), type: input.fallbackType };
+    if (String(sourceNode.type ?? '') === 'group-proxy' && String(inner.sourcePortId ?? '') === 'out') {
+      return resolveOutput(String(sourceNode.id ?? ''));
+    }
+    return resolvePortDef(
+      input.nodeRegistry,
+      String(sourceNode.type),
+      'output',
+      String(inner.sourcePortId)
+    );
+  };
+
+  return input.side === 'input' ? resolveInput(input.proxyId) : resolveOutput(input.proxyId);
+}
+
+export function refreshCustomNodeProjectionPorts(input: {
+  definition: CustomNodeDefinition;
+  ownerNode: NodeInstance;
+  nodeRegistry: {
+    get: (type: string) =>
+      | { inputs?: { id: string; label?: string; type?: string }[]; outputs?: { id: string; label?: string; type?: string }[] }
+      | undefined;
+  };
+}): CustomNodeDefinition | null {
+  const owner = input.ownerNode;
+  const state = readCustomNodeState(owner.config ?? {});
+  if (!state) return null;
+
+  const ownerId = String(owner.id ?? '');
+  const ownerGroupId = String(state.groupId ?? '');
+  const ownerY = Number(owner.position?.y ?? 0);
+  const internal = state.internal ?? { nodes: [], connections: [] };
+  const nodes = Array.isArray(internal.nodes) ? internal.nodes : [];
+  const connections = Array.isArray(internal.connections) ? internal.connections : [];
+  const nodeById = new Map(nodes.map((node) => [String(node?.id ?? ''), node] as const));
+
+  const ports: CustomNodePort[] = nodes.flatMap((node) => {
+    if (String(node?.type ?? '') !== 'group-proxy') return [];
+    const nodeId = String(node?.id ?? '');
+    if (!nodeId) return [];
+    const config = node.config ?? {};
+    const groupId = customNodeInternalGroupIdForProjection(ownerId, String(config.groupId ?? ''));
+    if (ownerGroupId && groupId !== ownerGroupId) return [];
+
+    const side: 'input' | 'output' = String(config.direction ?? 'output') === 'input' ? 'input' : 'output';
+    const bindingPortId = side === 'input' ? 'in' : 'out';
+    const y = Number(node.position?.y ?? ownerY) - ownerY;
+    const fallbackType = String(config.portType ?? 'any') || 'any';
+    const meta = resolveProxyBoundaryPortMeta({
+      proxyId: nodeId,
+      side,
+      fallbackType,
+      connections,
+      nodeById,
+      nodeRegistry: input.nodeRegistry,
+    });
+
+    return [
+      {
+        portKey: `p:${nodeId}`,
+        side,
+        label: meta.label,
+        type: (meta.type || fallbackType) as CustomNodePort['type'],
+        pinned: Boolean(config.pinned),
+        y: Number.isFinite(y) ? y : 0,
+        binding: { nodeId, portId: bindingPortId },
+      },
+    ];
+  });
+
+  return { ...input.definition, ports };
+}
+
 export function translateCustomNodeProjectionNodePosition(input: {
   projectionNodeId: string;
   position: { x: number; y: number };
+  ownerViewPosition?: { x: number; y: number } | null;
   getOwnerNode: (nodeId: string) => NodeInstance | null | undefined;
   updateOwnerConfig: (nodeId: string, config: Record<string, unknown>) => void;
 }): boolean {
@@ -292,8 +507,8 @@ export function translateCustomNodeProjectionNodePosition(input: {
     mutate: (state, owner) => {
       const internal = state.internal ?? { nodes: [], connections: [] };
       const nodes = Array.isArray(internal.nodes) ? internal.nodes : [];
-      const ownerX = Number(owner.position?.x ?? 0);
-      const ownerY = Number(owner.position?.y ?? 0);
+      const ownerX = Number(input.ownerViewPosition?.x ?? owner.position?.x ?? 0);
+      const ownerY = Number(input.ownerViewPosition?.y ?? owner.position?.y ?? 0);
       const x = Number(input.position?.x);
       const y = Number(input.position?.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -403,6 +618,11 @@ export function buildCustomNodeProjectionGraph(input: {
     const type = String(node?.type ?? '');
     if (!id || !type) return [];
     const position = node.position ?? { x: 0, y: 0 };
+    const config = { ...(node.config ?? {}) };
+    if (type === 'group-proxy' || type === 'group-gate') {
+      const groupId = String(config.groupId ?? '');
+      if (groupId) config.groupId = customNodeProjectionGroupId(String(customNode.id), groupId);
+    }
     return [
       {
         id: customNodeProjectionNodeId(String(customNode.id), id),
@@ -412,7 +632,7 @@ export function buildCustomNodeProjectionGraph(input: {
           y: baseY + Number(position.y ?? 0),
         },
         config: {
-          ...(node.config ?? {}),
+          ...config,
           editorProjection: true,
           projectionOwnerNodeId: String(customNode.id),
           projectionInternalNodeId: id,
@@ -514,12 +734,12 @@ export function buildCustomNodeProjectionGraph(input: {
             const id = String(group?.id ?? '');
             if (!id) return [];
             const parentId = String(group?.parentId ?? '');
-            const projectedId = `${CUSTOM_NODE_PROJECTION_PREFIX}${customNodeId}:group:${id}`;
+            const projectedId = customNodeProjectionGroupId(customNodeId, id);
             return [
               {
                 id: projectedId,
                 parentId: parentId
-                  ? `${CUSTOM_NODE_PROJECTION_PREFIX}${customNodeId}:group:${parentId}`
+                  ? customNodeProjectionGroupId(customNodeId, parentId)
                   : null,
                 name: String(group?.name ?? 'Group'),
                 nodeIds: (Array.isArray(group?.nodeIds) ? group.nodeIds : [])

@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planNodesOutOfBounds } from './group-node-motion';
+import { persistFinalNodeTranslations, planNodesOutOfBounds } from './group-node-motion';
 
 const viewport = { k: 1, tx: 0, ty: 0 };
 
@@ -32,4 +32,23 @@ test('planNodesOutOfBounds ignores decoration nodes and moves normal nodes out o
   assert.equal(updates[0].id, 'regular');
   assert.deepEqual(updates[0].from, { x: 40, y: 40 });
   assert.notDeepEqual(updates[0].to, updates[0].from);
+});
+
+test('persistFinalNodeTranslations writes animation endpoints through the supplied position updater', () => {
+  const writes: Array<{ nodeId: string; position: { x: number; y: number } }> = [];
+
+  persistFinalNodeTranslations(
+    [
+      {
+        id: 'view:custom:custom-1:inner',
+        from: { x: 10, y: 20 },
+        to: { x: 110, y: 220 },
+      },
+    ],
+    (nodeId, position) => writes.push({ nodeId, position })
+  );
+
+  assert.deepEqual(writes, [
+    { nodeId: 'view:custom:custom-1:inner', position: { x: 110, y: 220 } },
+  ]);
 });

@@ -28,10 +28,16 @@ export function createDeleteNodeWithRules(opts: {
   setSelectedNode: (id: string) => void;
   confirm: (message: string) => boolean;
   removeNodeCommand?: (nodeId: string) => boolean;
+  removeProjectionNode?: (nodeId: string) => boolean;
 }) {
   return (nodeId: string) => {
     const id = String(nodeId ?? '');
     if (!id) return;
+
+    if (opts.removeProjectionNode?.(id)) {
+      if (opts.getSelectedNodeId() === id) opts.setSelectedNode('');
+      return;
+    }
 
     const node = opts.nodeEngine.getNode(id);
     if (!node) return;

@@ -60,6 +60,17 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
     return !setEquals(expectedInputs, actualInputs) || !setEquals(expectedOutputs, actualOutputs);
   };
 
+  const shouldRebuildPortShape = (instance: NodeInstance, reteNode: ClassicPreset.Node): boolean => {
+    if (shouldRebuildCustomNode(instance, reteNode)) return true;
+    const def = opts.nodeRegistry.get(String(instance.type));
+    if (!def) return false;
+    const expectedInputs = new Set((def.inputs ?? []).map((p) => String(p.id ?? '')));
+    const expectedOutputs = new Set((def.outputs ?? []).map((p) => String(p.id ?? '')));
+    const actualInputs = new Set(Object.keys(reteNode?.inputs ?? {}));
+    const actualOutputs = new Set(Object.keys(reteNode?.outputs ?? {}));
+    return !setEquals(expectedInputs, actualInputs) || !setEquals(expectedOutputs, actualOutputs);
+  };
+
   const ensureCmdAggregatorInputs = async (
     instance: NodeInstance,
     reteNode: ClassicPreset.Node,
@@ -148,13 +159,14 @@ export function createGraphSync(opts: GraphSyncOptions): GraphSyncController {
 
       for (const n of viewState.nodes) {
         let reteNode = opts.nodeMap.get(n.id);
-        if (reteNode && shouldRebuildCustomNode(n, reteNode)) {
+        if (reteNode && shouldRebuildPortShape(n, reteNode)) {
           try {
             await opts.editor.removeNode(n.id);
           } catch {
             // ignore
           }
           opts.nodeMap.delete(n.id);
+          lastTranslatedPositionByNodeId.delete(n.id);
           reteNode = undefined;
         }
         if (!reteNode) {

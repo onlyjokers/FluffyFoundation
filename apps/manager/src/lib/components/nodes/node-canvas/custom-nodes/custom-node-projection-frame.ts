@@ -1,8 +1,8 @@
 // Purpose: Build expanded Custom Node overlay frame bounds from rendered projection nodes.
 import type { GraphState } from '$lib/nodes/types';
 import type { NodeBounds } from '../adapters';
-import type { GroupFrame } from '../controllers/group-types';
-import { mergeBounds } from '../controllers/group-bounds';
+import type { GroupFrame, NodeGroup } from '../controllers/group-types';
+import { buildGroupIndex, computeGroupFrameBoundsWithChildren, mergeBounds } from '../controllers/group-bounds';
 
 export function buildCustomNodeProjectionFrame(input: {
   ownerId: string;
@@ -33,6 +33,40 @@ export function buildCustomNodeProjectionFrame(input: {
     const y = Number(node.position?.y ?? 0);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     bounds = mergeBounds(bounds, { left: x, top: y, right: x + 230, bottom: y + 100 });
+  }
+
+  const ownedGroups: NodeGroup[] = (input.projection.groups ?? [])
+    .filter((group) => String(group.id ?? '').startsWith(`view:custom:${ownerId}:group:`))
+    .map((group) => ({
+      ...group,
+      id: String(group.id),
+      parentId: group.parentId ? String(group.parentId) : null,
+      nodeIds: (group.nodeIds ?? []).map(String),
+      disabled: Boolean(group.disabled),
+      minimized: Boolean(group.minimized),
+    }));
+  if (ownedGroups.length > 0) {
+    const { byId, childrenByParentId } = buildGroupIndex(ownedGroups);
+    const childGroupIds = new Set(ownedGroups.flatMap((group) => (group.parentId ? [String(group.id)] : [])));
+    const rootGroupIds = ownedGroups
+      .map((group) => String(group.id ?? ''))
+      .filter((groupId) => groupId && !childGroupIds.has(groupId));
+    for (const groupId of rootGroupIds) {
+      bounds = mergeBounds(
+        bounds,
+        computeGroupFrameBoundsWithChildren({
+          groupId,
+          byId,
+          childrenByParentId,
+          cache: new Map(),
+          visiting: new Set(),
+          hiddenNodeIds: new Set(),
+          graph: input.projection,
+          localLoops: [],
+          getNodeBounds: input.getNodeBounds,
+        })
+      );
+    }
   }
   if (!bounds) return null;
 

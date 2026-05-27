@@ -81,9 +81,12 @@
     appendCustomNodeProjectionConnection,
     appendCustomNodeProjectionNode,
     buildCustomNodeProjectionGraph,
+    customNodeInternalGroupIdForProjection,
     isCustomNodeProjectionId,
     mergeProjectionGraphs,
     parseCustomNodeProjectionNodeId,
+    refreshCustomNodeProjectionPorts,
+    removeCustomNodeProjectionNode,
     resolveCustomNodeProjectionPublicConnection,
     translateCustomNodeProjectionNodePosition,
     upsertCustomNodeProjectionPort,
@@ -236,6 +239,7 @@
     getLoopConstraintLoops: () => (loopController ? loopController.getEffectiveLoops() : []),
     getDeployedLoopIds: () => (loopController ? get(loopController.deployedLoopIds) : new Set()),
     setNodesDisabled: (ids, disabled) => nodeEngine.setNodesDisabled(ids, disabled),
+    updateNodePosition: (id, pos) => updateNodeOrProjectionPosition(id, pos),
     requestLoopFramesUpdate: () => requestFramesUpdate(),
     requestMinimapUpdate: () => minimapController?.requestUpdate(),
     isSyncingGraph: isServerSemanticSyncing,
@@ -433,6 +437,7 @@
       return nodeId;
     },
     onNodeAdded: (nodeId) => {
+      assignProjectionNodeToEditedGroup(nodeId);
       handlePickerNodeAdded(nodeId, {
         setSelectedNode,
         requestFramesUpdate,
@@ -506,6 +511,24 @@
     setSelectedNode,
     confirm,
     removeNodeCommand: (nodeId) => canvasCommands.removeNode(nodeId),
+    removeProjectionNode: (nodeId) =>
+      (() => {
+        const parsed = parseCustomNodeProjectionNodeId(String(nodeId ?? ''));
+        const removed = removeCustomNodeProjectionNode({
+          projectionNodeId: nodeId,
+          getOwnerNode: (ownerId) => nodeEngine.getNode(ownerId),
+          updateOwnerConfig: (ownerId, config) => {
+            nodeEngine.updateNodeConfig(ownerId, config);
+            canvasCommands.setNodeParams(ownerId, config);
+          },
+        });
+        if (removed && parsed?.customNodeId) {
+          refreshCustomNodeDefinitionPortsForOwner(parsed.customNodeId);
+          requestFramesUpdate();
+          minimapController?.requestUpdate();
+        }
+        return removed;
+      })(),
   });
 
   const expandedCustomByGroupId = new Map<string, ExpandedCustomNodeFrame>();
@@ -529,6 +552,16 @@
     if (groupId && customNodeEditGroupId !== String(groupId)) return;
     customNodeEditGroupId = null;
   };
+  const findExpandedCustomForProjectionGroup = (groupId: string) => {
+    const id = String(groupId ?? '');
+    if (!id) return null;
+    if (expandedCustomByGroupId.has(id)) return expandedCustomByGroupId.get(id) ?? null;
+    const parsed = /^view:custom:([^:]+):group:/.exec(id);
+    if (!parsed?.[1]) return null;
+    return Array.from(expandedCustomByGroupId.values()).find(
+      (expanded) => String(expanded.nodeId) === String(parsed[1])
+    ) ?? null;
+  };
   const toggleCustomNodeEditMode = (groupId: string) => {
     const id = String(groupId ?? '');
     if (!id) return;
@@ -537,16 +570,34 @@
       clearCustomNodeEditMode(id);
     } else {
       groupController.editModeGroupId.set(null);
+      customNodeProjectionEditGroupId = null;
       customNodeEditGroupId = id;
     }
     requestFramesUpdate();
   };
+  let customNodeProjectionEditGroupId: string | null = null;
+  const effectiveGroupEditModeId = () => customNodeProjectionEditGroupId ?? get(editModeGroupId);
+  const toggleProjectionGroupEditMode = (groupId: string) => {
+    const expanded = findExpandedCustomForProjectionGroup(groupId);
+    if (!expanded || customNodeEditGroupId !== String(expanded.groupId)) return false;
+    const id = String(groupId ?? '');
+    customNodeProjectionEditGroupId = customNodeProjectionEditGroupId === id ? null : id;
+    groupController.editModeGroupId.set(null);
+    requestFramesUpdate();
+    return true;
+  };
   const toggleGroupEditMode = (groupId: string) => {
-    clearCustomNodeEditMode();
+    const expanded = findExpandedCustomForProjectionGroup(groupId);
+    if (!expanded || customNodeEditGroupId !== String(expanded.groupId)) {
+      clearCustomNodeEditMode();
+    }
+    if (toggleProjectionGroupEditMode(groupId)) return;
+    customNodeProjectionEditGroupId = null;
     groupController.toggleGroupEditMode(groupId);
   };
   const collapseCustomNodeFrame = (groupId: string) => {
     clearCustomNodeEditMode(groupId);
+    customNodeProjectionEditGroupId = null;
     handleCollapseCustomNodeFrame(groupId);
   };
   const getCustomNodeProjectionState = () => {
@@ -585,12 +636,12 @@
     };
     const internalFrames = computeGroupFramesFromState({
       groups: (projection.groups ?? []) as NodeGroup[],
-      editModeGroupId: null,
       editModeGroupBounds: null,
       forcedHiddenNodeIds: new Set(),
       graph: projection,
       localLoops: [],
       getNodeBounds: getProjectionNodeBounds,
+      editModeGroupId: customNodeProjectionEditGroupId,
     });
     const ownerFrames = Array.from(expandedCustomByGroupId.values()).flatMap((expanded) => {
       const ownerId = String(expanded.nodeId ?? '');
@@ -636,6 +687,7 @@
           canvasCommands.setNodeParams(candidateOwnerId, config);
         },
       });
+      if (ok) refreshCustomNodeDefinitionPortsForOwner(ownerId);
       return ok ? connection : null;
     }
     return resolveCustomNodeProjectionPublicConnection({
@@ -653,12 +705,43 @@
     translateCustomNodeProjectionNodePosition({
       projectionNodeId,
       position,
+      ownerViewPosition: viewAdapter.getNodePosition(
+        parseCustomNodeProjectionNodeId(projectionNodeId)?.customNodeId ?? ''
+      ),
       getOwnerNode: (ownerId) => nodeEngine.getNode(ownerId),
       updateOwnerConfig: (ownerId, config) => {
         nodeEngine.updateNodeConfig(ownerId, config);
         canvasCommands.setNodeParams(ownerId, config);
       },
     });
+  const updateNodeOrProjectionPosition = (
+    nodeId: string,
+    position: { x: number; y: number }
+  ): void => {
+    const parsed = parseCustomNodeProjectionNodeId(String(nodeId ?? ''));
+    if (parsed) {
+      updateCustomNodeProjectionPosition(String(nodeId), position);
+      return;
+    }
+    nodeEngine.updateNodePosition(String(nodeId), position);
+  };
+  const refreshCustomNodeDefinitionPortsForOwner = (ownerId: string): void => {
+    const owner = nodeEngine.getNode(String(ownerId ?? ''));
+    const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
+    const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
+    if (!owner || !state || !definition) return;
+    const nextDefinition = refreshCustomNodeProjectionPorts({
+      definition,
+      ownerNode: owner,
+      nodeRegistry,
+    });
+    if (!nextDefinition) return;
+    upsertCustomNodeDefinition(nextDefinition);
+    canvasCommands.dispatch({
+      type: 'definition.custom.upsert',
+      definition: nextDefinition,
+    });
+  };
 
   const generateId = () => `node-${crypto.randomUUID?.() ?? Date.now()}`;
 
@@ -833,6 +916,7 @@
       const projectionId = appendCustomNodeProjectionNode({
         ownerNodeId,
         node,
+        ownerViewPosition: viewAdapter.getNodePosition(ownerNodeId),
         getOwnerNode: (candidateOwnerId) => nodeEngine.getNode(candidateOwnerId),
         updateOwnerConfig: (candidateOwnerId, config) => {
           nodeEngine.updateNodeConfig(candidateOwnerId, config);
@@ -840,11 +924,18 @@
         },
       });
       if (projectionId && owner && definition && String(node.type ?? '') === 'group-proxy') {
-        const nextDefinition = upsertCustomNodeProjectionPort({
-          definition,
-          ownerNode: owner,
-          node,
-        });
+        const nextOwner = nodeEngine.getNode(ownerNodeId) ?? owner;
+        const nextDefinition =
+          refreshCustomNodeProjectionPorts({
+            definition,
+            ownerNode: nextOwner,
+            nodeRegistry,
+          }) ??
+          upsertCustomNodeProjectionPort({
+            definition,
+            ownerNode: owner,
+            node,
+          });
         if (nextDefinition) {
           upsertCustomNodeDefinition(nextDefinition);
           canvasCommands.dispatch({
@@ -856,6 +947,40 @@
       return projectionId;
     },
   });
+
+  const assignProjectionNodeToEditedGroup = (nodeId: string): void => {
+    const parsed = parseCustomNodeProjectionNodeId(String(nodeId ?? ''));
+    const editGroupId = customNodeProjectionEditGroupId;
+    if (!parsed || !editGroupId) return;
+    const owner = nodeEngine.getNode(parsed.customNodeId);
+    const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
+    if (!owner || !state) return;
+    if (!isCustomNodeGroupEditing(String(state.groupId ?? ''))) return;
+    const internalGroupId = customNodeInternalGroupIdForProjection(parsed.customNodeId, editGroupId);
+    if (!internalGroupId || internalGroupId === editGroupId) return;
+    const internal = state.internal ?? { nodes: [], connections: [] };
+    const groups = Array.isArray(internal.groups) ? internal.groups : [];
+    let changed = false;
+    const nextGroups = groups.map((group) => {
+      if (String(group?.id ?? '') !== internalGroupId) return group;
+      const nodeIds = new Set((Array.isArray(group.nodeIds) ? group.nodeIds : []).map(String));
+      if (nodeIds.has(parsed.internalNodeId)) return group;
+      nodeIds.add(parsed.internalNodeId);
+      changed = true;
+      return { ...group, nodeIds: Array.from(nodeIds) };
+    });
+    if (!changed) return;
+    const nextConfig = writeCustomNodeState(owner.config ?? {}, {
+      ...state,
+      internal: {
+        ...internal,
+        groups: nextGroups,
+      },
+    });
+    nodeEngine.updateNodeConfig(parsed.customNodeId, nextConfig);
+    canvasCommands.setNodeParams(parsed.customNodeId, nextConfig);
+    requestFramesUpdate();
+  };
 
   const clipboardController = createClipboardController({
     getContainer: () => container,
@@ -1128,7 +1253,7 @@
   }}
   {reteBuilder}
   groupFrames={[...$groupFrames, ...getCustomNodeProjectionFrames()]}
-  editModeGroupId={$editModeGroupId}
+  editModeGroupId={effectiveGroupEditModeId()}
   {customNodeEditGroupId}
   selectedGroupId={$selectedGroupId}
   groupEditToast={$groupEditToast}

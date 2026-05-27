@@ -60,6 +60,7 @@ export type GroupControllerOptions = {
   getLoopConstraintLoops: () => LocalLoop[];
   getDeployedLoopIds: () => Set<string>;
   setNodesDisabled: (ids: string[], disabled: boolean) => void;
+  updateNodePosition?: (nodeId: string, pos: { x: number; y: number }) => void;
   requestLoopFramesUpdate: () => void;
   requestMinimapUpdate: () => void;
   isSyncingGraph: () => boolean;

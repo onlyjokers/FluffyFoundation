@@ -24,6 +24,8 @@ type GroupFrameTranslateOptions = {
   areaPlugin: AnyAreaPlugin | null;
   nodeEngine: NodeEngine;
   groupController: GroupController;
+  isProjectionId?: (id: string) => boolean;
+  updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
   isSyncing: () => boolean;
   groupPortNodesController: GroupPortNodesController;
   requestFramesUpdate: () => void;
@@ -133,7 +135,12 @@ export const registerGroupFrameTranslatePipe = (opts: GroupFrameTranslateOptions
       const view = areaPlugin?.nodeViews?.get?.(String(id));
       const viewPos = view?.position as { x: number; y: number } | undefined;
       if (viewPos && Number.isFinite(viewPos.x) && Number.isFinite(viewPos.y)) {
-        nodeEngine.updateNodePosition(String(id), { x: viewPos.x, y: viewPos.y });
+        const nextPosition = { x: viewPos.x, y: viewPos.y };
+        if (opts.isProjectionId?.(String(id))) {
+          opts.updateProjectionNodePosition?.(String(id), nextPosition);
+        } else {
+          nodeEngine.updateNodePosition(String(id), nextPosition);
+        }
       }
     }
 

@@ -476,6 +476,103 @@ test('handleNodelizeGroup publishes the post-nodelization graph to server author
   }
 });
 
+test('handleNodelizeGroup stores mother at frame origin and internal nodes relative to that origin', () => {
+  const nodes = new Map<string, NodeInstance>([
+    [
+      'inner-number',
+      {
+        id: 'inner-number',
+        type: 'number',
+        position: { x: 540, y: 360 },
+        config: { value: 1 },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+  ]);
+  const groupStore = writable([
+    {
+      id: 'group-1',
+      parentId: null,
+      name: 'Offset Group',
+      nodeIds: ['inner-number'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+  let motherNode: NodeInstance | null = null;
+
+  const originalConfirm = globalThis.confirm;
+  (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm = () => true;
+
+  const actions = createCustomNodeActions({
+    nodeEngine: {
+      getNode: (nodeId) => nodes.get(nodeId) ?? null,
+      exportGraph: () => ({ nodes: Array.from(nodes.values()).map((node) => ({ ...node })), connections: [] }),
+      updateNodeType: () => {},
+      updateNodeConfig: () => {},
+      updateNodeInputValue: () => {},
+      updateNodePosition: () => {},
+      addNode: (node) => {
+        nodes.set(node.id, node);
+        motherNode = node;
+      },
+      removeNode: (nodeId) => nodes.delete(nodeId),
+      addConnection: () => {},
+      removeConnection: () => {},
+    },
+    nodeRegistry: {
+      get: (type: string) =>
+        type === 'number'
+          ? { inputs: [], outputs: [{ id: 'value', label: 'Value', type: 'number' }] }
+          : null,
+    } as NodeRegistry,
+    groupController: {
+      nodeGroups: groupStore,
+      setGroups: (groups) => groupStore.set(groups),
+      disassembleGroup: (groupId) =>
+        groupStore.update((groups) => groups.filter((group) => group.id !== groupId)),
+      scheduleHighlight: () => {},
+    },
+    groupPortNodesController: {
+      ensureGroupPortNodes: () => {},
+      disassembleGroupAndPorts: () => {},
+      scheduleNormalizeProxies: () => {},
+    },
+    groupFrames: writable([{ group: { id: 'group-1' }, left: 500, top: 300, width: 300, height: 200 } as never]),
+    viewAdapter: {
+      getNodePosition: (nodeId) => nodes.get(nodeId)?.position ?? null,
+    },
+    buildGroupPortIndex: () => new Map([['group-1', { proxyIds: [], legacyActivateIds: [] }]]),
+    groupIdFromNode: () => null,
+    customNodeType: (definitionId) => `custom:${definitionId}`,
+    addCustomNodeDefinition: () => {},
+    upsertCustomNodeDefinitionCommand: () => {},
+    replaceSemanticGraphCommand: () => {},
+    removeCustomNodeDefinition: () => {},
+    getCustomNodeDefinition: () => null,
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config, state) => ({ ...config, customNode: state }),
+    expandedCustomByGroupId: new Map(),
+    forcedHiddenNodeIds: new Set(),
+    refreshExpandedCustomGroupIds: () => {},
+    requestFramesUpdate: () => {},
+    setSelectedNode: () => {},
+  });
+
+  actions.handleNodelizeGroup('group-1');
+
+  assert.deepEqual(motherNode?.position, { x: 500, y: 300 });
+  const internal = (motherNode?.config.customNode as CustomNodeInstanceState | undefined)?.internal;
+  assert.deepEqual(internal?.nodes[0]?.position, { x: 40, y: 60 });
+
+  if (originalConfirm) {
+    globalThis.confirm = originalConfirm;
+  } else {
+    delete (globalThis as typeof globalThis & { confirm?: () => boolean }).confirm;
+  }
+});
+
 test('handleNodelizeGroup captures ordinary nodes enclosed by the group frame even when membership lags', () => {
   const makeInstance = (
     id: string,

@@ -173,6 +173,10 @@ export async function initReteCanvas(opts: {
     areaPlugin,
     nodeEngine: opts.nodeEngine,
     groupController: opts.groupController,
+    isProjectionId: opts.isProjectionId,
+    updateProjectionNodePosition: opts.updateProjectionNodePosition as
+      | ((nodeId: string, position: { x: number; y: number }) => boolean)
+      | undefined,
     isSyncing: () => opts.isSyncingRef.value,
     groupPortNodesController: opts.groupPortNodesController,
     requestFramesUpdate: opts.requestFramesUpdate,
