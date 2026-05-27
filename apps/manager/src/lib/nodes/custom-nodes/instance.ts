@@ -71,15 +71,10 @@ export function cloneInternalGraphForNewInstance(graph: GraphState, groupId?: st
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
   const groups = cloneGraphGroups(graph);
-  const targetGroupId = typeof groupId === 'string' && groupId ? String(groupId) : '';
 
   const clonedNodes = nodes.map((node) => {
     let config = { ...(node.config ?? {}) };
     const inputValues = { ...(node.inputValues ?? {}) };
-
-    if (targetGroupId && (node.type === 'group-proxy' || node.type === 'group-gate')) {
-      config = { ...config, groupId: targetGroupId };
-    }
 
     const state = readCustomNodeState(config);
     if (!state) {

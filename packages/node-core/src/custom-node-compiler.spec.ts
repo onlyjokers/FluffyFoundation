@@ -501,3 +501,63 @@ test('compileGraphForPatch materializes internal custom-node groups for runtime 
     },
   ]);
 });
+
+test('compileGraphForPatch repairs legacy custom group gates that point at the instance group id', () => {
+  const definition: CustomNodeDefinition = {
+    definitionId: 'def-legacy-instance-gate',
+    name: 'Legacy Instance Gate Custom',
+    template: {
+      nodes: [
+        {
+          id: 'inner-gate',
+          type: 'group-gate',
+          position: { x: 0, y: 0 },
+          config: { groupId: 'group:custom' },
+          inputValues: { active: true },
+          outputValues: {},
+        },
+        numberNode('inner'),
+      ],
+      connections: [],
+      groups: [
+        {
+          id: 'group:inner',
+          parentId: null,
+          name: 'Inner',
+          nodeIds: ['inner'],
+          disabled: false,
+          minimized: false,
+        },
+      ],
+    },
+    ports: [],
+  };
+
+  const graph: GraphState = {
+    nodes: [
+      {
+        id: 'custom-1',
+        type: 'custom:def-legacy-instance-gate',
+        position: { x: 0, y: 0 },
+        config: writeCustomNodeState(
+          {},
+          {
+            definitionId: 'def-legacy-instance-gate',
+            groupId: 'group:custom',
+            role: 'child',
+            manualGate: true,
+            internal: definition.template,
+          }
+        ),
+        inputValues: { gate: true },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  const compiled = compileGraphForPatch(graph, [definition]);
+  const gate = compiled.nodes.find((node) => node.id === 'cn:custom-1:inner-gate');
+
+  assert.equal(gate?.config.groupId, 'cn:custom-1:group:group:inner');
+});

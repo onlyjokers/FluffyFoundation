@@ -87,11 +87,21 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
       const internalGroupIds = new Set(
         internalGroups.map((group) => String(group?.id ?? '')).filter(Boolean)
       );
+      const fallbackInternalGroupId =
+        internalGroups.length === 1 ? String(internalGroups[0]?.id ?? '') : '';
+      const resolveInternalPortGroupId = (rawGroupId: string): string => {
+        const id = String(rawGroupId ?? '');
+        if (internalGroupIds.has(id)) return id;
+        if (fallbackInternalGroupId && id && id === String(state.groupId ?? '')) {
+          return fallbackInternalGroupId;
+        }
+        return id;
+      };
       const nodes: NodeInstance[] = (internal.nodes ?? []).map((n) => {
         const id = String(n?.id ?? '');
         const type = String(n?.type ?? '');
         const config = { ...(n?.config ?? {}) };
-        const rawGroupId = String(config.groupId ?? '');
+        const rawGroupId = resolveInternalPortGroupId(String(config.groupId ?? ''));
         if ((type === 'group-gate' || type === 'group-proxy') && internalGroupIds.has(rawGroupId)) {
           config.groupId = materializeInternalGroupId(nodeId, rawGroupId);
         }

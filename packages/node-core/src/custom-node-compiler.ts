@@ -300,6 +300,16 @@ export function expandCustomNodesForCompile(
       const internalGroupIds = new Set(
         internalGroups.map((group) => getString(group?.id, '')).filter(Boolean)
       );
+      const fallbackInternalGroupId =
+        internalGroups.length === 1 ? getString(internalGroups[0]?.id, '') : '';
+      const resolveInternalPortGroupId = (rawGroupId: string): string => {
+        const id = String(rawGroupId ?? '');
+        if (internalGroupIds.has(id)) return id;
+        if (fallbackInternalGroupId && id && id === String(state.groupId ?? '')) {
+          return fallbackInternalGroupId;
+        }
+        return id;
+      };
       const inputValuesByInternalNode = new Map<string, Record<string, unknown>>();
       for (const binding of publicInputBindings(node, def, internalGraph)) {
         const patch = inputValuesByInternalNode.get(binding.nodeId) ?? {};
@@ -346,7 +356,7 @@ export function expandCustomNodesForCompile(
         const position = asRecord(record.position);
         const inputValuePatch = inputValuesByInternalNode.get(innerId) ?? {};
         const config = { ...asRecord(record.config) };
-        const rawGroupId = getString(config.groupId, '');
+        const rawGroupId = resolveInternalPortGroupId(getString(config.groupId, ''));
         if ((type === 'group-gate' || type === 'group-proxy') && internalGroupIds.has(rawGroupId)) {
           config.groupId = materializedGroupId(rawGroupId);
         }

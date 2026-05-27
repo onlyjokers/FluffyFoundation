@@ -197,6 +197,82 @@ test('exportGraphForPatch includes independent variable name nodes used by boole
   }
 });
 
+test('exportGraphForPatch resolves independent variable names through group proxy ports', () => {
+  const graph: GraphState = {
+    nodes: [
+      { ...node('name', 'independent-variable-name'), config: { name: 'variable_2' } },
+      {
+        ...node('setter', 'set-boolean-variable'),
+        config: { name: 'setter-fallback', defaultValue: true, mode: 'latchTrue' },
+      },
+      { ...node('getter', 'get-boolean-variable'), config: { name: 'getter-fallback' } },
+      node('button', 'client-button'),
+      {
+        ...node('name-port', 'group-proxy'),
+        config: { groupId: 'group:inner', direction: 'input', portType: 'string', pinned: true },
+      },
+      node('out', 'ui-out'),
+    ],
+    connections: [
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-proxy-in',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'name-port',
+        targetPortId: 'in',
+      },
+      {
+        id: 'name-proxy-out',
+        sourceNodeId: 'name-port',
+        sourcePortId: 'out',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
+    ],
+  };
+
+  const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: registry });
+
+  assert.deepEqual(
+    result.graph.nodes.map((item) => item.id).sort(),
+    ['button', 'getter', 'name', 'out', 'setter'].sort()
+  );
+  assert.equal(
+    result.graph.nodes.some((item) => item.id === 'name-port'),
+    false
+  );
+  assert.ok(
+    result.graph.connections.some(
+      (connection) =>
+        connection.sourceNodeId === 'name' &&
+        connection.sourcePortId === 'value' &&
+        connection.targetNodeId === 'setter' &&
+        connection.targetPortId === 'name'
+    )
+  );
+});
+
 test('exportGraphForPatch includes Client Button pressed feedback used by exported boolean variable setters', () => {
   const graph: GraphState = {
     nodes: [
