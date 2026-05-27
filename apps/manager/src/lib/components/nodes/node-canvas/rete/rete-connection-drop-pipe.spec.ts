@@ -12,7 +12,13 @@ type HarnessOptions = {
   edgeTarget?: {
     groupId: string;
     side: 'input' | 'output';
-    frame: { left: number; top: number; width: number; height: number; group?: { minimized?: boolean } };
+    frame: {
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+      group?: { minimized?: boolean };
+    };
   } | null;
   nodeGroups?: Array<{ id?: string; nodeIds?: unknown[] }>;
   exportGraph?: () => { nodes?: Array<{ id?: string; type?: string; config?: unknown }> };
@@ -32,15 +38,14 @@ type HarnessOptions = {
     sourcePortId: string;
     targetNodeId: string;
     targetPortId: string;
-  }) =>
-    | {
-        id: string;
-        sourceNodeId: string;
-        sourcePortId: string;
-        targetNodeId: string;
-        targetPortId: string;
-      }
-    | null;
+  }) => {
+    id: string;
+    sourceNodeId: string;
+    sourcePortId: string;
+    targetNodeId: string;
+    targetPortId: string;
+  } | null;
+  isProjectionEditable?: (nodeId: string) => boolean;
 };
 
 function createHarness(options: HarnessOptions = {}) {
@@ -86,13 +91,21 @@ function createHarness(options: HarnessOptions = {}) {
     findPortRowSocketAt: options.findPortRowSocketAt ?? (() => null),
     openConnectPicker: (socket) => openedSockets.push(socket),
     isProjectionId: (id) => String(id).startsWith('view:'),
+    isProjectionEditable: options.isProjectionEditable ?? (() => true),
     translateProjectionConnection: (connection) => {
       projectionConnectionTranslations.push(connection);
       return options.translateProjectionConnection?.(connection) ?? null;
     },
   });
 
-  return { pipe, connected, openedSockets, draggingSockets, edgeHighlights, projectionConnectionTranslations };
+  return {
+    pipe,
+    connected,
+    openedSockets,
+    draggingSockets,
+    edgeHighlights,
+    projectionConnectionTranslations,
+  };
 }
 
 test('connectionpick from a projection socket starts a normal drag', () => {
@@ -124,7 +137,9 @@ test('connectiondrop from a projection socket can open the normal connect picker
   });
 
   assert.deepEqual(connected, []);
-  assert.deepEqual(openedSockets, [{ nodeId: 'view:custom:owner:inner', side: 'output', key: 'out' }]);
+  assert.deepEqual(openedSockets, [
+    { nodeId: 'view:custom:owner:inner', side: 'output', key: 'out' },
+  ]);
 });
 
 test('connectiondrop to a projection socket translates to custom node public port', () => {
@@ -209,14 +224,41 @@ test('connectiondrop from a projection socket to a group edge creates projection
   ]);
 });
 
+test('connectiondrop from a read-only projection socket does not create projection proxy wiring', () => {
+  const addedNodes: unknown[] = [];
+  const { pipe, connected, projectionConnectionTranslations } = createHarness({
+    edgeTarget: {
+      groupId: 'group:custom',
+      side: 'output',
+      frame: { left: 100, top: 100, width: 400, height: 300 },
+    },
+    isProjectionEditable: () => false,
+    addNode: (type, position, configPatch) => {
+      addedNodes.push({ type, position, configPatch });
+      return 'view:custom:custom-1:proxy-out';
+    },
+    translateProjectionConnection: () => null,
+  });
+  pipe({
+    type: 'connectiondrop',
+    data: {
+      created: false,
+      initial: { nodeId: 'view:custom:custom-1:inner', side: 'output', key: 'value' },
+      socket: {},
+    },
+  });
+
+  assert.deepEqual(addedNodes, []);
+  assert.deepEqual(connected, []);
+  assert.deepEqual(projectionConnectionTranslations, []);
+});
+
 test('connectiondrop to a group gate resolves the current gate node by group id', () => {
   const { pipe, connected } = createHarness({
     gateTarget: { groupId: 'group:outer' },
     nodeGroups: [{ id: 'group:outer', nodeIds: ['inside-node'] }],
     exportGraph: () => ({
-      nodes: [
-        { id: 'current-gate', type: 'group-gate', config: { groupId: 'group:outer' } },
-      ],
+      nodes: [{ id: 'current-gate', type: 'group-gate', config: { groupId: 'group:outer' } }],
     }),
   });
 

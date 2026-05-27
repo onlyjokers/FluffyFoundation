@@ -60,9 +60,14 @@ export function createNodeAdder(opts: {
     state: Record<string, unknown>
   ) => Record<string, unknown>;
   customNodeDefinitions: Readable<unknown[]>;
-  wouldCreateCycle: (definitions: unknown[], parentDefinitionId: string, childDefinitionId: string) => boolean;
+  wouldCreateCycle: (
+    definitions: unknown[],
+    parentDefinitionId: string,
+    childDefinitionId: string
+  ) => boolean;
   getGroupFrames: () => unknown[];
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;
+  isExpandedCustomEditable?: (groupId: string) => boolean;
   getGraphState?: () => GraphState;
   getNodeCount: () => number;
   generateId: () => string;
@@ -81,15 +86,19 @@ export function createNodeAdder(opts: {
   ): string | undefined => {
     const fallback = fallbackPosition();
     const hintedGroupId = String(asRecord(configPatch).groupId ?? '');
-    const hintedHost = hintedGroupId
-      ? (opts.expandedCustomByGroupId.get(hintedGroupId) ?? null)
-      : null;
+    const canEditExpandedCustom = (groupId: string) =>
+      opts.isExpandedCustomEditable?.(String(groupId)) ?? true;
+    const hintedHost =
+      hintedGroupId && canEditExpandedCustom(hintedGroupId)
+        ? (opts.expandedCustomByGroupId.get(hintedGroupId) ?? null)
+        : null;
 
     const host = position
       ? findExpandedCustomHost({
           position,
           frames: opts.getGroupFrames(),
           expandedCustomByGroupId: opts.expandedCustomByGroupId,
+          isExpandedCustomEditable: canEditExpandedCustom,
         })
       : hintedHost;
     const targetHost = host ?? hintedHost;
@@ -164,6 +173,7 @@ function findExpandedCustomHost(opts: {
   position: Position;
   frames: unknown[];
   expandedCustomByGroupId: Map<string, ExpandedCustomNodeFrame>;
+  isExpandedCustomEditable?: (groupId: string) => boolean;
 }): ExpandedCustomNodeFrame | null {
   let host: ExpandedCustomNodeFrame | null = null;
   let bestDepth = -1;
@@ -174,6 +184,7 @@ function findExpandedCustomHost(opts: {
     if (!gid) continue;
     const expanded = opts.expandedCustomByGroupId.get(gid) ?? null;
     if (!expanded) continue;
+    if (opts.isExpandedCustomEditable && !opts.isExpandedCustomEditable(gid)) continue;
 
     const left = Number(frame.left ?? 0);
     const top = Number(frame.top ?? 0);

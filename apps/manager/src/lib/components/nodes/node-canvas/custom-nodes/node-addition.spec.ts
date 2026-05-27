@@ -34,7 +34,10 @@ test('createNodeAdder writes normal nodes into an expanded custom node host', ()
         depth: 0,
       },
     ],
-    expandedCustomByGroupId: new Map([['group:expanded', { groupId: 'group:expanded', nodeId: 'custom-1' }]]),
+    expandedCustomByGroupId: new Map([
+      ['group:expanded', { groupId: 'group:expanded', nodeId: 'custom-1' }],
+    ]),
+    isExpandedCustomEditable: (groupId) => groupId === 'group:expanded',
     getNodeCount: () => 0,
     generateId: () => 'node-new',
     addNodeCommand: (node) => addedCanonical.push(node),
@@ -52,6 +55,54 @@ test('createNodeAdder writes normal nodes into an expanded custom node host', ()
   assert.equal(addedProjection.length, 1);
   assert.deepEqual(addedProjection[0]?.config, { value: 1 });
   assert.deepEqual(addedProjection[0]?.position, { x: 160, y: 180 });
+});
+
+test('createNodeAdder leaves expanded custom nodes read-only until explicitly editable', () => {
+  const addedCanonical: NodeInstance[] = [];
+  const addedProjection: NodeInstance[] = [];
+  const addNode = createNodeAdder({
+    nodeRegistry: {
+      get: () => ({ configSchema: [{ key: 'value', defaultValue: 1 }] }),
+    },
+    nodeEngine: {
+      getNode: () => undefined,
+    },
+    customNodeTypePrefix: 'custom:',
+    getCustomNodeDefinition: () => undefined,
+    cloneInternalGraphForNewInstance: (graph) => graph,
+    generateCustomNodeGroupId: () => 'group:new',
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config) => config,
+    customNodeDefinitions: writable([]),
+    wouldCreateCycle: () => false,
+    getGroupFrames: () => [
+      {
+        group: { id: 'group:expanded' },
+        left: 100,
+        top: 100,
+        width: 400,
+        height: 300,
+        depth: 0,
+      },
+    ],
+    expandedCustomByGroupId: new Map([
+      ['group:expanded', { groupId: 'group:expanded', nodeId: 'custom-1' }],
+    ]),
+    isExpandedCustomEditable: () => false,
+    getNodeCount: () => 0,
+    generateId: () => 'node-new',
+    addNodeCommand: (node) => addedCanonical.push(node),
+    addProjectionNodeCommand: (_ownerNodeId, node) => {
+      addedProjection.push(node);
+      return `view:custom:custom-1:${node.id}`;
+    },
+  });
+
+  const nodeId = addNode('float', { x: 160, y: 180 });
+
+  assert.equal(nodeId, 'node-new');
+  assert.equal(addedCanonical.length, 1);
+  assert.deepEqual(addedProjection, []);
 });
 
 test('createNodeAdder uses expanded custom groupId hints for edge proxy nodes outside the frame', () => {
@@ -82,7 +133,10 @@ test('createNodeAdder uses expanded custom groupId hints for edge proxy nodes ou
         depth: 0,
       },
     ],
-    expandedCustomByGroupId: new Map([['group:expanded', { groupId: 'group:expanded', nodeId: 'custom-1' }]]),
+    expandedCustomByGroupId: new Map([
+      ['group:expanded', { groupId: 'group:expanded', nodeId: 'custom-1' }],
+    ]),
+    isExpandedCustomEditable: (groupId) => groupId === 'group:expanded',
     getNodeCount: () => 0,
     generateId: () => 'proxy-new',
     addNodeCommand: (node) => addedCanonical.push(node),
@@ -93,12 +147,59 @@ test('createNodeAdder uses expanded custom groupId hints for edge proxy nodes ou
     },
   });
 
-  const nodeId = addNode('group-proxy', { x: 64, y: 180 }, { groupId: 'group:expanded', direction: 'input' });
+  const nodeId = addNode(
+    'group-proxy',
+    { x: 64, y: 180 },
+    { groupId: 'group:expanded', direction: 'input' }
+  );
 
   assert.equal(nodeId, 'view:custom:custom-1:proxy-new');
   assert.deepEqual(addedCanonical, []);
   assert.equal(addedProjection.length, 1);
   assert.deepEqual(addedProjection[0]?.config, { groupId: 'group:expanded', direction: 'input' });
+});
+
+test('createNodeAdder ignores expanded custom groupId hints while read-only', () => {
+  const addedCanonical: NodeInstance[] = [];
+  const addedProjection: NodeInstance[] = [];
+  const addNode = createNodeAdder({
+    nodeRegistry: {
+      get: () => ({ configSchema: [] }),
+    },
+    nodeEngine: {
+      getNode: () => undefined,
+    },
+    customNodeTypePrefix: 'custom:',
+    getCustomNodeDefinition: () => undefined,
+    cloneInternalGraphForNewInstance: (graph) => graph,
+    generateCustomNodeGroupId: () => 'group:new',
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config) => config,
+    customNodeDefinitions: writable([]),
+    wouldCreateCycle: () => false,
+    getGroupFrames: () => [],
+    expandedCustomByGroupId: new Map([
+      ['group:expanded', { groupId: 'group:expanded', nodeId: 'custom-1' }],
+    ]),
+    isExpandedCustomEditable: () => false,
+    getNodeCount: () => 0,
+    generateId: () => 'proxy-new',
+    addNodeCommand: (node) => addedCanonical.push(node),
+    addProjectionNodeCommand: (_ownerNodeId, node) => {
+      addedProjection.push(node);
+      return `view:custom:custom-1:${node.id}`;
+    },
+  });
+
+  const nodeId = addNode(
+    'group-proxy',
+    { x: 64, y: 180 },
+    { groupId: 'group:expanded', direction: 'input' }
+  );
+
+  assert.equal(nodeId, 'proxy-new');
+  assert.equal(addedCanonical.length, 1);
+  assert.deepEqual(addedProjection, []);
 });
 
 test('createNodeAdder assigns unique default variable names for boolean variable nodes', () => {

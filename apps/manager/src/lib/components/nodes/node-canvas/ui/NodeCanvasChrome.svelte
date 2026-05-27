@@ -57,6 +57,7 @@
 
   export let groupFrames: GroupFrame[] = [];
   export let editModeGroupId = null;
+  export let customNodeEditGroupId = null;
   export let selectedGroupId = null;
   export let groupEditToast = null;
   export let groupEdgeHighlight = null;
@@ -181,6 +182,7 @@
       areaTransform={{ k: gridScale, tx: gridOffset.x, ty: gridOffset.y }}
       {isRunning}
       {editModeGroupId}
+      {customNodeEditGroupId}
       {selectedGroupId}
       toast={groupEditToast}
       edgeHighlight={groupEdgeHighlight}
@@ -188,6 +190,7 @@
       onToggleDisabled={groupOverlayActions.onToggleDisabled}
       onToggleMinimized={groupOverlayActions.onToggleMinimized}
       onToggleEditMode={groupOverlayActions.onToggleEditMode}
+      onToggleCustomNodeEditMode={groupOverlayActions.onToggleCustomNodeEditMode}
       onNodelize={groupOverlayActions.onNodelize}
       onDenodelize={groupOverlayActions.onDenodelize}
       onCollapseCustomNode={groupOverlayActions.onCollapseCustomNode}

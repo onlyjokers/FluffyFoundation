@@ -48,6 +48,7 @@ export async function initReteCanvas(opts: {
   setNodeCount: (count: number) => void;
   getProjectionState?: () => unknown;
   isProjectionId?: (id: string) => boolean;
+  isProjectionEditable?: (id: string) => boolean;
   translateProjectionConnection?: (...args: any[]) => unknown;
   updateProjectionNodePosition?: (...args: any[]) => unknown;
   getSelectedNodeId: () => string;
@@ -78,28 +79,29 @@ export async function initReteCanvas(opts: {
 
   connection.addPreset(ConnectionPresets.classic.setup());
   const connectionDropPipe = createReteConnectionDropPipe({
-      getLastPointerClient: opts.getLastPointerClient,
-      setConnectDraggingSocket: opts.setConnectDraggingSocket,
-      setGroupEdgeHighlight: opts.setGroupEdgeHighlight,
-      groupEdgeFinder: opts.groupEdgeFinder,
-      groupController: opts.groupController,
-      nodeEngine: opts.nodeEngine,
-      nodeRegistry: opts.nodeRegistry,
-      canvasCommands: opts.canvasCommands,
-      groupPortNodesController: opts.groupPortNodesController,
-      computeGraphPosition: opts.computeGraphPosition,
-      addNode: opts.addNode,
-      findPortRowSocketAt: opts.findPortRowSocketAt as (
-        clientX: number,
-        clientY: number,
-        desiredSide: 'input' | 'output'
-      ) => SocketData | null,
-      openConnectPicker: opts.openConnectPicker as (socket: SocketData) => void,
-      isProjectionId: opts.isProjectionId,
-      translateProjectionConnection: opts.translateProjectionConnection as
-        | ((connection: EngineConnection) => EngineConnection | null)
-        | undefined,
-    });
+    getLastPointerClient: opts.getLastPointerClient,
+    setConnectDraggingSocket: opts.setConnectDraggingSocket,
+    setGroupEdgeHighlight: opts.setGroupEdgeHighlight,
+    groupEdgeFinder: opts.groupEdgeFinder,
+    groupController: opts.groupController,
+    nodeEngine: opts.nodeEngine,
+    nodeRegistry: opts.nodeRegistry,
+    canvasCommands: opts.canvasCommands,
+    groupPortNodesController: opts.groupPortNodesController,
+    computeGraphPosition: opts.computeGraphPosition,
+    addNode: opts.addNode,
+    findPortRowSocketAt: opts.findPortRowSocketAt as (
+      clientX: number,
+      clientY: number,
+      desiredSide: 'input' | 'output'
+    ) => SocketData | null,
+    openConnectPicker: opts.openConnectPicker as (socket: SocketData) => void,
+    isProjectionId: opts.isProjectionId,
+    isProjectionEditable: opts.isProjectionEditable,
+    translateProjectionConnection: opts.translateProjectionConnection as
+      | ((connection: EngineConnection) => EngineConnection | null)
+      | undefined,
+  });
   connection.addPipe(connectionDropPipe as unknown as Parameters<typeof connection.addPipe>[0]);
 
   const socketPositionWatcher = setupReteRenderPreset({
@@ -158,6 +160,7 @@ export async function initReteCanvas(opts: {
     requestFramesUpdate: opts.requestFramesUpdate,
     requestMinimapUpdate: opts.minimapController.requestUpdate,
     isProjectionId: opts.isProjectionId,
+    isProjectionEditable: opts.isProjectionEditable,
     translateProjectionConnection: opts.translateProjectionConnection as
       | ((connection: EngineConnection) => EngineConnection | null)
       | undefined,

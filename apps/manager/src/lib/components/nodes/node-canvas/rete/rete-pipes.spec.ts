@@ -9,6 +9,7 @@ function createHarness(
   options: {
     translateProjectionConnection?: (connection: unknown) => unknown;
     updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
+    isProjectionEditable?: (nodeId: string) => boolean;
   } = {}
 ) {
   const editorPipes: Array<(ctx: Record<string, unknown>) => Promise<Record<string, unknown>>> = [];
@@ -66,6 +67,7 @@ function createHarness(
     requestFramesUpdate: () => undefined,
     requestMinimapUpdate: () => undefined,
     isProjectionId: (id) => String(id).startsWith('view:'),
+    isProjectionEditable: options.isProjectionEditable ?? (() => true),
     translateProjectionConnection: (connection) => {
       projectionConnectionTranslations.push(connection);
       return options.translateProjectionConnection?.(connection) ?? null;
@@ -131,8 +133,7 @@ test('bindRetePipes routes connectionremoved through semantic canvas disconnect 
 });
 
 test('bindRetePipes keeps projection removals editor-only', async () => {
-  const { editorPipes, connections, disconnected, removedNodes } =
-    createHarness();
+  const { editorPipes, connections, disconnected, removedNodes } = createHarness();
 
   await editorPipes[0]?.({
     type: 'connectionremoved',
@@ -170,6 +171,24 @@ test('bindRetePipes writes projection node movement through projection callback'
   ]);
 });
 
+test('bindRetePipes keeps read-only projection movement editor-only', async () => {
+  const { areaPipes, movedNodes, projectionPositionUpdates } = createHarness({
+    isProjectionEditable: () => false,
+  });
+
+  await areaPipes[0]?.({
+    type: 'nodetranslated',
+    data: {
+      id: 'view:custom:custom-1:inner',
+      position: { x: 1, y: 2 },
+      previous: { x: 0, y: 0 },
+    },
+  });
+
+  assert.deepEqual(movedNodes, []);
+  assert.deepEqual(projectionPositionUpdates, []);
+});
+
 test('bindRetePipes writes same-owner projection connections through projection callback', async () => {
   const { editorPipes, connections, projectionConnectionTranslations } = createHarness({
     translateProjectionConnection: () => null,
@@ -195,6 +214,27 @@ test('bindRetePipes writes same-owner projection connections through projection 
       targetPortId: 'value',
     },
   ]);
+  assert.deepEqual(connections, []);
+});
+
+test('bindRetePipes keeps read-only projection connections editor-only', async () => {
+  const { editorPipes, connections, projectionConnectionTranslations } = createHarness({
+    isProjectionEditable: () => false,
+    translateProjectionConnection: () => null,
+  });
+
+  await editorPipes[0]?.({
+    type: 'connectioncreated',
+    data: {
+      id: 'view:c1',
+      source: 'view:custom:custom-1:a',
+      sourceOutput: 'value',
+      target: 'view:custom:custom-1:b',
+      targetInput: 'value',
+    },
+  });
+
+  assert.deepEqual(projectionConnectionTranslations, []);
   assert.deepEqual(connections, []);
 });
 

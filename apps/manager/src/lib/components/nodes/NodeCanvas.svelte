@@ -381,8 +381,9 @@
       void applyClientNodeSelection(nodeId, { [portId]: value }),
     onClientNodeRandom: (nodeId, value) => void applyClientNodeSelection(nodeId, { random: value }),
     isProjectionId: isCustomNodeProjectionId,
-    commitProjectionValue: ({ nodeId, kind, key, value }) =>
-      writeCustomNodeProjectionValue({
+    commitProjectionValue: ({ nodeId, kind, key, value }) => {
+      if (!isCustomNodeProjectionEditable(nodeId)) return false;
+      return writeCustomNodeProjectionValue({
         projectionNodeId: nodeId,
         kind,
         key,
@@ -391,7 +392,8 @@
         updateOwnerConfig: (ownerId, config) => nodeEngine.updateNodeConfig(ownerId, config),
         sendSemanticNodeParams: (ownerId, params) => canvasCommands.setNodeParams(ownerId, params),
         sendNodeOverride,
-      }),
+      });
+    },
   });
 
   let pickerControllerRef: ReturnType<typeof createPickerController> | null = null;
@@ -508,6 +510,45 @@
 
   const expandedCustomByGroupId = new Map<string, ExpandedCustomNodeFrame>();
   let expandedCustomGroupIds: Set<string> = new Set();
+  let customNodeEditGroupId: string | null = null;
+  const isCustomNodeGroupEditing = (groupId: string) =>
+    Boolean(groupId) && customNodeEditGroupId === String(groupId);
+  const customNodeGroupIdForProjectionNode = (projectionNodeId: string) => {
+    const parsed = parseCustomNodeProjectionNodeId(String(projectionNodeId ?? ''));
+    if (!parsed) return '';
+    const owner = nodeEngine.getNode(parsed.customNodeId);
+    const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
+    return String(state?.groupId ?? '');
+  };
+  const isCustomNodeProjectionEditable = (projectionNodeId: string) => {
+    const groupId = customNodeGroupIdForProjectionNode(projectionNodeId);
+    return Boolean(groupId) && isCustomNodeGroupEditing(groupId);
+  };
+  const clearCustomNodeEditMode = (groupId?: string) => {
+    if (!customNodeEditGroupId) return;
+    if (groupId && customNodeEditGroupId !== String(groupId)) return;
+    customNodeEditGroupId = null;
+  };
+  const toggleCustomNodeEditMode = (groupId: string) => {
+    const id = String(groupId ?? '');
+    if (!id) return;
+    if (!expandedCustomByGroupId.has(id)) return;
+    if (customNodeEditGroupId === id) {
+      clearCustomNodeEditMode(id);
+    } else {
+      groupController.editModeGroupId.set(null);
+      customNodeEditGroupId = id;
+    }
+    requestFramesUpdate();
+  };
+  const toggleGroupEditMode = (groupId: string) => {
+    clearCustomNodeEditMode();
+    groupController.toggleGroupEditMode(groupId);
+  };
+  const collapseCustomNodeFrame = (groupId: string) => {
+    clearCustomNodeEditMode(groupId);
+    handleCollapseCustomNodeFrame(groupId);
+  };
   const getCustomNodeProjectionState = () => {
     const projections = Array.from(expandedCustomByGroupId.values()).flatMap((expanded) => {
       const node = nodeEngine.getNode(String(expanded.nodeId ?? ''));
@@ -525,10 +566,13 @@
     });
     return mergeProjectionGraphs({ nodes: [], connections: [] }, projections);
   };
-  getNodeActivityGraphState = () => mergeProjectionGraphs(graphState, [getCustomNodeProjectionState()]);
+  getNodeActivityGraphState = () =>
+    mergeProjectionGraphs(graphState, [getCustomNodeProjectionState()]);
   const getCustomNodeProjectionFrames = () => {
     const projection = getCustomNodeProjectionState();
-    const projectionNodeById = new Map((projection.nodes ?? []).map((node) => [String(node.id), node]));
+    const projectionNodeById = new Map(
+      (projection.nodes ?? []).map((node) => [String(node.id), node])
+    );
     const getProjectionNodeBounds = (nodeId: string) => {
       const rendered = viewAdapter.getNodeBounds(String(nodeId));
       if (rendered) return rendered;
@@ -566,6 +610,10 @@
     });
     return [...ownerFrames, ...internalFrames];
   };
+  const getVisibleGroupFrames = () => [
+    ...(get(groupFrames) ?? []),
+    ...getCustomNodeProjectionFrames(),
+  ];
 
   const translateCustomNodeProjectionConnection = (
     connection: EngineConnection
@@ -578,6 +626,7 @@
     const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
     const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
     if (!owner || !definition) return null;
+    if (!isCustomNodeGroupEditing(String(state?.groupId ?? ''))) return null;
     if (source && target && source.customNodeId === target.customNodeId) {
       const ok = appendCustomNodeProjectionConnection({
         connection,
@@ -600,6 +649,7 @@
     projectionNodeId: string,
     position: { x: number; y: number }
   ): boolean =>
+    isCustomNodeProjectionEditable(projectionNodeId) &&
     translateCustomNodeProjectionNodePosition({
       projectionNodeId,
       position,
@@ -729,7 +779,7 @@
   }
 
   const groupEdgeFinder = createGroupEdgeFinder({
-    getFrames: () => get(groupFrames) ?? [],
+    getFrames: getVisibleGroupFrames,
     clientToGraph: (x, y) => viewAdapter.clientToGraph(x, y),
     getScale: () => Number(canvasTransform?.k ?? 1) || 1,
   });
@@ -769,18 +819,18 @@
     writeCustomNodeState,
     customNodeDefinitions,
     wouldCreateCycle,
-    getGroupFrames: () => get(groupFrames) ?? [],
+    getGroupFrames: getVisibleGroupFrames,
     expandedCustomByGroupId,
+    isExpandedCustomEditable: isCustomNodeGroupEditing,
     getGraphState: () => graphState,
     getNodeCount: () => nodeCount,
     generateId,
     addNodeCommand: (node) => canvasCommands.addNode(node),
-    addProjectionNodeCommand: (ownerNodeId, node) =>
-      {
-        const owner = nodeEngine.getNode(ownerNodeId);
-        const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
-        const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
-        const projectionId = appendCustomNodeProjectionNode({
+    addProjectionNodeCommand: (ownerNodeId, node) => {
+      const owner = nodeEngine.getNode(ownerNodeId);
+      const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
+      const definition = state ? getCustomNodeDefinition(state.definitionId) : null;
+      const projectionId = appendCustomNodeProjectionNode({
         ownerNodeId,
         node,
         getOwnerNode: (candidateOwnerId) => nodeEngine.getNode(candidateOwnerId),
@@ -788,19 +838,23 @@
           nodeEngine.updateNodeConfig(candidateOwnerId, config);
           canvasCommands.setNodeParams(candidateOwnerId, config);
         },
+      });
+      if (projectionId && owner && definition && String(node.type ?? '') === 'group-proxy') {
+        const nextDefinition = upsertCustomNodeProjectionPort({
+          definition,
+          ownerNode: owner,
+          node,
         });
-        if (projectionId && owner && definition && String(node.type ?? '') === 'group-proxy') {
-          const nextDefinition = upsertCustomNodeProjectionPort({ definition, ownerNode: owner, node });
-          if (nextDefinition) {
-            upsertCustomNodeDefinition(nextDefinition);
-            canvasCommands.dispatch({
-              type: 'definition.custom.upsert',
-              definition: nextDefinition,
-            });
-          }
+        if (nextDefinition) {
+          upsertCustomNodeDefinition(nextDefinition);
+          canvasCommands.dispatch({
+            type: 'definition.custom.upsert',
+            definition: nextDefinition,
+          });
         }
-        return projectionId;
-      },
+      }
+      return projectionId;
+    },
   });
 
   const clipboardController = createClipboardController({
@@ -825,6 +879,7 @@
       getCustomNodeProjectionFrames()
         .find((frame) => String(frame.group?.id ?? '') === String(groupId))
         ?.group.nodeIds.map(String) ?? [],
+    isProjectionGroupEditable: isCustomNodeGroupEditing,
     updateProjectionNodePosition: updateCustomNodeProjectionPosition,
   });
 
@@ -941,6 +996,7 @@
       translateProjectionConnection: translateCustomNodeProjectionConnection,
       updateProjectionNodePosition: updateCustomNodeProjectionPosition,
       isProjectionId: isCustomNodeProjectionId,
+      isProjectionEditable: isCustomNodeProjectionEditable,
       getSelectedNodeId: () => selectedNodeId,
       syncSleepNodeSockets,
       flushPendingCollapsedNodes,
@@ -977,7 +1033,7 @@
       getConnectDraggingSocket: () => connectDraggingSocket,
       getGroupEdgeHighlight: () => groupEdgeHighlight,
       groupFrames,
-      toggleGroupEditMode: groupController.toggleGroupEditMode,
+      toggleGroupEditMode,
       isPickerOpen,
       closePicker,
       groupSelectionNodeIds: groupController.groupSelectionNodeIds,
@@ -1073,6 +1129,7 @@
   {reteBuilder}
   groupFrames={[...$groupFrames, ...getCustomNodeProjectionFrames()]}
   editModeGroupId={$editModeGroupId}
+  {customNodeEditGroupId}
   selectedGroupId={$selectedGroupId}
   groupEditToast={$groupEditToast}
   {groupEdgeHighlight}
@@ -1080,10 +1137,14 @@
   groupOverlayActions={{
     onToggleDisabled: handleToggleGroupDisabled,
     onToggleMinimized: groupController.toggleGroupMinimized,
-    onToggleEditMode: groupController.toggleGroupEditMode,
+    onToggleEditMode: toggleGroupEditMode,
+    onToggleCustomNodeEditMode: toggleCustomNodeEditMode,
     onNodelize: handleNodelizeGroup,
-    onDenodelize: handleDenodelizeGroup,
-    onCollapseCustomNode: handleCollapseCustomNodeFrame,
+    onDenodelize: (groupId) => {
+      clearCustomNodeEditMode(groupId);
+      handleDenodelizeGroup(groupId);
+    },
+    onCollapseCustomNode: collapseCustomNodeFrame,
     onDisassemble: groupPortNodesController.disassembleGroupAndPorts,
     onRename: handleRenameGroup,
     onHeaderPointerDown: groupFrameHeaderHandlers.handleGroupHeaderPointerDown,

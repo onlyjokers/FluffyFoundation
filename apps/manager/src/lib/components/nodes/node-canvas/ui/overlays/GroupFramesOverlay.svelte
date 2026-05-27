@@ -25,12 +25,14 @@
   export let areaTransform: { k: number; tx: number; ty: number } | null = null;
   export let isRunning = false;
   export let editModeGroupId: string | null = null;
+  export let customNodeEditGroupId: string | null = null;
   export let selectedGroupId: string | null = null;
   export let toast: { groupId: string; message: string } | null = null;
   export let customNodeGroupIds: Set<string> | null = null;
   export let onToggleDisabled: (groupId: string) => void = () => undefined;
   export let onToggleMinimized: (groupId: string) => void = () => undefined;
   export let onToggleEditMode: (groupId: string) => void = () => undefined;
+  export let onToggleCustomNodeEditMode: (groupId: string) => void = () => undefined;
   export let onNodelize: (groupId: string) => void = () => undefined;
   export let onDenodelize: (groupId: string) => void = () => undefined;
   export let onCollapseCustomNode: (groupId: string) => void = () => undefined;
@@ -106,6 +108,7 @@
     {#each frames as frame (frame.group.id)}
       {@const group = frame.group}
       {@const isEditing = editModeGroupId === group.id}
+      {@const isCustomNodeEditing = customNodeEditGroupId === group.id}
       {@const toastMessage = toast?.groupId === group.id ? toast.message : ''}
       {@const runtimeGateClosed = group.runtimeActive === false}
       {@const gateClosed = !isRunning || frame.effectiveDisabled}
@@ -181,6 +184,17 @@
               use:observeActionOverflow={String(group.id)}
             >
               {#if isCustomNodeGroup}
+                <Button
+                  variant={isCustomNodeEditing ? 'primary' : 'ghost'}
+                  size="sm"
+                  ariaLabel={isCustomNodeEditing ? 'Editing node' : 'Edit node'}
+                  title={isCustomNodeEditing ? 'Editing node' : 'Edit node'}
+                  on:click={() => onToggleCustomNodeEditMode(group.id)}
+                >
+                  {#if isActionsCompact}✎{:else}{isCustomNodeEditing
+                      ? 'Editing…'
+                      : 'Edit node'}{/if}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

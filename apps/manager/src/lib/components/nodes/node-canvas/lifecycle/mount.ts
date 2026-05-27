@@ -108,6 +108,7 @@ export async function mountNodeCanvasResources(
     setGraphState: opts.setGraphState,
     setNodeCount: opts.setNodeCount,
     getProjectionState: opts.getProjectionState,
+    isProjectionEditable: opts.isProjectionEditable,
     translateProjectionConnection: opts.translateProjectionConnection,
     updateProjectionNodePosition: opts.updateProjectionNodePosition,
     getSelectedNodeId: opts.getSelectedNodeId,

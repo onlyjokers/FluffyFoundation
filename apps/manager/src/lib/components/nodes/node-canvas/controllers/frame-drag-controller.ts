@@ -20,12 +20,15 @@ export type CreateFrameDragControllerOptions = {
   groupController: GroupController;
   getLoopController: () => LoopController | null;
   getProjectionGroupNodeIds?: (groupId: string) => string[];
+  isProjectionGroupEditable?: (groupId: string) => boolean;
   updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
 };
 
 type AnyAreaPlugin = AreaPlugin<BaseSchemes, unknown>;
 
-export function createFrameDragController(opts: CreateFrameDragControllerOptions): FrameDragController {
+export function createFrameDragController(
+  opts: CreateFrameDragControllerOptions
+): FrameDragController {
   const { getAreaPlugin, groupController, getLoopController } = opts;
 
   let groupHeaderDragPointerId: number | null = null;
@@ -68,6 +71,7 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
     const areaPlugin = getAreaPlugin();
     const group = get(groupController.nodeGroups).find((g) => String(g.id) === String(groupId));
     const isProjectionGroup = !group?.nodeIds?.length;
+    if (isProjectionGroup && opts.isProjectionGroupEditable?.(String(groupId)) === false) return;
     const resolvedNodeIds = isProjectionGroup
       ? (opts.getProjectionGroupNodeIds?.(String(groupId)) ?? [])
       : (group?.nodeIds ?? []);
@@ -148,7 +152,8 @@ export function createFrameDragController(opts: CreateFrameDragControllerOptions
     const areaPlugin = getAreaPlugin();
     const loopController = getLoopController();
     const effectiveLoops =
-      loopController?.getEffectiveLoops?.() ?? (loopController ? get(loopController.localLoops) : []);
+      loopController?.getEffectiveLoops?.() ??
+      (loopController ? get(loopController.localLoops) : []);
     const loop = (effectiveLoops ?? []).find((l) => String(l?.id ?? '') === String(loopId));
     if (!loop?.nodeIds?.length) return;
     if (!areaPlugin?.nodeViews) return;

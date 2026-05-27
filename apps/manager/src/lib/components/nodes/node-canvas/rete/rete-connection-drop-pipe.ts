@@ -11,7 +11,10 @@ type ReteConnectionDropPipeOptions = {
   setConnectDraggingSocket: (socket: SocketData | null) => void;
   setGroupEdgeHighlight: (highlight: { groupId: string; side: 'input' | 'output' } | null) => void;
   groupEdgeFinder: {
-    findGroupProxyEdgeTargetAt: (clientX: number, clientY: number) => {
+    findGroupProxyEdgeTargetAt: (
+      clientX: number,
+      clientY: number
+    ) => {
       groupId: string;
       side: 'input' | 'output';
       frame: {
@@ -33,9 +36,7 @@ type ReteConnectionDropPipeOptions = {
     lastError: { set: (message: string) => void };
   };
   nodeRegistry: {
-    get: (
-      type: string
-    ) =>
+    get: (type: string) =>
       | {
           inputs?: Array<{ id?: string; type?: string }>;
           outputs?: Array<{ id?: string; type?: string }>;
@@ -63,6 +64,7 @@ type ReteConnectionDropPipeOptions = {
   ) => SocketData | null;
   openConnectPicker: (socket: SocketData) => void;
   isProjectionId?: (id: string) => boolean;
+  isProjectionEditable?: (id: string) => boolean;
   translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
 };
 
@@ -89,6 +91,7 @@ const connectionId = () => `conn-${crypto.randomUUID?.() ?? Date.now()}`;
 
 export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOptions) {
   const isProjectionId = options.isProjectionId ?? (() => false);
+  const isProjectionEditable = options.isProjectionEditable ?? (() => true);
 
   const resolveTypeForSocket = (sock: SocketData) => {
     const node = options.nodeEngine.getNode(String(sock.nodeId));
@@ -132,6 +135,8 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
       side: initialSide,
       key: initialKey,
     };
+    const initialIsReadOnlyProjection =
+      isProjectionId(initialSocket.nodeId) && !isProjectionEditable(initialSocket.nodeId);
     const pointer = options.getLastPointerClient();
 
     const gateTarget = options.groupEdgeFinder.findGroupGateTargetAt(pointer.x, pointer.y);
@@ -140,7 +145,9 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
         get(options.groupController.nodeGroups).find((g) => String(g.id) === gateTarget.groupId) ??
         null;
       if (group && (group.nodeIds ?? []).some((id) => String(id) === initialSocket.nodeId)) {
-        options.nodeEngine.lastError.set('Group gate input cannot originate from inside the group.');
+        options.nodeEngine.lastError.set(
+          'Group gate input cannot originate from inside the group.'
+        );
         return ctx;
       }
 
@@ -166,6 +173,7 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
 
     const edgeTarget = options.groupEdgeFinder.findGroupProxyEdgeTargetAt(pointer.x, pointer.y);
     if (edgeTarget) {
+      if (initialIsReadOnlyProjection) return ctx;
       const frame = edgeTarget.frame;
       const groupId = edgeTarget.groupId;
       const direction = edgeTarget.side === 'input' ? 'input' : 'output';
@@ -263,7 +271,9 @@ export function createReteConnectionDropPipe(options: ReteConnectionDropPipeOpti
               targetPortId: initialSocket.key,
             };
       const connectionToCreate = isProjectionId(snapped.nodeId)
-        ? (options.translateProjectionConnection?.(engineConn) ?? null)
+        ? isProjectionEditable(snapped.nodeId)
+          ? (options.translateProjectionConnection?.(engineConn) ?? null)
+          : null
         : engineConn;
       if (!connectionToCreate) {
         return ctx;

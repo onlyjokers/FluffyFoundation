@@ -34,6 +34,7 @@ type RetePipeOptions = {
   requestFramesUpdate: () => void;
   requestMinimapUpdate: () => void;
   isProjectionId?: (id: string) => boolean;
+  isProjectionEditable?: (id: string) => boolean;
   translateProjectionConnection?: (connection: EngineConnection) => EngineConnection | null;
   updateProjectionNodePosition?: (nodeId: string, position: { x: number; y: number }) => boolean;
 };
@@ -54,6 +55,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
     requestFramesUpdate,
     requestMinimapUpdate,
     isProjectionId = () => false,
+    isProjectionEditable = () => true,
     translateProjectionConnection = () => null,
     updateProjectionNodePosition = () => false,
   } = opts;
@@ -89,6 +91,14 @@ export function bindRetePipes(opts: RetePipeOptions) {
       };
       const isProjectionConnection =
         isProjectionId(source) || isProjectionId(target) || isProjectionId(id);
+      if (
+        isProjectionConnection &&
+        ((source && isProjectionId(source) && !isProjectionEditable(source)) ||
+          (target && isProjectionId(target) && !isProjectionEditable(target)) ||
+          (id && isProjectionId(id) && !isProjectionEditable(id)))
+      ) {
+        return ctx;
+      }
       const canonicalConn = isProjectionConnection
         ? translateProjectionConnection(engineConn)
         : engineConn;
@@ -219,7 +229,11 @@ export function bindRetePipes(opts: RetePipeOptions) {
         }
       }
     }
-    if (record.type === 'translated' || record.type === 'zoomed' || record.type === 'nodetranslated') {
+    if (
+      record.type === 'translated' ||
+      record.type === 'zoomed' ||
+      record.type === 'nodetranslated'
+    ) {
       requestMinimapUpdate();
       requestFramesUpdate();
     }
@@ -239,6 +253,7 @@ export function bindRetePipes(opts: RetePipeOptions) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) return ctx;
       if (id && position) {
         if (isProjectionId(String(id))) {
+          if (!isProjectionEditable(String(id))) return ctx;
           updateProjectionNodePosition(String(id), { x, y });
           return ctx;
         }
