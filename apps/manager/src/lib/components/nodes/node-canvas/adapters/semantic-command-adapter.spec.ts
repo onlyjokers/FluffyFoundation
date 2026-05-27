@@ -285,6 +285,66 @@ test('NodeCanvas semantic commands do not send structural commands rejected by l
   assert.deepEqual(events, ['local:dry-run']);
 });
 
+test('NodeCanvas semantic commands can keep manager-only structural commands local', () => {
+  const events: string[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: () => {
+        events.push('send');
+        return true;
+      },
+    }),
+    onLocalCommand: (_command, _requestId, options) => {
+      events.push(options?.dryRun ? 'local:dry-run' : 'local:apply');
+      return true;
+    },
+    isLocalOnlyCommand: (command) =>
+      command.type === 'node.connect' &&
+      String(command.connection.targetNodeId) === 'group-gate-1',
+  });
+
+  assert.equal(
+    adapter.connect({
+      id: 'c1',
+      sourceNodeId: 'bool',
+      sourcePortId: 'value',
+      targetNodeId: 'group-gate-1',
+      targetPortId: 'active',
+    }),
+    true
+  );
+  assert.deepEqual(events, ['local:dry-run', 'local:apply']);
+});
+
+test('NodeCanvas semantic commands do not locally apply rejected manager-only structural commands', () => {
+  const events: string[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: () => {
+        events.push('send');
+        return true;
+      },
+    }),
+    onLocalCommand: (_command, _requestId, options) => {
+      events.push(options?.dryRun ? 'local:dry-run' : 'local:apply');
+      return options?.dryRun ? true : false;
+    },
+    isLocalOnlyCommand: () => true,
+  });
+
+  assert.equal(
+    adapter.connect({
+      id: 'c1',
+      sourceNodeId: 'bool',
+      sourcePortId: 'value',
+      targetNodeId: 'group-gate-1',
+      targetPortId: 'active',
+    }),
+    false
+  );
+  assert.deepEqual(events, ['local:dry-run', 'local:apply']);
+});
+
 test('NodeCanvas semantic commands do not locally apply structural commands when SDK send fails', () => {
   const events: string[] = [];
   const adapter = createNodeCanvasSemanticCommands({

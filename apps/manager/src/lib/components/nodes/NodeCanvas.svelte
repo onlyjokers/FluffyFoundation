@@ -67,6 +67,7 @@
     type LoopController,
   } from './node-canvas/controllers/loop-controller';
   import { createMidiHighlightController } from './node-canvas/controllers/midi-highlight-controller';
+  import { computeGroupFramesFromState } from './node-canvas/controllers/group-frame-computation';
   import {
     createPickerController,
     type SocketData,
@@ -152,6 +153,31 @@
 
   const canvasCommands = createNodeCanvasSemanticCommands({
     getSDK,
+    isLocalOnlyCommand: (command) => {
+      if (command.type !== 'node.connect' && command.type !== 'node.disconnect') return false;
+      const graph = nodeEngine.exportGraph();
+      const decorationNodeIds = new Set(
+        (graph.nodes ?? [])
+          .filter((node) =>
+            ['group-gate', 'group-proxy', 'group-frame'].includes(String(node.type ?? ''))
+          )
+          .map((node) => String(node.id))
+      );
+      if (command.type === 'node.connect') {
+        const connection = command.connection;
+        return (
+          decorationNodeIds.has(String(connection.sourceNodeId)) ||
+          decorationNodeIds.has(String(connection.targetNodeId))
+        );
+      }
+      const existing = (graph.connections ?? []).find(
+        (connection) => String(connection.id) === String(command.connectionId)
+      );
+      return existing
+        ? decorationNodeIds.has(String(existing.sourceNodeId)) ||
+            decorationNodeIds.has(String(existing.targetNodeId))
+        : false;
+    },
     onError: (message) => {
       lastErrorStore.set(message);
     },
@@ -502,7 +528,27 @@
   getNodeActivityGraphState = () => mergeProjectionGraphs(graphState, [getCustomNodeProjectionState()]);
   const getCustomNodeProjectionFrames = () => {
     const projection = getCustomNodeProjectionState();
-    return Array.from(expandedCustomByGroupId.values()).flatMap((expanded) => {
+    const projectionNodeById = new Map((projection.nodes ?? []).map((node) => [String(node.id), node]));
+    const getProjectionNodeBounds = (nodeId: string) => {
+      const rendered = viewAdapter.getNodeBounds(String(nodeId));
+      if (rendered) return rendered;
+      const node = projectionNodeById.get(String(nodeId));
+      if (!node) return null;
+      const x = Number(node.position?.x ?? 0);
+      const y = Number(node.position?.y ?? 0);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return { left: x, top: y, right: x + 230, bottom: y + 100 };
+    };
+    const internalFrames = computeGroupFramesFromState({
+      groups: (projection.groups ?? []) as NodeGroup[],
+      editModeGroupId: null,
+      editModeGroupBounds: null,
+      forcedHiddenNodeIds: new Set(),
+      graph: projection,
+      localLoops: [],
+      getNodeBounds: getProjectionNodeBounds,
+    });
+    const ownerFrames = Array.from(expandedCustomByGroupId.values()).flatMap((expanded) => {
       const ownerId = String(expanded.nodeId ?? '');
       const owner = nodeEngine.getNode(ownerId);
       const state = owner ? readCustomNodeState(owner.config ?? {}) : null;
@@ -518,6 +564,7 @@
       });
       return frame ? [frame] : [];
     });
+    return [...ownerFrames, ...internalFrames];
   };
 
   const translateCustomNodeProjectionConnection = (

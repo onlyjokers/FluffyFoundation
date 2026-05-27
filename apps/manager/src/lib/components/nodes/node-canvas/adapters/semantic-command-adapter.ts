@@ -84,6 +84,7 @@ function canvasRequestId(command: SemanticCommand): string {
 export function createNodeCanvasSemanticCommands(input: {
   getSDK: () => CanvasSemanticSdk | null;
   onError?: (message: string) => void;
+  isLocalOnlyCommand?: (command: SemanticCommand) => boolean;
   onLocalCommand?: (
     command: SemanticCommand,
     requestId: string,
@@ -105,9 +106,14 @@ export function createNodeCanvasSemanticCommands(input: {
       return false;
     }
     const requestId = canvasRequestId(command);
+    const localOnly = Boolean(input.isLocalOnlyCommand?.(command));
     if (shouldApplyLocally(command)) {
       const locallyAccepted = input.onLocalCommand?.(command, requestId, { dryRun: true });
       if (locallyAccepted === false) return false;
+    }
+    if (localOnly) {
+      const locallyApplied = input.onLocalCommand?.(command, requestId, { dryRun: false });
+      return locallyApplied !== false;
     }
     const emitted = sdk.sendSemanticCommand({
       requestId,

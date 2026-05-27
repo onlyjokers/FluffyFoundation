@@ -6,11 +6,16 @@ import { writable } from 'svelte/store';
 import { createReteConnectionDropPipe } from './rete-connection-drop-pipe';
 
 type HarnessOptions = {
+  gateTarget?: {
+    groupId: string;
+  } | null;
   edgeTarget?: {
     groupId: string;
     side: 'input' | 'output';
     frame: { left: number; top: number; width: number; height: number; group?: { minimized?: boolean } };
   } | null;
+  nodeGroups?: Array<{ id?: string; nodeIds?: unknown[] }>;
+  exportGraph?: () => { nodes?: Array<{ id?: string; type?: string; config?: unknown }> };
   addNode?: (
     type: string,
     position?: { x: number; y: number },
@@ -51,13 +56,13 @@ function createHarness(options: HarnessOptions = {}) {
     setGroupEdgeHighlight: (highlight) => edgeHighlights.push(highlight),
     groupEdgeFinder: {
       findGroupProxyEdgeTargetAt: () => options.edgeTarget ?? null,
-      findGroupGateTargetAt: () => null,
+      findGroupGateTargetAt: () => options.gateTarget ?? null,
     },
     groupController: {
-      nodeGroups: writable([]),
+      nodeGroups: writable(options.nodeGroups ?? []),
     },
     nodeEngine: {
-      exportGraph: () => ({ nodes: [] }),
+      exportGraph: options.exportGraph ?? (() => ({ nodes: [] })),
       getNode: () => ({ type: 'number', config: {} }),
       lastError: { set: () => undefined },
     },
@@ -200,6 +205,37 @@ test('connectiondrop from a projection socket to a group edge creates projection
       sourcePortId: 'value',
       targetNodeId: 'view:custom:custom-1:proxy-out',
       targetPortId: 'in',
+    },
+  ]);
+});
+
+test('connectiondrop to a group gate resolves the current gate node by group id', () => {
+  const { pipe, connected } = createHarness({
+    gateTarget: { groupId: 'group:outer' },
+    nodeGroups: [{ id: 'group:outer', nodeIds: ['inside-node'] }],
+    exportGraph: () => ({
+      nodes: [
+        { id: 'current-gate', type: 'group-gate', config: { groupId: 'group:outer' } },
+      ],
+    }),
+  });
+
+  pipe({
+    type: 'connectiondrop',
+    data: {
+      created: false,
+      initial: { nodeId: 'source-node', side: 'output', key: 'value' },
+      socket: {},
+    },
+  });
+
+  assert.deepEqual(connected, [
+    {
+      id: (connected[0] as { id?: string }).id,
+      sourceNodeId: 'source-node',
+      sourcePortId: 'value',
+      targetNodeId: 'current-gate',
+      targetPortId: 'active',
     },
   ]);
 });
