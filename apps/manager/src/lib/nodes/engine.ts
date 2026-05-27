@@ -774,7 +774,7 @@ class NodeEngineClass {
    * Throws if the patch contains node types outside the client whitelist.
    */
   exportGraphForPatchFromRootNodeIds(rootNodeIds: string[]): {
-    graph: Pick<GraphState, 'nodes' | 'connections'>;
+    graph: Pick<GraphState, 'nodes' | 'connections' | 'groups'>;
     meta: {
       loopId: string;
       requiredCapabilities: string[];
@@ -852,7 +852,7 @@ class NodeEngineClass {
   }
 
   exportGraphForPatch(): {
-    graph: Pick<GraphState, 'nodes' | 'connections'>;
+    graph: Pick<GraphState, 'nodes' | 'connections' | 'groups'>;
     meta: {
       loopId: string;
       requiredCapabilities: string[];

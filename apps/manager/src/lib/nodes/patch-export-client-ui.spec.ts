@@ -1,9 +1,14 @@
 // Purpose: Regression coverage for exporting ClientUI nodes into deployed Client patches.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { NodeRegistry, registerDefaultNodeDefinitions } from '@shugu/node-core';
+import {
+  compileGraphForPatch,
+  NodeRegistry,
+  registerDefaultNodeDefinitions,
+} from '@shugu/node-core';
 import { exportGraphForPatch } from './patch-export';
 import type { GraphState, NodeInstance } from './types';
+import { writeCustomNodeState } from './custom-nodes/instance';
 
 const node = (
   id: string,
@@ -564,9 +569,9 @@ test('exported boolean variable client UI patch runs with setter defaults', asyn
       node('name', 'string', { value: 'flag' }),
       {
         ...node('setter', 'set-boolean-variable'),
-        config: { name: 'flag', defaultValue: true, mode: 'latchTrue' },
+        config: { name: 'flat-gated-flag', defaultValue: true, mode: 'latchTrue' },
       },
-      { ...node('getter', 'get-boolean-variable'), config: { name: 'flag' } },
+      { ...node('getter', 'get-boolean-variable'), config: { name: 'flat-gated-flag' } },
       node('button', 'client-button'),
       node('out', 'ui-out'),
     ],
@@ -612,4 +617,256 @@ test('exported boolean variable client UI patch runs with setter defaults', asyn
   assert.equal(runtime.getNode('getter')?.outputValues.value, true);
   assert.ok(Array.isArray(buttonOut));
   assert.ok(buttonOut.some((item) => (item as { type?: string }).type === 'button'));
+});
+
+test('exportGraphForPatch preserves runtime groups and their gates for ClientUI patches', async () => {
+  let buttonPressed = false;
+  const graph: GraphState = {
+    nodes: [
+      {
+        ...node('setter', 'set-boolean-variable'),
+        config: { name: 'flat-gated-flag', defaultValue: true, mode: 'latchTrue' },
+      },
+      { ...node('getter', 'get-boolean-variable'), config: { name: 'flat-gated-flag' } },
+      { ...node('pulse', 'pulse-to-boolean'), config: { mode: 'toggle', defaultValue: true } },
+      node('button', 'client-button', { display: true }),
+      node('gate', 'group-gate', { active: true }),
+      node('out', 'ui-out'),
+    ],
+    connections: [
+      {
+        id: 'getter-gate',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'gate',
+        targetPortId: 'active',
+      },
+      {
+        id: 'pressed-pulse',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'pulse',
+        targetPortId: 'pulse',
+      },
+      {
+        id: 'pulse-set',
+        sourceNodeId: 'pulse',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'button-ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
+    ],
+    groups: [
+      {
+        id: 'group:inner',
+        parentId: null,
+        name: 'Inner',
+        nodeIds: ['button', 'out', 'setter', 'pulse'],
+        disabled: false,
+        minimized: false,
+      },
+    ],
+  };
+  graph.nodes.find((item) => item.id === 'gate')!.config = { groupId: 'group:inner' };
+
+  const { NodeRuntime } = await import('@shugu/node-core');
+  const runtimeRegistry = new NodeRegistry();
+  registerDefaultNodeDefinitions(runtimeRegistry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    clientUi: {
+      consumeClientButtonPressed: () => {
+        const current = buttonPressed;
+        buttonPressed = false;
+        return current;
+      },
+    },
+  });
+
+  const result = exportGraphForPatch(graph, {
+    rootNodeIds: ['out'],
+    nodeRegistry: runtimeRegistry,
+  });
+
+  assert.deepEqual(
+    result.graph.nodes.map((item) => item.id).sort(),
+    ['button', 'gate', 'getter', 'out', 'pulse', 'setter'].sort()
+  );
+  assert.deepEqual(result.graph.groups, [
+    {
+      id: 'group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: ['button', 'out', 'setter', 'pulse'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+
+  const variables = new Map<string, boolean>([['flat-gated-flag', true]]);
+  const runtime = new NodeRuntime(runtimeRegistry, {
+    booleanVariables: {
+      get: (name) => variables.get(name),
+      set: (name, value) => variables.set(name, value),
+    },
+  });
+  try {
+    runtime.loadGraph(result.graph);
+    runtime.start();
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === true);
+    assert.ok(
+      (runtime.getNode('button')?.outputValues.out as unknown[] | undefined)?.some(
+        (item) => (item as { type?: string }).type === 'button'
+      )
+    );
+
+    buttonPressed = true;
+    await waitFor(() => runtime.getNode('getter')?.outputValues.value === false);
+    await waitFor(() => runtime.getNode('button')?.outputValues.out === undefined);
+  } finally {
+    runtime.stop();
+  }
+});
+
+test('compiled custom ClientUI patch preserves internal group gates', async () => {
+  let buttonPressed = false;
+  const definition = {
+    definitionId: 'def-custom-ui-gated',
+    name: 'Custom UI Gated',
+    ports: [],
+    template: {
+      nodes: [
+        {
+          ...node('setter', 'set-boolean-variable'),
+          config: { name: 'custom-gated-flag', defaultValue: true, mode: 'latchTrue' },
+        },
+        { ...node('getter', 'get-boolean-variable'), config: { name: 'custom-gated-flag' } },
+        { ...node('pulse', 'pulse-to-boolean'), config: { mode: 'toggle', defaultValue: true } },
+        node('button', 'client-button', { display: true }),
+        { ...node('gate', 'group-gate', { active: true }), config: { groupId: 'group:inner' } },
+        node('out', 'ui-out'),
+      ],
+      connections: [
+        {
+          id: 'getter-gate',
+          sourceNodeId: 'getter',
+          sourcePortId: 'value',
+          targetNodeId: 'gate',
+          targetPortId: 'active',
+        },
+        {
+          id: 'pressed-pulse',
+          sourceNodeId: 'button',
+          sourcePortId: 'pressed',
+          targetNodeId: 'pulse',
+          targetPortId: 'pulse',
+        },
+        {
+          id: 'pulse-set',
+          sourceNodeId: 'pulse',
+          sourcePortId: 'value',
+          targetNodeId: 'setter',
+          targetPortId: 'set',
+        },
+        {
+          id: 'button-ui',
+          sourceNodeId: 'button',
+          sourcePortId: 'out',
+          targetNodeId: 'out',
+          targetPortId: 'in',
+        },
+      ],
+      groups: [
+        {
+          id: 'group:inner',
+          parentId: null,
+          name: 'Inner',
+          nodeIds: ['button', 'out', 'setter', 'pulse'],
+          disabled: false,
+          minimized: false,
+        },
+      ],
+    },
+  };
+  const graph: GraphState = {
+    nodes: [
+      {
+        ...node('custom-1', `custom:${definition.definitionId}`),
+        config: writeCustomNodeState(
+          {},
+          {
+            definitionId: definition.definitionId,
+            groupId: 'group:custom',
+            role: 'mother',
+            manualGate: true,
+            internal: definition.template,
+          }
+        ),
+        inputValues: { gate: true },
+      },
+    ],
+    connections: [],
+  };
+  const compiled = compileGraphForPatch(graph, [definition]);
+
+  const { NodeRuntime } = await import('@shugu/node-core');
+  const runtimeRegistry = new NodeRegistry();
+  registerDefaultNodeDefinitions(runtimeRegistry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    clientUi: {
+      consumeClientButtonPressed: () => {
+        const current = buttonPressed;
+        buttonPressed = false;
+        return current;
+      },
+    },
+  });
+  const result = exportGraphForPatch(compiled, {
+    rootNodeIds: ['cn:custom-1:out'],
+    nodeRegistry: runtimeRegistry,
+  });
+
+  assert.ok(result.graph.nodes.some((item) => item.id === 'cn:custom-1:gate'));
+  assert.ok(result.graph.nodes.some((item) => item.id === 'cn:custom-1:getter'));
+  assert.deepEqual(result.graph.groups, [
+    {
+      id: 'cn:custom-1:group:group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: ['cn:custom-1:button', 'cn:custom-1:out', 'cn:custom-1:setter', 'cn:custom-1:pulse'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+
+  const variables = new Map<string, boolean>([['custom-gated-flag', true]]);
+  const runtime = new NodeRuntime(runtimeRegistry, {
+    booleanVariables: {
+      get: (name) => variables.get(name),
+      set: (name, value) => variables.set(name, value),
+    },
+  });
+  try {
+    runtime.loadGraph(result.graph);
+    runtime.start();
+    await waitFor(() => runtime.getNode('cn:custom-1:getter')?.outputValues.value === true);
+
+    buttonPressed = true;
+    await waitFor(() => runtime.getNode('cn:custom-1:getter')?.outputValues.value === false);
+    await waitFor(() => runtime.getNode('cn:custom-1:button')?.outputValues.out === undefined);
+  } finally {
+    runtime.stop();
+  }
 });

@@ -4,7 +4,7 @@
 import type { GraphState, NodeDefinition, NodePort } from '$lib/nodes/types';
 
 export type PatchPayloadLike = {
-  graph: Pick<GraphState, 'nodes' | 'connections'>;
+  graph: Pick<GraphState, 'nodes' | 'connections' | 'groups'>;
 };
 
 export type PatchDeploymentPlanSnapshotLike = {
@@ -13,7 +13,7 @@ export type PatchDeploymentPlanSnapshotLike = {
   rootIdsByClientId?: Map<string, string[]>;
 } | null;
 
-export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'connections'>): string {
+export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'connections' | 'groups'>): string {
   const nodes = (payload.nodes ?? []).map((node) => ({
     id: String(node.id),
     type: String(node.type),
@@ -31,8 +31,17 @@ export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'co
     const sb = `${b.s}:${b.sp}->${b.t}:${b.tp}`;
     return sa.localeCompare(sb);
   });
+  const groups = (payload.groups ?? []).map((group) => ({
+    id: String(group.id),
+    parentId: group.parentId ? String(group.parentId) : null,
+    nodeIds: (group.nodeIds ?? []).map(String).sort(),
+    disabled: Boolean(group.disabled),
+    runtimeActive:
+      typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+  }));
+  groups.sort((a, b) => a.id.localeCompare(b.id));
 
-  return JSON.stringify({ nodes, connections });
+  return JSON.stringify({ nodes, connections, groups });
 }
 
 function planSnapshotSignature(plan: PatchDeploymentPlanSnapshotLike): string {

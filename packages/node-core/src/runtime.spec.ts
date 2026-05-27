@@ -1063,6 +1063,48 @@ test('boolean variables can use an injected shared store across runtimes', async
   assert.equal(reader.getNode('getter')?.outputValues.value, true);
 });
 
+test('runtime step executes sink nodes without requiring start', () => {
+  const shared = new Map<string, boolean>();
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const runtime = new NodeRuntime(registry, {
+    booleanVariables: {
+      get: (name) => shared.get(name),
+      set: (name, value) => {
+        shared.set(name, value);
+      },
+    },
+  });
+
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('source', 'bool'), inputValues: { value: true } },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'step-visible', defaultValue: false, mode: 'followInput' },
+      },
+    ],
+    connections: [
+      {
+        id: 'source-set',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+    ],
+  });
+
+  runtime.step();
+
+  assert.equal(shared.get('step-visible'), true);
+});
+
 test('set boolean variable supports explicit pulse false writes and reset to default', async () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
@@ -2296,4 +2338,70 @@ test('loadGraph preserves the previous graph when the next graph is invalid', ()
     ['good']
   );
   assert.deepEqual(graph.connections, []);
+});
+
+test('runtime disables nodes that belong to a group with a closed group-gate', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'const-bool',
+    label: 'Const Bool',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+    configSchema: [],
+    process: () => ({ value: false }),
+  });
+  registry.register({
+    type: 'group-gate',
+    label: 'Group Gate',
+    category: 'Internal',
+    inputs: [{ id: 'active', label: 'Active', type: 'boolean', defaultValue: true }],
+    outputs: [],
+    configSchema: [],
+    process: (inputs) => ({ active: typeof inputs.active === 'boolean' ? inputs.active : true }),
+  });
+  registry.register({
+    type: 'number',
+    label: 'Number',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    configSchema: [],
+    process: () => ({ value: 1 }),
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      testNode('active', 'const-bool'),
+      {
+        ...testNode('gate', 'group-gate'),
+        config: { groupId: 'group:inner' },
+      },
+      testNode('inner', 'number'),
+    ],
+    connections: [
+      {
+        id: 'active-to-gate',
+        sourceNodeId: 'active',
+        sourcePortId: 'value',
+        targetNodeId: 'gate',
+        targetPortId: 'active',
+      },
+    ],
+    groups: [
+      {
+        id: 'group:inner',
+        parentId: null,
+        name: 'Inner',
+        nodeIds: ['inner'],
+        disabled: false,
+      },
+    ],
+  } as GraphState);
+
+  runtime.step();
+
+  assert.deepEqual(runtime.getNode('gate')?.outputValues, { active: false });
+  assert.deepEqual(runtime.getNode('inner')?.outputValues, {});
 });

@@ -9,6 +9,7 @@ import type {
   GraphChange,
   GraphValidationResult,
   Connection as CoreConnection,
+  GraphGroup,
   NodeDefinition,
   NodeInstance as CoreNodeInstance,
   NodePort,
@@ -21,6 +22,7 @@ export type {
   ConfigField,
   GraphChange,
   GraphValidationResult,
+  GraphGroup,
   NodeDefinition,
   NodePort,
   PortKind,
@@ -42,6 +44,7 @@ export interface GraphState {
   [key: string]: unknown;
   nodes: NodeInstance[];
   connections: Connection[];
+  groups?: GraphGroup[];
 }
 
 export type NodeMode = 'REMOTE' | 'MODULATION';

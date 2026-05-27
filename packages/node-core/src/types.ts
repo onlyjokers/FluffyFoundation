@@ -180,7 +180,18 @@ export interface Connection {
   targetPortId: string;
 }
 
+export interface GraphGroup {
+  id: string;
+  parentId: string | null;
+  name: string;
+  nodeIds: string[];
+  disabled: boolean;
+  minimized?: boolean;
+  runtimeActive?: boolean;
+}
+
 export interface GraphState {
   nodes: NodeInstance[];
   connections: Connection[];
+  groups?: GraphGroup[];
 }

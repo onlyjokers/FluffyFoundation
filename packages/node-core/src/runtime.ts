@@ -34,9 +34,20 @@ type RuntimeOverridesByKind = {
   config: Map<string, RuntimeOverride>;
 };
 
+type RuntimeGroup = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  nodeIds: string[];
+  disabled: boolean;
+  minimized?: boolean;
+  runtimeActive?: boolean;
+};
+
 export class NodeRuntime {
   private nodes = new Map<string, NodeInstance>();
   private connections: Connection[] = [];
+  private groups: RuntimeGroup[] = [];
   private executionOrder: NodeInstance[] = [];
   private needsRecompile = true;
 
@@ -198,8 +209,32 @@ export class NodeRuntime {
       }
       nextConnections.push(conn);
     }
+    const stateWithGroups = state as Pick<GraphState, 'nodes' | 'connections'> & {
+      groups?: RuntimeGroup[];
+    };
+    const nextGroups = Array.isArray(stateWithGroups.groups)
+      ? (stateWithGroups.groups ?? []).flatMap((group) => {
+          const id = String(group?.id ?? '');
+          if (!id) return [];
+          return [
+            {
+              id,
+              parentId: group?.parentId ? String(group.parentId) : null,
+              name: String(group?.name ?? 'Group'),
+              nodeIds: (Array.isArray(group?.nodeIds) ? group.nodeIds : [])
+                .map(String)
+                .filter((nodeId) => nodeIds.has(nodeId)),
+              disabled: Boolean(group?.disabled),
+              minimized: Boolean(group?.minimized),
+              runtimeActive:
+                typeof group?.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+            },
+          ];
+        })
+      : [];
     this.nodes = nextNodes;
     this.connections = nextConnections;
+    this.groups = nextGroups;
     this.executionOrder = [];
     this.needsRecompile = true;
     this.lastTickTime = 0;
@@ -230,6 +265,14 @@ export class NodeRuntime {
     return {
       nodes: Array.from(this.nodes.values()),
       connections: [...this.connections],
+      ...(this.groups.length > 0
+        ? {
+            groups: this.groups.map((group) => ({
+              ...group,
+              nodeIds: [...group.nodeIds],
+            })),
+          }
+        : {}),
     };
   }
 
@@ -237,6 +280,14 @@ export class NodeRuntime {
     return {
       nodes: Array.from(this.nodes.values()).map((n) => ({ ...n })),
       connections: [...this.connections],
+      ...(this.groups.length > 0
+        ? {
+            groups: this.groups.map((group) => ({
+              ...group,
+              nodeIds: [...group.nodeIds],
+            })),
+          }
+        : {}),
     };
   }
 
@@ -246,7 +297,7 @@ export class NodeRuntime {
   }
 
   step(): void {
-    this.tick();
+    this.tick({ allowSinks: true });
   }
 
   start(): void {
@@ -277,6 +328,7 @@ export class NodeRuntime {
     this.stop();
     this.nodes.clear();
     this.connections = [];
+    this.groups = [];
     this.executionOrder = [];
     this.needsRecompile = true;
     this.lastTickTime = 0;
@@ -363,6 +415,15 @@ export class NodeRuntime {
   private compile(): void {
     const nodes = Array.from(this.nodes.values());
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const gateIdsByGroupId = new Map<string, string[]>();
+    for (const node of nodes) {
+      if (String(node.type ?? '') !== 'group-gate') continue;
+      const groupId = String((node.config ?? {}).groupId ?? '');
+      if (!groupId) continue;
+      const list = gateIdsByGroupId.get(groupId) ?? [];
+      list.push(node.id);
+      gateIdsByGroupId.set(groupId, list);
+    }
 
     const inDegree = new Map<string, number>();
     const outEdges = new Map<string, string[]>();
@@ -390,6 +451,26 @@ export class NodeRuntime {
       const outs = outEdges.get(conn.sourceNodeId) ?? [];
       if (!outs.includes(conn.targetNodeId)) outs.push(conn.targetNodeId);
       outEdges.set(conn.sourceNodeId, outs);
+    }
+
+    const addOrderingEdge = (sourceId: string, targetId: string) => {
+      if (!sourceId || !targetId || sourceId === targetId) return;
+      if (!inDegree.has(sourceId) || !inDegree.has(targetId)) return;
+      const edgeKey = `${sourceId}::${targetId}`;
+      if (uniqueEdges.has(edgeKey)) return;
+      uniqueEdges.add(edgeKey);
+      inDegree.set(targetId, (inDegree.get(targetId) ?? 0) + 1);
+      const outs = outEdges.get(sourceId) ?? [];
+      if (!outs.includes(targetId)) outs.push(targetId);
+      outEdges.set(sourceId, outs);
+    };
+
+    for (const group of this.groups) {
+      const gateIds = gateIdsByGroupId.get(String(group.id ?? '')) ?? [];
+      if (gateIds.length === 0) continue;
+      for (const gateId of gateIds) {
+        for (const nodeId of group.nodeIds ?? []) addOrderingEdge(gateId, String(nodeId));
+      }
     }
 
     const queue: string[] = [];
@@ -471,7 +552,7 @@ export class NodeRuntime {
     // the warning, but the runtime keeps ticking unless the operator explicitly stops it.
   }
 
-  private tick(): void {
+  private tick(opts?: { allowSinks?: boolean }): void {
     const t0 =
       typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
     const now = Date.now();
@@ -500,10 +581,45 @@ export class NodeRuntime {
     this.lastTickTime = now;
 
     const context: ProcessContext = { nodeId: '', time: now, deltaTime, variableStore: this.variableStore };
+    const groupGateActiveByGroupId = new Map<string, boolean>();
+    const disabledGroupNodeIds = new Set<string>();
+
+    const recomputeDisabledGroupNodes = () => {
+      disabledGroupNodeIds.clear();
+      if (this.groups.length === 0) return;
+      const byId = new Map(this.groups.map((group) => [group.id, group] as const));
+      const disabledByGroupId = new Map<string, boolean>();
+      const isGroupDisabled = (groupId: string, visiting = new Set<string>()): boolean => {
+        const cached = disabledByGroupId.get(groupId);
+        if (cached !== undefined) return cached;
+        if (visiting.has(groupId)) return false;
+        visiting.add(groupId);
+        const group = byId.get(groupId);
+        const parentId = group?.parentId && byId.has(group.parentId) ? group.parentId : '';
+        const runtimeActive = groupGateActiveByGroupId.has(groupId)
+          ? Boolean(groupGateActiveByGroupId.get(groupId))
+          : group?.runtimeActive ?? true;
+        const disabled =
+          Boolean(group?.disabled) ||
+          !runtimeActive ||
+          (parentId ? isGroupDisabled(parentId, visiting) : false);
+        visiting.delete(groupId);
+        disabledByGroupId.set(groupId, disabled);
+        return disabled;
+      };
+
+      for (const group of this.groups) {
+        if (!isGroupDisabled(group.id)) continue;
+        for (const nodeId of group.nodeIds) disabledGroupNodeIds.add(String(nodeId));
+      }
+    };
 
     // Compute pass
     for (const node of this.executionOrder) {
-      const enabled = this.isNodeEnabled ? this.isNodeEnabled(node.id) : true;
+      recomputeDisabledGroupNodes();
+      const enabled =
+        (this.isNodeEnabled ? this.isNodeEnabled(node.id) : true) &&
+        !disabledGroupNodeIds.has(String(node.id));
       if (!enabled) {
         const prev = this.lastEnabledStateByNode.get(node.id);
         if (prev !== false) {
@@ -578,14 +694,25 @@ export class NodeRuntime {
         const effectiveConfig = this.getEffectiveConfig(node.id, node.config, now);
         const outputs = def.process(inputs, effectiveConfig, context);
         node.outputValues = outputs;
+        if (String(node.type ?? '') === 'group-gate') {
+          const groupId = String((node.config ?? {}).groupId ?? '');
+          if (groupId) {
+            groupGateActiveByGroupId.set(
+              groupId,
+              typeof outputs?.active === 'boolean' ? Boolean(outputs.active) : true
+            );
+          }
+        }
       } catch (err) {
         console.error(`[NodeRuntime] process error in ${node.type} (${node.id})`, err);
       }
     }
+    recomputeDisabledGroupNodes();
 
     // Sink pass
     for (const node of this.executionOrder) {
       if (this.isNodeEnabled && !this.isNodeEnabled(node.id)) continue;
+      if (disabledGroupNodeIds.has(String(node.id))) continue;
       if (this.isComputeEnabled && !this.isComputeEnabled(node.id)) continue;
       const def = this.registry.get(node.type);
       if (!def?.onSink) continue;
@@ -742,7 +869,7 @@ export class NodeRuntime {
         }
       }
 
-      if (!this.timer) break;
+      if (!this.timer && !opts?.allowSinks) break;
 
       context.nodeId = node.id;
       try {
@@ -753,7 +880,7 @@ export class NodeRuntime {
         this.lastOnSinkStateByNode.set(node.id, { inputs: fullInputs, config: effectiveConfig });
       }
 
-      if (!this.timer) break;
+      if (!this.timer && !opts?.allowSinks) break;
     }
 
     const t1 =

@@ -10,7 +10,7 @@ import {
   shouldUpdatePatchDeploymentPlan,
 } from './patch-runtime-helpers';
 
-const graphA: Pick<GraphState, 'nodes' | 'connections'> = {
+const graphA: Pick<GraphState, 'nodes' | 'connections' | 'groups'> = {
   nodes: [
     { id: 'b', type: 'number', position: { x: 0, y: 0 }, config: {}, inputValues: {}, outputValues: {} },
     { id: 'a', type: 'logic-add', position: { x: 0, y: 0 }, config: {}, inputValues: {}, outputValues: {} },
@@ -21,7 +21,7 @@ const graphA: Pick<GraphState, 'nodes' | 'connections'> = {
   ],
 };
 
-const graphB: Pick<GraphState, 'nodes' | 'connections'> = {
+const graphB: Pick<GraphState, 'nodes' | 'connections' | 'groups'> = {
   nodes: [...graphA.nodes].reverse(),
   connections: [...graphA.connections].reverse(),
 };
@@ -30,6 +30,25 @@ const port = (id: string, type: NodePort['type']): NodePort => ({ id, label: id,
 
 test('computeTopologySignature is stable regardless of node and connection order', () => {
   assert.equal(computeTopologySignature(graphA), computeTopologySignature(graphB));
+});
+
+test('computeTopologySignature changes when runtime groups change', () => {
+  const withoutGroup = computeTopologySignature(graphA);
+  const withGroup = computeTopologySignature({
+    ...graphA,
+    groups: [
+      {
+        id: 'group:runtime',
+        parentId: null,
+        name: 'Runtime',
+        nodeIds: ['a'],
+        disabled: false,
+        minimized: false,
+      },
+    ],
+  });
+
+  assert.notEqual(withGroup, withoutGroup);
 });
 
 test('isDefinitionBypassableWhenDisabled allows matching non-command input and output ports', () => {

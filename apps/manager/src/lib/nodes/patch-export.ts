@@ -10,7 +10,7 @@ import type { NodeRegistry } from '@shugu/node-core';
 
 export type PatchExportResult = {
   rootNodeIds: string[];
-  graph: Pick<GraphState, 'nodes' | 'connections'>;
+  graph: Pick<GraphState, 'nodes' | 'connections' | 'groups'>;
   assetRefs: string[];
 };
 
@@ -76,7 +76,34 @@ export function exportGraphForPatch(
   const isNodeEnabled = opts.isNodeEnabled ?? null;
   const nodes = (state.nodes ?? []).slice();
   const connections = (state.connections ?? []).slice();
+  const groups = Array.isArray(state.groups) ? state.groups : [];
   const byId = new Map(nodes.map((n) => [String(n.id), n]));
+  const groupById = new Map(
+    groups
+      .map((group) => [String(group.id ?? ''), group] as const)
+      .filter(([id]) => Boolean(id))
+  );
+  const groupIdsByNodeId = new Map<string, string[]>();
+  for (const group of groups) {
+    const groupId = String(group.id ?? '');
+    if (!groupId) continue;
+    for (const nodeId of group.nodeIds ?? []) {
+      const id = String(nodeId ?? '');
+      if (!id) continue;
+      const list = groupIdsByNodeId.get(id) ?? [];
+      list.push(groupId);
+      groupIdsByNodeId.set(id, list);
+    }
+  }
+  const gateIdsByGroupId = new Map<string, string[]>();
+  for (const node of nodes) {
+    if (String(node.type ?? '') !== 'group-gate') continue;
+    const groupId = String(node.config?.groupId ?? '');
+    if (!groupId) continue;
+    const list = gateIdsByGroupId.get(groupId) ?? [];
+    list.push(String(node.id));
+    gateIdsByGroupId.set(groupId, list);
+  }
 
   const normalizeAssetPickerValue = (raw: unknown): string | null => {
     if (typeof raw !== 'string') return null;
@@ -222,6 +249,38 @@ export function exportGraphForPatch(
     // Adding a downstream UI interaction consumer can expose another exported ClientUI node.
   }
 
+  const addGroupAndAncestors = (out: Set<string>, groupId: string) => {
+    const id = String(groupId ?? '');
+    if (!id || out.has(id)) return;
+    const group = groupById.get(id);
+    if (!group) return;
+    out.add(id);
+    const parentId = group.parentId ? String(group.parentId) : '';
+    if (parentId) addGroupAndAncestors(out, parentId);
+  };
+  const collectRetainedGroupIds = (nodeIds: Set<string>): Set<string> => {
+    const out = new Set<string>();
+    for (const nodeId of nodeIds) {
+      for (const groupId of groupIdsByNodeId.get(String(nodeId)) ?? []) {
+        addGroupAndAncestors(out, groupId);
+      }
+    }
+    return out;
+  };
+  const addGroupGateDependencies = () => {
+    let changed = false;
+    const retainedGroupIds = collectRetainedGroupIds(keep);
+    for (const groupId of retainedGroupIds) {
+      for (const gateId of gateIdsByGroupId.get(groupId) ?? []) {
+        const before = keep.size;
+        visit(gateId);
+        visitDownstream(gateId);
+        if (keep.size !== before) changed = true;
+      }
+    }
+    return changed;
+  };
+
   const normalizeVariableName = (value: unknown, fallback = 'variable'): string => {
     const raw = typeof value === 'string' ? value.trim() : '';
     return raw || fallback;
@@ -265,8 +324,18 @@ export function exportGraphForPatch(
     return changed;
   };
 
-  while (addBooleanVariableSettersForExportedGetters()) {
-    // Adding a setter can add another exported getter through connected config inputs.
+  while (true) {
+    const before = keep.size;
+    while (addGroupGateDependencies()) {
+      // Group gates can add boolean getters that control runtime group activation.
+    }
+    while (addBooleanVariableSettersForExportedGetters()) {
+      // Adding a setter can add another exported getter through connected config inputs.
+    }
+    while (addClientUiOutputDependencies()) {
+      // Adding setters can expose more ClientUI feedback paths.
+    }
+    if (keep.size === before) break;
   }
 
   const keptNodes = nodes
@@ -583,9 +652,33 @@ export function exportGraphForPatch(
     collectAssetRefs(n.inputValues ?? null, assetRefs, seen);
   }
 
+  const effectiveNodeIds = new Set(effectiveNodes.map((node) => String(node.id)).filter(Boolean));
+  const retainedGroupIds = collectRetainedGroupIds(effectiveNodeIds);
+  const exportedGroups = groups
+    .filter((group) => retainedGroupIds.has(String(group.id ?? '')))
+    .map((group) => {
+      const id = String(group.id ?? '');
+      const parentId = group.parentId ? String(group.parentId) : '';
+      return {
+        id,
+        parentId: parentId && retainedGroupIds.has(parentId) ? parentId : null,
+        name: String(group.name ?? 'Group'),
+        nodeIds: (group.nodeIds ?? []).map(String).filter((nodeId) => effectiveNodeIds.has(nodeId)),
+        disabled: Boolean(group.disabled),
+        minimized: Boolean(group.minimized),
+        ...(typeof group.runtimeActive === 'boolean'
+          ? { runtimeActive: Boolean(group.runtimeActive) }
+          : {}),
+      };
+    });
+
   return {
     rootNodeIds,
-    graph: { nodes: effectiveNodes, connections: keptConnections },
+    graph: {
+      nodes: effectiveNodes,
+      connections: keptConnections,
+      ...(exportedGroups.length > 0 ? { groups: exportedGroups } : {}),
+    },
     assetRefs,
   };
 }

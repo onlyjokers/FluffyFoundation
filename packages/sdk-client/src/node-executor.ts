@@ -13,7 +13,7 @@ import { getBrowserAudioContextCtor } from './browser/audio-context.js';
 import { extractOverrides } from './node-executor-overrides.js';
 
 export type NodeExecutorDeployPayload = {
-  graph: Pick<GraphState, 'nodes' | 'connections'>;
+  graph: Pick<GraphState, 'nodes' | 'connections' | 'groups'>;
   meta: {
     loopId: string;
     requiredCapabilities?: string[];
@@ -512,7 +512,7 @@ export class NodeExecutor {
     const loopId = typeof meta.loopId === 'string' ? meta.loopId : '';
     if (!loopId) throw new Error('invalid payload (meta.loopId)');
     return {
-      graph: graph as Pick<GraphState, 'nodes' | 'connections'>,
+      graph: graph as Pick<GraphState, 'nodes' | 'connections' | 'groups'>,
       meta: meta as NodeExecutorDeployPayload['meta'],
     };
   }

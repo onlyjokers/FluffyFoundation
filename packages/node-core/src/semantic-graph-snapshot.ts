@@ -128,16 +128,22 @@ const normalizeAgentPolicy = (value: unknown): AgentGroupPolicy | undefined => {
   };
 };
 
-export const cloneGraph = (graph: GraphState): GraphState => ({
-  nodes: (graph.nodes ?? []).map((node) => ({
-    ...node,
-    position: { ...(node.position ?? { x: 0, y: 0 }) },
-    config: cloneRecord(node.config),
-    inputValues: cloneRecord(node.inputValues),
-    outputValues: cloneRecord(node.outputValues),
-  })),
-  connections: (graph.connections ?? []).map((connection) => ({ ...connection })),
-});
+export const cloneGraph = (graph: GraphState): GraphState => {
+  const groups = Array.isArray((graph as GraphState & { groups?: SemanticGroup[] })?.groups)
+    ? cloneGroups((graph as GraphState & { groups?: SemanticGroup[] }).groups ?? [])
+    : [];
+  return {
+    nodes: (graph.nodes ?? []).map((node) => ({
+      ...node,
+      position: { ...(node.position ?? { x: 0, y: 0 }) },
+      config: cloneRecord(node.config),
+      inputValues: cloneRecord(node.inputValues),
+      outputValues: cloneRecord(node.outputValues),
+    })),
+    connections: (graph.connections ?? []).map((connection) => ({ ...connection })),
+    ...(groups.length > 0 ? { groups } : {}),
+  };
+};
 
 export const cloneGroups = (groups: SemanticGroup[]): SemanticGroup[] =>
   groups.map((group) => ({

@@ -8,7 +8,7 @@ import type { GraphViewAdapter } from '../adapters/graph-view-adapter';
 import type { ExecutorStatusLike } from './patch-override-routing';
 
 export type PatchPayload = {
-  graph: Pick<GraphState, 'nodes' | 'connections'>;
+  graph: Pick<GraphState, 'nodes' | 'connections' | 'groups'>;
   meta: {
     loopId: string;
     requiredCapabilities: string[];
