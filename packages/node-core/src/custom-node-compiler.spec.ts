@@ -399,3 +399,105 @@ test('compileGraphForPatch falls back to manualGate when no runtime gate input e
   assert.deepEqual(compiled.nodes, []);
   assert.deepEqual(compiled.connections, []);
 });
+
+test('compileGraphForPatch materializes internal custom-node groups for runtime group gates', () => {
+  const definition: CustomNodeDefinition = {
+    definitionId: 'def-nested-group',
+    name: 'Nested Group Custom',
+    template: {
+      nodes: [
+        {
+          id: 'active-input',
+          type: 'group-proxy',
+          position: { x: 0, y: 0 },
+          config: { direction: 'input', portType: 'boolean' },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'inner-gate',
+          type: 'group-gate',
+          position: { x: 80, y: 0 },
+          config: { groupId: 'group:inner' },
+          inputValues: {},
+          outputValues: {},
+        },
+        numberNode('inner'),
+      ],
+      connections: [
+        {
+          id: 'proxy-to-gate',
+          sourceNodeId: 'active-input',
+          sourcePortId: 'out',
+          targetNodeId: 'inner-gate',
+          targetPortId: 'active',
+        },
+      ],
+      groups: [
+        {
+          id: 'group:inner',
+          parentId: null,
+          name: 'Inner',
+          nodeIds: ['inner'],
+          disabled: false,
+          minimized: false,
+          runtimeActive: false,
+        },
+      ],
+    },
+    ports: [
+      {
+        portKey: 'active',
+        label: 'Active',
+        side: 'input',
+        type: 'boolean',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'active-input', portId: 'in' },
+      },
+    ],
+  };
+
+  const graph: GraphState = {
+    nodes: [
+      {
+        id: 'custom-1',
+        type: 'custom:def-nested-group',
+        position: { x: 0, y: 0 },
+        config: writeCustomNodeState(
+          {},
+          {
+            definitionId: 'def-nested-group',
+            groupId: 'group:custom',
+            role: 'mother',
+            manualGate: true,
+            internal: definition.template,
+          }
+        ),
+        inputValues: { active: false },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  const compiled = compileGraphForPatch(graph, [definition]);
+
+  assert.deepEqual(
+    compiled.nodes.map((node) => [node.id, node.type]),
+    [
+      ['cn:custom-1:inner-gate', 'group-gate'],
+      ['cn:custom-1:inner', 'number'],
+    ]
+  );
+  assert.deepEqual(compiled.groups, [
+    {
+      id: 'cn:custom-1:group:group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: ['cn:custom-1:inner'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+});

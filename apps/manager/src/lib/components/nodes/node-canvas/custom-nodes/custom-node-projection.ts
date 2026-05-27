@@ -15,6 +15,29 @@ export const isCustomNodeProjectionId = (id: string): boolean =>
 export const customNodeProjectionNodeId = (customNodeId: string, internalNodeId: string): string =>
   `${CUSTOM_NODE_PROJECTION_PREFIX}${String(customNodeId ?? '')}:${String(internalNodeId ?? '')}`;
 
+const cloneInternalGroups = (internal: GraphState | null | undefined): GraphState['groups'] | undefined =>
+  Array.isArray(internal?.groups)
+    ? internal.groups.map((group) => ({
+        ...group,
+        nodeIds: Array.isArray(group?.nodeIds) ? group.nodeIds.map(String) : [],
+      }))
+    : undefined;
+
+const cloneInternalGraph = (input: {
+  internal: GraphState;
+  nodes: NodeInstance[];
+  connections?: Connection[];
+}): GraphState => {
+  const groups = cloneInternalGroups(input.internal);
+  return {
+    nodes: input.nodes,
+    connections: (input.connections ?? input.internal.connections ?? []).map((connection) => ({
+      ...connection,
+    })),
+    ...(groups ? { groups } : {}),
+  };
+};
+
 export function parseCustomNodeProjectionNodeId(
   id: string
 ): { customNodeId: string; internalNodeId: string } | null {
@@ -134,10 +157,10 @@ export function writeCustomNodeProjectionValue(input: {
 
   const nextState: CustomNodeInstanceState = {
     ...state,
-    internal: {
+    internal: cloneInternalGraph({
+      internal,
       nodes: nextNodes,
-      connections: (internal.connections ?? []).map((connection) => ({ ...connection })),
-    },
+    }),
   };
   const nextConfig = writeCustomNodeState(owner.config ?? {}, nextState);
   input.updateOwnerConfig(ownerId, nextConfig);
@@ -189,7 +212,8 @@ export function appendCustomNodeProjectionNode(input: {
       const y = Number(input.node.position?.y ?? ownerY);
       return {
         ...state,
-        internal: {
+        internal: cloneInternalGraph({
+          internal,
           nodes: [
             ...nodes.map((node) => ({ ...node })),
             {
@@ -205,8 +229,7 @@ export function appendCustomNodeProjectionNode(input: {
               outputValues: {},
             },
           ],
-          connections: (internal.connections ?? []).map((connection) => ({ ...connection })),
-        },
+        }),
       };
     },
   });
@@ -286,10 +309,10 @@ export function translateCustomNodeProjectionNodePosition(input: {
       if (!changed) return null;
       return {
         ...state,
-        internal: {
+        internal: cloneInternalGraph({
+          internal,
           nodes: nextNodes,
-          connections: (internal.connections ?? []).map((connection) => ({ ...connection })),
-        },
+        }),
       };
     },
   });
@@ -335,7 +358,8 @@ export function appendCustomNodeProjectionConnection(input: {
         `conn-${crypto.randomUUID?.() ?? Date.now()}`;
       return {
         ...state,
-        internal: {
+        internal: cloneInternalGraph({
+          internal,
           nodes: nodes.map((node) => ({ ...node })),
           connections: [
             ...connections.map((connection) => ({ ...connection })),
@@ -347,7 +371,7 @@ export function appendCustomNodeProjectionConnection(input: {
               targetPortId,
             },
           ],
-        },
+        }),
       };
     },
   });
@@ -372,6 +396,7 @@ export function buildCustomNodeProjectionGraph(input: {
   const internal = state.internal ?? input.definition.template ?? { nodes: [], connections: [] };
   const nodes = Array.isArray(internal.nodes) ? internal.nodes : [];
   const connections = Array.isArray(internal.connections) ? internal.connections : [];
+  const groups = Array.isArray(internal.groups) ? internal.groups : [];
 
   const projectedNodes: NodeInstance[] = nodes.flatMap((node) => {
     const id = String(node?.id ?? '');
@@ -483,6 +508,30 @@ export function buildCustomNodeProjectionGraph(input: {
   return {
     nodes: projectedNodes,
     connections: [...projectedConnections, ...projectedExternalConnections],
+    ...(groups.length > 0
+      ? {
+          groups: groups.flatMap((group) => {
+            const id = String(group?.id ?? '');
+            if (!id) return [];
+            const parentId = String(group?.parentId ?? '');
+            const projectedId = `${CUSTOM_NODE_PROJECTION_PREFIX}${customNodeId}:group:${id}`;
+            return [
+              {
+                id: projectedId,
+                parentId: parentId
+                  ? `${CUSTOM_NODE_PROJECTION_PREFIX}${customNodeId}:group:${parentId}`
+                  : null,
+                name: String(group?.name ?? 'Group'),
+                nodeIds: (Array.isArray(group?.nodeIds) ? group.nodeIds : [])
+                  .map((nodeId) => customNodeProjectionNodeId(customNodeId, String(nodeId)))
+                  .filter(Boolean),
+                disabled: Boolean(group?.disabled),
+                minimized: Boolean(group?.minimized),
+              },
+            ];
+          }),
+        }
+      : {}),
   };
 }
 
@@ -498,6 +547,12 @@ export function mergeProjectionGraphs(base: GraphState, projections: GraphState[
       ...(Array.isArray(base.connections) ? base.connections : []),
       ...projections.flatMap((projection) =>
         Array.isArray(projection.connections) ? projection.connections : []
+      ),
+    ],
+    groups: [
+      ...(Array.isArray(base.groups) ? base.groups : []),
+      ...projections.flatMap((projection) =>
+        Array.isArray(projection.groups) ? projection.groups : []
       ),
     ],
   };

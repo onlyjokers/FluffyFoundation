@@ -4,6 +4,7 @@
 import type { NodeRegistry } from '@shugu/node-core';
 import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
+import { cloneGraphGroups } from '../custom-nodes/custom-node-graph';
 import type { NodeGroup } from '../controllers/group-controller';
 import { remapImportedGroups, type ParsedNodeGraphFile } from './node-graph-file.js';
 
@@ -83,6 +84,10 @@ function parseCustomNodeDefinitions(value: unknown): CustomNodeDefinition[] {
       template: {
         nodes: nodes as GraphState['nodes'],
         connections: connections as GraphState['connections'],
+        ...(() => {
+          const groups = cloneGraphGroups(template as GraphState);
+          return groups.length > 0 ? { groups } : {};
+        })(),
       },
       ports: ports as CustomNodeDefinition['ports'],
     });

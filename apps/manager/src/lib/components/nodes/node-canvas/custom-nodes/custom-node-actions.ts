@@ -317,7 +317,11 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     const state = opts.nodeEngine.exportGraph();
     const nodes = Array.isArray(state.nodes) ? state.nodes : [];
     const connections = Array.isArray(state.connections) ? state.connections : [];
-    const frame = (get(opts.groupFrames) ?? []).find((f) => f.group.id === rootId) ?? null;
+    const framesSnapshot = get(opts.groupFrames) ?? [];
+    const frame = framesSnapshot.find((f) => f.group.id === rootId) ?? null;
+    const frameByGroupId = new Map(
+      framesSnapshot.map((groupFrame) => [String(groupFrame.group?.id ?? ''), groupFrame] as const)
+    );
 
     // Collect subtree group ids so we can remove all group metadata + port nodes.
     const subtreeGroupIds = new Set<string>();
@@ -333,6 +337,7 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     }
 
     const portIndex = opts.buildGroupPortIndex(state);
+    const rootEntry = portIndex.get(rootId) ?? { legacyActivateIds: [], proxyIds: [] };
 
     const toRemove = new Set<string>();
     const groupById = new Map(groupsSnapshot.map((g) => [String(g.id), g] as const));
@@ -398,13 +403,20 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
       }
     }
 
-    // Template includes all nodes we remove except group frames + group gate/activate nodes (editor affordances).
-    const excludedTypes = new Set(['group-frame', 'group-gate', 'group-activate']);
+    const rootPortNodeIds = new Set<string>([
+      ...(rootEntry.gateId ? [String(rootEntry.gateId)] : []),
+      ...(rootEntry.legacyActivateIds ?? []).map(String),
+    ]);
+
+    // Template includes removed nodes except root-only frame/gate affordances. Descendant group gates
+    // must stay in the template because they drive nested group runtime behavior inside the Custom Node.
     const templateNodeIds = new Set<string>();
     for (const nodeId of Array.from(toRemove)) {
       const node = nodes.find((n) => String(n.id) === String(nodeId));
       if (!node) continue;
-      if (excludedTypes.has(String(node.type))) continue;
+      const type = String(node.type);
+      if (type === 'group-frame' || type === 'group-activate') continue;
+      if (type === 'group-gate' && rootPortNodeIds.has(String(nodeId))) continue;
       templateNodeIds.add(String(nodeId));
     }
 
@@ -441,6 +453,96 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
         Boolean(String(conn.targetPortId ?? ''))
     );
 
+    const containsPoint = (groupFrame: GroupFrame, pos: { x: number; y: number }): boolean => {
+      const left = Number(groupFrame.left ?? 0);
+      const top = Number(groupFrame.top ?? 0);
+      const right = left + Number(groupFrame.width ?? 0);
+      const bottom = top + Number(groupFrame.height ?? 0);
+      if (
+        !Number.isFinite(left) ||
+        !Number.isFinite(top) ||
+        !Number.isFinite(right) ||
+        !Number.isFinite(bottom) ||
+        right < left ||
+        bottom < top
+      ) {
+        return false;
+      }
+      const tolerance = 1;
+      return (
+        pos.x >= left - tolerance &&
+        pos.x <= right + tolerance &&
+        pos.y >= top - tolerance &&
+        pos.y <= bottom + tolerance
+      );
+    };
+
+    const groupDepthById = new Map<string, number>();
+    const depthForGroup = (gid: string, visiting = new Set<string>()): number => {
+      const cached = groupDepthById.get(gid);
+      if (cached !== undefined) return cached;
+      if (visiting.has(gid)) return 0;
+      visiting.add(gid);
+      const source = groupById.get(gid);
+      const parentId = String(source?.parentId ?? '');
+      const depth =
+        parentId && subtreeGroupIds.has(parentId) && parentId !== rootId
+          ? depthForGroup(parentId, visiting) + 1
+          : 0;
+      visiting.delete(gid);
+      groupDepthById.set(gid, depth);
+      return depth;
+    };
+
+    const visuallyAssignedGroupByNodeId = new Map<string, string>();
+    for (const nodeId of Array.from(templateNodeIds)) {
+      const node = nodeById.get(String(nodeId));
+      if (!node) continue;
+      const type = String(node.type ?? '');
+      if (type === 'group-gate' || type === 'group-proxy') continue;
+      const pos = positionFor(String(nodeId));
+      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) continue;
+
+      let selectedGroupId = '';
+      let selectedDepth = -1;
+      for (const gid of subtreeGroupIds) {
+        const normalizedGroupId = String(gid);
+        if (normalizedGroupId === rootId) continue;
+        const groupFrame = frameByGroupId.get(normalizedGroupId);
+        if (!groupFrame || !containsPoint(groupFrame, pos)) continue;
+        const depth = depthForGroup(normalizedGroupId);
+        if (depth <= selectedDepth) continue;
+        selectedGroupId = normalizedGroupId;
+        selectedDepth = depth;
+      }
+      if (selectedGroupId) visuallyAssignedGroupByNodeId.set(String(nodeId), selectedGroupId);
+    }
+
+    const templateGroups = Array.from(subtreeGroupIds)
+      .filter((gid) => String(gid) !== rootId)
+      .flatMap((gid) => {
+        const source = groupById.get(String(gid));
+        if (!source) return [];
+        const parentId = String(source.parentId ?? '');
+        const nodeIds = new Set(
+          (source.nodeIds ?? []).map((nodeId) => String(nodeId)).filter((nodeId) => templateNodeIds.has(nodeId))
+        );
+        for (const [nodeId, assignedGroupId] of visuallyAssignedGroupByNodeId) {
+          if (assignedGroupId === String(gid)) nodeIds.add(nodeId);
+        }
+        return [
+          {
+            id: String(source.id),
+            parentId:
+              parentId && parentId !== rootId && subtreeGroupIds.has(parentId) ? parentId : null,
+            name: String(source.name ?? 'Group'),
+            nodeIds: Array.from(nodeIds),
+            disabled: Boolean(source.disabled),
+            minimized: Boolean(source.minimized),
+          },
+        ];
+      });
+
     const resolvePortLabel = (nodeType: string, side: 'input' | 'output', portId: string): string => {
       const def = opts.nodeRegistry.get(String(nodeType ?? ''));
       const ports = side === 'input' ? def?.inputs : def?.outputs;
@@ -449,7 +551,6 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     };
 
     // Build Custom Node ports from the root group's boundary proxy nodes.
-    const rootEntry = portIndex.get(rootId) ?? { legacyActivateIds: [], proxyIds: [] };
     const portKeyByProxyId = new Map<string, string>();
 
     const ports: CustomNodePort[] = (rootEntry.proxyIds ?? []).flatMap((proxyId) => {
@@ -568,7 +669,11 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     const customDefinition: CustomNodeDefinition = {
       definitionId,
       name: String(group.name ?? 'Group'),
-      template: { nodes: templateNodes, connections: templateConnections },
+      template: {
+        nodes: templateNodes,
+        connections: templateConnections,
+        ...(templateGroups.length > 0 ? { groups: templateGroups } : {}),
+      },
       ports,
     };
     opts.addCustomNodeDefinition(customDefinition);
@@ -587,7 +692,11 @@ export const createCustomNodeActions = (opts: CustomNodeActionsOptions): CustomN
     const motherType = opts.customNodeType(definitionId);
     const motherPos = frame ? { x: originX, y: originY } : { x: originX, y: originY };
 
-    const motherInternal = cloneGraphState({ nodes: templateNodes, connections: templateConnections });
+    const motherInternal = cloneGraphState({
+      nodes: templateNodes,
+      connections: templateConnections,
+      ...(templateGroups.length > 0 ? { groups: templateGroups } : {}),
+    });
 
     const initialGate = !group.disabled;
     const motherConfig = opts.writeCustomNodeState({}, {

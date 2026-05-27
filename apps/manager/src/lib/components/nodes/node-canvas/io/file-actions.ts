@@ -6,6 +6,7 @@ import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
 import { customNodeDefinitions } from '$lib/nodes/custom-nodes/store';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeGroup } from '../controllers/group-controller';
+import { cloneGraphGroups } from '../custom-nodes/custom-node-graph';
 import {
   exportMidiTemplateFile,
   instantiateMidiBindings,
@@ -83,6 +84,10 @@ function cloneCustomNodeDefinitionsForGraphFile(): CustomNodeDefinition[] {
         outputValues: {},
       })),
       connections: (def.template?.connections ?? []).map((connection) => ({ ...connection })),
+      ...(() => {
+        const groups = cloneGraphGroups(def.template);
+        return groups.length > 0 ? { groups } : {};
+      })(),
     },
     ports: (def.ports ?? []).map((port) => ({
       portKey: String(port.portKey ?? ''),

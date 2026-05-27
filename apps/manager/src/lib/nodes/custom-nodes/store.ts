@@ -9,7 +9,7 @@ import type { Connection, GraphState, NodeDefinition, NodePort, NodeInstance, Po
 import { nodeRegistry } from '$lib/nodes/registry';
 import type { CustomNodeDefinition } from './types';
 import { readCustomNodeState } from './instance';
-import { NodeRuntime } from '@shugu/node-core';
+import { NodeRuntime, type NodeVariableStore } from '@shugu/node-core';
 import { CUSTOM_NODE_TYPE_PREFIX, customNodeType } from './custom-node-type';
 import {
   normalizeLegacyCustomNodeDefinition,
@@ -19,6 +19,7 @@ import {
 const buildInternalSignature = (graph: GraphState | null | undefined): string => {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
+  const groups = Array.isArray(graph?.groups) ? graph.groups : [];
   try {
     return JSON.stringify({
       n: nodes.map((n) => ({
@@ -33,11 +34,24 @@ const buildInternalSignature = (graph: GraphState | null | undefined): string =>
         t: String(c?.targetNodeId ?? ''),
         tp: String(c?.targetPortId ?? ''),
       })),
+      g: groups.map((g) => ({
+        id: String(g?.id ?? ''),
+        parentId: g?.parentId ? String(g.parentId) : null,
+        nodeIds: (g?.nodeIds ?? []).map(String),
+        disabled: Boolean(g?.disabled),
+        minimized: Boolean(g?.minimized),
+      })),
     });
   } catch {
     return `${nodes.length}:${connections.length}:${Date.now()}`;
   }
 };
+
+const materializeInternalNodeId = (customNodeId: string, internalNodeId: string): string =>
+  `cn:${String(customNodeId ?? '')}:${String(internalNodeId ?? '')}`;
+
+const materializeInternalGroupId = (customNodeId: string, groupId: string): string =>
+  `cn:${String(customNodeId ?? '')}:group:${String(groupId ?? '')}`;
 
 const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefinition['process'] => {
   const runtimeByNodeId = new Map<
@@ -45,6 +59,7 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     {
       runtime: NodeRuntime;
       signature: string;
+      variableStore?: NodeVariableStore;
     }
   >();
 
@@ -64,26 +79,60 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     const signature = buildInternalSignature(internal);
 
     const nodeId = String(context?.nodeId ?? '');
+    const variableStore = context?.variableStore;
     let entry = runtimeByNodeId.get(nodeId);
-    if (!entry || entry.signature !== signature) {
-      const runtime = new NodeRuntime(nodeRegistry);
-      const nodes: NodeInstance[] = (internal.nodes ?? []).map((n) => ({
-        ...n,
-        id: String(n?.id ?? ''),
-        type: String(n?.type ?? ''),
-        config: { ...(n?.config ?? {}) },
-        inputValues: { ...(n?.inputValues ?? {}) },
-        outputValues: {},
-      }));
+    if (!entry || entry.signature !== signature || entry.variableStore !== variableStore) {
+      const runtime = new NodeRuntime(nodeRegistry, { variableStore });
+      const internalGroups = Array.isArray(internal.groups) ? internal.groups : [];
+      const internalGroupIds = new Set(
+        internalGroups.map((group) => String(group?.id ?? '')).filter(Boolean)
+      );
+      const nodes: NodeInstance[] = (internal.nodes ?? []).map((n) => {
+        const id = String(n?.id ?? '');
+        const type = String(n?.type ?? '');
+        const config = { ...(n?.config ?? {}) };
+        const rawGroupId = String(config.groupId ?? '');
+        if ((type === 'group-gate' || type === 'group-proxy') && internalGroupIds.has(rawGroupId)) {
+          config.groupId = materializeInternalGroupId(nodeId, rawGroupId);
+        }
+        return {
+          ...n,
+          id: materializeInternalNodeId(nodeId, id),
+          type,
+          config,
+          inputValues: { ...(n?.inputValues ?? {}) },
+          outputValues: {},
+        };
+      });
       const connections: Connection[] = (internal.connections ?? []).map((c) => ({
         ...c,
-        sourceNodeId: String(c?.sourceNodeId ?? ''),
+        sourceNodeId: materializeInternalNodeId(nodeId, String(c?.sourceNodeId ?? '')),
         sourcePortId: String(c?.sourcePortId ?? ''),
-        targetNodeId: String(c?.targetNodeId ?? ''),
+        targetNodeId: materializeInternalNodeId(nodeId, String(c?.targetNodeId ?? '')),
         targetPortId: String(c?.targetPortId ?? ''),
       }));
-      runtime.loadGraph({ nodes, connections });
-      entry = { runtime, signature };
+      const groups = internalGroups.flatMap((group) => {
+        const id = String(group?.id ?? '');
+        if (!id) return [];
+        const parentId = group?.parentId ? String(group.parentId) : '';
+        return [
+          {
+            id: materializeInternalGroupId(nodeId, id),
+            parentId:
+              parentId && internalGroupIds.has(parentId)
+                ? materializeInternalGroupId(nodeId, parentId)
+                : null,
+            name: String(group?.name ?? 'Group'),
+            nodeIds: (group?.nodeIds ?? []).map((innerId) =>
+              materializeInternalNodeId(nodeId, String(innerId))
+            ),
+            disabled: Boolean(group?.disabled),
+            minimized: Boolean(group?.minimized),
+          },
+        ];
+      });
+      runtime.loadGraph({ nodes, connections, ...(groups.length > 0 ? { groups } : {}) });
+      entry = { runtime, signature, variableStore };
       runtimeByNodeId.set(nodeId, entry);
     }
 
@@ -95,7 +144,12 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
       const binding = port?.binding ?? null;
       if (!portKey || !binding?.nodeId || !binding?.portId) continue;
       if (!Object.prototype.hasOwnProperty.call(inputs ?? {}, portKey)) continue;
-      runtime.applyOverride(String(binding.nodeId), 'input', String(binding.portId), inputs[portKey]);
+      runtime.applyOverride(
+        materializeInternalNodeId(nodeId, String(binding.nodeId)),
+        'input',
+        String(binding.portId),
+        inputs[portKey]
+      );
     }
 
     runtime.compileNow();
@@ -106,7 +160,7 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
       const portKey = String(port?.portKey ?? '');
       const binding = port?.binding ?? null;
       if (!portKey || !binding?.nodeId || !binding?.portId) continue;
-      const node = runtime.getNode(String(binding.nodeId));
+      const node = runtime.getNode(materializeInternalNodeId(nodeId, String(binding.nodeId)));
       outputs[portKey] = node?.outputValues?.[String(binding.portId)];
     }
 

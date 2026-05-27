@@ -2,6 +2,7 @@
 import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
 import type { CustomNodeDefinition, CustomNodePort } from './types';
 import { readCustomNodeState, writeCustomNodeState } from './instance';
+import { cloneGraphGroups } from '$lib/components/nodes/node-canvas/custom-nodes/custom-node-graph';
 
 const LEGACY_NODE_TYPE_ALIASES: Record<string, string> = {
   number: 'float',
@@ -161,6 +162,10 @@ export function normalizeLegacyCustomNodeGraph(graph: GraphState): GraphState {
   return {
     nodes: nextNodes,
     connections: [...migratedConnections, ...loaderLinks],
+    ...(() => {
+      const groups = cloneGraphGroups(graph);
+      return groups.length > 0 ? { groups } : {};
+    })(),
   };
 }
 

@@ -12,6 +12,7 @@ import type { CustomNodeInstanceState } from './instance';
 import type { CustomNodeDefinition, CustomNodePort } from './types';
 import { customNodeType } from './custom-node-type';
 import { dependenciesForDefinition } from './deps';
+import { cloneGraphGroups } from '$lib/components/nodes/node-canvas/custom-nodes/custom-node-graph';
 
 export type CustomNodeFileV1 = {
   kind: 'shugu-custom-node';
@@ -56,6 +57,7 @@ function asPortType(value: unknown): PortType {
 function cloneGraphForFile(graph: GraphState): GraphState {
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph.connections) ? graph.connections : [];
+  const groups = cloneGraphGroups(graph);
   return {
     nodes: nodes.flatMap((node) => {
       const record = asRecord(node);
@@ -95,6 +97,7 @@ function cloneGraphForFile(graph: GraphState): GraphState {
         },
       ];
     }),
+    ...(groups.length > 0 ? { groups } : {}),
   };
 }
 
@@ -214,6 +217,10 @@ export function parseCustomNodeFile(payload: unknown): CustomNodeFileV1 | null {
           },
         ];
       }),
+      ...(() => {
+        const groups = cloneGraphGroups(templateRaw as GraphState);
+        return groups.length > 0 ? { groups } : {};
+      })(),
     };
 
     const portsRaw = Array.isArray(item.ports) ? item.ports : [];
@@ -247,6 +254,7 @@ export function parseCustomNodeFile(payload: unknown): CustomNodeFileV1 | null {
 function rewriteGraphDeep(graph: GraphState, idMap: Map<string, string>): GraphState {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
+  const groups = cloneGraphGroups(graph);
 
   const nextNodes: NodeInstance[] = nodes.map((node) => {
     let type = String(node.type ?? '');
@@ -281,6 +289,7 @@ function rewriteGraphDeep(graph: GraphState, idMap: Map<string, string>): GraphS
   return {
     nodes: nextNodes,
     connections: connections.map((c) => ({ ...c })),
+    ...(groups.length > 0 ? { groups } : {}),
   };
 }
 

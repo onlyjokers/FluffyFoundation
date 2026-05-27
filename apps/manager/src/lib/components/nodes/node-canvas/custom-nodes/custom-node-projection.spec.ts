@@ -80,6 +80,66 @@ test('buildCustomNodeProjectionGraph creates view-prefixed nodes and connections
   assert.ok(isCustomNodeProjectionId(String(projection.connections[0].targetNodeId)));
 });
 
+test('buildCustomNodeProjectionGraph projects internal custom-node group metadata', () => {
+  const customNode: NodeInstance = {
+    id: 'custom-1',
+    type: 'custom:def-1',
+    position: { x: 100, y: 200 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const definition: CustomNodeDefinition = {
+    definitionId: 'def-1',
+    name: 'Projected',
+    template: {
+      nodes: [
+        {
+          id: 'inner-a',
+          type: 'number',
+          position: { x: 10, y: 20 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+      groups: [
+        {
+          id: 'group:inner',
+          parentId: null,
+          name: 'Inner',
+          nodeIds: ['inner-a'],
+          disabled: false,
+          minimized: false,
+          runtimeActive: false,
+        },
+      ],
+    },
+    ports: [],
+  };
+  const state: CustomNodeInstanceState = {
+    definitionId: 'def-1',
+    groupId: 'group:owner',
+    role: 'mother',
+    manualGate: true,
+    internal: definition.template,
+  };
+
+  const projection = buildCustomNodeProjectionGraph({ customNode, state, definition });
+
+  assert.deepEqual(projection.groups, [
+    {
+      id: 'view:custom:custom-1:group:group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: ['view:custom:custom-1:inner-a'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+});
+
 test('parseCustomNodeProjectionNodeId returns owner and internal ids', () => {
   assert.deepEqual(parseCustomNodeProjectionNodeId('view:custom:custom-1:input-proxy'), {
     customNodeId: 'custom-1',
@@ -294,6 +354,16 @@ test('writeCustomNodeProjectionValue patches the owner internal graph through se
             },
           ],
           connections: [],
+          groups: [
+            {
+              id: 'group:inner',
+              parentId: null,
+              name: 'Inner',
+              nodeIds: ['inner'],
+              disabled: false,
+              minimized: false,
+            },
+          ],
         },
       },
     },
@@ -341,6 +411,69 @@ test('writeCustomNodeProjectionValue patches the owner internal graph through se
   ]);
 });
 
+test('writeCustomNodeProjectionValue preserves internal groups while patching a projected node', () => {
+  const owner: NodeInstance = {
+    id: 'custom-1',
+    type: 'custom:def-1',
+    position: { x: 0, y: 0 },
+    config: {
+      customNode: {
+        definitionId: 'def-1',
+        groupId: 'group-1',
+        role: 'mother',
+        manualGate: true,
+        internal: {
+          nodes: [
+            {
+              id: 'inner',
+              type: 'number',
+              position: { x: 0, y: 0 },
+              config: { value: 1 },
+              inputValues: {},
+              outputValues: {},
+            },
+          ],
+          connections: [],
+          groups: [
+            {
+              id: 'group:inner',
+              parentId: null,
+              name: 'Inner',
+              nodeIds: ['inner'],
+              disabled: false,
+              minimized: false,
+            },
+          ],
+        },
+      },
+    },
+    inputValues: {},
+    outputValues: {},
+  };
+  const updates: Array<{ nodeId: string; config: Record<string, unknown> }> = [];
+
+  const ok = writeCustomNodeProjectionValue({
+    projectionNodeId: 'view:custom:custom-1:inner',
+    kind: 'config',
+    key: 'value',
+    value: 3,
+    getOwnerNode: (nodeId) => (nodeId === 'custom-1' ? owner : null),
+    updateOwnerConfig: (nodeId, config) => updates.push({ nodeId, config }),
+  });
+
+  assert.equal(ok, true);
+  assert.deepEqual(updates[0]?.config.customNode?.internal?.groups, [
+    {
+      id: 'group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: ['inner'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+});
+
 test('appendCustomNodeProjectionNode inserts a node into owner internal graph with relative position', () => {
   const owner: NodeInstance = {
     id: 'custom-1',
@@ -380,6 +513,64 @@ test('appendCustomNodeProjectionNode inserts a node into owner internal graph wi
   assert.deepEqual(nodes?.[0]?.position, { x: 60, y: 60 });
 });
 
+test('appendCustomNodeProjectionNode preserves existing internal groups', () => {
+  const owner: NodeInstance = {
+    id: 'custom-1',
+    type: 'custom:def-1',
+    position: { x: 100, y: 200 },
+    config: {
+      customNode: {
+        definitionId: 'def-1',
+        groupId: 'group-1',
+        role: 'mother',
+        manualGate: true,
+        internal: {
+          nodes: [],
+          connections: [],
+          groups: [
+            {
+              id: 'group:inner',
+              parentId: null,
+              name: 'Inner',
+              nodeIds: [],
+              disabled: false,
+              minimized: false,
+            },
+          ],
+        },
+      },
+    },
+    inputValues: {},
+    outputValues: {},
+  };
+  const updates: Array<{ nodeId: string; config: Record<string, unknown> }> = [];
+
+  appendCustomNodeProjectionNode({
+    ownerNodeId: 'custom-1',
+    node: {
+      id: 'inner-new',
+      type: 'float',
+      position: { x: 160, y: 260 },
+      config: {},
+      inputValues: {},
+      outputValues: {},
+    },
+    getOwnerNode: (nodeId) => (nodeId === 'custom-1' ? owner : null),
+    updateOwnerConfig: (nodeId, config) => updates.push({ nodeId, config }),
+  });
+
+  assert.deepEqual(updates[0]?.config.customNode?.internal?.groups, [
+    {
+      id: 'group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: [],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
+});
+
 test('translateCustomNodeProjectionNodePosition writes projected node movement back to internal relative position', () => {
   const owner: NodeInstance = {
     id: 'custom-1',
@@ -403,6 +594,16 @@ test('translateCustomNodeProjectionNodePosition writes projected node movement b
             },
           ],
           connections: [],
+          groups: [
+            {
+              id: 'group:inner',
+              parentId: null,
+              name: 'Inner',
+              nodeIds: ['inner'],
+              disabled: false,
+              minimized: false,
+            },
+          ],
         },
       },
     },
@@ -421,6 +622,16 @@ test('translateCustomNodeProjectionNodePosition writes projected node movement b
   assert.equal(ok, true);
   const nodes = updates[0]?.config.customNode?.internal?.nodes as NodeInstance[] | undefined;
   assert.deepEqual(nodes?.[0]?.position, { x: 45, y: 50 });
+  assert.deepEqual(updates[0]?.config.customNode?.internal?.groups, [
+    {
+      id: 'group:inner',
+      parentId: null,
+      name: 'Inner',
+      nodeIds: ['inner'],
+      disabled: false,
+      minimized: false,
+    },
+  ]);
 });
 
 test('appendCustomNodeProjectionConnection writes same-owner projection connections into internal graph', () => {

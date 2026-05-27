@@ -20,6 +20,16 @@ type CustomNodeInstanceState = {
   internal: GraphState;
 };
 
+type GraphGroup = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  nodeIds: string[];
+  disabled: boolean;
+  minimized?: boolean;
+  runtimeActive?: boolean;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -48,7 +58,11 @@ const readCustomNodeState = (config: Record<string, unknown>): CustomNodeInstanc
   const internalRaw = asRecord(record.internal);
   const internal =
     Array.isArray(internalRaw.nodes) && Array.isArray(internalRaw.connections)
-      ? ({ nodes: internalRaw.nodes, connections: internalRaw.connections } as GraphState)
+      ? ({
+          nodes: internalRaw.nodes,
+          connections: internalRaw.connections,
+          ...(Array.isArray(internalRaw.groups) ? { groups: internalRaw.groups } : {}),
+        } as GraphState)
       : null;
 
   if (!definitionId || !groupId || !role || !internal) return null;
@@ -58,6 +72,26 @@ const readCustomNodeState = (config: Record<string, unknown>): CustomNodeInstanc
 const cloneGraphForCompile = (graph: GraphState): GraphState => {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
+  const groups = Array.isArray((graph as GraphState & { groups?: GraphGroup[] })?.groups)
+    ? ((graph as GraphState & { groups?: GraphGroup[] }).groups ?? []).flatMap((group) => {
+        const id = getString(group?.id, '');
+        if (!id) return [];
+        return [
+          {
+            id,
+            parentId: getString(group?.parentId, '') || null,
+            name: getString(group?.name, 'Group'),
+            nodeIds: (Array.isArray(group?.nodeIds) ? group.nodeIds : [])
+              .map(String)
+              .filter(Boolean),
+            disabled: Boolean(group?.disabled),
+            minimized: Boolean(group?.minimized),
+            runtimeActive:
+              typeof group?.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+          },
+        ];
+      })
+    : [];
   return {
     nodes: nodes.flatMap((node) => {
       const record = asRecord(node);
@@ -97,6 +131,7 @@ const cloneGraphForCompile = (graph: GraphState): GraphState => {
         },
       ];
     }),
+    ...(groups.length > 0 ? { groups } : {}),
   };
 };
 
@@ -202,6 +237,9 @@ export function expandCustomNodesForCompile(
 
     const customIds = new Set(customNodes.map((node) => String(node.id ?? '')).filter(Boolean));
     const remainingNodes = nodes.filter((node) => !customIds.has(String(node.id ?? '')));
+    const currentGroups = Array.isArray((current as GraphState & { groups?: GraphGroup[] }).groups)
+      ? ((current as GraphState & { groups?: GraphGroup[] }).groups ?? [])
+      : [];
 
     const incomingByTarget = new Map<string, Connection[]>();
     const outgoingBySource = new Map<string, Connection[]>();
@@ -223,6 +261,16 @@ export function expandCustomNodesForCompile(
       const tgt = String(connection.targetNodeId ?? '');
       return !(customIds.has(src) || customIds.has(tgt));
     });
+    const nextGroups: GraphGroup[] = currentGroups.map((group) => ({
+      id: String(group.id ?? ''),
+      parentId: group.parentId ? String(group.parentId) : null,
+      name: String(group.name ?? 'Group'),
+      nodeIds: (group.nodeIds ?? []).map(String).filter((id) => !customIds.has(id)),
+      disabled: Boolean(group.disabled),
+      minimized: Boolean(group.minimized),
+      runtimeActive:
+        typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+    })).filter((group) => group.id);
 
     for (const node of customNodes) {
       const instanceId = String(node.id ?? '');
@@ -246,20 +294,62 @@ export function expandCustomNodesForCompile(
       const internalConnections = Array.isArray(internalGraph?.connections)
         ? internalGraph.connections
         : [];
+      const internalGroups = Array.isArray((internalGraph as GraphState & { groups?: GraphGroup[] }).groups)
+        ? ((internalGraph as GraphState & { groups?: GraphGroup[] }).groups ?? [])
+        : [];
+      const internalGroupIds = new Set(
+        internalGroups.map((group) => getString(group?.id, '')).filter(Boolean)
+      );
       const inputValuesByInternalNode = new Map<string, Record<string, unknown>>();
       for (const binding of publicInputBindings(node, def, internalGraph)) {
         const patch = inputValuesByInternalNode.get(binding.nodeId) ?? {};
         patch[binding.portId] = binding.value;
         inputValuesByInternalNode.set(binding.nodeId, patch);
       }
+      const effectiveInternalGraph: GraphState = {
+        ...internalGraph,
+        nodes: internalNodes.map((inner) => {
+          const innerId = getString(asRecord(inner).id, '');
+          const patch = innerId ? inputValuesByInternalNode.get(innerId) : undefined;
+          if (!patch) return inner;
+          return {
+            ...inner,
+            inputValues: { ...asRecord(inner.inputValues), ...patch },
+          } as NodeInstance;
+        }),
+        connections: internalConnections,
+      };
+      const materializedGroupId = (groupId: string): string =>
+        `cn:${instanceId}:group:${String(groupId ?? '')}`;
 
-      for (const inner of internalNodes) {
+      for (const group of internalGroups) {
+        const groupId = getString(group?.id, '');
+        if (!groupId) continue;
+        const parentId = getString(group?.parentId, '');
+        nextGroups.push({
+          id: materializedGroupId(groupId),
+          parentId: parentId && internalGroupIds.has(parentId) ? materializedGroupId(parentId) : null,
+          name: getString(group?.name, 'Group'),
+          nodeIds: (Array.isArray(group?.nodeIds) ? group.nodeIds : [])
+            .map((nodeId) => materializeInternalNodeId(instanceId, String(nodeId)))
+            .filter(Boolean),
+          disabled: Boolean(group?.disabled),
+          minimized: Boolean(group?.minimized),
+        });
+      }
+
+      for (const inner of effectiveInternalGraph.nodes ?? []) {
         const record = asRecord(inner);
         const innerId = getString(record.id, '');
         const type = getString(record.type, '');
         if (!innerId || !type) continue;
         const position = asRecord(record.position);
         const inputValuePatch = inputValuesByInternalNode.get(innerId) ?? {};
+        const config = { ...asRecord(record.config) };
+        const rawGroupId = getString(config.groupId, '');
+        if ((type === 'group-gate' || type === 'group-proxy') && internalGroupIds.has(rawGroupId)) {
+          config.groupId = materializedGroupId(rawGroupId);
+        }
         nextNodes.push({
           ...record,
           id: materializeInternalNodeId(instanceId, innerId),
@@ -268,7 +358,7 @@ export function expandCustomNodesForCompile(
             x: Number(position.x ?? 0),
             y: Number(position.y ?? 0),
           },
-          config: { ...asRecord(record.config) },
+          config,
           inputValues: { ...asRecord(record.inputValues), ...inputValuePatch },
           outputValues: {},
         } as NodeInstance);
@@ -345,6 +435,7 @@ export function expandCustomNodesForCompile(
     current = {
       nodes: nextNodes,
       connections: dedupeConnections(nextConnections),
+      ...(nextGroups.length > 0 ? { groups: nextGroups } : {}),
     };
   }
 
@@ -364,6 +455,9 @@ export function stripGroupProxyNodes(
       .map((node) => String(node.id ?? ''))
       .filter(Boolean)
   );
+  const groups = Array.isArray((graph as GraphState & { groups?: GraphGroup[] })?.groups)
+    ? ((graph as GraphState & { groups?: GraphGroup[] }).groups ?? [])
+    : [];
   if (proxyIds.size === 0) return graph;
 
   const incomingByTarget = new Map<string, Connection[]>();
@@ -416,7 +510,11 @@ export function stripGroupProxyNodes(
     }
   }
 
-  return { nodes: nextNodes, connections: dedupeConnections(rewired) };
+  return {
+    nodes: nextNodes,
+    connections: dedupeConnections(rewired),
+    ...(groups.length > 0 ? { groups } : {}),
+  };
 }
 
 export function compileGraphForPatch(

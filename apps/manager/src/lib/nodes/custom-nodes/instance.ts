@@ -6,6 +6,7 @@
  */
 import type { GraphState, NodeInstance } from '$lib/nodes/types';
 import { asRecord, getBoolean, getString } from '$lib/utils/value-guards';
+import { cloneGraphGroups, cloneGraphState } from '$lib/components/nodes/node-canvas/custom-nodes/custom-node-graph';
 
 export type CustomNodeRole = 'mother' | 'child';
 
@@ -34,7 +35,7 @@ export function readCustomNodeState(config: Record<string, unknown>): CustomNode
   const internalRaw = asRecord(rawRecord.internal);
   const internal =
     Array.isArray(internalRaw.nodes) && Array.isArray(internalRaw.connections)
-      ? ({ nodes: internalRaw.nodes, connections: internalRaw.connections } as GraphState)
+      ? cloneGraphState(internalRaw as GraphState)
       : null;
 
   if (!definitionId || !groupId || !role || !internal) return null;
@@ -69,6 +70,7 @@ export function generateCustomNodeGroupId(): string {
 export function cloneInternalGraphForNewInstance(graph: GraphState, groupId?: string): GraphState {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const connections = Array.isArray(graph?.connections) ? graph.connections : [];
+  const groups = cloneGraphGroups(graph);
   const targetGroupId = typeof groupId === 'string' && groupId ? String(groupId) : '';
 
   const clonedNodes = nodes.map((node) => {
@@ -109,5 +111,6 @@ export function cloneInternalGraphForNewInstance(graph: GraphState, groupId?: st
   return {
     nodes: clonedNodes,
     connections: connections.map((conn) => ({ ...conn })),
+    ...(groups.length > 0 ? { groups } : {}),
   };
 }

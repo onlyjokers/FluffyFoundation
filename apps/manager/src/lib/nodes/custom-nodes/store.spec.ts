@@ -186,3 +186,108 @@ test('custom node shell migrates legacy client-object internals before runtime l
     unregisterCustomNodeDefinition(definitionId);
   }
 });
+
+test('custom node shell consumes ClientUI interactions using materialized internal ids', () => {
+  const definitionId = 'test-client-ui-materialized-ids';
+  const internal = {
+    nodes: [
+      {
+        id: 'button',
+        type: 'client-button',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { display: true },
+        outputValues: {},
+      },
+      {
+        id: 'setter',
+        type: 'set-boolean-variable',
+        position: { x: 180, y: 0 },
+        config: { name: 'pressed', defaultValue: false, mode: 'latchTrue' },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'getter',
+        type: 'get-boolean-variable',
+        position: { x: 360, y: 0 },
+        config: { name: 'pressed', defaultValue: false },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'button-to-setter',
+        sourceNodeId: 'button',
+        sourcePortId: 'pressed',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+    ],
+  };
+  let pressed = true;
+
+  registerDefaultNodeDefinitions(nodeRegistry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    getSensorForClientId: () => null,
+    getImageForClientId: () => null,
+    executeCommand: () => undefined,
+    executeCommandForClientId: () => undefined,
+    clientUi: {
+      consumeClientButtonPressed: (nodeId) => {
+        if (nodeId !== 'cn:custom-1:button') return false;
+        const current = pressed;
+        pressed = false;
+        return current;
+      },
+    },
+  });
+  registerCustomNodeDefinition({
+    definitionId,
+    name: 'ClientUI Custom',
+    template: internal,
+    ports: [
+      {
+        portKey: 'value',
+        label: 'Value',
+        side: 'output',
+        type: 'boolean',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'getter', portId: 'value' },
+      },
+    ],
+  });
+
+  try {
+    const def = nodeRegistry.get(customNodeType(definitionId));
+    const config = writeCustomNodeState(
+      {},
+      {
+        definitionId,
+        groupId: 'group-client-ui',
+        role: 'mother',
+        manualGate: true,
+        internal,
+      }
+    );
+
+    def?.process({ gate: true }, config, {
+      nodeId: 'custom-1',
+      time: 0,
+      deltaTime: 16,
+    });
+    const outputs = def?.process({ gate: true }, config, {
+      nodeId: 'custom-1',
+      time: 16,
+      deltaTime: 16,
+    });
+
+    assert.equal(outputs?.value, true);
+  } finally {
+    unregisterCustomNodeDefinition(definitionId);
+  }
+});
