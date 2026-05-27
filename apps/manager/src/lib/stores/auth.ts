@@ -58,7 +58,7 @@ function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>({
     user: null,
     error: null,
-    isRestoring: browser,
+    isRestoring: false,
     remember: true,
   });
   let sessionRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -151,10 +151,6 @@ function createAuthStore() {
   const clearError = () => {
     update((state) => ({ ...state, error: null }));
   };
-
-  if (browser) {
-    void restore();
-  }
 
   return { subscribe, login, logout, restore, clearError };
 }

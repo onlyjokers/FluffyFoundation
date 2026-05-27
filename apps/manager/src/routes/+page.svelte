@@ -31,6 +31,7 @@ Purpose: Classic Manager control and authoring route.
       savedUrl: localStorage.getItem('shugu-server-url'),
       allowInsecureHttp: allowInsecureHttpManagerControl,
     });
+    void auth.restore(serverUrl);
 
     try {
       performanceMode = localStorage.getItem(PERFORMANCE_MODE_STORAGE_KEY) === '1';

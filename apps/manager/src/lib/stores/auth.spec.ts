@@ -21,3 +21,7 @@ test('manager auth source keeps long-lived sessions fresh while the Manager stay
   assert.match(authSource, /setInterval/);
   assert.match(authSource, /api\/manager\/auth\/session/);
 });
+
+test('manager auth source does not restore from stale localStorage during module import', () => {
+  assert.doesNotMatch(authSource, /if\s*\(browser\)\s*\{\s*void restore\(\);\s*\}/);
+});
