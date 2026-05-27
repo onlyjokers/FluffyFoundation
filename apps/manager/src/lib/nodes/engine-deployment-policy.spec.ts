@@ -21,6 +21,17 @@ test('patch deployment policy allows pulse conversion nodes as local patch logic
   assert.doesNotThrow(() => assertPatchDeployableNodeType('pulse-to-boolean'));
 });
 
+test('patch deployment policy allows group gates as runtime group controls', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('group-gate'));
+});
+
+test('patch deployment policy rejects group proxy canvas interface nodes', () => {
+  assert.throws(
+    () => assertPatchDeployableNodeType('group-proxy'),
+    /Patch contains non-deployable node type: group-proxy/
+  );
+});
+
 test('patch deployment policy rejects the legacy Aliyun TTS audio source node', () => {
   assert.throws(
     () => assertPatchDeployableNodeType('aliyun-tts'),
