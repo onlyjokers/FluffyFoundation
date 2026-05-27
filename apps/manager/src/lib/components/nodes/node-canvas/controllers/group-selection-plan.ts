@@ -18,6 +18,7 @@ type PlanGroupFromSelectionOptions = {
 type PlanGroupFromSelectionResult = {
   group: NodeGroup | null;
   deniedNodeIds: string[];
+  reparentGroups: Array<{ groupId: string; parentId: string | null }>;
 };
 
 function buildGroupMembership(groups: NodeGroup[]) {
@@ -72,7 +73,7 @@ export function planGroupFromSelection(
       const type = String(nodeById.get(id)?.type ?? '');
       return !isGroupDecorationNodeType(type);
     });
-  if (selected.length === 0) return { group: null, deniedNodeIds: [] };
+  if (selected.length === 0) return { group: null, deniedNodeIds: [], reparentGroups: [] };
 
   const { byId, groupNodeSets, nodeToGroupIds } = buildGroupMembership(groups);
   const getDepth = createDepthResolver(byId);
@@ -98,10 +99,28 @@ export function planGroupFromSelection(
   let parentId: string | null = null;
   let parentDepth = -1;
   let parentSize = Number.POSITIVE_INFINITY;
+  let wrapTargetGroupId: string | null = null;
+  let wrapTargetDepth = -1;
+  let wrapTargetSize = Number.POSITIVE_INFINITY;
+  const selectedSet = new Set(selected.map(String));
   for (const group of groups) {
     const groupId = String(group.id);
     const nodeIds = groupNodeSets.get(groupId);
     if (!nodeIds) continue;
+    const fullySelected =
+      nodeIds.size > 0 &&
+      Array.from(nodeIds).every((id) => selectedSet.has(String(id))) &&
+      selected.every((id) => nodeIds.has(String(id)));
+    if (fullySelected) {
+      const depth = getDepth(groupId);
+      const size = nodeIds.size;
+      if (depth > wrapTargetDepth || (depth === wrapTargetDepth && size < wrapTargetSize)) {
+        wrapTargetGroupId = groupId;
+        wrapTargetDepth = depth;
+        wrapTargetSize = size;
+      }
+      continue;
+    }
     if (!selected.every((id) => nodeIds.has(String(id)))) continue;
 
     const depth = getDepth(groupId);
@@ -113,22 +132,35 @@ export function planGroupFromSelection(
     }
   }
 
+  if (wrapTargetGroupId) {
+    const wrapTarget = byId.get(wrapTargetGroupId) ?? null;
+    parentId = wrapTarget?.parentId && byId.has(String(wrapTarget.parentId)) ? String(wrapTarget.parentId) : null;
+  }
+
   const deniedNodeIds: string[] = [];
   const ids = new Set<string>();
   for (const nodeId of selected) {
     const primary = getPrimaryGroupIdForNode(nodeId);
-    const allowed = parentId ? primary === parentId : primary === null;
+    const allowed = wrapTargetGroupId
+      ? primary === wrapTargetGroupId
+      : parentId
+        ? primary === parentId
+        : primary === null;
     if (!allowed) {
       deniedNodeIds.push(nodeId);
       continue;
     }
     ids.add(nodeId);
   }
-  if (ids.size === 0) return { group: null, deniedNodeIds };
+  if (ids.size === 0) return { group: null, deniedNodeIds, reparentGroups: [] };
 
   const isEligibleLoopNode = (nodeId: string): boolean => {
     const primary = getPrimaryGroupIdForNode(nodeId);
-    return parentId ? primary === parentId : primary === null;
+    return wrapTargetGroupId
+      ? primary === wrapTargetGroupId
+      : parentId
+        ? primary === parentId
+        : primary === null;
   };
   for (const loop of localLoops) {
     if (!loop?.nodeIds?.length) continue;
@@ -146,10 +178,11 @@ export function planGroupFromSelection(
         : `Group ${groups.filter((group) => !group.parentId).length + 1}`;
 
   const nodeIds = Array.from(ids);
+  const groupId = createId();
 
   return {
     group: {
-      id: createId(),
+      id: groupId,
       parentId,
       name: nextName,
       nodeIds,
@@ -194,5 +227,8 @@ export function planGroupFromSelection(
         : {}),
     },
     deniedNodeIds,
+    reparentGroups: wrapTargetGroupId
+      ? [{ groupId: wrapTargetGroupId, parentId: groupId }]
+      : [],
   };
 }

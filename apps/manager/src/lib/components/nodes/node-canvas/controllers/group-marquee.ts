@@ -15,6 +15,13 @@ export type GroupMarqueeControllerOptions = {
   marqueeRect: Writable<MarqueeRect | null>;
   getContainer: () => HTMLDivElement | null;
   getAdapter: () => GraphViewAdapter | null;
+  getGroupFrames?: () => Array<{
+    group?: { nodeIds?: unknown[] };
+    left?: number;
+    top?: number;
+    width?: number;
+    height?: number;
+  }>;
   setSelectedNodeIds: (ids: Set<string>) => void;
   onSelectionComplete: () => void;
 };
@@ -82,7 +89,30 @@ export function createGroupMarqueeController(opts: GroupMarqueeControllerOptions
         right: (selRight - t.tx) / t.k,
         bottom: (selBottom - t.ty) / t.k,
       };
-      opts.setSelectedNodeIds(new Set(adapter.getNodesInRect(rect).map(String)));
+      const selectedIds = new Set(adapter.getNodesInRect(rect).map(String));
+      for (const frame of opts.getGroupFrames?.() ?? []) {
+        const left = Number(frame.left ?? 0);
+        const top = Number(frame.top ?? 0);
+        const width = Number(frame.width ?? 0);
+        const height = Number(frame.height ?? 0);
+        const right = left + width;
+        const bottom = top + height;
+        const contained =
+          Number.isFinite(left) &&
+          Number.isFinite(top) &&
+          Number.isFinite(right) &&
+          Number.isFinite(bottom) &&
+          left >= rect.left &&
+          right <= rect.right &&
+          top >= rect.top &&
+          bottom <= rect.bottom;
+        if (!contained) continue;
+        for (const nodeId of frame.group?.nodeIds ?? []) {
+          const id = String(nodeId ?? '');
+          if (id) selectedIds.add(id);
+        }
+      }
+      opts.setSelectedNodeIds(selectedIds);
       opts.onSelectionComplete();
       opts.marqueeRect.set(null);
     };

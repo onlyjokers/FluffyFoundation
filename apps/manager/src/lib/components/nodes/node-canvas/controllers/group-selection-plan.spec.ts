@@ -68,7 +68,7 @@ test('planGroupFromSelection denies cross-group selections', () => {
   const result = planGroupFromSelection({
     selectionNodeIds: ['a', 'b'],
     graph: graph(['a', 'b']),
-    groups: [group('existing', ['a'])],
+    groups: [group('existing', ['a', 'c'])],
     localLoops: [],
     createId: () => 'group:new',
   });
@@ -108,4 +108,20 @@ test('planGroupFromSelection nests under the smallest containing group', () => {
 
   assert.equal(result.group?.parentId, 'parent');
   assert.equal(result.group?.name, 'Sub Group 1');
+});
+
+test('planGroupFromSelection can wrap a fully selected root group in a new parent group', () => {
+  const result = planGroupFromSelection({
+    selectionNodeIds: ['a', 'b'],
+    graph: graph(['a', 'b']),
+    groups: [group('existing', ['a', 'b'])],
+    localLoops: [],
+    createId: () => 'group:outer',
+  });
+
+  assert.equal(result.group?.id, 'group:outer');
+  assert.equal(result.group?.parentId, null);
+  assert.deepEqual(result.group?.nodeIds, ['a', 'b']);
+  assert.deepEqual(result.reparentGroups, [{ groupId: 'existing', parentId: 'group:outer' }]);
+  assert.deepEqual(result.deniedNodeIds, []);
 });

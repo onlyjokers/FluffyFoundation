@@ -488,8 +488,16 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     if (!result.group) return;
 
     const group = result.group;
+    const reparentByGroupId = new Map(
+      result.reparentGroups.map((entry) => [String(entry.groupId), entry.parentId] as const)
+    );
+    const nextGroups = groups.map((existing) =>
+      reparentByGroupId.has(String(existing.id))
+        ? { ...existing, parentId: reparentByGroupId.get(String(existing.id)) ?? null }
+        : existing
+    );
 
-    nodeGroups.set([...groups, group]);
+    nodeGroups.set([...nextGroups, group]);
     recomputeDisabledNodes();
 
     groupSelectionNodeIds.set(new Set());
@@ -794,6 +802,7 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
     marqueeRect,
     getContainer: opts.getContainer,
     getAdapter: opts.getAdapter,
+    getGroupFrames: () => get(groupFrames),
     setSelectedNodeIds: (ids) => groupSelectionNodeIds.set(ids),
     onSelectionComplete: () => {
       scheduleHighlight();
