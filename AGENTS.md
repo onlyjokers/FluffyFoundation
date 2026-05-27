@@ -40,44 +40,18 @@
 - When touching networking or permissions, verify both HTTPS and localhost flows (`serverUrl` handling in client startup).
 - Mind user-gesture requirements on mobile (audio/vibration); initialize such features inside click/tap handlers.
 
-## Classic Manager Topology Rollback
-- When the task is to remove Root or "everyone can become manager" behavior, treat the target topology as
-  `Manager -> Server -> Client/Display`.
-- `Manager` is the only human control and authoring surface. `Client` and `Display` are runtime endpoints, not
-  control-plane owners. `Server` routes, validates, and fans out commands, but does not introduce Root authority.
-- Do not preserve `/manager/root` as a product route when executing this rollback. Remove or retire Root-facing UI,
-  Root authoring stores, Root-only navigation, Root stop-all authority, and Root-specific docs/evidence claims.
-- Remove client-as-controller transfer behavior from the active product path. Clients may report sensors, readiness,
-  media/runtime state, and transfer-response remnants only while being deleted or migrated; they must not gain
-  manager-like mutation authority.
-- Preserve working client, display, media, sensor, local display bridge, and server transport behavior unless a change
-  is required to remove Root/control-transfer coupling.
-- Before editing any symbol for this rollback, run GitNexus impact analysis as required below. If impact is HIGH or
-  CRITICAL, stop and report the blast radius before continuing.
-- Use `.harness/goals/FF-classic-manager-rollback-contract.md` as the acceptance contract for this rollback. Do not
-  claim completion until its validation and stop-condition requirements are satisfied.
-
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **FluffyFoundation** (16389 symbols, 27529 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **FluffyFoundation** (20490 symbols, 38079 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
-## Always Do
+## GitNexus Risk Handling
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+- GitNexus HIGH/CRITICAL impact is not a reason to avoid a necessary change.
+- Treat HIGH/CRITICAL as a signal to report the blast radius, make the smallest coherent edit, and verify the affected runtime paths carefully.
+- Do not stop at "too risky to change" when the root cause is in a high-impact symbol; proceed deliberately unless the user explicitly asks for a safer alternative first.
 
 ## Resources
 
