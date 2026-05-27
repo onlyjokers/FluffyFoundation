@@ -1,8 +1,13 @@
 /**
  * Purpose: Manager-side transport for asset-first TTS and audio Drop Box nodes.
  */
-import { assetsStore } from '$lib/stores/assets';
 import type { AudioAssetNodeDeps } from '@shugu/node-core';
+
+type ManagerAudioAssetDepsOptions = {
+  fetchImpl?: typeof fetch;
+  getLocalStorageItem?: (key: string) => string | null;
+  refreshAssets?: () => Promise<void>;
+};
 
 type AssetRequestState = {
   signature: string;
@@ -15,16 +20,20 @@ const ttsStates = new Map<string, AssetRequestState>();
 const uploadStates = new Map<string, AssetRequestState>();
 const referenceStates = new Map<string, AssetRequestState>();
 
-function readLocalStorage(key: string): string {
+async function refreshAssetsStore(): Promise<void> {
+  const mod = await import('../../../stores/assets');
+  await mod.assetsStore.refresh();
+}
+
+function readLocalStorageItem(key: string): string | null {
   try {
-    return localStorage.getItem(key) ?? '';
+    return localStorage.getItem(key);
   } catch {
-    return '';
+    return null;
   }
 }
 
-function buildUrl(path: string): string | null {
-  const serverUrl = readLocalStorage('shugu-server-url').trim();
+function buildUrl(path: string, serverUrl: string): string | null {
   if (!serverUrl) return null;
   try {
     const base = serverUrl.endsWith('/') ? serverUrl : `${serverUrl}/`;
@@ -34,8 +43,12 @@ function buildUrl(path: string): string | null {
   }
 }
 
-async function fetchJson(url: string, init: RequestInit): Promise<Record<string, unknown>> {
-  const response = await fetch(url, { ...init, credentials: 'include' });
+async function fetchJson(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit
+): Promise<Record<string, unknown>> {
+  const response = await fetchImpl(url, { ...init, credentials: 'include' });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     throw new Error(body ? `HTTP ${response.status}: ${body}` : `HTTP ${response.status}`);
@@ -81,16 +94,24 @@ function buildReferenceQuery(request: {
   return query ? `?${query}` : '';
 }
 
-export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
+export function createManagerAudioAssetNodeDeps(
+  options: ManagerAudioAssetDepsOptions = {}
+): AudioAssetNodeDeps {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const getLocalStorageItem = options.getLocalStorageItem ?? readLocalStorageItem;
+  const refreshAssets = options.refreshAssets ?? refreshAssetsStore;
+
   return {
     getTtsAudioAsset: (request) => {
       const state = stateFor(ttsStates, request.nodeId, request.signature);
-      if (state.assetId || state.inFlight || state.errorSignature === request.signature) return state.assetId;
-      const url = buildUrl('api/tts/asset');
+      if (state.assetId || state.inFlight) return state.assetId;
+      const url = buildUrl('api/tts/asset', getLocalStorageItem('shugu-server-url')?.trim() ?? '');
       if (!url) return '';
       state.inFlight = true;
-      void fetchJson(url, {
+      void fetchJson(fetchImpl, url, {
         method: 'POST',
+        // Use the same Manager session cookie auth path as the rest of the manager asset APIs.
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: request.text,
@@ -106,7 +127,7 @@ export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
           if (assetId) {
             state.assetId = assetId;
             state.errorSignature = null;
-            void assetsStore.refresh();
+            void refreshAssets();
           }
         })
         .catch((error) => {
@@ -121,11 +142,11 @@ export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
     uploadAudioToDropBox: (request) => {
       const state = stateFor(uploadStates, request.nodeId, request.signature);
       if (state.inFlight || state.errorSignature === request.signature) return request.assetId;
-      const url = buildUrl('api/assets/drop-box/audio');
+      const url = buildUrl('api/assets/drop-box/audio', getLocalStorageItem('shugu-server-url')?.trim() ?? '');
       if (!url) return request.assetId;
       state.inFlight = true;
       state.assetId = request.assetId;
-      void fetchJson(url, {
+      void fetchJson(fetchImpl, url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -151,10 +172,13 @@ export function createManagerAudioAssetNodeDeps(): AudioAssetNodeDeps {
       if (request.assetId) return request.assetId;
       const state = stateFor(referenceStates, request.nodeId, request.signature);
       if (state.assetId || state.inFlight || state.errorSignature === request.signature) return state.assetId;
-      const url = buildUrl(`api/assets/drop-box/audio/reference${buildReferenceQuery(request)}`);
+      const url = buildUrl(
+        `api/assets/drop-box/audio/reference${buildReferenceQuery(request)}`,
+        getLocalStorageItem('shugu-server-url')?.trim() ?? ''
+      );
       if (!url) return '';
       state.inFlight = true;
-      void fetchJson(url, { method: 'GET' })
+      void fetchJson(fetchImpl, url, { method: 'GET' })
         .then((json) => {
           const assetId = extractAssetId(json);
           if (assetId) {

@@ -1,7 +1,7 @@
 /**
  * Purpose: HTTP endpoint for generating persisted TTS audio assets.
  */
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AssetsService } from '../assets/assets.service.js';
 import { AudioDropBoxService } from '../assets/audio-dropbox.service.js';
@@ -30,7 +30,16 @@ export class AliyunTtsController {
     usage: Record<string, unknown> | null;
   }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
-    const result = await this.tts.synthesizeAsset(body ?? { text: '' }, this.assets);
+    let result: Awaited<ReturnType<AliyunTtsService['synthesizeAsset']>>;
+    try {
+      result = await this.tts.synthesizeAsset(body ?? { text: '' }, this.assets);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === 'TTS text is required') {
+        throw new BadRequestException(message);
+      }
+      throw new BadGatewayException(message);
+    }
     const dropBoxEntry = await this.audioDropBox.push({
       assetId: result.asset.id,
       name: body?.dropBoxName ?? body?.text,

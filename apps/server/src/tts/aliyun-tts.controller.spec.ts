@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { BadGatewayException } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { AliyunTtsController } from './aliyun-tts.controller.js';
@@ -49,4 +50,42 @@ test('AliyunTtsController allows a Manager session to generate an audio asset wi
 
   assert.equal(called, true);
   assert.equal(result.assetId, 'asset-1');
+});
+
+test('AliyunTtsController surfaces TTS provider failures instead of a generic 500', async () => {
+  const tts = {
+    synthesizeAsset: async () => {
+      throw new Error('Aliyun TTS request failed (400): invalid voice');
+    },
+  } as unknown as AliyunTtsService;
+  const assets = {
+    config: { writeToken: null },
+  } as unknown as AssetsService;
+  const dropBox = {
+    push: async () => {
+      throw new Error('drop box should not be called');
+    },
+  } as unknown as AudioDropBoxService;
+  const managerAuth = ManagerAuthService.forTest({
+    env: {
+      SHUGU_MANAGER_USERS: 'Eureka',
+      SHUGU_MANAGER_PASSWORD: 'secret-password',
+      SHUGU_MANAGER_SESSION_SECRET: 'session-secret',
+    },
+    now: () => 1_000,
+  });
+  const login = managerAuth.login({ username: 'Eureka', password: 'secret-password' });
+  assert.equal(login.ok, true);
+  const req = {
+    header: (name: string) => (name.toLowerCase() === 'cookie' ? login.cookie : undefined),
+  } as unknown as Request;
+
+  const controller = new AliyunTtsController(tts, assets, dropBox, managerAuth);
+
+  await assert.rejects(
+    () => controller.synthesizeAsset({ text: 'hello' }, req),
+    (error) =>
+      error instanceof BadGatewayException &&
+      error.message === 'Aliyun TTS request failed (400): invalid voice'
+  );
 });
