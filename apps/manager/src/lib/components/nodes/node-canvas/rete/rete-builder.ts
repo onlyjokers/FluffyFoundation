@@ -212,7 +212,8 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
       );
 
       const hasDefault = input.defaultValue !== undefined;
-      const isPrimitive = input.type === 'number' || input.type === 'string' || input.type === 'boolean';
+      const isPrimitive =
+        input.type === 'number' || input.type === 'string' || input.type === 'boolean' || input.type === 'pulse';
       const isSink = input.kind === 'sink';
       const configField = configFieldByKey.get(input.id);
       const isSelectConfig = configField?.type === 'select';
@@ -341,7 +342,7 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
           });
           withControlMeta(control, { inline: true });
           inp.addControl(control);
-        } else if (input.type === 'boolean') {
+        } else if (input.type === 'boolean' || input.type === 'pulse') {
           const initial =
             typeof current === 'boolean'
               ? current
@@ -378,9 +379,9 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
               }
             },
           });
-          if (input.buttonLabel) {
+          if (input.buttonLabel || input.type === 'pulse') {
             control.button = true;
-            control.buttonLabel = input.buttonLabel;
+            control.buttonLabel = input.buttonLabel ?? input.label;
           } else if (instance.type === 'url-session' && input.id === 'trigger') {
             control.button = true;
             control.buttonLabel = 'New URL';

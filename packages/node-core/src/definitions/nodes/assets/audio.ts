@@ -4,7 +4,7 @@
 import type { NodeDefinition } from '../../../types.js';
 import { normalizeLocalMediaRef } from '../../media-utils.js';
 import { clampNumber, coerceBoolean, coerceBooleanOr, coerceNumber } from '../../utils.js';
-import { getRecordString } from '../node-definition-utils.js';
+import { getRecordString, getStringValue } from '../node-definition-utils.js';
 import type { ClientObjectDeps } from '../../types.js';
 
 type LoadAudioTimelineState = {
@@ -319,6 +319,20 @@ function buildTtsSignature(input: {
   return JSON.stringify(input);
 }
 
+const TTS_MODEL_OPTIONS = [{ value: 'qwen3-tts-flash', label: 'Qwen3 TTS Flash' }];
+const TTS_VOICE_OPTIONS = [
+  { value: 'Cherry', label: 'Cherry' },
+  { value: 'Chelsie', label: 'Chelsie' },
+  { value: 'Serena', label: 'Serena' },
+  { value: 'Ethan', label: 'Ethan' },
+];
+const TTS_LANGUAGE_OPTIONS = [
+  { value: 'Chinese', label: 'Chinese' },
+  { value: 'English', label: 'English' },
+  { value: 'Japanese', label: 'Japanese' },
+  { value: 'Korean', label: 'Korean' },
+];
+
 export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDefinition {
   return {
     type: 'generate-tts-audio-asset',
@@ -326,16 +340,48 @@ export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDef
     category: 'AI',
     inputs: [
       { id: 'text', label: 'Text', type: 'string', defaultValue: '' },
-      { id: 'trigger', label: 'Trigger', type: 'boolean', defaultValue: true },
+      { id: 'trigger', label: 'Trigger', type: 'pulse', defaultValue: false, buttonLabel: 'Generate' },
+      { id: 'model', label: 'Model', type: 'string', defaultValue: 'qwen3-tts-flash', options: TTS_MODEL_OPTIONS },
+      { id: 'voice', label: 'Voice', type: 'string', defaultValue: 'Cherry', options: TTS_VOICE_OPTIONS },
+      {
+        id: 'languageType',
+        label: 'Language',
+        type: 'string',
+        defaultValue: 'Chinese',
+        options: TTS_LANGUAGE_OPTIONS,
+      },
+      { id: 'instructions', label: 'Instructions', type: 'string', defaultValue: '' },
+      { id: 'optimizeInstructions', label: 'Optimize Instructions', type: 'boolean', defaultValue: false },
     ],
     outputs: [
       { id: 'assetId', label: 'Asset ID', type: 'string' },
       { id: 'asset', label: 'Asset', type: 'asset' },
     ],
     configSchema: [
-      { key: 'model', label: 'Model', type: 'string', defaultValue: 'qwen3-tts-flash' },
-      { key: 'voice', label: 'Voice', type: 'string', defaultValue: 'Cherry' },
-      { key: 'languageType', label: 'Language', type: 'string', defaultValue: 'Chinese' },
+      {
+        key: 'model',
+        label: 'Model',
+        type: 'select',
+        defaultValue: 'qwen3-tts-flash',
+        connectable: true,
+        options: TTS_MODEL_OPTIONS,
+      },
+      {
+        key: 'voice',
+        label: 'Voice',
+        type: 'select',
+        defaultValue: 'Cherry',
+        connectable: true,
+        options: TTS_VOICE_OPTIONS,
+      },
+      {
+        key: 'languageType',
+        label: 'Language',
+        type: 'select',
+        defaultValue: 'Chinese',
+        connectable: true,
+        options: TTS_LANGUAGE_OPTIONS,
+      },
       { key: 'instructions', label: 'Instructions', type: 'string', defaultValue: '' },
       {
         key: 'optimizeInstructions',
@@ -374,12 +420,17 @@ export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDef
     },
     process: (inputs, config, context) => {
       const text = typeof inputs.text === 'string' ? inputs.text.trim() : '';
-      const trigger = coerceBooleanOr(inputs.trigger, true);
-      const model = typeof config.model === 'string' ? config.model.trim() : 'qwen3-tts-flash';
-      const voice = typeof config.voice === 'string' ? config.voice.trim() : 'Cherry';
-      const languageType = typeof config.languageType === 'string' ? config.languageType.trim() : 'Chinese';
-      const instructions = typeof config.instructions === 'string' ? config.instructions.trim() : '';
-      const optimizeInstructions = coerceBooleanOr(config.optimizeInstructions, false);
+      const trigger = coerceBooleanOr(inputs.trigger, false);
+      const model = getStringValue(inputs.model) || getStringValue(config.model) || 'qwen3-tts-flash';
+      const voice = getStringValue(inputs.voice) || getStringValue(config.voice) || 'Cherry';
+      const languageType =
+        getStringValue(inputs.languageType) || getStringValue(config.languageType) || 'Chinese';
+      const instructions =
+        getStringValue(inputs.instructions) || getStringValue(config.instructions) || '';
+      const optimizeInstructions = coerceBooleanOr(
+        inputs.optimizeInstructions ?? config.optimizeInstructions,
+        false
+      );
       const signature = buildTtsSignature({
         text,
         model,
