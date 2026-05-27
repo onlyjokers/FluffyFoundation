@@ -2431,3 +2431,189 @@ test('runtime disables nodes that belong to a group with a closed group-gate', (
   assert.deepEqual(runtime.getNode('gate')?.outputValues, { active: false });
   assert.deepEqual(runtime.getNode('inner')?.outputValues, {});
 });
+
+test('runtime keeps group gate nodes enabled when a nested group closes', () => {
+  const registry = new NodeRegistry();
+  registry.register({
+    type: 'const-bool',
+    label: 'Const Bool',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'value', label: 'Value', type: 'boolean' }],
+    configSchema: [{ key: 'value', label: 'Value', type: 'boolean', defaultValue: false }],
+    process: (_inputs, config) => ({ value: Boolean(config.value) }),
+  });
+  registry.register({
+    type: 'group-gate',
+    label: 'Group Gate',
+    category: 'Internal',
+    inputs: [{ id: 'active', label: 'Active', type: 'boolean', defaultValue: true }],
+    outputs: [],
+    configSchema: [],
+    process: (inputs) => ({ active: typeof inputs.active === 'boolean' ? inputs.active : true }),
+  });
+  registry.register({
+    type: 'number',
+    label: 'Number',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'value', label: 'Value', type: 'number' }],
+    configSchema: [],
+    process: () => ({ value: 1 }),
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      { ...testNode('inner-active', 'const-bool'), config: { value: false } },
+      { ...testNode('outer-active', 'const-bool'), config: { value: true } },
+      { ...testNode('inner-gate', 'group-gate'), config: { groupId: 'group:inner' } },
+      { ...testNode('outer-gate', 'group-gate'), config: { groupId: 'group:outer' } },
+      testNode('inner-worker', 'number'),
+    ],
+    connections: [
+      {
+        id: 'inner-active-to-gate',
+        sourceNodeId: 'inner-active',
+        sourcePortId: 'value',
+        targetNodeId: 'inner-gate',
+        targetPortId: 'active',
+      },
+      {
+        id: 'outer-active-to-gate',
+        sourceNodeId: 'outer-active',
+        sourcePortId: 'value',
+        targetNodeId: 'outer-gate',
+        targetPortId: 'active',
+      },
+    ],
+    groups: [
+      {
+        id: 'group:inner',
+        parentId: 'group:outer',
+        name: 'Inner',
+        nodeIds: ['inner-worker', 'outer-gate'],
+        disabled: false,
+      },
+      {
+        id: 'group:outer',
+        parentId: null,
+        name: 'Outer',
+        nodeIds: ['inner-worker', 'outer-gate'],
+        disabled: false,
+      },
+    ],
+  } as GraphState);
+
+  runtime.step();
+  runtime.step();
+
+  assert.deepEqual(runtime.getNode('inner-gate')?.outputValues, { active: false });
+  assert.deepEqual(runtime.getNode('outer-gate')?.outputValues, { active: true });
+  assert.deepEqual(runtime.getNode('inner-worker')?.outputValues, {});
+});
+
+test('runtime keeps variable state nodes enabled when their group gate closes', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const variables = new Map<string, boolean>();
+  const runtime = new NodeRuntime(registry, {
+    booleanVariables: {
+      get: (name) => variables.get(name),
+      set: (name, value) => {
+        variables.set(name, value);
+      },
+    },
+  });
+
+  runtime.loadGraph({
+    nodes: [
+      {
+        ...testNode('name', 'independent-variable-name'),
+        config: { name: 'variable_2' },
+      },
+      {
+        ...testNode('setter', 'set-boolean-variable'),
+        config: { name: 'fallback-setter', defaultValue: true, mode: 'followInput' },
+      },
+      {
+        ...testNode('getter', 'get-boolean-variable'),
+        config: { name: 'fallback-getter' },
+      },
+      {
+        ...testNode('name-port', 'group-proxy'),
+        config: { groupId: 'group:inner', direction: 'input', portType: 'string' },
+      },
+      {
+        ...testNode('gate', 'group-gate'),
+        config: { groupId: 'group:inner' },
+      },
+      {
+        ...testNode('button', 'client-button'),
+        inputValues: { display: true },
+      },
+      {
+        ...testNode('set-source', 'bool'),
+        inputValues: { value: true },
+      },
+    ],
+    connections: [
+      {
+        id: 'name-getter',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-proxy-in',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'name-port',
+        targetPortId: 'in',
+      },
+      {
+        id: 'name-proxy-out',
+        sourceNodeId: 'name-port',
+        sourcePortId: 'out',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'set-source-setter',
+        sourceNodeId: 'set-source',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'set',
+      },
+      {
+        id: 'getter-gate',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'gate',
+        targetPortId: 'active',
+      },
+    ],
+    groups: [
+      {
+        id: 'group:inner',
+        parentId: null,
+        name: 'Group 1',
+        nodeIds: ['setter', 'button'],
+        disabled: false,
+      },
+    ],
+  } as GraphState);
+
+  runtime.step();
+  runtime.step();
+
+  assert.equal(variables.get('variable_2'), true);
+  assert.deepEqual(runtime.getNode('getter')?.outputValues, { value: true });
+  assert.deepEqual(runtime.getNode('gate')?.outputValues, { active: true });
+});

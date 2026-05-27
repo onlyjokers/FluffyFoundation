@@ -16,6 +16,19 @@ import {
 } from './runtime-watchdog.js';
 
 const DEFAULT_TICK_INTERVAL_MS = 33;
+const GROUP_DECORATION_NODE_TYPES = new Set(['group-gate', 'group-proxy', 'group-frame']);
+const GROUP_STATE_NODE_TYPES = new Set([
+  'independent-variable-name',
+  'set-boolean-variable',
+  'get-boolean-variable',
+  'boolean-variable',
+  'number-variable',
+  'string-variable',
+]);
+const GROUP_GATE_EXEMPT_NODE_TYPES = new Set([
+  ...GROUP_DECORATION_NODE_TYPES,
+  ...GROUP_STATE_NODE_TYPES,
+]);
 
 export type NodeRuntimeWatchdogInfo = {
   reason: 'compile-error' | 'sink-burst' | 'oscillation';
@@ -610,7 +623,12 @@ export class NodeRuntime {
 
       for (const group of this.groups) {
         if (!isGroupDisabled(group.id)) continue;
-        for (const nodeId of group.nodeIds) disabledGroupNodeIds.add(String(nodeId));
+        for (const nodeId of group.nodeIds) {
+          const id = String(nodeId);
+          const type = String(this.nodes.get(id)?.type ?? '');
+          if (GROUP_GATE_EXEMPT_NODE_TYPES.has(type)) continue;
+          disabledGroupNodeIds.add(id);
+        }
       }
     };
 

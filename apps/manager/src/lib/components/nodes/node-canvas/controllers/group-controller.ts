@@ -8,7 +8,6 @@ import { nodeRegistry } from '$lib/nodes';
 import { audienceClients } from '$lib/stores/manager';
 import type { NodeBounds } from '../adapters';
 import { normalizeGroupList } from '../groups/normalize-group-list';
-import { isGroupDecorationNodeType } from '../groups/group-node-types';
 import {
   buildGroupIndex,
   computeGroupFrameBoundsWithChildren,
@@ -46,6 +45,7 @@ import {
   type NodeTranslation,
 } from './group-node-motion';
 import { createGroupMarqueeController } from './group-marquee';
+import { computeGroupDisabledNodeIds } from './group-disabled-nodes';
 export type { FrameMoveContext, GroupController, GroupFrame, NodeGroup } from './group-types';
 
 export function createGroupController(opts: GroupControllerOptions): GroupController {
@@ -130,24 +130,8 @@ export function createGroupController(opts: GroupControllerOptions): GroupContro
   };
   const recomputeDisabledNodes = (nextGroups: NodeGroup[] = get(nodeGroups)) => {
     const prev = get(groupDisabledNodeIds);
-    const next = new Set<string>();
     const graph = opts.getGraphState();
-    const typeByNodeId = new Map(
-      (graph.nodes ?? []).map((node) => [String(node.id), String(node.type ?? '')])
-    );
-
-    for (const g of nextGroups) {
-      const runtimeActive = g.runtimeActive ?? true;
-      if (!g.disabled && runtimeActive) continue;
-      for (const nodeId of g.nodeIds ?? []) {
-        const id = String(nodeId);
-        if (!id) continue;
-        const type = typeByNodeId.get(id) ?? '';
-        // Group decoration nodes are UI-only and should stay enabled even when the group is gated.
-        if (isGroupDecorationNodeType(type)) continue;
-        next.add(id);
-      }
-    }
+    const next = computeGroupDisabledNodeIds(graph, nextGroups);
 
     groupDisabledNodeIds.set(next);
 

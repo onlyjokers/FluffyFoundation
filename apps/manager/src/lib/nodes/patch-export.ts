@@ -285,14 +285,12 @@ export function exportGraphForPatch(
     const raw = typeof value === 'string' ? value.trim() : '';
     return raw || fallback;
   };
-  const readNodeInputConnectionValue = (nodeId: string, portId: string): unknown => {
-    const conn = connections.find(
-      (candidate) =>
-        String(candidate.targetNodeId) === nodeId && String(candidate.targetPortId) === portId
-    );
-    if (!conn) return undefined;
-    const source = byId.get(String(conn.sourceNodeId));
-    const sourcePortId = String(conn.sourcePortId);
+  const readSourceValue = (
+    nodeId: string,
+    sourcePortId: string,
+    visiting = new Set<string>()
+  ): unknown => {
+    const source = byId.get(String(nodeId));
     const outputValue = source?.outputValues?.[sourcePortId];
     if (outputValue !== undefined) return outputValue;
     if (sourcePortId === 'value' && String(source?.type ?? '') === 'independent-variable-name') {
@@ -301,7 +299,26 @@ export function exportGraphForPatch(
     if (sourcePortId === 'value' && String(source?.type ?? '') === 'string') {
       return source?.inputValues?.value ?? source?.config?.value;
     }
+    if (String(source?.type ?? '') === 'group-proxy' && sourcePortId === 'out') {
+      const proxyId = String(source?.id ?? '');
+      if (!proxyId || visiting.has(proxyId)) return undefined;
+      visiting.add(proxyId);
+      const incoming = connections.find(
+        (candidate) =>
+          String(candidate.targetNodeId) === proxyId && String(candidate.targetPortId) === 'in'
+      );
+      if (!incoming) return undefined;
+      return readSourceValue(String(incoming.sourceNodeId), String(incoming.sourcePortId), visiting);
+    }
     return undefined;
+  };
+  const readNodeInputConnectionValue = (nodeId: string, portId: string): unknown => {
+    const conn = connections.find(
+      (candidate) =>
+        String(candidate.targetNodeId) === nodeId && String(candidate.targetPortId) === portId
+    );
+    if (!conn) return undefined;
+    return readSourceValue(String(conn.sourceNodeId), String(conn.sourcePortId));
   };
   const booleanVariableNameFor = (node: GraphState['nodes'][number]): string =>
     normalizeVariableName(
