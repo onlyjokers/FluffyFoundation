@@ -243,6 +243,60 @@ test('createNodeAdder assigns unique default variable names for boolean variable
   );
 });
 
+test('createNodeAdder assigns unique immutable names for independent variable name nodes', () => {
+  const added: NodeInstance[] = [
+    {
+      id: 'existing-set',
+      type: 'set-boolean-variable',
+      position: { x: 0, y: 0 },
+      config: { name: 'variable' },
+      inputValues: {},
+      outputValues: {},
+    },
+    {
+      id: 'existing-independent',
+      type: 'independent-variable-name',
+      position: { x: 0, y: 0 },
+      config: { name: 'variable_1' },
+      inputValues: {},
+      outputValues: {},
+    },
+  ];
+  const ids = ['independent-a', 'independent-b'];
+  const addNode = createNodeAdder({
+    nodeRegistry: {
+      get: () => ({
+        configSchema: [],
+      }),
+    },
+    nodeEngine: {
+      getNode: () => undefined,
+    },
+    customNodeTypePrefix: 'custom:',
+    getCustomNodeDefinition: () => undefined,
+    cloneInternalGraphForNewInstance: (graph) => graph,
+    generateCustomNodeGroupId: () => 'group:new',
+    readCustomNodeState: () => null,
+    writeCustomNodeState: (config) => config,
+    customNodeDefinitions: writable([]),
+    wouldCreateCycle: () => false,
+    getGroupFrames: () => [],
+    expandedCustomByGroupId: new Map(),
+    getGraphState: () => ({ nodes: added, connections: [] }),
+    getNodeCount: () => added.length,
+    generateId: () => ids[added.length - 2] ?? `node-${added.length}`,
+    addNodeCommand: (node) => added.push(node),
+  });
+
+  addNode('independent-variable-name');
+  addNode('independent-variable-name');
+
+  assert.deepEqual(
+    added.slice(2).map((node) => node.config.name),
+    ['variable_2', 'variable_3']
+  );
+});
+
 test('createNodeAdder does not return a node id when semantic add rejects the node', () => {
   const addNode = createNodeAdder({
     nodeRegistry: {

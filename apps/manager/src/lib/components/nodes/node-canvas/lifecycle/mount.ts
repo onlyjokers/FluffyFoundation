@@ -194,7 +194,7 @@ export async function mountNodeCanvasResources(
     setGroupEdgeHighlight: opts.setGroupEdgeHighlight,
     groupEdgeFinder: opts.groupEdgeFinder,
     groupFrames: opts.groupFrames,
-    toggleGroupEditMode: opts.groupController.toggleGroupEditMode,
+    toggleGroupEditMode: opts.toggleGroupEditMode,
     minimapController: opts.minimapController,
     isPickerOpen: opts.isPickerOpen,
     closePicker: opts.closePicker,

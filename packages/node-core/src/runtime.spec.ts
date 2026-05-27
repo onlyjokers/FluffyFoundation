@@ -1554,6 +1554,32 @@ test('default registry exposes split variable nodes', () => {
   assert.ok(registry.get('string-variable'));
 });
 
+test('independent variable name node outputs its stored name', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+
+  const definition = registry.get('independent-variable-name');
+  assert.ok(definition);
+  assert.deepEqual(definition.configSchema, []);
+  assert.equal(
+    definition.process(
+      {},
+      { name: 'variable_7' },
+      { nodeId: 'independent-name', time: 0, deltaTime: 0 }
+    ).value,
+    'variable_7'
+  );
+  assert.equal(
+    definition.process({}, {}, { nodeId: 'independent-name', time: 16, deltaTime: 16 }).value,
+    ''
+  );
+});
+
 test('default registry exposes pulse event ports and pulse to boolean conversion', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {

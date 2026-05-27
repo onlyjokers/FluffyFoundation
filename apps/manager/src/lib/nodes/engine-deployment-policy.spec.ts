@@ -11,6 +11,7 @@ test('patch deployment policy allows FCT track scene chain nodes', () => {
 test('patch deployment policy allows variable nodes as local patch state', () => {
   assert.doesNotThrow(() => assertPatchDeployableNodeType('set-boolean-variable'));
   assert.doesNotThrow(() => assertPatchDeployableNodeType('get-boolean-variable'));
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('independent-variable-name'));
   assert.doesNotThrow(() => assertPatchDeployableNodeType('boolean-variable'));
   assert.doesNotThrow(() => assertPatchDeployableNodeType('number-variable'));
   assert.doesNotThrow(() => assertPatchDeployableNodeType('string-variable'));

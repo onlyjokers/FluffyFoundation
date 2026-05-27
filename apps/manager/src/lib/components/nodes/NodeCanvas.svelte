@@ -157,13 +157,15 @@
   const canvasCommands = createNodeCanvasSemanticCommands({
     getSDK,
     isLocalOnlyCommand: (command) => {
+      const decorationTypes = new Set(['group-gate', 'group-proxy', 'group-frame']);
+      if (command.type === 'node.add') {
+        return decorationTypes.has(String(command.node.type ?? ''));
+      }
       if (command.type !== 'node.connect' && command.type !== 'node.disconnect') return false;
       const graph = nodeEngine.exportGraph();
       const decorationNodeIds = new Set(
         (graph.nodes ?? [])
-          .filter((node) =>
-            ['group-gate', 'group-proxy', 'group-frame'].includes(String(node.type ?? ''))
-          )
+          .filter((node) => decorationTypes.has(String(node.type ?? '')))
           .map((node) => String(node.id))
       );
       if (command.type === 'node.connect') {

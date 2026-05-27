@@ -197,6 +197,20 @@ export function createStringNode(): NodeDefinition {
   };
 }
 
+export function createIndependentVariableNameNode(): NodeDefinition {
+  return {
+    type: 'independent-variable-name',
+    label: 'Independent Variable Name',
+    category: 'Values',
+    inputs: [],
+    outputs: [{ id: 'value', label: 'Name', type: 'string' }],
+    configSchema: [],
+    process: (_inputs, config) => ({
+      value: typeof config.name === 'string' ? config.name : '',
+    }),
+  };
+}
+
 export function createBoolNode(): NodeDefinition {
   return {
     type: 'bool',

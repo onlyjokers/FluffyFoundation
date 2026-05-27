@@ -23,19 +23,23 @@ type CustomNodeDefinition = {
   template: GraphState;
 };
 
-const BOOLEAN_VARIABLE_NODE_TYPES = new Set(['set-boolean-variable', 'get-boolean-variable']);
+const VARIABLE_NAME_NODE_TYPES = new Set([
+  'set-boolean-variable',
+  'get-boolean-variable',
+  'independent-variable-name',
+]);
 
 function uniqueVariableName(
   type: string,
   config: Record<string, unknown>,
   graph: GraphState | null
 ): string | null {
-  if (!BOOLEAN_VARIABLE_NODE_TYPES.has(String(type))) return null;
+  if (!VARIABLE_NAME_NODE_TYPES.has(String(type))) return null;
   const baseRaw = typeof config.name === 'string' ? config.name.trim() : '';
   const base = baseRaw || 'variable';
   const used = new Set<string>();
   for (const node of graph?.nodes ?? []) {
-    if (!BOOLEAN_VARIABLE_NODE_TYPES.has(String(node.type))) continue;
+    if (!VARIABLE_NAME_NODE_TYPES.has(String(node.type))) continue;
     const name = typeof node.config?.name === 'string' ? node.config.name.trim() : '';
     if (name) used.add(name);
   }

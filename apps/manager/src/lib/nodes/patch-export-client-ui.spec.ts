@@ -7,6 +7,7 @@ import {
   registerDefaultNodeDefinitions,
 } from '@shugu/node-core';
 import { exportGraphForPatch } from './patch-export';
+import { assertPatchDeployableNodeType } from './engine-deployment-policy';
 import type { GraphState, NodeInstance } from './types';
 import { writeCustomNodeState } from './custom-nodes/instance';
 
@@ -139,6 +140,61 @@ test('exportGraphForPatch includes boolean variable setters used by exported get
         connection.targetPortId === 'name'
     )
   );
+});
+
+test('exportGraphForPatch includes independent variable name nodes used by boolean variables', () => {
+  const graph: GraphState = {
+    nodes: [
+      { ...node('name', 'independent-variable-name'), config: { name: 'variable_2' } },
+      {
+        ...node('setter', 'set-boolean-variable'),
+        config: { name: 'setter-fallback', defaultValue: true, mode: 'latchTrue' },
+      },
+      { ...node('getter', 'get-boolean-variable'), config: { name: 'getter-fallback' } },
+      node('button', 'client-button'),
+      node('out', 'ui-out'),
+    ],
+    connections: [
+      {
+        id: 'name-set',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'setter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'name-get',
+        sourceNodeId: 'name',
+        sourcePortId: 'value',
+        targetNodeId: 'getter',
+        targetPortId: 'name',
+      },
+      {
+        id: 'display',
+        sourceNodeId: 'getter',
+        sourcePortId: 'value',
+        targetNodeId: 'button',
+        targetPortId: 'display',
+      },
+      {
+        id: 'ui',
+        sourceNodeId: 'button',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
+    ],
+  };
+
+  const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: registry });
+
+  assert.deepEqual(
+    result.graph.nodes.map((item) => item.id).sort(),
+    ['button', 'getter', 'name', 'out', 'setter'].sort()
+  );
+  for (const item of result.graph.nodes) {
+    assert.doesNotThrow(() => assertPatchDeployableNodeType(String(item.type)));
+  }
 });
 
 test('exportGraphForPatch includes Client Button pressed feedback used by exported boolean variable setters', () => {

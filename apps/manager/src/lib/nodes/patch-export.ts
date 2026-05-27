@@ -295,6 +295,9 @@ export function exportGraphForPatch(
     const sourcePortId = String(conn.sourcePortId);
     const outputValue = source?.outputValues?.[sourcePortId];
     if (outputValue !== undefined) return outputValue;
+    if (sourcePortId === 'value' && String(source?.type ?? '') === 'independent-variable-name') {
+      return source?.config?.name;
+    }
     if (sourcePortId === 'value' && String(source?.type ?? '') === 'string') {
       return source?.inputValues?.value ?? source?.config?.value;
     }

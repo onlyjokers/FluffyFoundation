@@ -316,6 +316,37 @@ test('NodeCanvas semantic commands can keep manager-only structural commands loc
   assert.deepEqual(events, ['local:dry-run', 'local:apply']);
 });
 
+test('NodeCanvas semantic commands can keep manager-only node additions local', () => {
+  const events: string[] = [];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: () => {
+        events.push('send');
+        return true;
+      },
+    }),
+    onLocalCommand: (_command, _requestId, options) => {
+      events.push(options?.dryRun ? 'local:dry-run' : 'local:apply');
+      return true;
+    },
+    isLocalOnlyCommand: (command) =>
+      command.type === 'node.add' && String(command.node.type) === 'group-proxy',
+  });
+
+  assert.equal(
+    adapter.addNode({
+      id: 'group-proxy-1',
+      type: 'group-proxy',
+      position: { x: 0, y: 0 },
+      config: { groupId: 'group-1', direction: 'input' },
+      inputValues: {},
+      outputValues: {},
+    }),
+    true
+  );
+  assert.deepEqual(events, ['local:dry-run', 'local:apply']);
+});
+
 test('NodeCanvas semantic commands do not locally apply rejected manager-only structural commands', () => {
   const events: string[] = [];
   const adapter = createNodeCanvasSemanticCommands({
