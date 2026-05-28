@@ -223,7 +223,7 @@ export function resetDisplayNodeRouteStateForTests(): void {
 }
 
 export function sendDisplayNodeCommand(options: SendDisplayNodeCommandOptions): {
-  route: 'none' | 'local' | 'remote';
+  route: 'none' | 'local' | 'remote' | 'local+remote';
   explicit: boolean;
   ids: string[];
 } {
@@ -263,5 +263,11 @@ export function sendDisplayNodeCommand(options: SendDisplayNodeCommandOptions): 
   cleanupRouteState(options, previous, new Set());
   displayRouteStateByNode.delete(options.nodeId);
   options.sendLocalControl(options.action, options.payload, options.executeAt);
+  if (options.sendDisplayOperation) {
+    resolved.ids.forEach((displayId, index) => {
+      sendDisplayOperationToId(options, displayId, options.action, options.payload, index);
+    });
+    return { route: 'local+remote', explicit: false, ids: resolved.ids };
+  }
   return { route: 'local', explicit: false, ids: resolved.ids };
 }

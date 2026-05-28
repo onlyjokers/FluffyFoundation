@@ -10,6 +10,13 @@ import { createClearedDisplayTextOverlayState } from '../display-text-overlay';
 import { createDisplayControlExecutor } from './control-executor';
 import type { MultimediaCore } from '@shugu/multimedia-core';
 
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 test('Display executor applies showText and hideText controls to the text overlay', () => {
   const textOverlay = writable(createClearedDisplayTextOverlayState());
   const visualScenes = writable([]);
@@ -123,4 +130,53 @@ test('Display executor forwards remote asset image refs to MultimediaCore', asyn
     duration: undefined,
     fit: 'cover',
   });
+});
+
+test('Display executor shows the first completed streaming image while newer frames are pending', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  const resolvers: Array<(value: Response) => void> = [];
+  const shown: Array<Parameters<MultimediaCore['media']['showImage']>[0]> = [];
+  let objectUrlSeq = 0;
+
+  globalThis.fetch = (() =>
+    new Promise<Response>((resolve) => {
+      resolvers.push(resolve);
+    })) as typeof fetch;
+  URL.createObjectURL = (() => `blob:frame-${(objectUrlSeq += 1)}`) as typeof URL.createObjectURL;
+  URL.revokeObjectURL = (() => undefined) as typeof URL.revokeObjectURL;
+
+  try {
+    const visualScenes = writable([]);
+    const visualEffects = writable([]);
+    const executor = createDisplayControlExecutor({
+      getMultimediaCore: () =>
+        ({
+          media: {
+            showImage: (payload: Parameters<MultimediaCore['media']['showImage']>[0]) => {
+              shown.push(payload);
+            },
+          },
+        }) as MultimediaCore,
+      getNodeExecutor: () => null,
+      screenOverlay: writable(createClearedDisplayScreenOverlayState()),
+      textOverlay: writable(createClearedDisplayTextOverlayState()),
+      visualScenes,
+      visualEffects,
+      isDev: false,
+    });
+
+    executor.executeControl('showImage', { url: 'data:image/webp;base64,first' });
+    executor.executeControl('showImage', { url: 'data:image/webp;base64,second' });
+
+    resolvers[0]?.(new Response(new Blob(['first'], { type: 'image/webp' })));
+    await waitFor(() => shown.length > 0);
+
+    assert.deepEqual(shown, [{ url: 'blob:frame-1', duration: undefined }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
 });

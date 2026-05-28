@@ -104,6 +104,10 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
       url={$imageState.url}
       duration={$imageState.duration}
       fit={$imageState.fit}
+      scale={$imageState.scale}
+      offsetX={$imageState.offsetX}
+      offsetY={$imageState.offsetY}
+      opacity={$imageState.opacity}
       onHide={() => executeControl('hideImage', {})}
     />
   {/if}

@@ -139,7 +139,33 @@ test('sendDisplayNodeCommand routes range-based display selection to multiple di
   );
 });
 
-test('sendDisplayNodeCommand keeps implicit routing on the local display transport', () => {
+test('sendDisplayNodeCommand mirrors implicit routing to local and remote display transports', () => {
+  resetDisplayNodeRouteStateForTests();
+  const emitted: unknown[] = [];
+  const result = sendDisplayNodeCommand({
+    nodeId: 'display-node',
+    action: 'playMedia',
+    payload: { url: '/demo.mp4' },
+    clients,
+    node: { inputValues: {} },
+    graph: { connections: [] },
+    sendLocalControl: (action, payload, executeAt) => emitted.push({ action, payload, executeAt }),
+    sendDisplayOperation: (operation) => emitted.push(operation),
+  });
+
+  assert.deepEqual(result, { route: 'local+remote', explicit: false, ids: ['display-1', 'display-2'] });
+  assert.deepEqual(emitted.map((entry) => (entry as { action?: string }).action), [
+    'playMedia',
+    'playMedia',
+    'playMedia',
+  ]);
+  assert.deepEqual((emitted[0] as { payload?: unknown; executeAt?: number }).payload, { url: '/demo.mp4' });
+  assert.deepEqual((emitted[1] as { target?: { displayId?: string } }).target, { mode: 'displayId', displayId: 'display-1' });
+  assert.deepEqual((emitted[2] as { target?: { displayId?: string } }).target, { mode: 'displayId', displayId: 'display-2' });
+});
+
+test('sendDisplayNodeCommand keeps implicit routing local when no remote display sender exists', () => {
+  resetDisplayNodeRouteStateForTests();
   const emitted: unknown[] = [];
   const result = sendDisplayNodeCommand({
     nodeId: 'display-node',
@@ -319,7 +345,7 @@ test('sendDisplayNodeCommand clears each long-lived Display action when the rout
   );
 });
 
-test('sendDisplayNodeCommand clears prior explicit Display actions before returning to local routing', () => {
+test('sendDisplayNodeCommand clears prior explicit Display actions before returning to implicit routing', () => {
   resetDisplayNodeRouteStateForTests();
   const emitted: Array<{ action?: string; payload?: unknown; target?: { displayId?: string } }> = [];
 
@@ -363,6 +389,16 @@ test('sendDisplayNodeCommand clears prior explicit Display actions before return
         action: 'visualScenes',
         payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
         displayId: undefined,
+      },
+      {
+        action: 'visualScenes',
+        payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
+        displayId: 'display-1',
+      },
+      {
+        action: 'visualScenes',
+        payload: { scenes: [{ type: 'box', color: '#00ff00' }] },
+        displayId: 'display-2',
       },
     ]
   );

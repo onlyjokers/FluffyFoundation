@@ -20,3 +20,11 @@ test('push image screenshot capture uses async canvas encoding', () => {
   assert.match(screenshotSource, /canvas\.toBlob\(/);
   assert.doesNotMatch(screenshotSource, /canvas\.toDataURL\(/);
 });
+
+test('push image screenshot capture keeps an async encoding fallback', () => {
+  const screenshotSource = readFileSync(new URL('./client-screenshot.ts', import.meta.url), 'utf8');
+
+  assert.match(screenshotSource, /encodeCanvasToDataUrl/);
+  assert.match(screenshotSource, /'image\/jpeg'/);
+  assert.match(screenshotSource, /'image\/png'/);
+});

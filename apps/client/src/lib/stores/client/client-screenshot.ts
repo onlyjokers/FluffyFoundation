@@ -60,6 +60,33 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+async function encodeCanvasToDataUrl(
+  canvas: HTMLCanvasElement,
+  preferredMime: ScreenshotFormat,
+  quality: number
+): Promise<{ dataUrl: string; mime: ScreenshotFormat } | null> {
+  const fallbacks: ScreenshotFormat[] = [preferredMime, 'image/jpeg', 'image/png'];
+  const tried = new Set<ScreenshotFormat>();
+
+  for (const mime of fallbacks) {
+    if (tried.has(mime)) continue;
+    tried.add(mime);
+
+    const blob = await canvasToBlob(canvas, mime, quality);
+    const dataUrl = blob ? await blobToDataUrl(blob) : '';
+    if (dataUrl) {
+      const actualMime = dataUrl.startsWith('data:image/png')
+        ? 'image/png'
+        : dataUrl.startsWith('data:image/webp')
+          ? 'image/webp'
+          : 'image/jpeg';
+      return { dataUrl, mime: actualMime };
+    }
+  }
+
+  return null;
+}
+
 function getFittedDrawParams(
   srcW: number,
   srcH: number,
@@ -268,12 +295,13 @@ async function captureScreenshotDataUrl(opts: {
   }
 
   const quality = clampNumber(opts.quality, 0.85, 0.1, 1);
-  const mime = opts.format;
-  const blob = await canvasToBlob(canvas, mime, quality);
-  const dataUrl = blob ? await blobToDataUrl(blob) : '';
+  const encoded = await encodeCanvasToDataUrl(canvas, opts.format, quality);
 
-  if (!dataUrl) return { ok: false, reason: 'toBlob-failed' };
-  return { ok: true, shot: { dataUrl, mime, width: outW, height: outH, createdAt: Date.now() } };
+  if (!encoded) return { ok: false, reason: 'toBlob-failed' };
+  return {
+    ok: true,
+    shot: { dataUrl: encoded.dataUrl, mime: encoded.mime, width: outW, height: outH, createdAt: Date.now() },
+  };
 }
 
 export async function handlePushImageUpload(

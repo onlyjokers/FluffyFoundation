@@ -46,3 +46,12 @@ test('display visual effects do not hide video, image, or scene base layers', ()
   assert.doesNotMatch(source, /setBaseLayerVisibility/);
   assert.doesNotMatch(source, /querySelectorAll\('\\.display-visual-scenes, \\.video-overlay, \\.image-overlay'\)/);
 });
+
+test('display page forwards image transform controls to the image overlay', () => {
+  const source = pageSource();
+
+  assert.match(source, /scale=\{\$imageState\.scale\}/);
+  assert.match(source, /offsetX=\{\$imageState\.offsetX\}/);
+  assert.match(source, /offsetY=\{\$imageState\.offsetY\}/);
+  assert.match(source, /opacity=\{\$imageState\.opacity\}/);
+});

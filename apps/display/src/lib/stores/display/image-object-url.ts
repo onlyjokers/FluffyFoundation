@@ -43,13 +43,13 @@ export async function normalizeImageUrlForDisplay(url: string): Promise<string> 
   const blob = await fetch(trimmed)
     .then((response) => response.blob())
     .catch(() => null);
-  if (seq !== imageObjectUrlSeq) return trimmed;
   if (!blob) {
     clearActiveImageObjectUrl();
     return trimmed;
   }
 
   const objectUrl = URL.createObjectURL(blob);
+  if (seq !== imageObjectUrlSeq) return objectUrl;
   const prev = activeImageObjectUrl;
   activeImageObjectUrl = objectUrl;
   if (prev) scheduleRevokeObjectUrl(prev);
