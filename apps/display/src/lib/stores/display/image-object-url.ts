@@ -23,7 +23,7 @@ function scheduleRevokeObjectUrl(url: string): void {
 }
 
 export async function normalizeImageUrlForDisplay(url: string): Promise<string> {
-  const seq = (imageObjectUrlSeq += 1);
+  const seq = imageObjectUrlSeq;
   const trimmed = url.trim();
   if (!trimmed) {
     clearActiveImageObjectUrl();
@@ -49,7 +49,10 @@ export async function normalizeImageUrlForDisplay(url: string): Promise<string> 
   }
 
   const objectUrl = URL.createObjectURL(blob);
-  if (seq !== imageObjectUrlSeq) return objectUrl;
+  if (seq !== imageObjectUrlSeq) {
+    scheduleRevokeObjectUrl(objectUrl);
+    return objectUrl;
+  }
   const prev = activeImageObjectUrl;
   activeImageObjectUrl = objectUrl;
   if (prev) scheduleRevokeObjectUrl(prev);
