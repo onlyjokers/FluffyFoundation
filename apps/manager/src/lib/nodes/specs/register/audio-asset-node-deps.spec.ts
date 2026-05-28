@@ -57,3 +57,61 @@ test('TTS asset deps allow retrying the same signature after a failed request', 
     optimizeInstructions: false,
   });
 });
+
+test('TTS asset deps can peek completed requests without starting a fetch', async () => {
+  const fetchCalls: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const storage = new Map<string, string>([['shugu-server-url', 'https://localhost:3001']]);
+  const isolatedRequest = {
+    ...request,
+    nodeId: 'tts-peek',
+    signature: 'tts-peek-signature',
+  };
+  const deps = createManagerAudioAssetNodeDeps({
+    fetchImpl: async (url, init) => {
+      fetchCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ assetId: 'asset-tts-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    getLocalStorageItem: (key) => storage.get(key) ?? null,
+    refreshAssets: async () => {},
+  });
+
+  assert.equal(deps.peekTtsAudioAsset?.(isolatedRequest), '');
+  assert.equal(fetchCalls.length, 0);
+
+  assert.equal(deps.getTtsAudioAsset?.(isolatedRequest), '');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(deps.peekTtsAudioAsset?.(isolatedRequest), 'asset-tts-1');
+  assert.equal(fetchCalls.length, 1);
+});
+
+test('TTS asset deps notify when a generated asset becomes ready', async () => {
+  const readyAssets: string[] = [];
+  const storage = new Map<string, string>([['shugu-server-url', 'https://localhost:3001']]);
+  const isolatedRequest = {
+    ...request,
+    nodeId: 'tts-ready',
+    signature: 'tts-ready-signature',
+  };
+  const deps = createManagerAudioAssetNodeDeps({
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ assetId: 'asset-tts-ready' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    getLocalStorageItem: (key) => storage.get(key) ?? null,
+    refreshAssets: async () => {},
+    onAssetReady: (assetId) => {
+      readyAssets.push(assetId);
+    },
+  });
+
+  assert.equal(deps.getTtsAudioAsset?.(isolatedRequest), '');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(readyAssets, ['asset-tts-ready']);
+  assert.equal(deps.peekTtsAudioAsset?.(isolatedRequest), 'asset-tts-ready');
+});

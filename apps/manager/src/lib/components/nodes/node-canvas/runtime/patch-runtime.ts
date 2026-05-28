@@ -9,6 +9,7 @@ import {
 } from './patch-deployment-plan';
 import {
   applyTimeRangePlayheadsToPatchPayload,
+  computePatchPayloadSignature,
   computeTopologySignature,
   isDefinitionBypassableWhenDisabled,
   shouldUpdatePatchDeploymentPlan,
@@ -116,6 +117,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     | undefined;
   let isCompiledPlanningGraphDirty = true;
   let lastRuntimeCustomGateSignature = '';
+  let lastRuntimeAssetOutputSignature = '';
 
   // ────────────────────────────────────────────────────────────────────────────
   // node-executor control transport
@@ -242,6 +244,22 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     return JSON.stringify(nodes);
   };
 
+  const computeRuntimeAssetOutputSignature = (): string => {
+    const nodes = (getGraphState().nodes ?? [])
+      .map((node) => {
+        const id = String(node.id ?? '');
+        const type = String(node.type ?? '');
+        const outputValues = asRecord(node.outputValues);
+        const asset = outputValues?.asset;
+        const assetId = outputValues?.assetId;
+        if (asset === undefined && assetId === undefined) return null;
+        return { id, type, asset, assetId };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(a?.id ?? '').localeCompare(String(b?.id ?? '')));
+    return JSON.stringify(nodes);
+  };
+
   const compiledGraphHasPatchRoot = (): boolean => {
     const compiledGraph = getCompiledPlanningGraph();
     const graph = compiledGraph ?? getGraphState();
@@ -294,6 +312,36 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
     return signatures.sort().join('||');
   };
 
+  const computeDesiredPatchPayloadSignature = (): string => {
+    const plan = resolvePatchDeploymentPlan();
+    if (!plan) return '';
+
+    const payloadSignatureByRootKey = new Map<string, string>();
+    const signatureForRootIds = (rootIds: string[]): string => {
+      const key = rootIds.join('|');
+      const cached = payloadSignatureByRootKey.get(key);
+      if (cached !== undefined) return cached;
+
+      try {
+        const payload = nodeEngine.exportGraphForPatchFromRootNodeIds(rootIds);
+        const signature = computePatchPayloadSignature(payload.graph);
+        payloadSignatureByRootKey.set(key, signature);
+        return signature;
+      } catch {
+        const signature = `export-error:${key}`;
+        payloadSignatureByRootKey.set(key, signature);
+        return signature;
+      }
+    };
+
+    const signatures = plan.targetClientIds.map((clientId) => {
+      const rootIds = plan.rootIdsByClientId.get(clientId) ?? [];
+      return `${clientId}:${signatureForRootIds(rootIds)}`;
+    });
+
+    return signatures.sort().join('||');
+  };
+
   const stopAndRemovePatchOnClient = (clientId: string, patchId: string) => {
     const id = String(clientId ?? '');
     const loopId = String(patchId ?? '');
@@ -324,6 +372,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     const plan = resolvePatchDeploymentPlan();
     lastRuntimeCustomGateSignature = computeRuntimeCustomGateSignature();
+    lastRuntimeAssetOutputSignature = computeRuntimeAssetOutputSignature();
     lastGraphTopologySignature = computeDesiredPatchTopologySignature();
     patchLastPlan = plan;
     if (!plan || plan.targetClientIds.length === 0) {
@@ -351,6 +400,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         patchId: string;
         nodeIds: Set<string>;
         topologySignature: string;
+        payloadSignature: string;
         targetRevision: string;
         payload: PatchPayload;
       }
@@ -455,6 +505,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       }
 
       const topologySignature = computeTopologySignature(payload.graph);
+      const payloadSignature = computePatchPayloadSignature(payload.graph);
       const patchId = String(payload?.meta?.loopId ?? '');
 
       applyTimeRangePlayheadsToPatchPayload(payload, (nodeId) =>
@@ -468,6 +519,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
           patchId,
           nodeIds,
           topologySignature,
+          payloadSignature,
           targetRevision: plan.targetRevisionByClientId.get(targetKey) ?? '',
           payload,
         });
@@ -515,6 +567,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         !deployed ||
         deployed.patchId !== desired.patchId ||
         deployed.topologySignature !== desired.topologySignature ||
+        deployed.payloadSignature !== desired.payloadSignature ||
         deployed.targetRevision !== desired.targetRevision ||
         (statusLoopId && statusLoopId !== desired.patchId);
 
@@ -529,6 +582,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
           patchId: desired.patchId,
           nodeIds: desired.nodeIds,
           topologySignature: desired.topologySignature,
+          payloadSignature: desired.payloadSignature,
           targetRevision: desired.targetRevision,
           deployedAt: deployed?.deployedAt ?? Date.now(),
         });
@@ -548,6 +602,7 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
         patchId: desired.patchId,
         nodeIds: desired.nodeIds,
         topologySignature: desired.topologySignature,
+        payloadSignature: desired.payloadSignature,
         targetRevision: desired.targetRevision,
         deployedAt: Date.now(),
       });
@@ -683,8 +738,20 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
 
     if (!get(isRunningStore)) return;
     if (patchDeployTimer) return;
+
+    const runtimeAssetOutputSignature = computeRuntimeAssetOutputSignature();
+    const runtimeAssetOutputChanged =
+      runtimeAssetOutputSignature !== lastRuntimeAssetOutputSignature;
+    if (runtimeAssetOutputChanged) {
+      lastRuntimeAssetOutputSignature = runtimeAssetOutputSignature;
+    }
+
     const now = Date.now();
-    if (now - patchRuntimeTargetsLastCheckAt < PATCH_RUNTIME_TARGETS_CHECK_INTERVAL_MS) return;
+    if (
+      !runtimeAssetOutputChanged &&
+      now - patchRuntimeTargetsLastCheckAt < PATCH_RUNTIME_TARGETS_CHECK_INTERVAL_MS
+    )
+      return;
     patchRuntimeTargetsLastCheckAt = now;
 
     const runtimeCustomGateSignature = computeRuntimeCustomGateSignature();
@@ -698,11 +765,22 @@ export function createPatchRuntime(opts: CreatePatchRuntimeOptions): PatchRuntim
       }
       return;
     }
-
     const plan = resolvePatchDeploymentPlan();
     const shouldUpdate = shouldUpdatePatchDeploymentPlan(patchLastPlan, plan);
     if (shouldUpdate) {
       scheduleReconcile('runtime-target-change', { immediate: true });
+      return;
+    }
+
+    if (runtimeAssetOutputChanged || deployedPatchByClientId.size > 0) {
+      const nextPayloadSignature = computeDesiredPatchPayloadSignature();
+      const deployedPayloadSignature = Array.from(deployedPatchByClientId.entries())
+        .map(([clientId, patch]) => `${clientId}:${patch.payloadSignature ?? ''}`)
+        .sort()
+        .join('||');
+      if (nextPayloadSignature && nextPayloadSignature !== deployedPayloadSignature) {
+        scheduleReconcile('runtime-payload-change', { immediate: true });
+      }
     }
   };
 

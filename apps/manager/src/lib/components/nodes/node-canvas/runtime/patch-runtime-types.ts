@@ -98,6 +98,7 @@ export type DeployedPatch = {
   patchId: string;
   nodeIds: Set<string>;
   topologySignature: string;
+  payloadSignature?: string;
   targetRevision: string;
   deployedAt: number;
 };

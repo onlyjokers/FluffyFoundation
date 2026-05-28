@@ -274,3 +274,149 @@ test('patch export uses connected runtime gate values for Custom Node Active', a
     for (const type of registeredTypes) nodeRegistry.unregister(type);
   }
 });
+
+test('pulseRuntime syncs runtime output values into exported graph state', () => {
+  nodeRegistry.register({
+    type: 'test-pulse-output',
+    label: 'Test Pulse Output',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'asset', label: 'Asset', type: 'asset' }],
+    configSchema: [],
+    process: () => ({ asset: 'asset:ready-audio' }),
+  });
+
+  try {
+    nodeEngine.loadGraph({
+      nodes: [
+        {
+          id: 'source',
+          type: 'test-pulse-output',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    });
+    nodeEngine.start();
+
+    nodeEngine.pulseRuntime('test');
+
+    assert.equal(nodeEngine.exportGraph().nodes[0]?.outputValues.asset, 'asset:ready-audio');
+  } finally {
+    nodeEngine.stop();
+    nodeEngine.isRunning.set(false);
+    nodeEngine.loadGraph({ nodes: [], connections: [] });
+    nodeRegistry.unregister('test-pulse-output');
+  }
+});
+
+test('patch export materializes generated TTS audio asset after compile', () => {
+  const registeredTypes: string[] = [];
+  const registerIfMissing = (definition: NodeDefinition) => {
+    if (nodeRegistry.get(definition.type)) return;
+    nodeRegistry.register(definition);
+    registeredTypes.push(definition.type);
+  };
+
+  registerIfMissing({
+    type: 'test-tts-source',
+    label: 'Test TTS Source',
+    category: 'Test',
+    inputs: [],
+    outputs: [{ id: 'asset', label: 'Asset', type: 'asset' }],
+    configSchema: [],
+    process: () => ({ asset: 'asset:ready-audio', assetId: 'ready-audio' }),
+  });
+  registerIfMissing({
+    type: 'load-audio-from-assets',
+    label: 'Load Audio From Remote',
+    category: 'Test',
+    inputs: [
+      { id: 'asset', label: 'Asset', type: 'asset' },
+      { id: 'play', label: 'Play', type: 'boolean' },
+    ],
+    outputs: [{ id: 'ref', label: 'Ref', type: 'audio' }],
+    configSchema: [
+      {
+        key: 'assetId',
+        label: 'Audio Asset',
+        type: 'asset-picker',
+        assetKind: 'audio',
+        defaultValue: '',
+      },
+    ],
+    process: () => ({ ref: 1 }),
+  });
+  registerIfMissing({
+    type: 'audio-out',
+    label: 'Audio Out',
+    category: 'Test',
+    inputs: [{ id: 'in', label: 'In', type: 'audio', kind: 'sink' }],
+    outputs: [{ id: 'cmd', label: 'Command', type: 'command' }],
+    configSchema: [],
+    process: () => ({}),
+  });
+
+  try {
+    nodeEngine.loadGraph({
+      nodes: [
+        {
+          id: 'source',
+          type: 'test-tts-source',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'load',
+          type: 'load-audio-from-assets',
+          position: { x: 0, y: 0 },
+          config: { assetId: '' },
+          inputValues: { play: true },
+          outputValues: {},
+        },
+        {
+          id: 'out',
+          type: 'audio-out',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'asset',
+          sourceNodeId: 'source',
+          sourcePortId: 'asset',
+          targetNodeId: 'load',
+          targetPortId: 'asset',
+        },
+        {
+          id: 'audio',
+          sourceNodeId: 'load',
+          sourcePortId: 'ref',
+          targetNodeId: 'out',
+          targetPortId: 'in',
+        },
+      ],
+    });
+
+    nodeEngine.start();
+    nodeEngine.pulseRuntime('test');
+
+    const patch = nodeEngine.exportGraphForPatchFromRootNodeIds(['out']);
+    const load = patch.graph.nodes.find((node) => node.id === 'load');
+    assert.equal(load?.config.assetId, 'ready-audio');
+    assert.deepEqual(patch.assetRefs, ['asset:ready-audio']);
+  } finally {
+    nodeEngine.stop();
+    nodeEngine.isRunning.set(false);
+    nodeEngine.loadGraph({ nodes: [], connections: [] });
+    for (const type of registeredTypes) nodeRegistry.unregister(type);
+  }
+});

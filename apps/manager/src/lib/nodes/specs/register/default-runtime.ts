@@ -88,7 +88,13 @@ export function registerDefaultRuntimeNodes(): void {
       return pressed;
     },
   },
-  audioAssets: createManagerAudioAssetNodeDeps(),
+  audioAssets: createManagerAudioAssetNodeDeps({
+    onAssetReady: () => {
+      void import('../../engine').then(({ nodeEngine }) => {
+        nodeEngine.pulseRuntime('audio-asset-ready');
+      });
+    },
+  }),
   imageAssets: createManagerImageAssetNodeDeps(),
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {

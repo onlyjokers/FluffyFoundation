@@ -481,6 +481,7 @@ export function exportGraphForPatch(
   }
 
   const allNodeById = new Map(nodes.map((n) => [String(n.id), n]));
+
   for (const node of keptNodes) {
     if (String(node.type) !== 'load-audio-from-assets') continue;
     const assetInput = connections.find(
@@ -489,8 +490,11 @@ export function exportGraphForPatch(
     if (!assetInput) continue;
     const source = allNodeById.get(String(assetInput.sourceNodeId));
     const raw = source?.outputValues?.[String(assetInput.sourcePortId)];
+    const configAssetId =
+      String(source?.type ?? '') === 'load-audio-asset-from-assets' ? source?.config?.assetId : undefined;
     const id =
       assetIdFromRef(raw) ??
+      assetIdFromRef(configAssetId) ??
       (typeof raw === 'string' && raw.trim() ? raw.trim().split(/[?#]/)[0] : '');
     if (id) {
       node.config = { ...(node.config ?? {}), assetId: id };

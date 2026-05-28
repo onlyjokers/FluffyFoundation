@@ -10,7 +10,6 @@
  * - It intentionally avoids storing any auth token inside the graph; tokens live in localStorage/UI config only.
  */
 import { get } from 'svelte/store';
-import { targetClients } from '@shugu/protocol';
 
 import type { GraphState } from './types';
 import { nodeEngine } from './engine';
@@ -181,14 +180,17 @@ function pushManifestToClientIds(clientIds: string[], manifest: AssetManifest): 
   const ids = clientIds.map(String).filter(Boolean);
   if (ids.length === 0) return;
 
-  sdk.sendPluginControl(targetClients(ids), PLUGIN_ID, 'configure', {
+  const payload = {
     manifestId: manifest.manifestId,
     assets: manifest.assets,
     ...(Array.isArray(manifest.entries) ? { entries: manifest.entries } : {}),
     updatedAt: manifest.updatedAt,
-  });
+  };
 
-  for (const id of ids) sentManifestIdByClient.set(id, manifest.manifestId);
+  for (const id of ids) {
+    sdk.sendPluginControl({ mode: 'group', groupId: `client:${id}` }, PLUGIN_ID, 'configure', payload);
+    sentManifestIdByClient.set(id, manifest.manifestId);
+  }
 }
 
 let latestDisplayManifest: AssetManifest | null = null;

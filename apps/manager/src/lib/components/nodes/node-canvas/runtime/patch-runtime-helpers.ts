@@ -44,6 +44,42 @@ export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'co
   return JSON.stringify({ nodes, connections, groups });
 }
 
+export function computePatchPayloadSignature(
+  payload: Pick<GraphState, 'nodes' | 'connections' | 'groups'>
+): string {
+  const nodes = (payload.nodes ?? []).map((node) => ({
+    id: String(node.id),
+    type: String(node.type),
+    config: node.config ?? {},
+    inputValues: node.inputValues ?? {},
+  }));
+  nodes.sort((a, b) => a.id.localeCompare(b.id));
+
+  const connections = (payload.connections ?? []).map((conn) => ({
+    s: String(conn.sourceNodeId),
+    sp: String(conn.sourcePortId),
+    t: String(conn.targetNodeId),
+    tp: String(conn.targetPortId),
+  }));
+  connections.sort((a, b) => {
+    const sa = `${a.s}:${a.sp}->${a.t}:${a.tp}`;
+    const sb = `${b.s}:${b.sp}->${b.t}:${b.tp}`;
+    return sa.localeCompare(sb);
+  });
+
+  const groups = (payload.groups ?? []).map((group) => ({
+    id: String(group.id),
+    parentId: group.parentId ? String(group.parentId) : null,
+    nodeIds: (group.nodeIds ?? []).map(String).sort(),
+    disabled: Boolean(group.disabled),
+    runtimeActive:
+      typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+  }));
+  groups.sort((a, b) => a.id.localeCompare(b.id));
+
+  return JSON.stringify({ nodes, connections, groups });
+}
+
 function planSnapshotSignature(plan: PatchDeploymentPlanSnapshotLike): string {
   if (!plan) return '';
   const targets = (plan.targetClientIds ?? []).map(String).sort();

@@ -7,6 +7,7 @@ type ManagerAudioAssetDepsOptions = {
   fetchImpl?: typeof fetch;
   getLocalStorageItem?: (key: string) => string | null;
   refreshAssets?: () => Promise<void>;
+  onAssetReady?: (assetId: string) => void;
 };
 
 type AssetRequestState = {
@@ -100,8 +101,13 @@ export function createManagerAudioAssetNodeDeps(
   const fetchImpl = options.fetchImpl ?? fetch;
   const getLocalStorageItem = options.getLocalStorageItem ?? readLocalStorageItem;
   const refreshAssets = options.refreshAssets ?? refreshAssetsStore;
+  const onAssetReady = options.onAssetReady;
 
   return {
+    peekTtsAudioAsset: (request) => {
+      const state = stateFor(ttsStates, request.nodeId, request.signature);
+      return state.assetId;
+    },
     getTtsAudioAsset: (request) => {
       const state = stateFor(ttsStates, request.nodeId, request.signature);
       if (state.assetId || state.inFlight) return state.assetId;
@@ -127,6 +133,7 @@ export function createManagerAudioAssetNodeDeps(
           if (assetId) {
             state.assetId = assetId;
             state.errorSignature = null;
+            onAssetReady?.(assetId);
             void refreshAssets();
           }
         })

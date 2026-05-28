@@ -460,6 +460,12 @@ class NodeEngineClass {
     return this.runtime.getLastComputedInputs(id);
   }
 
+  pulseRuntime(_reason = 'external'): void {
+    if (!get(this.isRunning)) return;
+    this.runtime.step();
+    this.tickTime.set(Date.now());
+  }
+
   // ========== Lifecycle ==========
 
   start(): void {
@@ -632,6 +638,23 @@ class NodeEngineClass {
     };
   }
 
+  private mergeRuntimeOutputValuesIntoCompiledGraph(
+    compiled: GraphState,
+    runtimeSnapshot: GraphState
+  ): GraphState {
+    const outputValuesByNodeId = new Map(
+      (runtimeSnapshot.nodes ?? []).map((node) => [String(node.id), { ...(node.outputValues ?? {}) }])
+    );
+    return {
+      ...compiled,
+      nodes: (compiled.nodes ?? []).map((node) => {
+        const outputValues = outputValuesByNodeId.get(String(node.id));
+        if (!outputValues) return node;
+        return { ...node, outputValues };
+      }),
+    };
+  }
+
   // ========== Group / Disable Nodes ==========
 
   setNodesDisabled(nodeIds: string[], disabled: boolean): void {
@@ -784,10 +807,11 @@ class NodeEngineClass {
     };
     assetRefs: string[];
   } {
-    const snapshot = asManagerGraph(compileGraphForPatch(
-      this.exportGraphWithRuntimeCustomGateInputs(),
-      get(customNodeDefinitions) ?? []
-    ));
+    const runtimeSnapshot = this.exportGraphWithRuntimeCustomGateInputs();
+    const snapshot = this.mergeRuntimeOutputValuesIntoCompiledGraph(
+      asManagerGraph(compileGraphForPatch(runtimeSnapshot, get(customNodeDefinitions) ?? [])),
+      runtimeSnapshot
+    );
     const ids = Array.from(new Set((rootNodeIds ?? []).map(String).filter(Boolean))).sort();
     if (ids.length === 0) throw new Error('No patch root ids provided.');
 
@@ -845,10 +869,11 @@ class NodeEngineClass {
   }
 
   exportCompiledGraphForPatchPlanning(): GraphState {
-    return asManagerGraph(compileGraphForPatch(
-      this.exportGraphWithRuntimeCustomGateInputs(),
-      get(customNodeDefinitions) ?? []
-    ));
+    const runtimeSnapshot = this.exportGraphWithRuntimeCustomGateInputs();
+    return this.mergeRuntimeOutputValuesIntoCompiledGraph(
+      asManagerGraph(compileGraphForPatch(runtimeSnapshot, get(customNodeDefinitions) ?? [])),
+      runtimeSnapshot
+    );
   }
 
   exportGraphForPatch(): {

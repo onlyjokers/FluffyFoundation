@@ -16,7 +16,16 @@ type LoadAudioTimelineState = {
   ended: boolean;
 };
 
+type GenerateTtsAudioAssetState = {
+  lastTrigger: boolean;
+  currentSignature: string;
+  currentAssetId: string;
+  assetIdBySignature: Map<string, string>;
+  requestedSignatures: Set<string>;
+};
+
 const loadAudioTimelineState = new Map<string, LoadAudioTimelineState>();
+const generateTtsAudioAssetStateByNodeId = new Map<string, GenerateTtsAudioAssetState>();
 
 function computeLoadAudioFinished(opts: {
   nodeId: string;
@@ -290,7 +299,7 @@ export function createLoadAudioAssetFromAssetsNode(): NodeDefinition {
     ],
     process: (_inputs, config) => {
       const assetId = typeof config.assetId === 'string' ? config.assetId.trim() : '';
-      return { ref: assetId ? `asset:${assetId}` : '' };
+      return { ref: assetId ? normalizeAssetRef(assetId) : '' };
     },
   };
 }
@@ -319,6 +328,32 @@ function buildTtsSignature(input: {
   return JSON.stringify(input);
 }
 
+function getGenerateTtsAudioAssetState(nodeId: string): GenerateTtsAudioAssetState {
+  const existing = generateTtsAudioAssetStateByNodeId.get(nodeId);
+  if (existing) return existing;
+  const next: GenerateTtsAudioAssetState = {
+    lastTrigger: false,
+    currentSignature: '',
+    currentAssetId: '',
+    assetIdBySignature: new Map(),
+    requestedSignatures: new Set(),
+  };
+  generateTtsAudioAssetStateByNodeId.set(nodeId, next);
+  return next;
+}
+
+function normalizeTtsAssetId(raw: string | null | undefined): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return '';
+  return value.startsWith('asset:') ? value.slice('asset:'.length).trim() : value;
+}
+
+function outputForTtsAsset(assetId: string): Record<string, unknown> {
+  return assetId
+    ? { assetId, asset: normalizeAssetRef(assetId) }
+    : { assetId: '', asset: '' };
+}
+
 const TTS_MODEL_OPTIONS = [{ value: 'qwen3-tts-flash', label: 'Qwen3 TTS Flash' }];
 const TTS_VOICE_OPTIONS = [
   { value: 'Cherry', label: 'Cherry' },
@@ -335,8 +370,8 @@ const TTS_LANGUAGE_OPTIONS = [
 
 export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDefinition {
   return {
-    type: 'generate-tts-audio-asset',
-    label: 'Generate TTS Audio Asset',
+    type: 'generate-tts-audio',
+    label: 'Generate TTS Audio',
     category: 'AI',
     inputs: [
       { id: 'text', label: 'Text', type: 'string', defaultValue: '' },
@@ -398,7 +433,7 @@ export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDef
       compatibility: [
         {
           target: 'load-audio-from-assets',
-          rule: 'Produces an asset ref that can feed Load Audio From Assets via the asset input.',
+          rule: 'Connect the asset output into Load Audio From Remote before audio processors or Audio Out.',
         },
       ],
       examples: [
@@ -413,12 +448,13 @@ export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDef
         'Requires server-side DashScope credentials and asset write access.',
       ],
       description:
-        'Generate a reusable audio asset from text using the server-side TTS asset pipeline.',
+        'Generate reusable audio from text using the server-side TTS asset pipeline.',
       repairHints: [
-        'Keep the node on the manager/control plane; its output is an asset reference, not live audio.',
+        'Connect the Asset output to Load Audio From Remote, then connect that audio output through Tone or Audio Out.',
       ],
     },
     process: (inputs, config, context) => {
+      const state = getGenerateTtsAudioAssetState(context.nodeId);
       const text = typeof inputs.text === 'string' ? inputs.text.trim() : '';
       const trigger = coerceBooleanOr(inputs.trigger, false);
       const model = getStringValue(inputs.model) || getStringValue(config.model) || 'qwen3-tts-flash';
@@ -440,11 +476,17 @@ export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDef
         optimizeInstructions,
       });
 
-      if (!text || !trigger) {
-        return { assetId: '', asset: '' };
+      if (state.currentSignature !== signature) {
+        state.currentSignature = signature;
+        state.currentAssetId = state.assetIdBySignature.get(signature) ?? state.currentAssetId;
       }
 
-      const assetId = deps.audioAssets?.getTtsAudioAsset?.({
+      if (!text) {
+        state.lastTrigger = trigger;
+        return outputForTtsAsset(state.currentAssetId);
+      }
+
+      const request = {
         nodeId: context.nodeId,
         signature,
         text,
@@ -453,8 +495,39 @@ export function createGenerateTtsAudioAssetNode(deps: ClientObjectDeps): NodeDef
         languageType,
         instructions,
         optimizeInstructions,
-      }) ?? '';
-      return { assetId, asset: assetId ? normalizeAssetRef(assetId) : '' };
+      };
+      const rising = trigger && !state.lastTrigger;
+      if (rising) {
+        state.requestedSignatures.add(signature);
+        const nextAssetId = normalizeTtsAssetId(deps.audioAssets?.getTtsAudioAsset?.(request));
+        if (nextAssetId) {
+          state.assetIdBySignature.set(signature, nextAssetId);
+          state.currentAssetId = nextAssetId;
+        }
+        state.lastTrigger = trigger;
+        return outputForTtsAsset(state.currentAssetId);
+      }
+
+      const cached =
+        state.assetIdBySignature.get(signature) ??
+        (state.requestedSignatures.has(signature)
+          ? normalizeTtsAssetId(
+              deps.audioAssets?.peekTtsAudioAsset?.(request) ??
+                deps.audioAssets?.getTtsAudioAsset?.(request)
+            )
+          : '');
+      if (cached) {
+        state.assetIdBySignature.set(signature, cached);
+        state.currentAssetId = cached;
+        state.lastTrigger = trigger;
+        return outputForTtsAsset(cached);
+      }
+
+      state.lastTrigger = trigger;
+      return outputForTtsAsset(state.currentAssetId);
+    },
+    onDisable: (_inputs, _config, context) => {
+      generateTtsAudioAssetStateByNodeId.delete(context.nodeId);
     },
   };
 }

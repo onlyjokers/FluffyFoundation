@@ -51,6 +51,16 @@ export type ClientUiDeps = {
 };
 
 export type AudioAssetNodeDeps = {
+  peekTtsAudioAsset?: (request: {
+    nodeId: string;
+    signature: string;
+    text: string;
+    model: string;
+    voice: string;
+    languageType: string;
+    instructions: string;
+    optimizeInstructions: boolean;
+  }) => string | null;
   getTtsAudioAsset?: (request: {
     nodeId: string;
     signature: string;

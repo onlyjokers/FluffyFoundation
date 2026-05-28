@@ -666,6 +666,344 @@ test('patch runtime does not redeploy when graph changes keep the same topology'
   runtime.destroy();
 });
 
+test('patch runtime redeploys when generated TTS asset resolves after initial patch deploy', () => {
+  let assetId = '';
+  const { runtime, sent } = createImmediateHarness();
+  const createTtsPayload = (): PatchPayload => ({
+    ...basePayload(),
+    graph: {
+      nodes: [
+        { ...node('tts', 'load-audio-from-assets'), config: { assetId } },
+        node('out', 'audio-out'),
+      ],
+      connections: [
+        {
+          id: 'audio',
+          sourceNodeId: 'tts',
+          sourcePortId: 'ref',
+          targetNodeId: 'out',
+          targetPortId: 'in',
+        },
+      ],
+    },
+    assetRefs: assetId ? [`asset:${assetId}`] : [],
+  });
+
+  runtime.destroy();
+
+  const sentForTts: Array<{ command: string; payload: unknown }> = [];
+  const runtimeForTts = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => {
+        const nodes = [
+          node('source', 'generate-tts-audio'),
+          node('tts-load', 'load-audio-from-assets'),
+          node('out', 'audio-out'),
+          node('loader', 'client-loader'),
+          node('client', 'client-executor'),
+        ];
+        return nodes.find((candidate) => candidate.id === nodeId);
+      },
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' ? { client: { clientId: 'client-1', clientIds: ['client-1'] } } : null,
+      exportGraphForPatchFromRootNodeIds: createTtsPayload,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: {
+      get: (type) =>
+        new Map<string, NodeDefinition>([
+          ['generate-tts-audio', definition('generate-tts-audio', 'TTS', [], [port('asset', 'asset')])],
+          ['load-audio-from-assets', definition('load-audio-from-assets', 'Load Audio', [port('asset', 'asset')], [port('ref', 'audio')])],
+          ['audio-out', definition('audio-out', 'Audio Out', [port('in', 'audio')], [port('cmd', 'command')])],
+          ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+          ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+        ]).get(type),
+    },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => ({
+      nodes: [
+        node('source', 'generate-tts-audio'),
+        node('tts-load', 'load-audio-from-assets'),
+        node('out', 'audio-out'),
+        node('loader', 'client-loader'),
+        node('client', 'client-executor'),
+      ],
+      connections: [
+        { id: 'asset', sourceNodeId: 'source', sourcePortId: 'asset', targetNodeId: 'tts-load', targetPortId: 'asset' },
+        { id: 'audio', sourceNodeId: 'tts-load', sourcePortId: 'ref', targetNodeId: 'out', targetPortId: 'in' },
+        { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+        { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+      ],
+    }),
+    groupDisabledNodeIds: readable(new Set<string>()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (_target, _pluginName, command, nextPayload) => {
+        sentForTts.push({ command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtimeForTts.scheduleReconcile('initial', { immediate: true });
+  assetId = 'asset-tts-1';
+  runtimeForTts.onTick();
+
+  assert.deepEqual(sentForTts.map((message) => message.command), [
+    'deploy',
+    'start',
+    'deploy',
+    'start',
+  ]);
+  const redeployPayload = sentForTts[2]?.payload as PatchPayload;
+  assert.equal(redeployPayload.graph.nodes.find((item) => item.id === 'tts')?.config.assetId, 'asset-tts-1');
+  runtimeForTts.destroy();
+  assert.deepEqual(sent.map((message) => message.command), []);
+});
+
+test('patch runtime deploys when generated TTS asset appears after an empty initial patch', () => {
+  let assetId = '';
+  const { runtime, sent } = createImmediateHarness();
+  const createTtsPayload = (): PatchPayload => ({
+    ...basePayload(),
+    graph: {
+      nodes: [
+        { ...node('tts', 'load-audio-from-assets'), config: { assetId } },
+        node('out', 'audio-out'),
+      ],
+      connections: [
+        {
+          id: 'audio',
+          sourceNodeId: 'tts',
+          sourcePortId: 'ref',
+          targetNodeId: 'out',
+          targetPortId: 'in',
+        },
+      ],
+    },
+    assetRefs: assetId ? [`asset:${assetId}`] : [],
+  });
+
+  runtime.destroy();
+
+  const sentForTts: Array<{ command: string; payload: unknown }> = [];
+  const runtimeForTts = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => {
+        const nodes = [
+          node('source', 'generate-tts-audio'),
+          node('tts-load', 'load-audio-from-assets'),
+          node('out', 'audio-out'),
+          node('loader', 'client-loader'),
+          node('client', 'client-executor'),
+        ];
+        return nodes.find((candidate) => candidate.id === nodeId);
+      },
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' ? { client: { clientId: 'client-1', clientIds: ['client-1'] } } : null,
+      exportGraphForPatchFromRootNodeIds: createTtsPayload,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: {
+      get: (type) =>
+        new Map<string, NodeDefinition>([
+          ['generate-tts-audio', definition('generate-tts-audio', 'TTS', [], [port('asset', 'asset')])],
+          ['load-audio-from-assets', definition('load-audio-from-assets', 'Load Audio', [port('asset', 'asset')], [port('ref', 'audio')])],
+          ['audio-out', definition('audio-out', 'Audio Out', [port('in', 'audio')], [port('cmd', 'command')])],
+          ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+          ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+        ]).get(type),
+    },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => {
+      const source = node('source', 'generate-tts-audio');
+      source.outputValues = assetId ? { asset: `asset:${assetId}`, assetId } : {};
+      return {
+        nodes: [
+          source,
+          node('tts-load', 'load-audio-from-assets'),
+          node('out', 'audio-out'),
+          node('loader', 'client-loader'),
+          node('client', 'client-executor'),
+        ],
+        connections: [
+          { id: 'asset', sourceNodeId: 'source', sourcePortId: 'asset', targetNodeId: 'tts-load', targetPortId: 'asset' },
+          { id: 'audio', sourceNodeId: 'tts-load', sourcePortId: 'ref', targetNodeId: 'out', targetPortId: 'in' },
+          { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+          { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+        ],
+      };
+    },
+    groupDisabledNodeIds: readable(new Set()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (_target, _pluginName, command, nextPayload) => {
+        sentForTts.push({ command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtimeForTts.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sentForTts.map((message) => message.command), ['deploy', 'start']);
+  sentForTts.length = 0;
+
+  runtimeForTts.onTick();
+  assert.deepEqual(sentForTts.map((message) => message.command), []);
+
+  assetId = 'asset-tts-ready';
+  runtimeForTts.onTick();
+
+  assert.deepEqual(sentForTts.map((message) => message.command), ['deploy', 'start']);
+  const deployPayload = sentForTts[0]?.payload as PatchPayload;
+  assert.equal(deployPayload.graph.nodes.find((item) => item.id === 'tts')?.config.assetId, 'asset-tts-ready');
+  runtimeForTts.destroy();
+});
+
+test('patch runtime ignores runtime-only output changes when checking payload drift', () => {
+  const { runtime, sent } = createImmediateHarness();
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+  const deployedPayload = sent[0]?.payload as PatchPayload;
+
+  sent.length = 0;
+  const sceneNode = deployedPayload.graph.nodes.find((item) => item.id === 'scene');
+  assert.ok(sceneNode);
+  sceneNode.outputValues = { frame: 1 };
+
+  runtime.onTick();
+
+  assert.deepEqual(sent.map((message) => message.command), []);
+  runtime.destroy();
+});
+
+test('patch runtime does not report payload drift for the same patch deployed to multiple clients', () => {
+  const graph: GraphState = {
+    nodes: [
+      node('scene', 'scene-fct-track'),
+      node('out', 'scene-out'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
+  };
+  const sent: Array<{ target: unknown; pluginName: string; command: string; payload: unknown }> = [];
+  const logs: unknown[][] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    logs.push(args);
+  };
+
+  const definitions = new Map<string, NodeDefinition>([
+    ['scene-out', definition('scene-out', 'Scene Out', [], [port('cmd', 'command')])],
+    ['scene-fct-track', definition('scene-fct-track', 'Scene FCT', [port('in', 'scene')], [port('out', 'scene')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+  ]);
+
+  try {
+    const runtime = createPatchRuntime({
+      nodeEngine: {
+        getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+        getLastComputedInputs: (nodeId) =>
+          nodeId === 'client'
+            ? { client: { clientId: 'client-1', clientIds: ['client-1', 'client-2'] } }
+            : null,
+        exportGraphForPatchFromRootNodeIds: () => basePayload(),
+        lastError: writable<string | null>(null),
+        setPatchOffloadedNodeIds: () => undefined,
+        getTimeRangePlayheadSec: () => null,
+      },
+      nodeRegistry: { get: (type) => definitions.get(type) },
+      adapter: {
+        getNodeVisualState: () => ({}),
+        setNodeVisualState: async () => undefined,
+      } as unknown as CreatePatchRuntimeOptions['adapter'],
+      isRunningStore: readable(true),
+      getGraphState: () => graph,
+      groupDisabledNodeIds: readable(new Set<string>()),
+      executorStatusByClient: readable(new Map()),
+      showExecutorLogs: writable(false),
+      logsClientId: writable(''),
+      loopController: null,
+      managerState: readable({
+        clients: [
+          { clientId: 'client-1', group: 'audience', connected: true },
+          { clientId: 'client-2', group: 'audience', connected: true },
+        ],
+        selectedClientIds: ['client-1', 'client-2'],
+      }),
+      displayTransport: {
+        getAvailability: defaultAvailability,
+        sendPlugin: defaultAvailability,
+      },
+      getSDK: () => ({
+        sendPluginControl: (target, pluginName, command, nextPayload) => {
+          sent.push({ target, pluginName, command, payload: nextPayload });
+        },
+      }),
+      ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+    });
+
+    runtime.scheduleReconcile('initial', { immediate: true });
+    assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start', 'deploy', 'start']);
+
+    sent.length = 0;
+    logs.length = 0;
+    runtime.onTick();
+
+    assert.deepEqual(sent.map((message) => message.command), []);
+    assert.equal(
+      logs.some((args) => {
+        const meta = args[1] as { reason?: unknown } | undefined;
+        return args[0] === '[patch] reconciled' && meta?.reason === 'runtime-payload-change';
+      }),
+      false
+    );
+    runtime.destroy();
+  } finally {
+    console.log = originalLog;
+  }
+});
+
 test('patch runtime does not redeploy when unrelated canvas topology changes outside the active patch', () => {
   const { runtime, sent, setGraph } = createImmediateHarness();
 
