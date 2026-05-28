@@ -308,6 +308,80 @@ test('compileGraphForPatch applies unconnected public custom inputs through boun
   assert.deepEqual(compiled.connections, []);
 });
 
+test('compileGraphForPatch repairs missing pinned proxy internals from the definition template', () => {
+  const definition: CustomNodeDefinition = {
+    definitionId: 'def-stale-proxy-value',
+    name: 'Stale Proxy Public Input Value Custom',
+    template: {
+      nodes: [
+        {
+          id: 'input-proxy',
+          type: 'group-proxy',
+          position: { x: 0, y: 0 },
+          config: { direction: 'input', portType: 'number', pinned: true },
+          inputValues: {},
+          outputValues: {},
+        },
+        numberNode('inner'),
+      ],
+      connections: [
+        {
+          id: 'proxy-to-inner',
+          sourceNodeId: 'input-proxy',
+          sourcePortId: 'out',
+          targetNodeId: 'inner',
+          targetPortId: 'value',
+        },
+      ],
+    },
+    ports: [
+      {
+        portKey: 'amount',
+        label: 'Amount',
+        side: 'input',
+        type: 'number',
+        pinned: true,
+        y: 0,
+        binding: { nodeId: 'input-proxy', portId: 'in' },
+      },
+    ],
+  };
+
+  const graph: GraphState = {
+    nodes: [
+      {
+        id: 'custom-1',
+        type: 'custom:def-stale-proxy-value',
+        position: { x: 0, y: 0 },
+        config: writeCustomNodeState(
+          {},
+          {
+            definitionId: 'def-stale-proxy-value',
+            groupId: 'group-1',
+            role: 'mother',
+            manualGate: true,
+            internal: {
+              nodes: [numberNode('inner')],
+              connections: [],
+            },
+          }
+        ),
+        inputValues: { amount: 99 },
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  const compiled = compileGraphForPatch(graph, [definition]);
+
+  assert.deepEqual(
+    compiled.nodes.map((node) => [node.id, node.inputValues]),
+    [['cn:custom-1:inner', { value: 99 }]]
+  );
+  assert.deepEqual(compiled.connections, []);
+});
+
 test('compileGraphForPatch expands when the runtime gate input is active even if manualGate config is stale', () => {
   const definition: CustomNodeDefinition = {
     definitionId: 'def-stale-gate',

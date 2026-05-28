@@ -1,6 +1,6 @@
 // Purpose: Migrate persisted Custom Node graphs authored against older node definitions.
 import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
-import type { CustomNodeDefinition, CustomNodePort } from './types';
+import type { CustomNodeDefinition, CustomNodePort, CustomNodePortSide } from './types';
 import { readCustomNodeState, writeCustomNodeState } from './instance';
 import { cloneGraphGroups } from '$lib/components/nodes/node-canvas/custom-nodes/custom-node-graph';
 
@@ -20,6 +20,40 @@ const CLIENT_OBJECT_LOADER_OUTPUT_PORTS: Record<string, string> = {
   out: 'client',
   indexs: 'indexs',
   indexOut: 'number',
+};
+
+const CUSTOM_NODE_PORT_TYPES = new Set([
+  'number',
+  'boolean',
+  'pulse',
+  'string',
+  'asset',
+  'color',
+  'audio',
+  'image',
+  'video',
+  'scene',
+  'effect',
+  'print',
+  'client',
+  'command',
+  'fuzzy',
+  'array',
+  'any',
+]);
+
+const normalizeCustomPortType = (value: unknown): CustomNodePort['type'] => {
+  const type = String(value ?? 'any');
+  return (CUSTOM_NODE_PORT_TYPES.has(type) ? type : 'any') as CustomNodePort['type'];
+};
+
+const labelFromPortId = (value: unknown, fallback: string): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return fallback;
+  return raw
+    .replace(/[-_]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
 const makeUniqueNodeId = (preferred: string, used: Set<string>): string => {
@@ -212,23 +246,77 @@ const migratePortBinding = (
   return { ...port, binding: { ...port.binding } };
 };
 
+const inferPinnedProxyPortLabel = (
+  proxy: NodeInstance,
+  graph: GraphState,
+  side: CustomNodePortSide
+): string => {
+  const proxyId = String(proxy.id ?? '');
+  const connections = Array.isArray(graph.connections) ? graph.connections : [];
+  if (side === 'input') {
+    const outgoing = connections.find(
+      (connection) =>
+        String(connection.sourceNodeId) === proxyId && String(connection.sourcePortId) === 'out'
+    );
+    if (outgoing) return labelFromPortId(outgoing.targetPortId, 'In');
+    return 'In';
+  }
+
+  const incoming = connections.find(
+    (connection) =>
+      String(connection.targetNodeId) === proxyId && String(connection.targetPortId) === 'in'
+  );
+  if (incoming) return labelFromPortId(incoming.sourcePortId, 'Out');
+  return 'Out';
+};
+
+const repairPinnedProxyPorts = (
+  graph: GraphState,
+  ports: CustomNodePort[]
+): CustomNodePort[] => {
+  const next = ports.map((port) => ({ ...port, binding: { ...port.binding } }));
+  const existingProxyIds = new Set(next.map((port) => String(port.binding?.nodeId ?? '')));
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+
+  for (const node of nodes) {
+    const id = String(node?.id ?? '');
+    if (!id || String(node?.type ?? '') !== 'group-proxy') continue;
+    if (existingProxyIds.has(id)) continue;
+    if (!Boolean(node.config?.pinned)) continue;
+
+    const direction = String(node.config?.direction ?? 'output');
+    const side: CustomNodePortSide = direction === 'input' ? 'input' : 'output';
+    const portKey = `p:${id}`;
+    if (next.some((port) => String(port.portKey ?? '') === portKey)) continue;
+
+    next.push({
+      portKey,
+      side,
+      label: inferPinnedProxyPortLabel(node, graph, side),
+      type: normalizeCustomPortType(node.config?.portType),
+      pinned: true,
+      y: Number(node.position?.y ?? 0),
+      binding: { nodeId: id, portId: side === 'input' ? 'in' : 'out' },
+    });
+  }
+
+  return next;
+};
+
 export function normalizeLegacyCustomNodeDefinition(
   definition: CustomNodeDefinition
 ): CustomNodeDefinition {
   const migratedClients = collectMigratedClientsForGraph(definition.template);
-
-  if (migratedClients.size === 0) {
-    return {
-      ...definition,
-      template: normalizeLegacyCustomNodeGraph(definition.template),
-      ports: (definition.ports ?? []).map((port) => ({ ...port, binding: { ...port.binding } })),
-    };
-  }
+  const template = normalizeLegacyCustomNodeGraph(definition.template);
+  const migratedPorts =
+    migratedClients.size === 0
+      ? (definition.ports ?? []).map((port) => ({ ...port, binding: { ...port.binding } }))
+      : (definition.ports ?? []).map((port) => migratePortBinding(port, migratedClients));
 
   return {
     ...definition,
-    template: normalizeLegacyCustomNodeGraph(definition.template),
-    ports: (definition.ports ?? []).map((port) => migratePortBinding(port, migratedClients)),
+    template,
+    ports: repairPinnedProxyPorts(template, migratedPorts),
   };
 }
 

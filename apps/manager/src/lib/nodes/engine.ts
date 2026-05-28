@@ -22,7 +22,7 @@ import type { Connection, GraphChange, GraphState, NodeInstance } from './types'
 import { nodeRegistry } from './registry';
 import { parameterRegistry } from '../parameters/registry';
 import { exportGraphForPatch } from './patch-export';
-import { customNodeDefinitions } from './custom-nodes/store';
+import { CUSTOM_NODE_INTERNAL_OUTPUTS_KEY, customNodeDefinitions } from './custom-nodes/store';
 import {
   clearNodeGraphLayout,
   patchNodeGraphLayoutPosition,
@@ -642,9 +642,22 @@ class NodeEngineClass {
     compiled: GraphState,
     runtimeSnapshot: GraphState
   ): GraphState {
-    const outputValuesByNodeId = new Map(
-      (runtimeSnapshot.nodes ?? []).map((node) => [String(node.id), { ...(node.outputValues ?? {}) }])
-    );
+    const outputValuesByNodeId = new Map<string, Record<string, unknown>>();
+    for (const node of runtimeSnapshot.nodes ?? []) {
+      const nodeId = String(node.id);
+      if (!nodeId) continue;
+      outputValuesByNodeId.set(nodeId, { ...(node.outputValues ?? {}) });
+
+      if (!String(node.type ?? '').startsWith('custom:')) continue;
+      const internalOutputs = node.outputValues?.[CUSTOM_NODE_INTERNAL_OUTPUTS_KEY];
+      if (!internalOutputs || typeof internalOutputs !== 'object') continue;
+      for (const [innerNodeId, outputValues] of Object.entries(
+        internalOutputs as Record<string, unknown>
+      )) {
+        if (!innerNodeId || !outputValues || typeof outputValues !== 'object') continue;
+        outputValuesByNodeId.set(innerNodeId, { ...(outputValues as Record<string, unknown>) });
+      }
+    }
     return {
       ...compiled,
       nodes: (compiled.nodes ?? []).map((node) => {

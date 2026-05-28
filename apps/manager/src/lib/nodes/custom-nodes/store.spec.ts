@@ -123,6 +123,136 @@ test('custom node shell passes public inputs through bound group proxies', () =>
   }
 });
 
+test('custom node shell repairs missing public ports for pinned group proxies', () => {
+  const definitionId = 'test-repair-pinned-proxy';
+  const internal = {
+    nodes: [
+      {
+        id: 'trigger-proxy',
+        type: 'group-proxy',
+        position: { x: 0, y: 12 },
+        config: { direction: 'input', portType: 'pulse', pinned: true },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'pulse-consumer',
+        type: 'pulse-to-boolean',
+        position: { x: 160, y: 0 },
+        config: { mode: 'latch', defaultValue: false },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'proxy-to-consumer',
+        sourceNodeId: 'trigger-proxy',
+        sourcePortId: 'out',
+        targetNodeId: 'pulse-consumer',
+        targetPortId: 'pulse',
+      },
+    ],
+  };
+
+  registerCustomNodeDefinition({
+    definitionId,
+    name: 'Repair Pinned Proxy Custom',
+    template: internal,
+    ports: [],
+  });
+
+  try {
+    const def = nodeRegistry.get(customNodeType(definitionId));
+    const trigger = def?.inputs.find((input) => input.id === 'p:trigger-proxy');
+
+    assert.equal(trigger?.label, 'Pulse');
+    assert.equal(trigger?.type, 'pulse');
+  } finally {
+    unregisterCustomNodeDefinition(definitionId);
+  }
+});
+
+test('custom node shell uses repaired pinned proxy ports with stale instance internals', () => {
+  const definitionId = 'test-repair-pinned-proxy-runtime';
+  const template = {
+    nodes: [
+      {
+        id: 'trigger-proxy',
+        type: 'group-proxy',
+        position: { x: 0, y: 12 },
+        config: { direction: 'input', portType: 'pulse', pinned: true },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'pulse-consumer',
+        type: 'pulse-to-boolean',
+        position: { x: 160, y: 0 },
+        config: { mode: 'latch', defaultValue: false },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'proxy-to-consumer',
+        sourceNodeId: 'trigger-proxy',
+        sourcePortId: 'out',
+        targetNodeId: 'pulse-consumer',
+        targetPortId: 'pulse',
+      },
+    ],
+  };
+  const staleInternal = {
+    nodes: [
+      {
+        id: 'pulse-consumer',
+        type: 'pulse-to-boolean',
+        position: { x: 160, y: 0 },
+        config: { mode: 'latch', defaultValue: false },
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [],
+  };
+
+  registerCustomNodeDefinition({
+    definitionId,
+    name: 'Repair Pinned Proxy Runtime Custom',
+    template,
+    ports: [],
+  });
+
+  try {
+    const def = nodeRegistry.get(customNodeType(definitionId));
+    const config = writeCustomNodeState(
+      {},
+      {
+        definitionId,
+        groupId: 'group-1',
+        role: 'mother',
+        manualGate: true,
+        internal: staleInternal,
+      }
+    );
+
+    const outputs = def?.process({ gate: true, 'p:trigger-proxy': true }, config, {
+      nodeId: 'custom-1',
+      time: 0,
+      deltaTime: 16,
+    });
+    const internalOutputs = outputs?.__customNodeInternalOutputs as
+      | Record<string, Record<string, unknown>>
+      | undefined;
+
+    assert.equal(internalOutputs?.['cn:custom-1:pulse-consumer']?.value, true);
+  } finally {
+    unregisterCustomNodeDefinition(definitionId);
+  }
+});
+
 test('custom node shell migrates legacy client-object internals before runtime load', () => {
   const definitionId = 'test-legacy-client-runtime';
   const internal = {

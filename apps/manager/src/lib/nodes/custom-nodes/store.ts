@@ -53,6 +53,72 @@ const materializeInternalNodeId = (customNodeId: string, internalNodeId: string)
 const materializeInternalGroupId = (customNodeId: string, groupId: string): string =>
   `cn:${String(customNodeId ?? '')}:group:${String(groupId ?? '')}`;
 
+export const CUSTOM_NODE_INTERNAL_OUTPUTS_KEY = '__customNodeInternalOutputs';
+
+const connectionKey = (connection: {
+  sourceNodeId: string;
+  sourcePortId: string;
+  targetNodeId: string;
+  targetPortId: string;
+}) =>
+  `${connection.sourceNodeId}|${connection.sourcePortId}|${connection.targetNodeId}|${connection.targetPortId}`;
+
+const graphWithDefinitionPortBindings = (
+  graph: GraphState,
+  definition: CustomNodeDefinition
+): GraphState => {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  const connections = Array.isArray(graph.connections) ? graph.connections : [];
+  const templateNodes = Array.isArray(definition.template?.nodes) ? definition.template.nodes : [];
+  const templateConnections = Array.isArray(definition.template?.connections)
+    ? definition.template.connections
+    : [];
+  const nodeIds = new Set(nodes.map((node) => String(node?.id ?? '')).filter(Boolean));
+  const requiredIds = new Set(
+    (definition.ports ?? [])
+      .map((port) => String(port?.binding?.nodeId ?? ''))
+      .filter((id) => id && !nodeIds.has(id))
+  );
+  if (requiredIds.size === 0) return graph;
+
+  const nextNodes: NodeInstance[] = [...nodes];
+  for (const node of templateNodes) {
+    const id = String(node?.id ?? '');
+    if (!requiredIds.has(id)) continue;
+    nextNodes.push({
+      ...node,
+      config: { ...(node.config ?? {}) },
+      inputValues: { ...(node.inputValues ?? {}) },
+      outputValues: {},
+    });
+    nodeIds.add(id);
+  }
+
+  const nextNodeIds = new Set(nextNodes.map((node) => String(node?.id ?? '')).filter(Boolean));
+  const existingConnectionKeys = new Set(connections.map(connectionKey));
+  const nextConnections: Connection[] = [...connections];
+  for (const connection of templateConnections) {
+    const sourceNodeId = String(connection?.sourceNodeId ?? '');
+    const sourcePortId = String(connection?.sourcePortId ?? '');
+    const targetNodeId = String(connection?.targetNodeId ?? '');
+    const targetPortId = String(connection?.targetPortId ?? '');
+    if (!sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) continue;
+    if (!nextNodeIds.has(sourceNodeId) || !nextNodeIds.has(targetNodeId)) continue;
+    const key = connectionKey({ sourceNodeId, sourcePortId, targetNodeId, targetPortId });
+    if (existingConnectionKeys.has(key)) continue;
+    existingConnectionKeys.add(key);
+    nextConnections.push({
+      ...connection,
+      sourceNodeId,
+      sourcePortId,
+      targetNodeId,
+      targetPortId,
+    });
+  }
+
+  return { ...graph, nodes: nextNodes, connections: nextConnections };
+};
+
 const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefinition['process'] => {
   const runtimeByNodeId = new Map<
     string,
@@ -73,8 +139,9 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     const gate = inputs?.gate;
     if (gate === false) return {};
 
-    const internal = normalizeLegacyCustomNodeGraph(
-      state.internal ?? { nodes: [], connections: [] }
+    const internal = graphWithDefinitionPortBindings(
+      normalizeLegacyCustomNodeGraph(state.internal ?? { nodes: [], connections: [] }),
+      definition
     );
     const signature = buildInternalSignature(internal);
 
@@ -166,6 +233,20 @@ const createCustomNodeProcess = (definition: CustomNodeDefinition): NodeDefiniti
     runtime.step();
 
     const outputs: Record<string, unknown> = {};
+    const internalOutputs: Record<string, Record<string, unknown>> = {};
+    for (const internalNode of internal.nodes ?? []) {
+      const internalNodeId = String(internalNode?.id ?? '');
+      if (!internalNodeId) continue;
+      const runtimeNodeId = materializeInternalNodeId(nodeId, internalNodeId);
+      const runtimeNode = runtime.getNode(runtimeNodeId);
+      const outputValues = runtimeNode?.outputValues ?? {};
+      if (Object.keys(outputValues).length === 0) continue;
+      internalOutputs[runtimeNodeId] = { ...outputValues };
+    }
+    if (Object.keys(internalOutputs).length > 0) {
+      outputs[CUSTOM_NODE_INTERNAL_OUTPUTS_KEY] = internalOutputs;
+    }
+
     for (const port of outputPorts) {
       const portKey = String(port?.portKey ?? '');
       const binding = port?.binding ?? null;

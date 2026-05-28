@@ -175,6 +175,68 @@ function definitionById(definitions: CustomNodeDefinition[]): Map<string, Custom
   return map;
 }
 
+const graphWithDefinitionPortBindings = (
+  graph: GraphState,
+  definition: CustomNodeDefinition
+): GraphState => {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  const connections = Array.isArray(graph.connections) ? graph.connections : [];
+  const templateNodes = Array.isArray(definition.template?.nodes) ? definition.template.nodes : [];
+  const templateConnections = Array.isArray(definition.template?.connections)
+    ? definition.template.connections
+    : [];
+  const nodeIds = new Set(nodes.map((node) => getString(asRecord(node).id, '')).filter(Boolean));
+  const requiredIds = new Set(
+    (definition.ports ?? [])
+      .map((port) => getString(port?.binding?.nodeId, ''))
+      .filter((id) => id && !nodeIds.has(id))
+  );
+  if (requiredIds.size === 0) return graph;
+
+  const nextNodes = [...nodes];
+  for (const node of templateNodes) {
+    const id = getString(asRecord(node).id, '');
+    if (!requiredIds.has(id)) continue;
+    nextNodes.push({
+      ...(asRecord(node) as NodeInstance),
+      config: { ...asRecord(node.config) },
+      inputValues: { ...asRecord(node.inputValues) },
+      outputValues: {},
+    });
+    nodeIds.add(id);
+  }
+
+  const nextNodeIds = new Set(
+    nextNodes.map((node) => getString(asRecord(node).id, '')).filter(Boolean)
+  );
+  const existingConnectionKeys = new Set(connections.map(connectionKey));
+  const nextConnections = [...connections];
+  for (const connection of templateConnections) {
+    const sourceNodeId = getString(connection?.sourceNodeId, '');
+    const sourcePortId = getString(connection?.sourcePortId, '');
+    const targetNodeId = getString(connection?.targetNodeId, '');
+    const targetPortId = getString(connection?.targetPortId, '');
+    if (!sourceNodeId || !sourcePortId || !targetNodeId || !targetPortId) continue;
+    if (!nextNodeIds.has(sourceNodeId) || !nextNodeIds.has(targetNodeId)) continue;
+    const key = connectionKey({ sourceNodeId, sourcePortId, targetNodeId, targetPortId });
+    if (existingConnectionKeys.has(key)) continue;
+    existingConnectionKeys.add(key);
+    nextConnections.push({
+      ...(asRecord(connection) as Connection),
+      sourceNodeId,
+      sourcePortId,
+      targetNodeId,
+      targetPortId,
+    });
+  }
+
+  return {
+    ...graph,
+    nodes: nextNodes,
+    connections: nextConnections,
+  };
+};
+
 const publicInputBindings = (
   node: NodeInstance,
   definition: CustomNodeDefinition,
@@ -289,7 +351,7 @@ export function expandCustomNodesForCompile(
         continue;
       }
 
-      const internalGraph = state.internal as GraphState;
+      const internalGraph = graphWithDefinitionPortBindings(state.internal as GraphState, def);
       const internalNodes = Array.isArray(internalGraph?.nodes) ? internalGraph.nodes : [];
       const internalConnections = Array.isArray(internalGraph?.connections)
         ? internalGraph.connections
