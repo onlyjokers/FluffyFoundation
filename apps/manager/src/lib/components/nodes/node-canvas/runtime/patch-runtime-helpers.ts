@@ -13,6 +13,32 @@ export type PatchDeploymentPlanSnapshotLike = {
   rootIdsByClientId?: Map<string, string[]>;
 } | null;
 
+const PATCH_PAYLOAD_SIGNATURE_LIVE_CONFIG_FIELDS_BY_NODE_TYPE: Record<string, Set<string>> = {
+  'scene-fct-track': new Set([
+    'audioSource',
+    'blend',
+    'brightness',
+    'contrast',
+    'palette',
+    'sensitivity',
+    'showBackground',
+    'variant',
+  ]),
+};
+
+function signatureRecordForNodeValues(
+  nodeType: string,
+  values: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const record = values ?? {};
+  const liveFields = PATCH_PAYLOAD_SIGNATURE_LIVE_CONFIG_FIELDS_BY_NODE_TYPE[nodeType];
+  if (!liveFields) return record;
+
+  const stableEntries = Object.entries(record).filter(([key]) => !liveFields.has(key));
+  if (stableEntries.length === Object.keys(record).length) return record;
+  return Object.fromEntries(stableEntries);
+}
+
 export function computeTopologySignature(payload: Pick<GraphState, 'nodes' | 'connections' | 'groups'>): string {
   const nodes = (payload.nodes ?? []).map((node) => ({
     id: String(node.id),
@@ -50,8 +76,10 @@ export function computePatchPayloadSignature(
   const nodes = (payload.nodes ?? []).map((node) => ({
     id: String(node.id),
     type: String(node.type),
-    config: node.config ?? {},
-    inputValues: node.inputValues ?? {},
+    // Scene FCT Track visual parameters are applied through runtime overrides. Including them here turns every
+    // slider movement into a full patch redeploy, which resets the remote renderer and causes visible flashing.
+    config: signatureRecordForNodeValues(String(node.type), node.config),
+    inputValues: signatureRecordForNodeValues(String(node.type), node.inputValues),
   }));
   nodes.sort((a, b) => a.id.localeCompare(b.id));
 

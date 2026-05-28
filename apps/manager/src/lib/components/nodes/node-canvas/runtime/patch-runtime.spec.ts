@@ -196,6 +196,7 @@ function createImmediateHarness() {
 
   return {
     runtime: createPatchRuntime(opts),
+    payload,
     sent,
     setGraph: (nextGraph: GraphState) => {
       graph = nextGraph;
@@ -664,6 +665,32 @@ test('patch runtime does not redeploy when graph changes keep the same topology'
 
   assert.deepEqual(sent.map((message) => message.command), []);
   runtime.destroy();
+});
+
+test('patch runtime does not redeploy when Scene FCT Track live config changes', () => {
+  const { runtime, payload, sent } = createImmediateHarness();
+  const originalNow = Date.now;
+  let now = 1_000;
+  Date.now = () => now;
+
+  try {
+    runtime.scheduleReconcile('initial', { immediate: true });
+    assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+
+    sent.length = 0;
+    const sceneNode = payload.graph.nodes.find((candidate) => candidate.id === 'scene');
+    assert.ok(sceneNode);
+    sceneNode.config = { ...(sceneNode.config ?? {}), contrast: 1.25 };
+
+    runtime.sendNodeOverride('scene', 'config', 'contrast', 1.25);
+    now += 250;
+    runtime.onTick();
+
+    assert.deepEqual(sent.map((message) => message.command), ['override-set']);
+  } finally {
+    Date.now = originalNow;
+    runtime.destroy();
+  }
 });
 
 test('patch runtime redeploys when generated TTS asset resolves after initial patch deploy', () => {
