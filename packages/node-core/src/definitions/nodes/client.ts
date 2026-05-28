@@ -772,6 +772,38 @@ export function createCmdAggregatorNode(): NodeDefinition {
     out.push(value);
   };
 
+  const cleanupBlockedBy = (action: string): ControlAction | null => {
+    switch (action) {
+      case 'stopMedia':
+        return 'playMedia';
+      case 'hideImage':
+        return 'showImage';
+      case 'hideText':
+        return 'showText';
+      case 'stopSound':
+        return 'modulateSoundUpdate';
+      default:
+        return null;
+    }
+  };
+
+  const coalesceCommands = (cmds: unknown[]): unknown[] => {
+    const activeActions = new Set<string>();
+    for (const cmd of cmds) {
+      const record = asRecord(cmd);
+      const action = getStringValue(record?.action);
+      if (!action) continue;
+      if (!cleanupBlockedBy(action)) activeActions.add(action);
+    }
+    return cmds.filter((cmd) => {
+      const record = asRecord(cmd);
+      const action = getStringValue(record?.action);
+      if (!action) return true;
+      const blockedBy = cleanupBlockedBy(action);
+      return !blockedBy || !activeActions.has(blockedBy);
+    });
+  };
+
   return {
     type: 'cmd-aggregator',
     label: 'Cmd Aggregator',
@@ -784,7 +816,8 @@ export function createCmdAggregatorNode(): NodeDefinition {
       for (const port of inputs) {
         flattenCommands(nodeInputs[port.id], cmds);
       }
-      return { cmd: cmds.length > 0 ? cmds : null };
+      const coalesced = coalesceCommands(cmds);
+      return { cmd: coalesced.length > 0 ? coalesced : null };
     },
   };
 }

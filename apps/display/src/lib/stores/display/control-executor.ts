@@ -351,7 +351,8 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
       }
 
       case 'stopMedia':
-        deps.getMultimediaCore()?.media.stopAllMedia();
+        deps.getMultimediaCore()?.media.stopVideo();
+        deps.getMultimediaCore()?.media.stopAudio();
         return;
 
       case 'screenColor':

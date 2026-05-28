@@ -19,7 +19,8 @@ export function executeMediaControl(
       playMedia(deps, payload as PlayMediaPayload, delaySeconds);
       return true;
     case 'stopMedia':
-      deps.getMultimediaCore()?.media.stopAllMedia();
+      deps.getMultimediaCore()?.media.stopVideo();
+      deps.getMultimediaCore()?.media.stopAudio();
       deps.getToneSoundPlayer()?.stop();
       return true;
     case 'stopSound':

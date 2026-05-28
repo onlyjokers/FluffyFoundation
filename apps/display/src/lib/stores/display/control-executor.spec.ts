@@ -180,3 +180,38 @@ test('Display executor shows the first completed streaming image while newer fra
     URL.revokeObjectURL = originalRevokeObjectUrl;
   }
 });
+
+test('Display executor stopMedia stops playback media without hiding the active image', () => {
+  const calls: string[] = [];
+  const visualScenes = writable([]);
+  const visualEffects = writable([]);
+  const executor = createDisplayControlExecutor({
+    getMultimediaCore: () =>
+      ({
+        media: {
+          stopVideo: () => {
+            calls.push('stopVideo');
+          },
+          stopAudio: () => {
+            calls.push('stopAudio');
+          },
+          hideImage: () => {
+            calls.push('hideImage');
+          },
+          stopAllMedia: () => {
+            calls.push('stopAllMedia');
+          },
+        },
+      }) as unknown as MultimediaCore,
+    getNodeExecutor: () => null,
+    screenOverlay: writable(createClearedDisplayScreenOverlayState()),
+    textOverlay: writable(createClearedDisplayTextOverlayState()),
+    visualScenes,
+    visualEffects,
+    isDev: false,
+  });
+
+  executor.executeControl('stopMedia', {});
+
+  assert.deepEqual(calls, ['stopVideo', 'stopAudio']);
+});

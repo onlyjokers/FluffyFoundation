@@ -100,3 +100,28 @@ test('showImage refreshes an already displayed asset when the manifest checksum 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('stopMedia stops playback media without hiding the active image', () => {
+  const calls: string[] = [];
+  const core = {
+    media: {
+      stopVideo: () => {
+        calls.push('stopVideo');
+      },
+      stopAudio: () => {
+        calls.push('stopAudio');
+      },
+      hideImage: () => {
+        calls.push('hideImage');
+      },
+      stopAllMedia: () => {
+        calls.push('stopAllMedia');
+      },
+    },
+  } as unknown as Partial<MultimediaCore>;
+
+  const handled = executeMediaControl(depsWithMediaCore(core), 'stopMedia', {}, 0);
+
+  assert.equal(handled, true);
+  assert.deepEqual(calls, ['stopVideo', 'stopAudio']);
+});

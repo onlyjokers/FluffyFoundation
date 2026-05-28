@@ -849,6 +849,34 @@ test('client executor keeps unchanged long-lived commands when another aggregato
   }
 });
 
+test('cmd aggregator drops stale cleanup commands when a matching active command is present', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+  });
+  const aggregator = registry.get('cmd-aggregator');
+  assert.ok(aggregator);
+
+  const result = aggregator.process(
+    {
+      in1: { action: 'playMedia', payload: { url: '/clip.mp4', mediaType: 'video' } },
+      in2: { action: 'stopMedia', payload: {} },
+      in3: { action: 'showImage', payload: { url: '/poster.png' } },
+      in4: { action: 'hideImage', payload: {} },
+    },
+    {},
+    { nodeId: 'aggregator', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(result.cmd, [
+    { action: 'playMedia', payload: { url: '/clip.mp4', mediaType: 'video' } },
+    { action: 'showImage', payload: { url: '/poster.png' } },
+  ]);
+});
+
 test('display text processor maps text inputs to showText commands', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
