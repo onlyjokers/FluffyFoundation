@@ -5,9 +5,13 @@ import type { SemanticGraphSnapshot } from '@shugu/node-core';
 
 import {
   buildAgentCapabilityRows,
+  buildBulkAgentCapabilityCommands,
+  buildBulkCustomDeleteCommands,
   createAgentCapabilityCommand,
   filterAgentCapabilityRows,
   getAgentCapabilityRowActions,
+  getBulkCustomDeleteBlockers,
+  getRowsForSelectedTypes,
   summarizeAgentCapabilityRows,
 } from './agent-capability-manager';
 
@@ -201,4 +205,62 @@ test('getAgentCapabilityRowActions exposes Edit only for custom node rows', () =
     'delete-custom',
   ]);
   assert.deepEqual(getAgentCapabilityRowActions(rows[1]).map((action) => action.id), ['toggle-ai']);
+});
+
+test('getRowsForSelectedTypes resolves selected rows in visible row order', () => {
+  const rows = buildAgentCapabilityRows(snapshot());
+
+  assert.deepEqual(
+    getRowsForSelectedTypes(rows, new Set(['plugin:sparkle', 'custom:triplet-pulse'])).map((row) => row.type),
+    ['custom:triplet-pulse', 'plugin:sparkle']
+  );
+});
+
+test('buildBulkAgentCapabilityCommands emits one capability command per selected row', () => {
+  const rows = buildAgentCapabilityRows(snapshot());
+  const selected = getRowsForSelectedTypes(rows, new Set(['custom:triplet-pulse', 'plugin:sparkle']));
+
+  assert.deepEqual(buildBulkAgentCapabilityCommands(selected, false), [
+    {
+      type: 'agent.capability.set',
+      nodeType: 'custom:triplet-pulse',
+      source: 'custom',
+      enabled: false,
+      disabledReason: 'Disabled in Node Manager',
+    },
+    {
+      type: 'agent.capability.set',
+      nodeType: 'plugin:sparkle',
+      source: 'plugin',
+      enabled: false,
+      disabledReason: 'Disabled in Node Manager',
+    },
+  ]);
+});
+
+test('buildBulkAgentCapabilityCommands preserves row policy notes and clears disable reason when enabling', () => {
+  const rows = buildAgentCapabilityRows(snapshot());
+  const selected = getRowsForSelectedTypes(rows, new Set(['display-text']));
+
+  assert.deepEqual(buildBulkAgentCapabilityCommands(selected, true), [
+    {
+      type: 'agent.capability.set',
+      nodeType: 'display-text',
+      source: 'builtin',
+      enabled: true,
+      aiNotes: 'Use custom triplet pulse instead.',
+    },
+  ]);
+});
+
+test('bulk custom delete reports non-custom blockers and only creates commands for custom-only selections', () => {
+  const rows = buildAgentCapabilityRows(snapshot());
+  const mixed = getRowsForSelectedTypes(rows, new Set(['custom:triplet-pulse', 'display-text']));
+  const customOnly = getRowsForSelectedTypes(rows, new Set(['custom:triplet-pulse']));
+
+  assert.deepEqual(getBulkCustomDeleteBlockers(mixed).map((row) => row.type), ['display-text']);
+  assert.deepEqual(buildBulkCustomDeleteCommands(mixed), []);
+  assert.deepEqual(buildBulkCustomDeleteCommands(customOnly), [
+    { type: 'definition.custom.remove', definitionId: 'triplet-pulse' },
+  ]);
 });

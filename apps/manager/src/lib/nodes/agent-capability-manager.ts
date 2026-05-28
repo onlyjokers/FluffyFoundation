@@ -134,6 +134,40 @@ export function createAgentCapabilityCommand(input: {
   };
 }
 
+export function getRowsForSelectedTypes(
+  rows: AgentCapabilityRow[],
+  selectedTypes: ReadonlySet<string>
+): AgentCapabilityRow[] {
+  return rows.filter((row) => selectedTypes.has(row.type));
+}
+
+export function buildBulkAgentCapabilityCommands(
+  rows: AgentCapabilityRow[],
+  enabled: boolean
+): SemanticCommand[] {
+  return rows.map((row) =>
+    createAgentCapabilityCommand({
+      nodeType: row.type,
+      source: row.source,
+      enabled,
+      aiNotes: row.aiNotes,
+      disabledReason: enabled ? undefined : row.disabledReason || 'Disabled in Node Manager',
+    })
+  );
+}
+
+export function getBulkCustomDeleteBlockers(rows: AgentCapabilityRow[]): AgentCapabilityRow[] {
+  return rows.filter((row) => !row.customDefinition);
+}
+
+export function buildBulkCustomDeleteCommands(rows: AgentCapabilityRow[]): SemanticCommand[] {
+  if (getBulkCustomDeleteBlockers(rows).length > 0) return [];
+  return rows
+    .map((row) => row.customDefinition?.definitionId)
+    .filter((definitionId): definitionId is string => Boolean(definitionId))
+    .map((definitionId) => ({ type: 'definition.custom.remove', definitionId }));
+}
+
 export function summarizeAgentCapabilityRows(
   rows: AgentCapabilityRow[]
 ): AgentCapabilityManagerSummary {

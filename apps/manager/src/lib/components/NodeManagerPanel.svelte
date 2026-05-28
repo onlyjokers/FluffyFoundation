@@ -1,15 +1,19 @@
 <!-- Purpose: Full-page manager for controlling which semantic node capabilities are visible to AI agents. -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { AgentCapabilityNodeSource } from '@shugu/node-core';
+  import type { AgentCapabilityNodeSource, SemanticCommand } from '@shugu/node-core';
   import type { SemanticCommandPayload } from '@shugu/protocol';
   import Button from '$lib/components/ui/Button.svelte';
   import { semanticSnapshot } from '$lib/stores/manager';
   import { getManagerSDK } from '$lib/stores/manager-sdk-access';
   import {
     buildAgentCapabilityRows,
+    buildBulkAgentCapabilityCommands,
+    buildBulkCustomDeleteCommands,
     createAgentCapabilityCommand,
     filterAgentCapabilityRows,
+    getBulkCustomDeleteBlockers,
+    getRowsForSelectedTypes,
     summarizeAgentCapabilityRows,
     type AgentCapabilityRow,
     type AgentCapabilitySourceFilter,
@@ -21,6 +25,8 @@
   let statusFilter: AgentCapabilityStatusFilter = 'all';
   let categoryFilter = 'all';
   let selectedType = '';
+  let selectedTypes = new Set<string>();
+  let bulkBlockedTypes = new Set<string>();
   let lastError = '';
   const dispatch = createEventDispatcher<{
     editCustomNode: { definitionId: string };
@@ -38,8 +44,15 @@
   });
   $: selectedRow =
     filteredRows.find((row) => row.type === selectedType) ?? filteredRows[0] ?? null;
+  $: rowTypes = new Set(rows.map((row) => row.type));
+  $: selectedTypes = new Set([...selectedTypes].filter((type) => rowTypes.has(type)));
+  $: selectedRows = getRowsForSelectedTypes(rows, selectedTypes);
+  $: filteredSelectedRows = getRowsForSelectedTypes(filteredRows, selectedTypes);
+  $: allFilteredSelected =
+    filteredRows.length > 0 && filteredRows.every((row) => selectedTypes.has(row.type));
+  $: someFilteredSelected = filteredRows.some((row) => selectedTypes.has(row.type));
 
-  function semanticPayloadFromCommand(command: ReturnType<typeof createAgentCapabilityCommand>): SemanticCommandPayload {
+  function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPayload {
     const { type, ...rest } = command;
     return { kind: type, ...rest };
   }
@@ -64,6 +77,85 @@
         })
       ),
     });
+  }
+
+  function sendSemanticCommands(commands: SemanticCommand[]): void {
+    const sdk = getManagerSDK();
+    if (!sdk) {
+      lastError = 'Manager SDK is not connected.';
+      return;
+    }
+    lastError = '';
+    for (const command of commands) {
+      const key =
+        command.type === 'agent.capability.set'
+          ? command.nodeType
+          : command.type === 'definition.custom.remove'
+            ? command.definitionId
+            : crypto.randomUUID();
+      sdk.sendSemanticCommand({
+        requestId: `node-manager:${command.type}:${key}`,
+        command: semanticPayloadFromCommand(command),
+      });
+    }
+  }
+
+  function setBulkCapability(enabled: boolean): void {
+    if (selectedRows.length === 0) return;
+    bulkBlockedTypes = new Set();
+    sendSemanticCommands(buildBulkAgentCapabilityCommands(selectedRows, enabled));
+  }
+
+  function deleteSelectedCustomDefinitions(): void {
+    if (selectedRows.length === 0) return;
+    const blockers = getBulkCustomDeleteBlockers(selectedRows);
+    if (blockers.length > 0) {
+      bulkBlockedTypes = new Set(blockers.map((row) => row.type));
+      lastError = `Cannot delete ${blockers.length} non-custom node type${blockers.length === 1 ? '' : 's'}.`;
+      return;
+    }
+    const commands = buildBulkCustomDeleteCommands(selectedRows);
+    if (commands.length === 0) return;
+    if (!confirm(`Delete ${commands.length} custom node${commands.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+      return;
+    }
+    bulkBlockedTypes = new Set();
+    sendSemanticCommands(commands);
+    selectedTypes = new Set();
+    selectedType = '';
+  }
+
+  function toggleRowSelected(row: AgentCapabilityRow, checked: boolean): void {
+    const next = new Set(selectedTypes);
+    if (checked) next.add(row.type);
+    else next.delete(row.type);
+    selectedTypes = next;
+    if (!checked && bulkBlockedTypes.has(row.type)) {
+      const nextBlocked = new Set(bulkBlockedTypes);
+      nextBlocked.delete(row.type);
+      bulkBlockedTypes = nextBlocked;
+    }
+  }
+
+  function toggleFilteredRows(checked: boolean): void {
+    const next = new Set(selectedTypes);
+    for (const row of filteredRows) {
+      if (checked) next.add(row.type);
+      else next.delete(row.type);
+    }
+    selectedTypes = next;
+    if (!checked) {
+      const hiddenBlocked = new Set([...bulkBlockedTypes].filter((type) => !filteredRows.some((row) => row.type === type)));
+      bulkBlockedTypes = hiddenBlocked;
+    }
+  }
+
+  function handleFilteredRowsChange(event: Event): void {
+    toggleFilteredRows(Boolean((event.currentTarget as HTMLInputElement | null)?.checked));
+  }
+
+  function handleRowSelectedChange(event: Event, row: AgentCapabilityRow): void {
+    toggleRowSelected(row, Boolean((event.currentTarget as HTMLInputElement | null)?.checked));
   }
 
   function deleteCustomDefinition(row: AgentCapabilityRow): void {
@@ -180,6 +272,23 @@
       <div class="banner error">{lastError}</div>
     {/if}
 
+    {#if selectedRows.length > 0}
+      <div class="bulk-bar" aria-label="Bulk node capability actions">
+        <div class="bulk-summary">
+          <strong>{selectedRows.length}</strong>
+          <span>selected</span>
+          {#if filteredSelectedRows.length !== selectedRows.length}
+            <small>{filteredSelectedRows.length} visible</small>
+          {/if}
+        </div>
+        <div class="bulk-actions">
+          <Button size="sm" variant="ghost" on:click={() => setBulkCapability(true)}>Enable for AI</Button>
+          <Button size="sm" variant="ghost" on:click={() => setBulkCapability(false)}>Disable for AI</Button>
+          <Button size="sm" variant="ghost" on:click={deleteSelectedCustomDefinitions}>Delete Custom</Button>
+        </div>
+      </div>
+    {/if}
+
     <div class="summary-grid" aria-label="Node capability summary">
       <div class="summary-tile">
         <span>{summary.enabled}</span>
@@ -207,10 +316,16 @@
           <div class="empty-state">No node types match the current filters.</div>
         {:else}
           <div class="list-head">
+            <label class="select-cell">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                aria-label="Select visible node types"
+                on:change={handleFilteredRowsChange}
+              />
+            </label>
             <div>Node</div>
             <div>Source</div>
-            <div>Used</div>
-            <div>AI</div>
             <div>Action</div>
           </div>
           <div class="node-list">
@@ -219,11 +334,22 @@
                 class="node-row"
                 class:selected={selectedRow?.type === row.type}
                 class:disabled={!row.enabled}
+                class:bulk-blocked={bulkBlockedTypes.has(row.type)}
                 role="button"
                 tabindex="0"
                 on:click={() => selectRow(row)}
                 on:keydown={(event) => handleRowKeydown(event, row)}
               >
+                <div class="select-cell">
+                  <input
+                    type="checkbox"
+                    checked={selectedTypes.has(row.type)}
+                    aria-label={`Select ${row.label}`}
+                    on:click|stopPropagation
+                    on:keydown|stopPropagation
+                    on:change={(event) => handleRowSelectedChange(event, row)}
+                  />
+                </div>
                 <div class="node-main">
                   <div class="node-title">
                     <strong>{row.label}</strong>
@@ -232,12 +358,6 @@
                   <span>{row.category} · {portSummary(row)}</span>
                 </div>
                 <div><span class="pill {row.source}">{sourceLabel(row.source)}</span></div>
-                <div class="mono">{row.usedCount}</div>
-                <div>
-                  <span class:visible={row.manifestVisible} class="state-pill">
-                    {row.manifestVisible ? 'Enabled' : 'Hidden'}
-                  </span>
-                </div>
                 <div class="row-actions">
                   <button
                     class="row-action"
@@ -477,6 +597,35 @@
     gap: 12px;
   }
 
+  .bulk-bar {
+    min-height: 48px;
+    border: 1px solid rgba(20, 184, 166, 0.22);
+    border-radius: 14px;
+    background: rgba(10, 14, 24, 0.76);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .bulk-summary,
+  .bulk-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bulk-summary strong {
+    color: var(--text-primary);
+  }
+
+  .bulk-summary span,
+  .bulk-summary small {
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
   .summary-tile,
   .node-list-pane,
   .details-pane {
@@ -533,10 +682,23 @@
   .list-head,
   .node-row {
     display: grid;
-    grid-template-columns: minmax(260px, 1fr) 120px 80px 110px minmax(150px, auto);
+    grid-template-columns: 28px minmax(260px, 1fr) 120px minmax(150px, auto);
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
+  }
+
+  .select-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+  }
+
+  .select-cell input {
+    width: 15px;
+    height: 15px;
+    accent-color: #14b8a6;
   }
 
   .list-head {
@@ -578,6 +740,11 @@
     opacity: 0.7;
   }
 
+  .node-row.bulk-blocked {
+    background: rgba(239, 68, 68, 0.12);
+    box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.78);
+  }
+
   .node-main,
   .node-title {
     min-width: 0;
@@ -606,8 +773,7 @@
     white-space: nowrap;
   }
 
-  code,
-  .mono {
+  code {
     font-family: var(--font-mono);
   }
 
@@ -623,8 +789,7 @@
     overflow-wrap: anywhere;
   }
 
-  .pill,
-  .state-pill {
+  .pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -648,11 +813,6 @@
   .pill.plugin {
     border-color: rgba(245, 158, 11, 0.45);
     color: #fbbf24;
-  }
-
-  .state-pill.visible {
-    border-color: rgba(34, 197, 94, 0.45);
-    color: #86efac;
   }
 
   .row-actions {
@@ -803,6 +963,15 @@
     .details-header,
     .kv-grid {
       grid-template-columns: 1fr;
+    }
+
+    .bulk-bar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .bulk-actions {
+      flex-wrap: wrap;
     }
 
     .node-manager-toolbar-frame,
