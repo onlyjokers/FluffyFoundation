@@ -3,6 +3,7 @@
  */
 import type { ClientPermissionName, ClientPermissions, ControlAction, ControlPayload } from '@shugu/protocol';
 
+import { getCommandArrayDiffMetadata } from '../../runtime-watchdog.js';
 import type { NodeDefinition } from '../../types.js';
 import type {
   ClientObject,
@@ -182,6 +183,22 @@ function commandSignatureForRouting(cmd: NodeCommand | null | undefined): string
   } catch {
     return `${String(cmd.action)}:${String(cmd.executeAt ?? '')}`;
   }
+}
+
+function collectActiveCommandActions(raw: unknown): Set<string> {
+  const actions = new Set<string>();
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const record = asRecord(value);
+    const action = getStringValue(record?.action);
+    if (!action || action === '__commandRemoved') return;
+    actions.add(action);
+  };
+  visit(raw);
+  return actions;
 }
 
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
@@ -597,14 +614,43 @@ export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition
       const targetKeys = resolveTargetKeys(inputs, targets);
 
       const raw = inputs.in;
+      const routeState =
+        routeStateByNode.get(context.nodeId) ??
+        new Map<
+          string,
+          { targets: string[]; targetKeys: Record<string, string>; command: NodeCommand | null }
+        >();
+      const diffMetadata = getCommandArrayDiffMetadata(raw);
+      const removedActions = diffMetadata?.removedActions ?? [];
+      if (diffMetadata) {
+        for (const action of removedActions) {
+          const previousTargets = routeState.get(action)?.targets ?? [];
+          for (const previousClientId of previousTargets) {
+            for (const cleanup of cleanupCommandsFor({ action: action as ControlAction, payload: {} })) {
+              send(previousClientId, cleanup);
+            }
+          }
+          routeState.delete(action);
+        }
+      } else {
+        const activeActions = collectActiveCommandActions(raw);
+        for (const action of [...routeState.keys()]) {
+          if (!longLivedCommandActions.has(action as ControlAction) || activeActions.has(action)) {
+            continue;
+          }
+          const previousTargets = routeState.get(action)?.targets ?? [];
+          for (const previousClientId of previousTargets) {
+            for (const cleanup of cleanupCommandsFor({ action: action as ControlAction, payload: {} })) {
+              send(previousClientId, cleanup);
+            }
+          }
+          routeState.delete(action);
+        }
+      }
+      routeStateByNode.set(context.nodeId, routeState);
+
       const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
       for (const rawCommand of commands) {
-        const routeState =
-          routeStateByNode.get(context.nodeId) ??
-          new Map<
-            string,
-            { targets: string[]; targetKeys: Record<string, string>; command: NodeCommand | null }
-          >();
         const removedAction = removedCommandActionFromUnknown(rawCommand);
         if (removedAction) {
           const previousTargets = routeState.get(removedAction)?.targets ?? [];

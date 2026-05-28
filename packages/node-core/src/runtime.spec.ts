@@ -424,6 +424,431 @@ test('client executor clears long-lived commands that disappear from an active c
   );
 });
 
+test('client executor clears long-lived commands when an aggregator bundle becomes empty', async () => {
+  const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
+  const enabledByNode = new Map<string, boolean>();
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    executeCommandForClientId: (clientId, cmd) => {
+      commands.push({ clientId, cmd });
+    },
+  });
+
+  const runtime = new NodeRuntime(registry, {
+    isNodeEnabled: (nodeId) => enabledByNode.get(nodeId) ?? true,
+  });
+  runtime.loadGraph({
+    nodes: [
+      {
+        id: 'image',
+        type: 'proc-show-image',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { in: '/poster.png' },
+        outputValues: {},
+      },
+      {
+        id: 'aggregator',
+        type: 'cmd-aggregator',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'loader',
+        type: 'client-loader',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { index: 1, range: 1, random: false },
+        outputValues: {},
+      },
+      {
+        id: 'executor',
+        type: 'client-executor',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'image-to-aggregator',
+        sourceNodeId: 'image',
+        sourcePortId: 'cmd',
+        targetNodeId: 'aggregator',
+        targetPortId: 'in1',
+      },
+      {
+        id: 'aggregator-to-executor',
+        sourceNodeId: 'aggregator',
+        sourcePortId: 'cmd',
+        targetNodeId: 'executor',
+        targetPortId: 'in',
+      },
+      {
+        id: 'loader-client',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage')
+    );
+
+    commands.length = 0;
+    enabledByNode.set('image', false);
+
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage')
+    );
+  } finally {
+    runtime.stop();
+  }
+
+  assert.ok(
+    commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage'),
+    'old image should be hidden when an aggregator keeps the sink connected but loses showImage'
+  );
+});
+
+test('client executor clears long-lived image commands when image player input becomes disconnected', async () => {
+  const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    executeCommandForClientId: (clientId, cmd) => {
+      commands.push({ clientId, cmd });
+    },
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      {
+        id: 'image',
+        type: 'proc-show-image',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { in: '/poster.png' },
+        outputValues: {},
+      },
+      {
+        id: 'loader',
+        type: 'client-loader',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { index: 1, range: 1, random: false },
+        outputValues: {},
+      },
+      {
+        id: 'executor',
+        type: 'client-executor',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'image-cmd',
+        sourceNodeId: 'image',
+        sourcePortId: 'cmd',
+        targetNodeId: 'executor',
+        targetPortId: 'in',
+      },
+      {
+        id: 'loader-client',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage')
+    );
+
+    commands.length = 0;
+    const image = runtime.getNode('image');
+    assert.ok(image);
+    delete image.inputValues.in;
+
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage')
+    );
+  } finally {
+    runtime.stop();
+  }
+
+  assert.ok(
+    commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage'),
+    'old image should be hidden when Image Player no longer has an image input'
+  );
+});
+
+test('client executor clears every long-lived command action that disappears from a bundle', async () => {
+  const cases: Array<{
+    action: NodeCommand['action'];
+    payload: NodeCommand['payload'];
+    cleanupAction: NodeCommand['action'];
+    cleanupPayload?: NodeCommand['payload'];
+  }> = [
+    { action: 'showText', payload: { text: 'caption' }, cleanupAction: 'hideText' },
+    { action: 'showImage', payload: { url: '/poster.png' }, cleanupAction: 'hideImage' },
+    { action: 'playMedia', payload: { url: '/clip.mp4', mediaType: 'video' }, cleanupAction: 'stopMedia' },
+    {
+      action: 'screenColor',
+      payload: { color: '#ffffff', opacity: 1, mode: 'solid' },
+      cleanupAction: 'screenColor',
+      cleanupPayload: { color: '#000000', opacity: 0, mode: 'solid' },
+    },
+    {
+      action: 'modulateSoundUpdate',
+      payload: { active: true, frequency: 440 },
+      cleanupAction: 'stopSound',
+    },
+    {
+      action: 'flashlight',
+      payload: { mode: 'on' },
+      cleanupAction: 'flashlight',
+      cleanupPayload: { mode: 'off' },
+    },
+  ];
+
+  for (const item of cases) {
+    const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
+    const registry = new NodeRegistry();
+    registry.register({
+      type: 'test-command-source',
+      label: 'Test Command Source',
+      category: 'Test',
+      inputs: [],
+      outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+      configSchema: [],
+      process: (_inputs, config) => ({
+        cmd: config.enabled === false ? null : { action: item.action, payload: item.payload },
+      }),
+    });
+    registerDefaultNodeDefinitions(registry, {
+      getClientId: () => null,
+      getAllClientIds: () => ['client-a'],
+      getSelectedClientIds: () => [],
+      executeCommand: () => {},
+      executeCommandForClientId: (clientId, cmd) => {
+        commands.push({ clientId, cmd });
+      },
+    });
+
+    const runtime = new NodeRuntime(registry);
+    runtime.loadGraph({
+      nodes: [
+        {
+          id: 'source',
+          type: 'test-command-source',
+          position: { x: 0, y: 0 },
+          config: { enabled: true },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'loader',
+          type: 'client-loader',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: { index: 1, range: 1, random: false },
+          outputValues: {},
+        },
+        {
+          id: 'executor',
+          type: 'client-executor',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [
+        {
+          id: 'source-cmd',
+          sourceNodeId: 'source',
+          sourcePortId: 'cmd',
+          targetNodeId: 'executor',
+          targetPortId: 'in',
+        },
+        {
+          id: 'loader-client',
+          sourceNodeId: 'loader',
+          sourcePortId: 'client',
+          targetNodeId: 'executor',
+          targetPortId: 'client',
+        },
+      ],
+    });
+
+    try {
+      runtime.start();
+      await waitFor(() =>
+        commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === item.action)
+      );
+
+      commands.length = 0;
+      const source = runtime.getNode('source');
+      assert.ok(source);
+      source.config.enabled = false;
+
+      await waitFor(() =>
+        commands.some(
+          (entry) => entry.clientId === 'client-a' && entry.cmd.action === item.cleanupAction
+        )
+      );
+    } finally {
+      runtime.stop();
+    }
+
+    const cleanup = commands.find(
+      (entry) => entry.clientId === 'client-a' && entry.cmd.action === item.cleanupAction
+    )?.cmd;
+    assert.ok(cleanup, `${item.action} should emit ${item.cleanupAction} when it disappears`);
+    if (item.cleanupPayload) assert.deepEqual(cleanup.payload, item.cleanupPayload);
+  }
+});
+
+test('client executor keeps unchanged long-lived commands when another aggregator item changes', async () => {
+  const commands: Array<{ clientId: string; cmd: NodeCommand }> = [];
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    executeCommandForClientId: (clientId, cmd) => {
+      commands.push({ clientId, cmd });
+    },
+  });
+
+  const runtime = new NodeRuntime(registry);
+  runtime.loadGraph({
+    nodes: [
+      {
+        id: 'image',
+        type: 'proc-show-image',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { in: '/poster.png' },
+        outputValues: {},
+      },
+      {
+        id: 'text',
+        type: 'proc-display-text',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { text: 'one', durationMs: 0 },
+        outputValues: {},
+      },
+      {
+        id: 'aggregator',
+        type: 'cmd-aggregator',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'loader',
+        type: 'client-loader',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: { index: 1, range: 1, random: false },
+        outputValues: {},
+      },
+      {
+        id: 'executor',
+        type: 'client-executor',
+        position: { x: 0, y: 0 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'image-to-aggregator',
+        sourceNodeId: 'image',
+        sourcePortId: 'cmd',
+        targetNodeId: 'aggregator',
+        targetPortId: 'in1',
+      },
+      {
+        id: 'text-to-aggregator',
+        sourceNodeId: 'text',
+        sourcePortId: 'cmd',
+        targetNodeId: 'aggregator',
+        targetPortId: 'in2',
+      },
+      {
+        id: 'aggregator-to-executor',
+        sourceNodeId: 'aggregator',
+        sourcePortId: 'cmd',
+        targetNodeId: 'executor',
+        targetPortId: 'in',
+      },
+      {
+        id: 'loader-client',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
+      },
+    ],
+  });
+
+  try {
+    runtime.start();
+    await waitFor(
+      () =>
+        commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showImage') &&
+        commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showText')
+    );
+
+    commands.length = 0;
+    const text = runtime.getNode('text');
+    assert.ok(text);
+    text.inputValues.text = 'two';
+
+    await waitFor(() =>
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'showText')
+    );
+
+    assert.equal(
+      commands.some((entry) => entry.clientId === 'client-a' && entry.cmd.action === 'hideImage'),
+      false,
+      'unchanged showImage should not be hidden when only showText changes'
+    );
+  } finally {
+    runtime.stop();
+  }
+});
+
 test('display text processor maps text inputs to showText commands', () => {
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
