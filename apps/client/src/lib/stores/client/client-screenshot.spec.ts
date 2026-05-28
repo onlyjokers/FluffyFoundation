@@ -21,10 +21,21 @@ test('push image screenshot capture uses async canvas encoding', () => {
   assert.doesNotMatch(screenshotSource, /canvas\.toDataURL\(/);
 });
 
-test('push image screenshot capture keeps an async encoding fallback', () => {
+test('push image screenshot capture is WebP-only for streaming frames', () => {
   const screenshotSource = readFileSync(new URL('./client-screenshot.ts', import.meta.url), 'utf8');
 
   assert.match(screenshotSource, /encodeCanvasToDataUrl/);
-  assert.match(screenshotSource, /'image\/jpeg'/);
-  assert.match(screenshotSource, /'image\/png'/);
+  assert.match(screenshotSource, /return 'image\/webp'/);
+  assert.doesNotMatch(screenshotSource, /raw === 'image\/png'/);
+  assert.doesNotMatch(screenshotSource, /raw === 'image\/jpeg'/);
+  assert.doesNotMatch(screenshotSource, /const fallbacks/);
+});
+
+test('push image screenshot capture reuses a single canvas between frames', () => {
+  const screenshotSource = readFileSync(new URL('./client-screenshot.ts', import.meta.url), 'utf8');
+
+  assert.match(screenshotSource, /let captureCanvas: HTMLCanvasElement \| null = null/);
+  assert.match(screenshotSource, /function getCaptureCanvas/);
+  assert.match(screenshotSource, /captureCanvas = document\.createElement\('canvas'\)/);
+  assert.doesNotMatch(screenshotSource, /const canvas = document\.createElement\('canvas'\)/);
 });

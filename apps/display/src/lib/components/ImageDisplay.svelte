@@ -15,8 +15,11 @@ Purpose: Display image overlay (full-screen) for the Display app.
   export let onHide: (() => void) | undefined = undefined;
 
   let activeUrl: string | null = null;
+  let pendingStreamingUrl: string | null = null;
+  let streamingFrameLoading = false;
   let preloadSeq = 0;
   let hideTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let streamingFrameDecodeTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   // Compute transform style from scale and offset
   $: transformStyle = (() => {
@@ -51,17 +54,58 @@ Purpose: Display image overlay (full-screen) for the Display app.
   const isStreamingFrameUrl = (url: string) =>
     url.startsWith('blob:') || url.startsWith('data:image/');
 
+  function clearStreamingFrameDecodeWatchdog() {
+    if (!streamingFrameDecodeTimeoutId) return;
+    clearTimeout(streamingFrameDecodeTimeoutId);
+    streamingFrameDecodeTimeoutId = null;
+  }
+
+  function scheduleStreamingFrameDecodeWatchdog() {
+    clearStreamingFrameDecodeWatchdog();
+    streamingFrameDecodeTimeoutId = setTimeout(() => {
+      streamingFrameDecodeTimeoutId = null;
+      promotePendingStreamingFrame();
+    }, 250);
+  }
+
+  function promotePendingStreamingFrame() {
+    if (!pendingStreamingUrl) {
+      streamingFrameLoading = false;
+      return;
+    }
+
+    const nextUrl = pendingStreamingUrl;
+    pendingStreamingUrl = null;
+    clearHideTimer();
+    preloadSeq += 1;
+    streamingFrameLoading = true;
+    activeUrl = nextUrl;
+    scheduleStreamingFrameDecodeWatchdog();
+  }
+
   $: if (url) {
     if (!activeUrl) {
       clearHideTimer();
+      pendingStreamingUrl = null;
+      streamingFrameLoading = isStreamingFrameUrl(url);
       activeUrl = url;
+      if (streamingFrameLoading) scheduleStreamingFrameDecodeWatchdog();
     } else if (url !== activeUrl) {
       clearHideTimer();
       if (isStreamingFrameUrl(url)) {
-        preloadSeq += 1;
-        activeUrl = url;
-        scheduleHide();
+        if (streamingFrameLoading) {
+          pendingStreamingUrl = url;
+        } else {
+          pendingStreamingUrl = null;
+          streamingFrameLoading = true;
+          preloadSeq += 1;
+          activeUrl = url;
+          scheduleStreamingFrameDecodeWatchdog();
+        }
       } else {
+        pendingStreamingUrl = null;
+        streamingFrameLoading = false;
+        clearStreamingFrameDecodeWatchdog();
         // Preload via JS Image() to avoid missing `on:load` when the src is a fast blob/data URL.
         const currentSeq = (preloadSeq += 1);
         const nextUrl = url;
@@ -82,21 +126,39 @@ Purpose: Display image overlay (full-screen) for the Display app.
   }
 
   function handleActiveLoad() {
+    clearStreamingFrameDecodeWatchdog();
+    if (activeUrl && isStreamingFrameUrl(activeUrl) && pendingStreamingUrl) {
+      promotePendingStreamingFrame();
+      return;
+    }
+    streamingFrameLoading = false;
     scheduleHide();
   }
 
   function handleActiveError() {
+    clearStreamingFrameDecodeWatchdog();
     console.error('[ImageDisplay] Failed to load image:', activeUrl);
+    if (activeUrl && isStreamingFrameUrl(activeUrl) && pendingStreamingUrl) {
+      promotePendingStreamingFrame();
+      return;
+    }
+    streamingFrameLoading = false;
   }
 
   export function hide() {
     clearHideTimer();
+    clearStreamingFrameDecodeWatchdog();
+    pendingStreamingUrl = null;
+    streamingFrameLoading = false;
     preloadSeq += 1;
     onHide?.();
   }
 
   onDestroy(() => {
     clearHideTimer();
+    clearStreamingFrameDecodeWatchdog();
+    pendingStreamingUrl = null;
+    streamingFrameLoading = false;
   });
 </script>
 

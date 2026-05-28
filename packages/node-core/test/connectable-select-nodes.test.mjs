@@ -110,7 +110,7 @@ test('config-only select fields use input values before config fallbacks', () =>
     { format: 'image/jpeg', quality: 0.8, maxWidth: 960, speed: 1 },
     context('push-image')
   ).cmd;
-  assert.equal(cmd.payload.format, 'image/png');
+  assert.equal(cmd.payload.format, 'image/webp');
 });
 
 test('remote asset loader nodes accept typed asset refs without double-prefixing', () => {

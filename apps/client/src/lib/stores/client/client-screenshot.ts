@@ -14,7 +14,7 @@ import {
 import { videoState, imageState } from './client-media';
 import { clampNumber } from './client-utils';
 
-type ScreenshotFormat = 'image/jpeg' | 'image/png' | 'image/webp';
+type ScreenshotFormat = 'image/webp';
 
 export type PushImageUploadPayload = {
   kind: 'push-image-upload';
@@ -27,24 +27,23 @@ export type PushImageUploadPayload = {
 };
 
 let screenshotUploadInFlight = false;
+let captureCanvas: HTMLCanvasElement | null = null;
+let captureContext: CanvasRenderingContext2D | null = null;
 
 const CAMERA_SCENE_VIDEO_SELECTOR = [
   'video.shugu-scene-canvas[data-shugu-scene-id="front-camera-scene"]',
   'video.shugu-scene-canvas[data-shugu-scene-id="back-camera-scene"]',
 ].join(', ');
 
-function normalizeScreenshotFormat(value: unknown): ScreenshotFormat {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (raw === 'image/png') return 'image/png';
-  if (raw === 'image/webp') return 'image/webp';
-  return 'image/jpeg';
+function normalizeScreenshotFormat(_value: unknown): ScreenshotFormat {
+  return 'image/webp';
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, mime: ScreenshotFormat, quality: number): Promise<Blob | null> {
   if (typeof canvas.toBlob !== 'function') return Promise.resolve(null);
   return new Promise((resolve) => {
     try {
-      canvas.toBlob(resolve, mime, mime === 'image/png' ? undefined : quality);
+      canvas.toBlob(resolve, mime, quality);
     } catch {
       resolve(null);
     }
@@ -65,26 +64,28 @@ async function encodeCanvasToDataUrl(
   preferredMime: ScreenshotFormat,
   quality: number
 ): Promise<{ dataUrl: string; mime: ScreenshotFormat } | null> {
-  const fallbacks: ScreenshotFormat[] = [preferredMime, 'image/jpeg', 'image/png'];
-  const tried = new Set<ScreenshotFormat>();
-
-  for (const mime of fallbacks) {
-    if (tried.has(mime)) continue;
-    tried.add(mime);
-
-    const blob = await canvasToBlob(canvas, mime, quality);
-    const dataUrl = blob ? await blobToDataUrl(blob) : '';
-    if (dataUrl) {
-      const actualMime = dataUrl.startsWith('data:image/png')
-        ? 'image/png'
-        : dataUrl.startsWith('data:image/webp')
-          ? 'image/webp'
-          : 'image/jpeg';
-      return { dataUrl, mime: actualMime };
-    }
-  }
+  const blob = await canvasToBlob(canvas, preferredMime, quality);
+  const dataUrl = blob ? await blobToDataUrl(blob) : '';
+  if (dataUrl.startsWith('data:image/webp')) return { dataUrl, mime: 'image/webp' };
 
   return null;
+}
+
+function getCaptureCanvas(
+  width: number,
+  height: number
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  if (!captureCanvas) {
+    captureCanvas = document.createElement('canvas');
+    captureContext = null;
+  }
+
+  if (captureCanvas.width !== width) captureCanvas.width = width;
+  if (captureCanvas.height !== height) captureCanvas.height = height;
+
+  captureContext = captureContext ?? captureCanvas.getContext('2d');
+  if (!captureContext) return null;
+  return { canvas: captureCanvas, ctx: captureContext };
 }
 
 function getFittedDrawParams(
@@ -160,11 +161,9 @@ async function captureScreenshotDataUrl(opts: {
   const outW = Math.max(1, Math.floor(viewW * scale));
   const outH = Math.max(1, Math.floor(viewH * scale));
 
-  const canvas = document.createElement('canvas');
-  canvas.width = outW;
-  canvas.height = outH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return { ok: false, reason: 'missing-2d-context' };
+  const captureTarget = getCaptureCanvas(outW, outH);
+  if (!captureTarget) return { ok: false, reason: 'missing-2d-context' };
+  const { canvas, ctx } = captureTarget;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0a0a0f';

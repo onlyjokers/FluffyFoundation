@@ -118,10 +118,8 @@ export function createPushImageUploadNode(): NodeDefinition {
         key: 'format',
         label: 'Format',
         type: 'select',
-        defaultValue: 'image/jpeg',
+        defaultValue: 'image/webp',
         options: [
-          { value: 'image/jpeg', label: 'JPEG' },
-          { value: 'image/png', label: 'PNG' },
           { value: 'image/webp', label: 'WebP' },
         ],
         connectable: true,
@@ -163,16 +161,7 @@ export function createPushImageUploadNode(): NodeDefinition {
         return {};
       }
 
-      const formatRaw =
-        typeof inputs.format === 'string' && inputs.format.trim()
-          ? inputs.format.trim().toLowerCase()
-          : typeof config.format === 'string'
-            ? config.format.trim().toLowerCase()
-            : '';
-      const format =
-        formatRaw === 'image/png' || formatRaw === 'image/webp' || formatRaw === 'image/jpeg'
-          ? formatRaw
-          : 'image/jpeg';
+      const format = 'image/webp';
 
       const qualityRaw = Number(config.quality ?? 0.85);
       const quality = Number.isFinite(qualityRaw) ? clampNumber(qualityRaw, 0.1, 1) : 0.85;
