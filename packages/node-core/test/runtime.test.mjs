@@ -559,3 +559,95 @@ test('watchdog triggers on oscillation (alternating sink signatures)', (t) => {
   assert.ok(info, 'expected watchdog to trigger');
   assert.equal(info.reason, 'oscillation');
 });
+
+test('watchdog ignores push image upload rate pulses', (t) => {
+  const clock = withFakeNow(t, 0);
+
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => ['client-a'],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    executeCommandForClientId: () => {},
+  });
+
+  const watchdogs = [];
+  const runtime = new NodeRuntime(registry, {
+    watchdog: {
+      oscillation: {
+        enabled: true,
+        windowSize: 10,
+        minAlternatingLength: 10,
+        windowMs: 1000,
+      },
+    },
+    onWatchdog: (next) => {
+      watchdogs.push(next);
+    },
+  });
+
+  runtime.loadGraph({
+    nodes: [
+      nodeInstance('loader', 'client-loader', {
+        inputValues: { index: 1, range: 1, random: false },
+      }),
+      nodeInstance('push', 'proc-push-image-upload', {
+        config: { format: 'image/jpeg', quality: 0.85, maxWidth: 960, speed: 30 },
+        inputValues: { format: 'image/webp', trigger: true },
+      }),
+      nodeInstance('camera', 'scene-front-camera'),
+      nodeInstance('scene', 'scene-out'),
+      nodeInstance('agg', 'cmd-aggregator'),
+      nodeInstance('executor', 'client-executor'),
+    ],
+    connections: [
+      {
+        id: 'camera-scene',
+        sourceNodeId: 'camera',
+        sourcePortId: 'out',
+        targetNodeId: 'scene',
+        targetPortId: 'in',
+      },
+      {
+        id: 'scene-cmd',
+        sourceNodeId: 'scene',
+        sourcePortId: 'cmd',
+        targetNodeId: 'agg',
+        targetPortId: 'in1',
+      },
+      {
+        id: 'push-cmd',
+        sourceNodeId: 'push',
+        sourcePortId: 'cmd',
+        targetNodeId: 'agg',
+        targetPortId: 'in2',
+      },
+      {
+        id: 'agg-cmd',
+        sourceNodeId: 'agg',
+        sourcePortId: 'cmd',
+        targetNodeId: 'executor',
+        targetPortId: 'in',
+      },
+      {
+        id: 'loader-client',
+        sourceNodeId: 'loader',
+        sourcePortId: 'client',
+        targetNodeId: 'executor',
+        targetPortId: 'client',
+      },
+    ],
+  });
+  runtime.compileNow();
+
+  for (const now of [0, 32, 34, 66, 68, 100, 102, 134, 136, 168, 170]) {
+    clock.setNow(now);
+    runtime.tick({ allowSinks: true });
+  }
+
+  assert.deepEqual(
+    watchdogs.filter((info) => info.reason === 'oscillation'),
+    []
+  );
+});

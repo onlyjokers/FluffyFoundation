@@ -46,6 +46,10 @@ export const commandSignature = (value: unknown): string | null => {
     const action = typeof cmd.action === 'string' ? cmd.action : '';
     if (!action) return null;
 
+    // `__commandRemoved` is an internal diff marker, not a command that reaches endpoints.
+    // Rate-limited pulse commands naturally produce add/remove diffs between sends.
+    if (action === '__commandRemoved') return null;
+
     // Skip oscillation detection for continuous/smoothly-updating actions.
     if (continuousActions.has(action)) return null;
 
