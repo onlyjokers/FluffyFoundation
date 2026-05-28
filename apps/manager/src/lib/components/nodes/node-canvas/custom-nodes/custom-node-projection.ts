@@ -1,5 +1,5 @@
 // Purpose: Build editor-only Custom Node projection graphs without mutating canonical NodeEngine state.
-import type { Connection, GraphState, NodeInstance } from '$lib/nodes/types';
+import type { Connection, GraphState, NodeInstance, NodePort } from '$lib/nodes/types';
 import type { CustomNodeDefinition, CustomNodePort } from '$lib/nodes/custom-nodes/types';
 import {
   readCustomNodeState,
@@ -68,6 +68,29 @@ export function parseCustomNodeProjectionGroupId(
     customNodeId: rest.slice(0, splitAt),
     internalGroupId: rest.slice(splitAt + marker.length),
   };
+}
+
+export function resolveCustomNodeProjectionPortDef(input: {
+  socket: { nodeId: string; side: 'input' | 'output'; key: string };
+  getOwnerNode: (nodeId: string) => NodeInstance | null | undefined;
+  getOwnerState?: (ownerNode: NodeInstance) => CustomNodeInstanceState | null | undefined;
+  nodeRegistry: {
+    get: (type: string) => { inputs?: NodePort[]; outputs?: NodePort[] } | undefined;
+  };
+}): NodePort | null {
+  const projection = parseCustomNodeProjectionNodeId(String(input.socket?.nodeId ?? ''));
+  if (!projection) return null;
+  const owner = input.getOwnerNode(String(projection.customNodeId ?? ''));
+  if (!owner) return null;
+  const state = input.getOwnerState?.(owner) ?? readCustomNodeState(owner.config ?? {});
+  const internal = state?.internal ?? { nodes: [], connections: [] };
+  const internalNode = (Array.isArray(internal.nodes) ? internal.nodes : []).find(
+    (node) => String(node?.id ?? '') === String(projection.internalNodeId ?? '')
+  );
+  if (!internalNode) return null;
+  const definition = input.nodeRegistry.get(String(internalNode.type ?? ''));
+  const ports = input.socket.side === 'output' ? definition?.outputs : definition?.inputs;
+  return (ports ?? []).find((port) => String(port.id ?? '') === String(input.socket.key ?? '')) ?? null;
 }
 
 export function customNodeInternalGroupIdForProjection(ownerNodeId: string, groupId: string): string {

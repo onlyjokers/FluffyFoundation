@@ -12,6 +12,7 @@ import {
   customNodeInternalGroupIdForProjection,
   isCustomNodeProjectionId,
   parseCustomNodeProjectionNodeId,
+  resolveCustomNodeProjectionPortDef,
   refreshCustomNodeProjectionPorts,
   removeCustomNodeProjectionNode,
   resolveCustomNodeProjectionPublicConnection,
@@ -81,6 +82,54 @@ test('buildCustomNodeProjectionGraph creates view-prefixed nodes and connections
   assert.equal(projection.connections.length, 1);
   assert.ok(isCustomNodeProjectionId(String(projection.connections[0].sourceNodeId)));
   assert.ok(isCustomNodeProjectionId(String(projection.connections[0].targetNodeId)));
+});
+
+test('resolveCustomNodeProjectionPortDef returns the real internal port type for connect picker sockets', () => {
+  const customNode: NodeInstance = {
+    id: 'custom-1',
+    type: 'custom:def-1',
+    position: { x: 100, y: 200 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const state: CustomNodeInstanceState = {
+    definitionId: 'def-1',
+    groupId: 'group-1',
+    role: 'mother',
+    manualGate: true,
+    internal: {
+      nodes: [
+        {
+          id: 'loader',
+          type: 'client-loader',
+          position: { x: 10, y: 20 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+  };
+
+  const port = resolveCustomNodeProjectionPortDef({
+    socket: {
+      nodeId: 'view:custom:custom-1:loader',
+      side: 'input',
+      key: 'loadAll',
+    },
+    getOwnerNode: (id) => (id === 'custom-1' ? customNode : null),
+    getOwnerState: () => state,
+    nodeRegistry: {
+      get: (type) =>
+        type === 'client-loader'
+          ? { inputs: [{ id: 'loadAll', label: 'Load All', type: 'boolean' }], outputs: [] }
+          : undefined,
+    },
+  });
+
+  assert.deepEqual(port, { id: 'loadAll', label: 'Load All', type: 'boolean' });
 });
 
 test('buildCustomNodeProjectionGraph preserves internal output snapshots for projected live value display', () => {

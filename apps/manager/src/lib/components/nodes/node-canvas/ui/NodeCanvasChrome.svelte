@@ -53,7 +53,6 @@
   export let onCloseExecutorLogs = () => {};
 
   export let picker;
-  export let reteBuilder;
 
   export let groupFrames: GroupFrame[] = [];
   export let editModeGroupId = null;
@@ -162,9 +161,7 @@
       isOpen={picker.isOpen}
       mode={picker.mode}
       initialSocket={picker.initialSocket}
-      connectTypeLabel={picker.initialSocket
-        ? (reteBuilder.getPortDefForSocket(picker.initialSocket)?.type ?? 'any')
-        : 'any'}
+      connectTypeLabel={picker.connectTypeLabel ?? 'any'}
       anchor={picker.anchor}
       query={picker.query}
       onQueryChange={picker.onQueryChange}

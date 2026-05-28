@@ -85,6 +85,7 @@
     isCustomNodeProjectionId,
     mergeProjectionGraphs,
     parseCustomNodeProjectionNodeId,
+    resolveCustomNodeProjectionPortDef,
     refreshCustomNodeProjectionPorts,
     removeCustomNodeProjectionNode,
     resolveCustomNodeProjectionPublicConnection,
@@ -412,15 +413,22 @@
     graphStateStore,
     getPortDefForSocket: (socket) => {
       const base = reteBuilder.getPortDefForSocket(socket);
-      if (!base) return null;
+      const port =
+        base ??
+        resolveCustomNodeProjectionPortDef({
+          socket,
+          getOwnerNode: (ownerId) => nodeEngine.getNode(ownerId),
+          nodeRegistry,
+        });
+      if (!port) return null;
       if (socket.side === 'output' && socket.key === 'output') {
         const node = (graphState.nodes ?? []).find((n) => String(n.id) === String(socket.nodeId));
         if (node && String(node.type) === 'logic-sleep') {
           const { type } = resolveSleepOutputType(String(node.id));
-          return { ...base, type };
+          return { ...port, type };
         }
       }
-      return base;
+      return port;
     },
     bestMatchingPort: reteBuilder.bestMatchingPort,
     addNode: (type, position) => {
@@ -452,6 +460,14 @@
   });
 
   pickerControllerRef = pickerController;
+
+  const getPickerSocketPortDef = (socket: SocketData) =>
+    reteBuilder.getPortDefForSocket(socket) ??
+    resolveCustomNodeProjectionPortDef({
+      socket,
+      getOwnerNode: (ownerId) => nodeEngine.getNode(ownerId),
+      nodeRegistry,
+    });
 
   const {
     isOpen: isPickerOpen,
@@ -1243,6 +1259,9 @@
     isOpen: $isPickerOpen,
     mode: $pickerMode,
     initialSocket: $pickerInitialSocket,
+    connectTypeLabel: $pickerInitialSocket
+      ? (getPickerSocketPortDef($pickerInitialSocket)?.type ?? 'any')
+      : 'any',
     anchor: $pickerAnchor,
     query: $pickerQuery,
     categories: $pickerCategories,
@@ -1253,7 +1272,6 @@
     onClose: closePicker,
     onPick: handlePickerPick,
   }}
-  {reteBuilder}
   groupFrames={[...$groupFrames, ...getCustomNodeProjectionFrames()]}
   editModeGroupId={effectiveGroupEditModeId}
   {customNodeEditGroupId}
