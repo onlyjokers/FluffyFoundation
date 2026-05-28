@@ -180,6 +180,8 @@ export class AliyunTtsService {
           mimeType,
           originalName,
           kind: 'audio',
+          source: 'tts',
+          autoDiscardable: true,
         });
         const next: AliyunTtsAssetResult = {
           asset: upload.asset,

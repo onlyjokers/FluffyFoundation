@@ -3,6 +3,7 @@
   import type { AssetRecord } from '$lib/stores/assets';
   import {
     formatAssetBytes,
+    formatAssetSourceLabel,
     kindPillLabel,
     kindTone,
     shortAssetId,
@@ -51,6 +52,7 @@
         <div class="name" title={a.originalName}>{a.originalName}</div>
         <div class="meta-row">
           <span class="pill">{kindPillLabel(a.kind)}</span>
+          <span class="pill source">{formatAssetSourceLabel(a.source)}</span>
           <span class="meta-text mono">{formatAssetBytes(a.sizeBytes)}</span>
           <span class="meta-text mono">{shortAssetId(a.id)}</span>
         </div>
@@ -201,6 +203,12 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.84);
+  }
+
+  .pill.source {
+    text-transform: none;
+    letter-spacing: 0;
+    color: rgba(186, 230, 253, 0.92);
   }
 
   .meta-text {

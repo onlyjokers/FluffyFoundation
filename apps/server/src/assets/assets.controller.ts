@@ -109,9 +109,27 @@ export class AssetsController {
   ) {}
 
   @Get()
-  async list(@Req() req: Request): Promise<{ assets: AssetRecord[] }> {
+  async list(@Req() req: Request): Promise<{
+    assets: AssetRecord[];
+    usage: ReturnType<AssetsService['getUsage']>;
+    settings: ReturnType<AssetsService['getSettings']>;
+  }> {
     requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
-    return { assets: this.assets.listAssets() };
+    return {
+      assets: this.assets.listAssets(),
+      usage: this.assets.getUsage(),
+      settings: this.assets.getSettings(),
+    };
+  }
+
+  @Patch('settings')
+  async updateSettings(
+    @Body() body: unknown,
+    @Req() req: Request
+  ): Promise<{ settings: ReturnType<AssetsService['getSettings']>; usage: ReturnType<AssetsService['getUsage']> }> {
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
+    const settings = await this.assets.updateSettings((body ?? {}) as Record<string, unknown>);
+    return { settings, usage: this.assets.getUsage() };
   }
 
   @Get('manifest')
@@ -152,6 +170,8 @@ export class AssetsController {
         mimeType,
         originalName,
         kind,
+        source: 'manager-upload',
+        autoDiscardable: false,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

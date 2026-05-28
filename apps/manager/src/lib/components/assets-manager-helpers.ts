@@ -58,6 +58,22 @@ export function formatAssetBytes(bytes: number): string {
   return `${formatted} ${units[i]}`;
 }
 
+export function formatCapacityPercent(usedBytes: number, maxBytes: number): number {
+  const used = Number(usedBytes);
+  const max = Number(maxBytes);
+  if (!Number.isFinite(used) || !Number.isFinite(max) || max <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((used / max) * 100)));
+}
+
+export function formatAssetSourceLabel(source: unknown): string {
+  if (source === 'manager-upload') return 'Manager Upload';
+  if (source === 'ai-image') return 'AI Image';
+  if (source === 'tts') return 'TTS';
+  if (source === 'recording') return 'Recording';
+  if (source === 'import') return 'Import';
+  return 'Unknown';
+}
+
 export function formatAssetDateTime(epochMs: number): string {
   const n = Number(epochMs);
   if (!Number.isFinite(n) || n <= 0) return '—';

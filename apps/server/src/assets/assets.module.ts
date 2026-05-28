@@ -7,9 +7,10 @@ import { AssetsController } from './assets.controller.js';
 import { AudioDropBoxService } from './audio-dropbox.service.js';
 import { AssetsService } from './assets.service.js';
 import { ManagerAuthModule } from '../manager-auth/manager-auth.module.js';
+import { SemanticModule } from '../semantic/semantic.module.js';
 
 @Module({
-  imports: [ManagerAuthModule],
+  imports: [ManagerAuthModule, SemanticModule],
   controllers: [AssetsController],
   providers: [AssetsService, AudioDropBoxService],
   exports: [AssetsService, AudioDropBoxService],

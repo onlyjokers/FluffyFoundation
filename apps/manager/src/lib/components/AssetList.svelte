@@ -5,6 +5,7 @@
   import {
     formatAssetBytes,
     formatAssetDateTime,
+    formatAssetSourceLabel,
     kindPillLabel,
     shortAssetId,
   } from './assets-manager-helpers';
@@ -18,6 +19,7 @@
     <div class="list-head">
       <div>Name</div>
       <div>Kind</div>
+      <div>Source</div>
       <div>Size</div>
       <div>Created</div>
       <div>ID</div>
@@ -26,6 +28,7 @@
       <button class="list-row" type="button" on:click={() => openDrawer(a.id)}>
         <div class="cell name" title={a.originalName}>{a.originalName}</div>
         <div class="cell"><span class="pill">{kindPillLabel(a.kind)}</span></div>
+        <div class="cell"><span class="pill source">{formatAssetSourceLabel(a.source)}</span></div>
         <div class="cell mono">{formatAssetBytes(a.sizeBytes)}</div>
         <div class="cell mono">{formatAssetDateTime(a.createdAt)}</div>
         <div class="cell mono" title={a.id}>{shortAssetId(a.id)}</div>
@@ -48,7 +51,7 @@
   .list-head,
   .list-row {
     display: grid;
-    grid-template-columns: minmax(240px, 1.4fr) 110px 120px 170px 160px;
+    grid-template-columns: minmax(240px, 1.4fr) 110px 140px 120px 170px 160px;
     gap: 10px;
     align-items: center;
     padding: 10px 12px;
@@ -101,6 +104,12 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.84);
+  }
+
+  .pill.source {
+    text-transform: none;
+    letter-spacing: 0;
+    color: rgba(186, 230, 253, 0.92);
   }
 
   .mono {

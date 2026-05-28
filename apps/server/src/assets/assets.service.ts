@@ -8,11 +8,19 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { readAssetServiceConfig, type AssetServiceConfig } from './assets.config.js';
-import type { AssetIndexFile, AssetKind, AssetRecord, StoredAssetRecord } from './assets.types.js';
-import { defaultAssetRecordFields } from './asset-record-defaults.js';
+import type { AssetIndexFile, AssetKind, AssetRecord, AssetSource, StoredAssetRecord } from './assets.types.js';
+import { defaultAssetProvenanceFields, defaultAssetRecordFields } from './asset-record-defaults.js';
 import { getErrorCode } from '../utils/error-utils.js';
+import { SemanticGraphAuthorityService } from '../semantic/semantic-graph-authority.service.js';
 
 type UploadResult = { asset: AssetRecord; deduped: boolean };
+type AssetSettings = { maxTotalBytes: number };
+type AssetUsage = {
+  totalBytes: number;
+  discardableBytes: number;
+  protectedBytes: number;
+  maxTotalBytes: number;
+};
 
 type StoredIndex = {
   byId: Map<string, StoredAssetRecord>;
@@ -123,10 +131,35 @@ function normalizeKind(raw: unknown): AssetKind | null {
   return null;
 }
 
+function normalizeSource(raw: unknown, fallback: AssetSource): AssetSource {
+  if (typeof raw !== 'string') return fallback;
+  const source = raw.trim();
+  if (
+    source === 'manager-upload' ||
+    source === 'ai-image' ||
+    source === 'tts' ||
+    source === 'recording' ||
+    source === 'import' ||
+    source === 'unknown'
+  ) {
+    return source;
+  }
+  return fallback;
+}
+
+function isGeneratedSource(source: AssetSource): boolean {
+  return source === 'ai-image' || source === 'tts' || source === 'recording';
+}
+
 function normalizeStoredAssetRecord(asset: StoredAssetRecord): StoredAssetRecord {
+  const source = normalizeSource(asset.source, defaultAssetProvenanceFields().source);
   return {
     ...defaultAssetRecordFields(),
+    ...defaultAssetProvenanceFields(),
     ...asset,
+    source,
+    autoDiscardable: Boolean(asset.autoDiscardable) && isGeneratedSource(source),
+    pinned: asset.pinned === true ? true : undefined,
     variants: Array.isArray(asset.variants) ? asset.variants : defaultAssetRecordFields().variants,
     cachePolicy: asset.cachePolicy ?? defaultAssetRecordFields().cachePolicy,
     permissions: asset.permissions ?? defaultAssetRecordFields().permissions,
@@ -138,12 +171,16 @@ export class AssetsService {
   readonly config: AssetServiceConfig = readAssetServiceConfig();
 
   private index: StoredIndex = { byId: new Map(), bySha256: new Map() };
+  private settings: AssetSettings = { maxTotalBytes: this.config.maxTotalBytes };
   private persistChain: Promise<void> = Promise.resolve();
   private mutationChain: Promise<void> = Promise.resolve();
+
+  constructor(private readonly semanticAuthority?: SemanticGraphAuthorityService) {}
 
   async init(): Promise<void> {
     await fsp.mkdir(this.config.dataDir, { recursive: true });
     await this.loadIndexFromDisk();
+    await this.loadSettingsFromDisk();
   }
 
   async healthCheck(): Promise<{
@@ -232,6 +269,38 @@ export class AssetsService {
     return result;
   }
 
+  getSettings(): AssetSettings {
+    return { ...this.settings };
+  }
+
+  async updateSettings(patch: { maxTotalBytes?: unknown }): Promise<AssetSettings> {
+    const parsed = Number(patch.maxTotalBytes);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error('maxTotalBytes must be a positive number');
+    }
+    const next = { maxTotalBytes: Math.floor(parsed) };
+    this.settings = next;
+    await writeJsonAtomic(this.config.settingsPath, next);
+    return this.getSettings();
+  }
+
+  getUsage(): AssetUsage {
+    const referencedAssetIds = this.collectReferencedAssetIds();
+    let totalBytes = 0;
+    let discardableBytes = 0;
+    for (const asset of this.index.byId.values()) {
+      const size = Number(asset.sizeBytes) || 0;
+      totalBytes += size;
+      if (this.isAutoDiscardCandidate(asset, referencedAssetIds)) discardableBytes += size;
+    }
+    return {
+      totalBytes,
+      discardableBytes,
+      protectedBytes: Math.max(0, totalBytes - discardableBytes),
+      maxTotalBytes: this.settings.maxTotalBytes,
+    };
+  }
+
   private storagePathForSha256(sha256: string): string {
     const prefix = sha256.slice(0, 2);
     return path.join(this.config.dataDir, prefix, sha256);
@@ -259,7 +328,21 @@ export class AssetsService {
     }
   }
 
-  private enqueuePersist(): void {
+  private async loadSettingsFromDisk(): Promise<void> {
+    try {
+      const raw = await fsp.readFile(this.config.settingsPath, 'utf8');
+      const parsed = JSON.parse(raw) as Partial<AssetSettings>;
+      const maxTotalBytes = Number(parsed.maxTotalBytes);
+      if (Number.isFinite(maxTotalBytes) && maxTotalBytes > 0) {
+        this.settings = { maxTotalBytes: Math.floor(maxTotalBytes) };
+      }
+    } catch (err: unknown) {
+      const code = getErrorCode(err);
+      if (code !== 'ENOENT') console.warn('[asset-service] failed to load settings', err);
+    }
+  }
+
+  private enqueuePersist(): Promise<void> {
     const snapshot: AssetIndexFile = {
       version: 1,
       assets: Array.from(this.index.byId.values()),
@@ -268,6 +351,7 @@ export class AssetsService {
       .catch(() => undefined)
       .then(() => writeJsonAtomic(this.config.dbPath, snapshot))
       .catch((err) => console.warn('[asset-service] persist failed', err));
+    return this.persistChain;
   }
 
   getAssetRecord(id: string): AssetRecord | null {
@@ -298,7 +382,7 @@ export class AssetsService {
 
       this.index.byId.delete(safeId);
       this.index.bySha256.delete(stored.sha256);
-      this.enqueuePersist();
+      await this.enqueuePersist();
 
       // Best-effort: remove content file. Since we dedupe by sha256 and keep one assetId per sha256,
       // this is safe for MVP.
@@ -326,6 +410,7 @@ export class AssetsService {
       kind?: unknown;
       tags?: unknown;
       description?: unknown;
+      pinned?: unknown;
     }
   ): Promise<AssetRecord | null> {
     const safeId = String(id ?? '').trim();
@@ -379,6 +464,15 @@ export class AssetsService {
         }
       }
 
+      if (patch.pinned !== undefined) {
+        const pinned = Boolean(patch.pinned);
+        if (pinned !== Boolean(next.pinned)) {
+          if (pinned) next.pinned = true;
+          else delete next.pinned;
+          changed = true;
+        }
+      }
+
       if (!changed) {
         const { storageBackend, storageKey, ...record } = next;
         void storageBackend;
@@ -388,7 +482,7 @@ export class AssetsService {
 
       next.updatedAt = Date.now();
       this.index.byId.set(safeId, next);
-      this.enqueuePersist();
+      await this.enqueuePersist();
 
       const { storageBackend, storageKey, ...record } = next;
       void storageBackend;
@@ -417,6 +511,9 @@ export class AssetsService {
     mimeType: string;
     originalName: string;
     kind?: AssetKind | null;
+    source?: AssetSource | null;
+    autoDiscardable?: boolean;
+    referencedAssetIds?: Iterable<string>;
   }): Promise<UploadResult> {
     const safeName = toSafeOriginalName(opts.originalName);
     const sha256 = await sha256FileHex(opts.tempPath);
@@ -432,6 +529,9 @@ export class AssetsService {
     }
 
     const kind = opts.kind ?? guessKind(opts.mimeType, safeName);
+    const source = normalizeSource(opts.source, 'manager-upload');
+    const autoDiscardable = Boolean(opts.autoDiscardable) && isGeneratedSource(source);
+    const referencedAssetIds = this.collectReferencedAssetIds(opts.referencedAssetIds);
 
     return await this.runMutation(async () => {
       const existingId = this.index.bySha256.get(sha256);
@@ -447,6 +547,8 @@ export class AssetsService {
         return { asset: existing, deduped: true };
       }
 
+      if (autoDiscardable) await this.ensureCapacityForIncomingAsset(stat.size, referencedAssetIds);
+
       const id = randomUUID();
       const now = Date.now();
 
@@ -460,6 +562,8 @@ export class AssetsService {
         createdAt: now,
         updatedAt: now,
         ...defaultAssetRecordFields(),
+        source,
+        autoDiscardable,
         storageBackend: 'localfs',
         storageKey: sha256,
       };
@@ -488,7 +592,7 @@ export class AssetsService {
 
       this.index.byId.set(id, stored);
       this.index.bySha256.set(sha256, id);
-      this.enqueuePersist();
+      await this.enqueuePersist();
 
       const { storageBackend, storageKey, ...record } = stored;
       void storageBackend;
@@ -505,5 +609,77 @@ export class AssetsService {
       () => undefined
     );
     return await next;
+  }
+
+  private isAutoDiscardCandidate(asset: StoredAssetRecord, referencedAssetIds: Set<string>): boolean {
+    return Boolean(asset.autoDiscardable) && asset.pinned !== true && !referencedAssetIds.has(asset.id);
+  }
+
+  private collectReferencedAssetIds(extra?: Iterable<string>): Set<string> {
+    const out = new Set(Array.from(extra ?? []).map(String).filter(Boolean));
+    const snapshot = this.semanticAuthority?.getSnapshot?.();
+    if (!snapshot) return out;
+    const visit = (value: unknown): void => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        const match = /^asset:([^?#]+)/.exec(trimmed);
+        if (match?.[1]) out.add(match[1]);
+        else if (this.index.byId.has(trimmed)) out.add(trimmed);
+        return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    };
+    for (const node of snapshot.nodes ?? []) {
+      const record = node as unknown as Record<string, unknown>;
+      visit(record.config);
+      visit(record.inputValues);
+      visit(record.outputValues);
+    }
+    return out;
+  }
+
+  private async ensureCapacityForIncomingAsset(incomingBytes: number, referencedAssetIds: Set<string>): Promise<void> {
+    const maxTotalBytes = this.settings.maxTotalBytes;
+    if (incomingBytes > maxTotalBytes) {
+      throw new Error(`incoming asset too large for total capacity (${incomingBytes} bytes > ${maxTotalBytes})`);
+    }
+
+    let usage = this.getUsage().totalBytes;
+    if (usage + incomingBytes <= maxTotalBytes) return;
+
+    const candidates = Array.from(this.index.byId.values())
+      .filter((asset) => this.isAutoDiscardCandidate(asset, referencedAssetIds))
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id));
+
+    for (const asset of candidates) {
+      await this.deleteStoredAsset(asset);
+      usage -= Number(asset.sizeBytes) || 0;
+      if (usage + incomingBytes <= maxTotalBytes) return;
+    }
+
+    throw new Error('insufficient asset capacity after cleanup');
+  }
+
+  private async deleteStoredAsset(stored: StoredAssetRecord): Promise<void> {
+    this.index.byId.delete(stored.id);
+    this.index.bySha256.delete(stored.sha256);
+    await this.enqueuePersist();
+
+    const filePath = this.storagePathForSha256(stored.storageKey);
+    try {
+      await fsp.unlink(filePath);
+    } catch {
+      // ignore
+    }
+    try {
+      await fsp.rmdir(path.dirname(filePath));
+    } catch {
+      // ignore
+    }
   }
 }

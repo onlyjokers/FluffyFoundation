@@ -17,5 +17,13 @@ export function defaultAssetPermissions(): AssetRecord['permissions'] {
 }
 
 export function defaultAssetRecordFields(): Pick<AssetRecord, 'variants' | 'cachePolicy' | 'permissions'> {
-  return { variants: defaultAssetVariants(), cachePolicy: defaultAssetCachePolicy(), permissions: defaultAssetPermissions() };
+  return {
+    variants: defaultAssetVariants(),
+    cachePolicy: defaultAssetCachePolicy(),
+    permissions: defaultAssetPermissions(),
+  };
+}
+
+export function defaultAssetProvenanceFields(): Pick<AssetRecord, 'source' | 'autoDiscardable'> {
+  return { source: 'unknown', autoDiscardable: false };
 }

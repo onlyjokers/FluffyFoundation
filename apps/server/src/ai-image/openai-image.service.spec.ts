@@ -16,6 +16,8 @@ type UploadCall = {
   mimeType: string;
   originalName: string;
   kind?: AssetKind | null;
+  source?: string | null;
+  autoDiscardable?: boolean;
 };
 
 function createAsset(id: string): AssetRecord {
@@ -31,6 +33,8 @@ function createAsset(id: string): AssetRecord {
     variants: [],
     cachePolicy: { strategy: 'immutable', maxAgeSeconds: 31536000 },
     permissions: { scope: 'server-deliverable' },
+    source: 'ai-image',
+    autoDiscardable: true,
   };
 }
 
@@ -111,6 +115,8 @@ test('OpenAiImageService posts generation body, downloads remote PNG, and stores
   assert.equal(uploadCalls.length, 1);
   assert.equal(uploadCalls[0].mimeType, 'image/png');
   assert.equal(uploadCalls[0].kind, 'image');
+  assert.equal(uploadCalls[0].source, 'ai-image');
+  assert.equal(uploadCalls[0].autoDiscardable, true);
   assert.equal(readFileSync(uploadCalls[0].tempPath, 'utf8'), 'png-data');
 });
 

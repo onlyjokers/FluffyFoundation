@@ -28,6 +28,8 @@ const baseStoredAsset: StoredAssetRecord = {
   ],
   cachePolicy: { strategy: 'revalidate', maxAgeSeconds: 60 },
   permissions: { scope: 'server-deliverable', roles: ['manager'] },
+  source: 'manager-upload',
+  autoDiscardable: false,
   storageBackend: 'localfs',
   storageKey: 'd'.repeat(64),
 };

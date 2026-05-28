@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import type { AssetRecord } from '$lib/stores/assets';
 import {
   formatAssetBytes,
+  formatAssetSourceLabel,
+  formatCapacityPercent,
   getFileExt,
   getFilteredSortedAssets,
   inferAssetKindFromFileLike,
@@ -32,6 +34,10 @@ test('asset helpers preserve file extension, id, byte, and inferred-kind behavio
   assert.equal(getFileExt('.hidden'), '');
   assert.equal(shortAssetId('abcdef1234567890'), 'abcdef…7890');
   assert.equal(formatAssetBytes(1536), '1.5 KB');
+  assert.equal(formatCapacityPercent(5, 10), 50);
+  assert.equal(formatCapacityPercent(5, 0), 0);
+  assert.equal(formatAssetSourceLabel('ai-image'), 'AI Image');
+  assert.equal(formatAssetSourceLabel('manager-upload'), 'Manager Upload');
   assert.equal(inferAssetKindFromFileLike({ name: 'poster.webp', type: '' }), 'image');
   assert.equal(inferAssetKindFromFileLike({ name: 'weights.gguf', type: '' }), 'model');
 });

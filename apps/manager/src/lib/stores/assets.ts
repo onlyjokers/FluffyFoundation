@@ -7,6 +7,18 @@
 import { writable } from 'svelte/store';
 
 export type AssetKind = 'audio' | 'image' | 'video' | 'model';
+export type AssetSource = 'manager-upload' | 'ai-image' | 'tts' | 'recording' | 'import' | 'unknown';
+
+export type AssetUsage = {
+  totalBytes: number;
+  discardableBytes: number;
+  protectedBytes: number;
+  maxTotalBytes: number;
+};
+
+export type AssetSettings = {
+  maxTotalBytes: number;
+};
 
 export type AssetRecord = {
   id: string;
@@ -39,12 +51,17 @@ export type AssetRecord = {
     localOnlyReason?: string;
     roles?: string[];
   };
+  source?: AssetSource;
+  autoDiscardable?: boolean;
+  pinned?: boolean;
 };
 
 type AssetsState = {
   status: 'idle' | 'loading' | 'error';
   error: string | null;
   assets: AssetRecord[];
+  usage: AssetUsage;
+  settings: AssetSettings;
   lastUpdatedAt: number;
 };
 
@@ -78,7 +95,22 @@ function readServerUrl(): string {
   }
 }
 
-const initial: AssetsState = { status: 'idle', error: null, assets: [], lastUpdatedAt: 0 };
+const defaultMaxTotalBytes = 20 * 1024 * 1024 * 1024;
+const defaultUsage: AssetUsage = {
+  totalBytes: 0,
+  discardableBytes: 0,
+  protectedBytes: 0,
+  maxTotalBytes: defaultMaxTotalBytes,
+};
+const defaultSettings: AssetSettings = { maxTotalBytes: defaultMaxTotalBytes };
+const initial: AssetsState = {
+  status: 'idle',
+  error: null,
+  assets: [],
+  usage: defaultUsage,
+  settings: defaultSettings,
+  lastUpdatedAt: 0,
+};
 const store = writable<AssetsState>(initial);
 
 let refreshInFlight: Promise<void> | null = null;
@@ -97,8 +129,10 @@ async function refresh(opts?: { serverUrl?: string }): Promise<void> {
       });
       const record = (data ?? {}) as Record<string, unknown>;
       const assets = Array.isArray(record.assets) ? (record.assets as AssetRecord[]) : [];
+      const usage = normalizeUsage(record.usage);
+      const settings = normalizeSettings(record.settings);
       assets.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-      store.set({ status: 'idle', error: null, assets, lastUpdatedAt: Date.now() });
+      store.set({ status: 'idle', error: null, assets, usage, settings, lastUpdatedAt: Date.now() });
     } catch (err) {
       store.update((s) => ({
         ...s,
@@ -112,7 +146,59 @@ async function refresh(opts?: { serverUrl?: string }): Promise<void> {
   return refreshInFlight;
 }
 
+function normalizePositiveNumber(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+function normalizeNonNegativeNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+
+function normalizeUsage(value: unknown): AssetUsage {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const maxTotalBytes = normalizePositiveNumber(record.maxTotalBytes, defaultMaxTotalBytes);
+  return {
+    totalBytes: normalizeNonNegativeNumber(record.totalBytes),
+    discardableBytes: normalizeNonNegativeNumber(record.discardableBytes),
+    protectedBytes: normalizeNonNegativeNumber(record.protectedBytes),
+    maxTotalBytes,
+  };
+}
+
+function normalizeSettings(value: unknown): AssetSettings {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return { maxTotalBytes: normalizePositiveNumber(record.maxTotalBytes, defaultMaxTotalBytes) };
+}
+
+async function updateSettings(
+  settings: Partial<AssetSettings>,
+  opts?: { serverUrl?: string }
+): Promise<void> {
+  const serverUrl = typeof opts?.serverUrl === 'string' ? opts.serverUrl : readServerUrl();
+  const url = buildUrl(serverUrl, 'api/assets/settings');
+  if (!url) throw new Error('Missing or invalid Server URL.');
+  const data = await fetchJson(url, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  const record = (data ?? {}) as Record<string, unknown>;
+  const usage = normalizeUsage(record.usage);
+  const nextSettings = normalizeSettings(record.settings);
+  store.update((state) => ({
+    ...state,
+    usage,
+    settings: nextSettings,
+    error: null,
+    lastUpdatedAt: Date.now(),
+  }));
+}
+
 export const assetsStore = {
   subscribe: store.subscribe,
   refresh,
+  updateSettings,
 };

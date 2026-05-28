@@ -137,6 +137,8 @@ export class OpenAiImageService {
       mimeType: generated.mimeType,
       originalName: `gpt-image-${model}.${generated.mimeType === 'image/jpeg' ? 'jpg' : 'png'}`,
       kind: 'image',
+      source: 'ai-image',
+      autoDiscardable: true,
     });
 
     return {

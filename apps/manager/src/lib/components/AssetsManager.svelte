@@ -10,6 +10,8 @@
   import { assetsStore, type AssetKind, type AssetRecord } from '$lib/stores/assets';
   import {
     buildFileTypeOptions,
+    formatAssetBytes,
+    formatCapacityPercent,
     getActiveAdvancedFilterCount,
     getFilteredSortedAssets,
     inferAssetKindFromFileLike as inferKindFromFile,
@@ -24,6 +26,13 @@
   const storageKeyAssetsView = 'shugu-assets-view';
 
   let assets: AssetRecord[] = [];
+  let usage = {
+    totalBytes: 0,
+    discardableBytes: 0,
+    protectedBytes: 0,
+    maxTotalBytes: 20 * 1024 * 1024 * 1024,
+  };
+  let settings = { maxTotalBytes: 20 * 1024 * 1024 * 1024 };
   let status: 'idle' | 'loading' | 'error' = 'idle';
   let errorMessage: string | null = null;
 
@@ -51,6 +60,11 @@
   let uploaderRunning = false;
   let isDragActive = false;
   let uploadError = '';
+  let capacityDraftGb = '20';
+  let capacitySaving = false;
+  let capacityError = '';
+  let capacityEditing = false;
+  let lastSettingsMaxTotalBytes = 0;
 
   let editName = '';
   let editKind: AssetKind = 'audio';
@@ -329,6 +343,27 @@
     }
   }
 
+  async function saveCapacitySetting(): Promise<void> {
+    capacityError = '';
+    const gb = Number(capacityDraftGb);
+    if (!Number.isFinite(gb) || gb <= 0) {
+      capacityError = 'Capacity must be greater than 0 GB.';
+      return;
+    }
+    capacitySaving = true;
+    try {
+      await assetsStore.updateSettings(
+        { maxTotalBytes: Math.floor(gb * 1024 * 1024 * 1024) },
+        { serverUrl }
+      );
+      await refreshAssets();
+    } catch (err) {
+      capacityError = err instanceof Error ? err.message : String(err);
+    } finally {
+      capacitySaving = false;
+    }
+  }
+
   $: fileTypeOptions = buildFileTypeOptions(assets);
   $: activeAdvancedFilterCount = getActiveAdvancedFilterCount({
     query,
@@ -362,7 +397,13 @@
     ensureDrawerEditState(null);
   }
 
-  $: ({ status, error: errorMessage, assets } = $assetsStore);
+  $: ({ status, error: errorMessage, assets, usage, settings } = $assetsStore);
+  $: capacityPercent = formatCapacityPercent(usage.totalBytes, usage.maxTotalBytes);
+  $: if (!capacitySaving && !capacityEditing && settings.maxTotalBytes !== lastSettingsMaxTotalBytes) {
+    lastSettingsMaxTotalBytes = settings.maxTotalBytes;
+    const nextGb = Math.round((settings.maxTotalBytes / (1024 * 1024 * 1024)) * 10) / 10;
+    capacityDraftGb = String(nextGb);
+  }
 
   function onDragEnter(event: DragEvent): void {
     event.preventDefault();
@@ -439,6 +480,39 @@
     {#if status === 'error'}
       <div class="banner error">{errorMessage ?? 'Unknown error'}</div>
     {/if}
+
+    <section class="capacity-panel" aria-label="Asset capacity">
+      <div class="capacity-main">
+        <div>
+          <div class="capacity-title">Asset Capacity</div>
+          <div class="capacity-meta">
+            {formatAssetBytes(usage.totalBytes)} used / {formatAssetBytes(usage.maxTotalBytes)}
+            <span>AI reclaimable {formatAssetBytes(usage.discardableBytes)}</span>
+          </div>
+        </div>
+        <div class="capacity-control">
+          <label for="asset-capacity-gb">Max GB</label>
+          <input
+            id="asset-capacity-gb"
+            type="number"
+            min="0.1"
+            step="0.1"
+            bind:value={capacityDraftGb}
+            on:focus={() => (capacityEditing = true)}
+            on:blur={() => (capacityEditing = false)}
+          />
+          <button type="button" on:click={saveCapacitySetting} disabled={capacitySaving}>
+            {capacitySaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+      <div class="capacity-bar" aria-hidden="true">
+        <div class="capacity-fill" style={`width: ${capacityPercent}%`}></div>
+      </div>
+      {#if capacityError}
+        <div class="capacity-error">{capacityError}</div>
+      {/if}
+    </section>
 
     {#if status === 'loading' && assets.length === 0}
       <AssetEmptyState title="Loading assets…" />
@@ -530,6 +604,86 @@
     border-color: rgba(239, 68, 68, 0.35);
     background: rgba(239, 68, 68, 0.12);
     color: rgba(255, 255, 255, 0.92);
+  }
+
+  .capacity-panel {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    background: rgba(2, 6, 23, 0.36);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .capacity-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .capacity-title {
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .capacity-meta {
+    margin-top: 4px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .capacity-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .capacity-control input {
+    width: 86px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(15, 23, 42, 0.7);
+    color: var(--text-primary);
+    padding: 6px 8px;
+  }
+
+  .capacity-control button {
+    border: 1px solid rgba(6, 182, 212, 0.36);
+    border-radius: 8px;
+    background: rgba(6, 182, 212, 0.16);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  .capacity-control button:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .capacity-bar {
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+  .capacity-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #22c55e, #06b6d4);
+  }
+
+  .capacity-error {
+    color: #fecaca;
+    font-size: 12px;
   }
 
   .drop-overlay {

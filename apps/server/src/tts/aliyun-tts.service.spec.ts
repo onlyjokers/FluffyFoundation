@@ -156,6 +156,8 @@ test('AliyunTtsService stores synthesized audio as a deduped asset', async () =>
     assert.equal(first.asset.kind, 'audio');
     assert.equal(first.asset.mimeType, 'audio/wav');
     assert.equal(first.asset.originalName, 'tts-qwen3-tts-flash-Cherry.wav');
+    assert.equal(first.asset.source, 'tts');
+    assert.equal(first.asset.autoDiscardable, true);
     assert.equal(upstreamCalls, 2, 'same TTS signature should avoid a second upstream call');
   } finally {
     if (previousEnv.ASSET_DATA_DIR === undefined) delete process.env.ASSET_DATA_DIR;

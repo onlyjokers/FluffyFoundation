@@ -3,6 +3,7 @@
  */
 
 export type AssetKind = 'audio' | 'image' | 'video' | 'model';
+export type AssetSource = 'manager-upload' | 'ai-image' | 'tts' | 'recording' | 'import' | 'unknown';
 
 export type AssetRecord = {
   id: string; // UUIDv4
@@ -43,6 +44,9 @@ export type AssetRecord = {
     localOnlyReason?: string;
     roles?: string[];
   };
+  source: AssetSource;
+  autoDiscardable: boolean;
+  pinned?: boolean;
 };
 
 export type StoredAssetRecord = AssetRecord & {
