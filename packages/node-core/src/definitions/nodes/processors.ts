@@ -217,21 +217,23 @@ export function createPushImageUploadNode(): NodeDefinition {
 const showImageCommandCache = new Map<string, { signature: string; cmd: NodeCommand }>();
 
 export function createShowImageProcessorNode(): NodeDefinition {
-  const resolveUrl = (raw: unknown): string => {
+  const resolveUrl = (raw: unknown): string | undefined => {
+    if (raw === undefined || raw === null) return undefined;
     if (typeof raw === 'string') return raw.trim();
     if (Array.isArray(raw)) {
       // If upstream provides a queue/array, prefer the latest value (pipeline semantics).
       for (let i = raw.length - 1; i >= 0; i--) {
         const item = raw[i];
+        if (item === undefined || item === null) continue;
         if (typeof item === 'string' && item.trim()) return item.trim();
         const url = getRecordString(item, 'url');
         if (url) return url;
       }
-      return '';
+      return undefined;
     }
     const url = getRecordString(raw, 'url');
     if (url) return url;
-    return '';
+    return undefined;
   };
 
   return {
@@ -259,6 +261,7 @@ export function createShowImageProcessorNode(): NodeDefinition {
     configSchema: [],
     process: (inputs, _config, context) => {
       const url = resolveUrl(inputs.in);
+      if (url === undefined) return { cmd: undefined };
       const signature = url;
 
       const cached = showImageCommandCache.get(context.nodeId);

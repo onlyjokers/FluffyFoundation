@@ -10,6 +10,7 @@ import type { SemanticCommandPayload, SemanticResultMessage } from '@shugu/proto
 import type { GraphState } from '$lib/nodes/types';
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import type { NodeGroup } from '$lib/components/nodes/node-canvas/controllers/group-controller';
+import { isGroupDecorationNodeType } from '$lib/components/nodes/node-canvas/groups/group-node-types';
 
 export const SERVER_SEMANTIC_MIGRATION_KEY = 'shugu-server-semantic-migrated-v1';
 
@@ -72,6 +73,60 @@ const positionFromGraph = (
   return positions;
 };
 
+const overlayManagerOnlyGroupDecorations = (
+  nextGraph: GraphState,
+  currentGraph: GraphState | undefined
+): GraphState => {
+  if (!currentGraph) return nextGraph;
+
+  const nextNodeIds = new Set((nextGraph.nodes ?? []).map((node) => String(node.id)));
+  const preservedDecorationNodes = (currentGraph.nodes ?? []).filter((node) => {
+    const id = String(node.id);
+    if (nextNodeIds.has(id)) return false;
+    return isGroupDecorationNodeType(String(node.type ?? ''));
+  });
+  if (preservedDecorationNodes.length === 0) return nextGraph;
+
+  const finalNodeIds = new Set(nextNodeIds);
+  for (const node of preservedDecorationNodes) {
+    finalNodeIds.add(String(node.id));
+  }
+
+  const nextConnectionIds = new Set(
+    (nextGraph.connections ?? []).map((connection) => String(connection.id))
+  );
+  const preservedDecorationNodeIds = new Set(
+    preservedDecorationNodes.map((node) => String(node.id))
+  );
+  const preservedDecorationConnections = (currentGraph.connections ?? []).filter((connection) => {
+    const id = String(connection.id);
+    if (nextConnectionIds.has(id)) return false;
+    const sourceNodeId = String(connection.sourceNodeId);
+    const targetNodeId = String(connection.targetNodeId);
+    if (!preservedDecorationNodeIds.has(sourceNodeId) && !preservedDecorationNodeIds.has(targetNodeId)) {
+      return false;
+    }
+    return finalNodeIds.has(sourceNodeId) && finalNodeIds.has(targetNodeId);
+  });
+
+  return {
+    nodes: [
+      ...(nextGraph.nodes ?? []),
+      ...preservedDecorationNodes.map((node) => ({
+        ...node,
+        position: { ...(node.position ?? defaultSemanticNodePosition) },
+        config: { ...(node.config ?? {}) },
+        inputValues: { ...(node.inputValues ?? {}) },
+        outputValues: { ...(node.outputValues ?? {}) },
+      })),
+    ],
+    connections: [
+      ...(nextGraph.connections ?? []),
+      ...preservedDecorationConnections.map((connection) => ({ ...connection })),
+    ],
+  };
+};
+
 export function graphFromServerSemanticSnapshot(
   snapshot: SemanticGraphSnapshot,
   currentGraph?: GraphState,
@@ -85,7 +140,7 @@ export function graphFromServerSemanticSnapshot(
       ? Math.max(...existingPositions.map((position) => position.x)) + 240
       : defaultSemanticNodePosition.x;
   let missingNodeIndex = 0;
-  return {
+  const serverGraph = {
     nodes: (snapshot.nodes ?? []).map((node) => ({
       id: String(node.id),
       type: String(node.type),
@@ -102,6 +157,7 @@ export function graphFromServerSemanticSnapshot(
     })),
     connections: (snapshot.connections ?? []).map((connection) => ({ ...connection })),
   };
+  return overlayManagerOnlyGroupDecorations(serverGraph, currentGraph);
 }
 
 const snapshotNodeToGraphNode = (node: SemanticGraphSnapshot['nodes'][number]) => ({

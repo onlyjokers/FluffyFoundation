@@ -18,9 +18,18 @@ export function registerDefaultRuntimeNodes(): void {
   // Client Loader selection should only enumerate audience clients; Display has its own `display-object` node.
   getAllClientIds: () =>
     (get(state).clients ?? [])
-      .filter((c) => String(c?.group ?? '') !== 'display')
+      .filter((c) => String(c?.group ?? '') !== 'display' && c?.connected !== false)
       .map((c) => String(c?.clientId ?? ''))
       .filter(Boolean),
+  getClientConnectionKey: (clientId) => {
+    const client = (get(state).clients ?? []).find(
+      (entry) => String(entry?.clientId ?? '') === String(clientId ?? '')
+    );
+    const connectedAt = client?.connectedAt;
+    return typeof connectedAt === 'number' && Number.isFinite(connectedAt)
+      ? String(connectedAt)
+      : null;
+  },
   // Decouple Node Graph client targeting from Manager UI "selected clients".
   // Client targeting must be driven by the graph itself (client-loader inputs/config).
   getSelectedClientIds: () => [],

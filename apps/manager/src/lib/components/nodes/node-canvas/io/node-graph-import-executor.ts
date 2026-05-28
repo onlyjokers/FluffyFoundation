@@ -40,6 +40,8 @@ export type NodeGraphImportExecutorOptions = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
+const asRecord = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
+
 function coerceGraphNumber(value: unknown, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -95,21 +97,98 @@ function parseCustomNodeDefinitions(value: unknown): CustomNodeDefinition[] {
   return out;
 }
 
+function migrateLegacyTtsAudioChains(
+  nodes: GraphState['nodes'],
+  connections: GraphState['connections'],
+  createId: (prefix: string) => string
+): { nodes: GraphState['nodes']; connections: GraphState['connections'] } {
+  const nodeById = new Map(nodes.map((node) => [String(node.id), node]));
+  const nextNodes = nodes.slice();
+  const nextConnections: GraphState['connections'] = [];
+
+  for (const connection of connections) {
+    const source = nodeById.get(String(connection.sourceNodeId));
+    if (!source || String(source.type ?? '') !== 'generate-tts-audio' || String(connection.sourcePortId) !== 'audio') {
+      nextConnections.push(connection);
+      continue;
+    }
+
+    const ttsPosition = asRecord(source.position);
+    const target = nodeById.get(String(connection.targetNodeId));
+    const targetPosition = asRecord(target?.position);
+    const loadNodeId = createId('node');
+    nextNodes.push({
+      id: loadNodeId,
+      type: 'load-audio-from-assets',
+      position: {
+        x:
+          (coerceGraphNumber(ttsPosition.x, 0) +
+            coerceGraphNumber(targetPosition.x, coerceGraphNumber(ttsPosition.x, 0) + 240)) /
+          2,
+        y:
+          (coerceGraphNumber(ttsPosition.y, 0) +
+            coerceGraphNumber(targetPosition.y, coerceGraphNumber(ttsPosition.y, 0))) /
+          2,
+      },
+      config: {
+        assetId: '',
+        playbackRate: 1,
+        detune: 0,
+        volume: 0,
+        timeline: { startSec: 0, endSec: -1, cursorSec: -1 },
+      },
+      inputValues: {
+        play: true,
+        startSec: 0,
+        endSec: -1,
+        cursorSec: -1,
+        loop: false,
+        reverse: false,
+        playbackRate: 1,
+        detune: 0,
+        volume: 0,
+      },
+      outputValues: {},
+    });
+    nextConnections.push({
+      id: createId('conn'),
+      sourceNodeId: String(source.id),
+      sourcePortId: 'asset',
+      targetNodeId: loadNodeId,
+      targetPortId: 'asset',
+    });
+    nextConnections.push({
+      ...connection,
+      sourceNodeId: loadNodeId,
+      sourcePortId: 'ref',
+    });
+  }
+
+  return { nodes: nextNodes, connections: nextConnections };
+}
+
 export async function executeParsedNodeGraphImport(
   opts: NodeGraphImportExecutorOptions
 ): Promise<NodeGraphImportResult> {
   const sourceGraph = opts.parsedFile.graph;
-  const sourceNodes = Array.isArray(sourceGraph.nodes) ? sourceGraph.nodes : [];
-  const sourceConnections = Array.isArray(sourceGraph.connections)
+  const rawSourceNodes = Array.isArray(sourceGraph.nodes) ? sourceGraph.nodes : [];
+  const rawSourceConnections = Array.isArray(sourceGraph.connections)
     ? sourceGraph.connections
     : [];
+  const source = migrateLegacyTtsAudioChains(
+    rawSourceNodes as GraphState['nodes'],
+    rawSourceConnections as GraphState['connections'],
+    opts.createId
+  );
+  const sourceNodes = source.nodes;
+  const sourceConnections = source.connections;
 
   for (const definition of parseCustomNodeDefinitions(opts.parsedFile.customNodes)) {
     opts.addCustomNodeDefinition?.(definition);
   }
 
   const importableNodes = sourceNodes.filter((node) => {
-    const nodeRecord = isRecord(node) ? node : {};
+    const nodeRecord = asRecord(node);
     const type = String(nodeRecord.type ?? '');
     return Boolean(type && opts.nodeRegistry.get(type));
   });
@@ -121,7 +200,7 @@ export async function executeParsedNodeGraphImport(
   let skippedNodes = 0;
 
   for (const node of sourceNodes) {
-    const nodeRecord = isRecord(node) ? node : {};
+    const nodeRecord = asRecord(node);
     const oldId = String(nodeRecord.id ?? '');
     const type = String(nodeRecord.type ?? '');
     if (!type || !opts.nodeRegistry.get(type)) {
@@ -130,7 +209,7 @@ export async function executeParsedNodeGraphImport(
     }
 
     const newId = opts.createId('node');
-    const position = isRecord(nodeRecord.position) ? nodeRecord.position : {};
+    const position = asRecord(nodeRecord.position);
     const cfg = isRecord(nodeRecord.config)
       ? (nodeRecord.config as Record<string, unknown>)
       : {};
@@ -166,7 +245,7 @@ export async function executeParsedNodeGraphImport(
   let skippedConnections = 0;
 
   for (const c of sourceConnections) {
-    const record = isRecord(c) ? c : {};
+    const record = asRecord(c);
     const sourceNodeId = nodeIdMap.get(String(record.sourceNodeId ?? ''));
     const targetNodeId = nodeIdMap.get(String(record.targetNodeId ?? ''));
     if (!sourceNodeId || !targetNodeId) {
@@ -193,12 +272,12 @@ export async function executeParsedNodeGraphImport(
 
   if (groupIdMap.size > 0) {
     for (const node of sourceNodes) {
-      const nodeRecord = isRecord(node) ? node : {};
+      const nodeRecord = asRecord(node);
       const type = String(nodeRecord.type ?? '');
       if (!['group-activate', 'group-gate', 'group-proxy'].includes(type)) continue;
       const newNodeId = nodeIdMap.get(String(nodeRecord.id ?? ''));
       if (!newNodeId) continue;
-      const config = isRecord(nodeRecord.config) ? nodeRecord.config : {};
+      const config = asRecord(nodeRecord.config);
       const nextGroupId = groupIdMap.get(String(config.groupId ?? ''));
       if (!nextGroupId) continue;
       opts.nodeEngine.updateNodeConfig(newNodeId, { groupId: nextGroupId });

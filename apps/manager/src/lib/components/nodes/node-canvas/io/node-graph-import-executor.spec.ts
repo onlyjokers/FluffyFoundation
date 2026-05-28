@@ -11,6 +11,7 @@ import { NodeRegistry, type NodeDefinition } from '@shugu/node-core';
 import type { GraphState } from '$lib/nodes/types';
 import type { NodeGroup } from '../controllers/group-controller';
 import { executeParsedNodeGraphImport } from './node-graph-import-executor.js';
+import { parseNodeGraphFile } from './node-graph-file.js';
 
 function registryWith(type: string): NodeRegistry {
   const registry = new NodeRegistry();
@@ -138,8 +139,11 @@ test('executeParsedNodeGraphImport can import the AI agent demo template without
   const connectedInputs = new Set<string>();
   let importedGroups: NodeGroup[] = [];
 
+  const parsedFile = parseNodeGraphFile(parsed);
+  assert.ok(parsedFile);
+
   const result = await executeParsedNodeGraphImport({
-    parsedFile: parsed,
+    parsedFile,
     nodeRegistry: registry,
     nodeEngine: {
       exportGraph: () => ({
@@ -240,4 +244,99 @@ test('executeParsedNodeGraphImport restores embedded custom node definitions bef
   assert.ok(addedDefinition);
   assert.ok(importedGraph);
   assert.equal(importedGraph?.nodes[0].type, 'custom:def-1');
+});
+
+test('executeParsedNodeGraphImport migrates legacy direct TTS audio chains to explicit asset playback', async () => {
+  const graph: GraphState = { nodes: [], connections: [] };
+  const registry = registryWithTypes([
+    'generate-tts-audio',
+    'load-audio-from-assets',
+    'tone-pitch',
+    'audio-out',
+  ]);
+  let seq = 0;
+
+  const result = await executeParsedNodeGraphImport({
+    parsedFile: {
+      graph: {
+        nodes: [
+          {
+            id: 'tts',
+            type: 'generate-tts-audio',
+            position: { x: 0, y: 0 },
+            config: {},
+            inputValues: { text: 'hello' },
+            outputValues: {},
+          },
+          {
+            id: 'pitch',
+            type: 'tone-pitch',
+            position: { x: 180, y: 0 },
+            config: {},
+            inputValues: {},
+            outputValues: {},
+          },
+          {
+            id: 'out',
+            type: 'audio-out',
+            position: { x: 360, y: 0 },
+            config: {},
+            inputValues: {},
+            outputValues: {},
+          },
+        ],
+        connections: [
+          { id: 'legacy', sourceNodeId: 'tts', sourcePortId: 'audio', targetNodeId: 'pitch', targetPortId: 'in' },
+          { id: 'out', sourceNodeId: 'pitch', sourcePortId: 'out', targetNodeId: 'out', targetPortId: 'in' },
+        ],
+      },
+      groups: [],
+      collapsedNodeIds: [],
+    },
+    nodeRegistry: registry,
+    nodeEngine: {
+      exportGraph: () => ({
+        nodes: graph.nodes.map((node) => ({ ...node })),
+        connections: graph.connections.map((connection) => ({ ...connection })),
+      }),
+      addNode: (node) => {
+        graph.nodes.push(node);
+      },
+      addConnection: (connection) => {
+        graph.connections.push(connection);
+        return true;
+      },
+      updateNodeConfig: () => undefined,
+    },
+    getNodeGroups: () => [],
+    appendNodeGroups: () => undefined,
+    getViewportCenterGraphPos: () => ({ x: 0, y: 0 }),
+    createId: (prefix) => `${prefix}${++seq}`,
+  });
+
+  assert.equal(result.skippedConnections, 0);
+  const tts = graph.nodes.find((node) => node.type === 'generate-tts-audio');
+  const load = graph.nodes.find((node) => node.type === 'load-audio-from-assets');
+  const pitch = graph.nodes.find((node) => node.type === 'tone-pitch');
+  assert.ok(tts);
+  assert.ok(load);
+  assert.ok(pitch);
+  assert.ok(
+    graph.connections.some(
+      (connection) =>
+        connection.sourceNodeId === tts.id &&
+        connection.sourcePortId === 'asset' &&
+        connection.targetNodeId === load.id &&
+        connection.targetPortId === 'asset'
+    )
+  );
+  assert.ok(
+    graph.connections.some(
+      (connection) =>
+        connection.sourceNodeId === load.id &&
+        connection.sourcePortId === 'ref' &&
+        connection.targetNodeId === pitch.id &&
+        connection.targetPortId === 'in'
+    )
+  );
 });

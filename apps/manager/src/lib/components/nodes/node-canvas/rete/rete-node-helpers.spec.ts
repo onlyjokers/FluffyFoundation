@@ -5,6 +5,8 @@ import {
   formatPortValue,
   hasPortValueText,
   inferBypassPorts,
+  parseRenderedProjectionNodeId,
+  resolveRenderedRuntimeNode,
   shouldUpdatePortValueText,
   resolveRenderedNodeType,
   sortByIndex,
@@ -27,6 +29,37 @@ test('sortByIndex keeps existing index ordering semantics', () => {
 test('resolveRenderedNodeType falls back to projected view node type when no canonical instance exists', () => {
   assert.equal(resolveRenderedNodeType('', 'group-proxy'), 'group-proxy');
   assert.equal(resolveRenderedNodeType('number', 'group-proxy'), 'number');
+});
+
+test('resolveRenderedRuntimeNode maps custom projection nodes back to internal runtime state', () => {
+  const nodes = new Map<string, any>([
+    [
+      'custom-1',
+      {
+        id: 'custom-1',
+        config: {
+          customNode: {
+            internal: {
+              nodes: [{ id: 'child-1', outputValues: { value: 'live' } }],
+            },
+          },
+        },
+      },
+    ],
+  ]);
+
+  assert.deepEqual(parseRenderedProjectionNodeId('view:custom:custom-1:child-1'), {
+    ownerNodeId: 'custom-1',
+    internalNodeId: 'child-1',
+  });
+  assert.equal(
+    resolveRenderedRuntimeNode({
+      renderedNodeId: 'view:custom:custom-1:child-1',
+      getNode: (nodeId) => nodes.get(nodeId),
+      readCustomNodeState: (config) => (config.customNode as any) ?? null,
+    })?.outputValues?.value,
+    'live'
+  );
 });
 
 test('buildGroupFrameProxyPorts derives labels and frame-relative ordering', () => {

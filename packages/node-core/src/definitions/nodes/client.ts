@@ -35,6 +35,14 @@ function resolveClientSelection(
 
 const permissionConfigKeys: ClientPermissionName[] = ['microphone', 'motion', 'camera', 'wakeLock', 'geolocation'];
 const urlSessionStateByNodeId = new Map<string, { lastTrigger: boolean; sessionId: string }>();
+const longLivedCommandActions = new Set<ControlAction>([
+  'showText',
+  'showImage',
+  'playMedia',
+  'screenColor',
+  'modulateSoundUpdate',
+  'flashlight',
+]);
 
 function resolveRequiredPermissionKeys(
   inputs: Record<string, unknown>,
@@ -83,7 +91,16 @@ function createClientObjectForSelection(
         clientTimestamp: latest.clientTimestamp,
       }
     : null;
-  return { clientId: primaryClientId, clientIds: selectedIds, sensors };
+  const connectionKeys =
+    typeof deps.getClientConnectionKey === 'function'
+      ? selectedIds.map((clientId) => deps.getClientConnectionKey?.(clientId) ?? '')
+      : undefined;
+  return {
+    clientId: primaryClientId,
+    clientIds: selectedIds,
+    ...(connectionKeys ? { connectionKeys } : {}),
+    sensors,
+  };
 }
 
 function resolveTargetsFromClientInput(raw: unknown): string[] {
@@ -94,6 +111,23 @@ function resolveTargetsFromClientInput(raw: unknown): string[] {
   if (ids.length > 0) return ids;
   const clientId = getStringValue(record.clientId);
   return clientId ? [clientId] : [];
+}
+
+function resolveTargetConnectionKeysFromClientInput(raw: unknown, targets: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const record = asRecord(raw);
+  if (!record || targets.length === 0) return out;
+  const idsRaw = record.clientIds;
+  const keysRaw = record.connectionKeys;
+  if (!Array.isArray(idsRaw) || !Array.isArray(keysRaw)) return out;
+  const ids = idsRaw.map(String);
+  for (let i = 0; i < ids.length; i += 1) {
+    const clientId = ids[i] ?? '';
+    if (!clientId || !targets.includes(clientId)) continue;
+    const key = String(keysRaw[i] ?? '').trim();
+    if (key) out.set(clientId, key);
+  }
+  return out;
 }
 
 function getBaseUrl(inputs: Record<string, unknown>, config: Record<string, unknown>): string {
@@ -139,6 +173,15 @@ function removedCommandActionFromUnknown(raw: unknown): string | null {
   const payload = asRecord(record.payload);
   const action = getStringValue(payload?.action);
   return action || null;
+}
+
+function commandSignatureForRouting(cmd: NodeCommand | null | undefined): string {
+  if (!cmd) return '';
+  try {
+    return JSON.stringify(cmd);
+  } catch {
+    return `${String(cmd.action)}:${String(cmd.executeAt ?? '')}`;
+  }
 }
 
 export function createClientCountNode(deps: ClientObjectDeps): NodeDefinition {
@@ -482,7 +525,10 @@ export function createClientLoaderNode(deps: ClientObjectDeps): NodeDefinition {
 }
 
 export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition {
-  const routeStateByNode = new Map<string, Map<string, string[]>>();
+  const routeStateByNode = new Map<
+    string,
+    Map<string, { targets: string[]; targetKeys: Record<string, string>; command: NodeCommand | null }>
+  >();
 
   const cleanupCommandsFor = (cmd: NodeCommand): NodeCommand[] => {
     switch (cmd.action) {
@@ -512,6 +558,16 @@ export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition
     return fallbackSingle ? [fallbackSingle] : [];
   };
 
+  const resolveTargetKeys = (inputs: Record<string, unknown>, targets: string[]): Record<string, string> => {
+    const fromClient = resolveTargetConnectionKeysFromClientInput(inputs.client, targets);
+    const out: Record<string, string> = {};
+    for (const clientId of targets) {
+      const key = fromClient.get(clientId) ?? deps.getClientConnectionKey?.(clientId) ?? '';
+      if (key) out[clientId] = key;
+    }
+    return out;
+  };
+
   const send = (clientId: string, cmd: NodeCommand) => {
     if (!clientId) return;
     if (deps.executeCommandForClientId) deps.executeCommandForClientId(clientId, cmd);
@@ -538,15 +594,20 @@ export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition
     },
     onSink: (inputs, _config, context) => {
       const targets = resolveTargets(inputs);
-      if (targets.length === 0) return;
+      const targetKeys = resolveTargetKeys(inputs, targets);
 
       const raw = inputs.in;
       const commands = (Array.isArray(raw) ? raw : [raw]) as unknown[];
       for (const rawCommand of commands) {
-        const routeState = routeStateByNode.get(context.nodeId) ?? new Map<string, string[]>();
+        const routeState =
+          routeStateByNode.get(context.nodeId) ??
+          new Map<
+            string,
+            { targets: string[]; targetKeys: Record<string, string>; command: NodeCommand | null }
+          >();
         const removedAction = removedCommandActionFromUnknown(rawCommand);
         if (removedAction) {
-          const previousTargets = routeState.get(removedAction) ?? [];
+          const previousTargets = routeState.get(removedAction)?.targets ?? [];
           for (const previousClientId of previousTargets) {
             for (const cleanup of cleanupCommandsFor({ action: removedAction as ControlAction, payload: {} })) {
               send(previousClientId, cleanup);
@@ -559,14 +620,25 @@ export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition
 
         const next = commandFromUnknown(rawCommand);
         if (!next) continue;
-        const previousTargets = routeState.get(next.action) ?? [];
+        const previous = routeState.get(next.action);
+        const previousTargets = previous?.targets ?? [];
+        const previousTargetKeys = previous?.targetKeys ?? {};
         const nextTargetSet = new Set(targets);
         for (const previousClientId of previousTargets) {
           if (nextTargetSet.has(previousClientId)) continue;
           for (const cleanup of cleanupCommandsFor(next)) send(previousClientId, cleanup);
         }
-        for (const clientId of targets) send(clientId, next);
-        routeState.set(next.action, [...targets]);
+        const previousTargetSet = new Set(previousTargets);
+        const commandChanged =
+          commandSignatureForRouting(previous?.command) !== commandSignatureForRouting(next);
+        const replayAllTargets = commandChanged || !longLivedCommandActions.has(next.action);
+        for (const clientId of targets) {
+          const connectionChanged =
+            Boolean(targetKeys[clientId]) && targetKeys[clientId] !== previousTargetKeys[clientId];
+          if (!replayAllTargets && previousTargetSet.has(clientId) && !connectionChanged) continue;
+          send(clientId, next);
+        }
+        routeState.set(next.action, { targets: [...targets], targetKeys, command: next });
         routeStateByNode.set(context.nodeId, routeState);
       }
     },
@@ -574,8 +646,8 @@ export function createClientExecutorNode(deps: ClientObjectDeps): NodeDefinition
       const targets = resolveTargets(inputs);
       const routeState = routeStateByNode.get(context.nodeId);
       const cleanupTargetIds = new Set(targets);
-      for (const ids of routeState?.values() ?? []) {
-        for (const clientId of ids) cleanupTargetIds.add(clientId);
+      for (const route of routeState?.values() ?? []) {
+        for (const clientId of route.targets) cleanupTargetIds.add(clientId);
       }
       if (cleanupTargetIds.size === 0) return;
 

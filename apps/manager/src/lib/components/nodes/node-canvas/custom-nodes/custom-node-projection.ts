@@ -638,7 +638,7 @@ export function buildCustomNodeProjectionGraph(input: {
           projectionInternalNodeId: id,
         },
         inputValues: { ...(node.inputValues ?? {}) },
-        outputValues: {},
+        outputValues: { ...(node.outputValues ?? {}) },
       },
     ];
   });

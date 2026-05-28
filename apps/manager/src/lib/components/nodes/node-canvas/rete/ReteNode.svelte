@@ -18,6 +18,7 @@
     buildGroupFrameProxyPorts,
     formatPortValue,
     inferBypassPorts as inferBypassPortsFromDefinition,
+    resolveRenderedRuntimeNode,
     resolveRenderedNodeType,
     shouldUpdatePortValueText,
     sortByIndex,
@@ -88,15 +89,21 @@
 
   let nodeId = '';
   $: nodeId = String(data?.id ?? '');
+  const runtimeNode = (id: string) =>
+    resolveRenderedRuntimeNode({
+      renderedNodeId: id,
+      getNode: (nodeId) => nodeEngine.getNode(nodeId),
+      readCustomNodeState: (config) => readCustomNodeState(config) as any,
+    });
 
-  $: instanceType = resolveRenderedNodeType(nodeEngine.getNode(nodeId)?.type, dataRecord.type);
+  $: instanceType = resolveRenderedNodeType(runtimeNode(nodeId)?.type, dataRecord.type);
   $: isCmdAggregator = instanceType === 'cmd-aggregator';
   $: isGroupPortNode = ['group-activate', 'group-gate', 'group-proxy'].includes(instanceType);
   $: isGroupFrameNode = instanceType === 'group-frame';
   $: proxyDirection =
     instanceType === 'group-proxy'
       ? String(
-          (nodeEngine.getNode(nodeId)?.config as AnyRecord)?.direction ??
+          (runtimeNode(nodeId)?.config as AnyRecord)?.direction ??
             asRecord(dataRecord.config).direction ??
             'output'
         )
@@ -105,7 +112,7 @@
   $: {
     // Keep in sync with runtime config changes (e.g. Uncouple promotes child → mother).
     $graphStateStore;
-    customNodeState = readCustomNodeState(nodeEngine.getNode(nodeId)?.config ?? {});
+    customNodeState = readCustomNodeState(runtimeNode(nodeId)?.config ?? {});
   }
   $: isCustomNode = Boolean(customNodeState);
   $: customRole = customNodeState?.role ?? null;
@@ -113,7 +120,7 @@
   let groupFrameDisabled = false;
   $: groupFrameDisabled = (() => {
     if (!isGroupFrameNode) return false;
-    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const instance = asRecord(runtimeNode(nodeId));
     return Boolean(asRecord(instance.config).disabled);
   })();
 
@@ -184,7 +191,7 @@
   };
 
   const toggleGroupMinimized = () => {
-    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const instance = asRecord(runtimeNode(nodeId));
     const raw = asRecord(instance.config).groupId;
     const groupId = typeof raw === 'string' ? raw : raw ? String(raw) : '';
     if (!groupId) return;
@@ -193,7 +200,7 @@
   };
 
   const toggleGroupDisabled = () => {
-    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const instance = asRecord(runtimeNode(nodeId));
     const raw = asRecord(instance.config).groupId;
     const groupId = typeof raw === 'string' ? raw : raw ? String(raw) : '';
     if (!groupId) return;
@@ -253,13 +260,14 @@
   }
 
   function portTypeFor(side: 'input' | 'output', portId: string): string {
-    const instance = nodeEngine.getNode(nodeId);
+    const instance = runtimeNode(nodeId);
     if (!instance) return 'any';
-    if (instance.type === 'group-proxy') {
+    const type = String(instance.type ?? '');
+    if (type === 'group-proxy') {
       const raw = (instance.config as AnyRecord)?.portType;
       return typeof raw === 'string' && raw ? raw : raw ? String(raw) : 'any';
     }
-    const def = nodeRegistry.get(instance.type);
+    const def = nodeRegistry.get(type);
     if (!def) return 'any';
     const ports = side === 'input' ? def.inputs : def.outputs;
     const port = ports?.find((p) => p.id === portId);
@@ -270,7 +278,7 @@
   let groupFramePortAreaHeight = 0;
 
   $: if (isGroupFrameNode && nodeId) {
-    const instance = asRecord(nodeEngine.getNode(nodeId));
+    const instance = asRecord(runtimeNode(nodeId));
     const rawGroupId = asRecord(instance.config).groupId;
     const groupId = typeof rawGroupId === 'string' ? rawGroupId : rawGroupId ? String(rawGroupId) : '';
     const groupTop = Number(asRecord(instance.position).y ?? 0);
@@ -305,12 +313,12 @@
   }
 
   function effectiveInputValue(portId: string): unknown {
-    const instance = nodeEngine.getNode(nodeId);
+    const instance = runtimeNode(nodeId);
     if (!instance) return undefined;
 
     const conns = inputConnections[portId] ?? [];
     if (conns.length === 0) {
-      const def = nodeRegistry.get(instance.type);
+      const def = nodeRegistry.get(String(instance.type ?? ''));
       const port = def?.inputs?.find((p) => p.id === portId);
 
       const stored = instance.inputValues?.[portId];
@@ -325,15 +333,15 @@
 
     // Multi-connection sink inputs show a compact list preview.
     if (conns.length > 1) {
-      return conns.map((c) => nodeEngine.getNode(c.sourceNodeId)?.outputValues?.[c.sourcePortId]);
+      return conns.map((c) => runtimeNode(c.sourceNodeId)?.outputValues?.[c.sourcePortId]);
     }
 
     const conn = conns[0];
-    return nodeEngine.getNode(conn.sourceNodeId)?.outputValues?.[conn.sourcePortId];
+    return runtimeNode(conn.sourceNodeId)?.outputValues?.[conn.sourcePortId];
   }
 
   function effectiveOutputValue(portId: string): unknown {
-    const instance = nodeEngine.getNode(nodeId);
+    const instance = runtimeNode(nodeId);
     if (!instance) return undefined;
     return instance.outputValues?.[portId];
   }
@@ -346,7 +354,7 @@
 
   let bypassPorts: BypassPorts | null = null;
   $: bypassPorts = (() => {
-    const instance = nodeEngine.getNode(nodeId);
+    const instance = runtimeNode(nodeId);
     if (!instance) return null;
     return inferBypassPorts(String(instance.type));
   })();

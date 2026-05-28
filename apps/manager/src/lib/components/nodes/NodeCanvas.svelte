@@ -578,7 +578,7 @@
     requestFramesUpdate();
   };
   let customNodeProjectionEditGroupId: string | null = null;
-  const effectiveGroupEditModeId = () => customNodeProjectionEditGroupId ?? get(editModeGroupId);
+  $: effectiveGroupEditModeId = customNodeProjectionEditGroupId ?? $editModeGroupId;
   const toggleProjectionGroupEditMode = (groupId: string) => {
     const expanded = findExpandedCustomForProjectionGroup(groupId);
     if (!expanded || customNodeEditGroupId !== String(expanded.groupId)) return false;
@@ -1255,7 +1255,7 @@
   }}
   {reteBuilder}
   groupFrames={[...$groupFrames, ...getCustomNodeProjectionFrames()]}
-  editModeGroupId={effectiveGroupEditModeId()}
+  editModeGroupId={effectiveGroupEditModeId}
   {customNodeEditGroupId}
   selectedGroupId={$selectedGroupId}
   groupEditToast={$groupEditToast}

@@ -30,6 +30,7 @@ export type ClientSensorMessage = {
 export type ClientObject = {
   clientId: string;
   clientIds?: string[];
+  connectionKeys?: string[];
   sensors?: ClientSensorMessage | null;
 };
 
@@ -107,6 +108,11 @@ export type ClientObjectDeps = {
    * Client-side implementations may return `[selfClientId]` (or `[]` when offline).
    */
   getAllClientIds?: () => string[];
+  /**
+   * Manager-side connection revision for a client id. When available, it lets long-lived commands
+   * replay to a reconnected client even if the browser keeps the same logical clientId.
+   */
+  getClientConnectionKey?: (clientId: string) => string | null;
   /**
    * Manager-side selected clientIds (fallback when the node has no explicit selection).
    */

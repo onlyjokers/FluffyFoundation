@@ -102,9 +102,18 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
     },
     getAllClientIds: () =>
       (get(state).clients ?? [])
-        .filter((client) => client.group !== 'display')
+        .filter((client) => client.group !== 'display' && client.connected !== false)
         .map((client) => String(client.clientId ?? ''))
         .filter(Boolean),
+    getClientConnectionKey: (clientId) => {
+      const client = (get(state).clients ?? []).find(
+        (entry) => String(entry?.clientId ?? '') === String(clientId ?? '')
+      );
+      const connectedAt = client?.connectedAt;
+      return typeof connectedAt === 'number' && Number.isFinite(connectedAt)
+        ? String(connectedAt)
+        : null;
+    },
     getClientPermissions: (clientId) => {
       const client = (get(state).clients ?? []).find((entry) => String(entry.clientId ?? '') === clientId);
       return client?.permissions ?? null;

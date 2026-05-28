@@ -51,6 +51,100 @@ function uniqueVariableName(
   return `${base}_${Date.now()}`;
 }
 
+function collectVariableNamesFromGraph(
+  graph: GraphState | null | undefined,
+  out = new Set<string>()
+): Set<string> {
+  for (const node of graph?.nodes ?? []) {
+    if (VARIABLE_NAME_NODE_TYPES.has(String(node.type))) {
+      const name = typeof node.config?.name === 'string' ? node.config.name.trim() : '';
+      if (name) out.add(name);
+    }
+    const state = asRecord(node.config).customNode;
+    const internal = asRecord(state).internal;
+    if (
+      internal &&
+      typeof internal === 'object' &&
+      Array.isArray(internal.nodes) &&
+      Array.isArray(internal.connections)
+    ) {
+      collectVariableNamesFromGraph(internal as GraphState, out);
+    }
+  }
+  return out;
+}
+
+function nextUniqueVariableName(baseValue: unknown, used: Set<string>): string {
+  const baseRaw = typeof baseValue === 'string' ? baseValue.trim() : '';
+  const base = baseRaw || 'variable';
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  for (let index = 1; index < 10000; index += 1) {
+    const candidate = `${base}_${index}`;
+    if (!used.has(candidate)) {
+      used.add(candidate);
+      return candidate;
+    }
+  }
+  const candidate = `${base}_${Date.now()}`;
+  used.add(candidate);
+  return candidate;
+}
+
+function findCurrentMotherInternalGraph(
+  definitionId: string,
+  graph: GraphState | null | undefined,
+  readCustomNodeState: (
+    config: Record<string, unknown>
+  ) => { definitionId: string; role?: string; internal?: GraphState } | null
+): GraphState | null {
+  for (const node of graph?.nodes ?? []) {
+    const state = readCustomNodeState(asRecord(node.config));
+    if (
+      state &&
+      String(state.definitionId) === String(definitionId) &&
+      String(state.role ?? '') === 'mother' &&
+      Array.isArray(state.internal?.nodes) &&
+      Array.isArray(state.internal?.connections)
+    ) {
+      return state.internal;
+    }
+  }
+  return null;
+}
+
+function refreshIndependentVariableNames(graph: GraphState, used: Set<string>): GraphState {
+  return {
+    ...graph,
+    nodes: (graph.nodes ?? []).map((node) => {
+      let config = { ...(node.config ?? {}) };
+      const rawState = asRecord(config).customNode;
+      const internal = asRecord(rawState).internal;
+
+      if (String(node.type) === 'independent-variable-name') {
+        config = { ...config, name: nextUniqueVariableName(config.name, used) };
+      } else if (
+        internal &&
+        typeof internal === 'object' &&
+        Array.isArray(internal.nodes) &&
+        Array.isArray(internal.connections)
+      ) {
+        config = {
+          ...config,
+          customNode: {
+            ...rawState,
+            internal: refreshIndependentVariableNames(internal as GraphState, used),
+          },
+        };
+      }
+
+      return { ...node, config };
+    }),
+  };
+}
+
 export function createNodeAdder(opts: {
   nodeRegistry: NodeRegistryLike;
   nodeEngine: NodeEngineLike;
@@ -125,8 +219,14 @@ export function createNodeAdder(opts: {
         }
       }
 
+      const graph = opts.getGraphState?.() ?? null;
       const groupId = opts.generateCustomNodeGroupId();
-      const internal = opts.cloneInternalGraphForNewInstance(def.template, groupId);
+      const sourceTemplate =
+        findCurrentMotherInternalGraph(definitionId, graph, opts.readCustomNodeState) ?? def.template;
+      const internal = refreshIndependentVariableNames(
+        opts.cloneInternalGraphForNewInstance(sourceTemplate, groupId),
+        collectVariableNamesFromGraph(graph)
+      );
       const state = {
         definitionId,
         groupId,

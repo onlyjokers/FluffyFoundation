@@ -367,6 +367,112 @@ test('applyServerSemanticSnapshot keeps layout storage after server-side node de
   assert.deepEqual(requireLoaded(loaded).nodes[0]?.position, { x: 300, y: 400 });
 });
 
+test('applyServerSemanticSnapshot preserves manager-only group decoration nodes and valid connections', () => {
+  let loaded: GraphState | null = null;
+  const localGraph: GraphState = {
+    nodes: [
+      {
+        id: 'source',
+        type: 'number',
+        position: { x: 10, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'target',
+        type: 'client-button',
+        position: { x: 520, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'proxy-1',
+        type: 'group-proxy',
+        position: { x: 260, y: 20 },
+        config: { groupId: 'group-1', direction: 'output', portType: 'boolean', pinned: true },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'group-frame-1',
+        type: 'group-frame',
+        position: { x: 180, y: -40 },
+        config: { groupId: 'group-1' },
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'deleted-node',
+        type: 'math',
+        position: { x: 760, y: 20 },
+        config: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    connections: [
+      {
+        id: 'source-to-proxy',
+        sourceNodeId: 'source',
+        sourcePortId: 'value',
+        targetNodeId: 'proxy-1',
+        targetPortId: 'in',
+      },
+      {
+        id: 'proxy-to-target',
+        sourceNodeId: 'proxy-1',
+        sourcePortId: 'out',
+        targetNodeId: 'target',
+        targetPortId: 'display',
+      },
+      {
+        id: 'proxy-to-deleted-node',
+        sourceNodeId: 'proxy-1',
+        sourcePortId: 'out',
+        targetNodeId: 'deleted-node',
+        targetPortId: 'active',
+      },
+    ],
+  };
+
+  applyServerSemanticSnapshot({
+    snapshot: snapshot([
+      {
+        id: 'source',
+        type: 'number',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+      {
+        id: 'target',
+        type: 'client-button',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ]),
+    nodeEngine: {
+      exportGraph: () => localGraph,
+      loadGraph: (graph) => {
+        loaded = graph;
+      },
+    },
+  });
+
+  const nextGraph = requireLoaded(loaded);
+  assert.deepEqual(
+    nextGraph.nodes.map((node) => node.id),
+    ['source', 'target', 'proxy-1', 'group-frame-1']
+  );
+  assert.deepEqual(
+    nextGraph.connections.map((connection) => connection.id),
+    ['source-to-proxy', 'proxy-to-target']
+  );
+});
+
 test('applyServerSemanticSnapshot patches existing node params without reloading the runtime graph', () => {
   const loaded: GraphState[] = [];
   const updates: Array<{ nodeId: string; config: Record<string, unknown> }> = [];

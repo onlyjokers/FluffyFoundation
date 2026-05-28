@@ -26,6 +26,8 @@ export type NodeLike = {
   id?: unknown;
   type?: unknown;
   config?: AnyRecord;
+  inputValues?: AnyRecord;
+  outputValues?: AnyRecord;
   position?: { x?: number; y?: number };
 };
 
@@ -36,6 +38,41 @@ export type GroupFrameProxyPort = {
   centerY: number;
   label: string;
 };
+
+const CUSTOM_NODE_PROJECTION_PREFIX = 'view:custom:' as const;
+
+export function parseRenderedProjectionNodeId(
+  id: string
+): { ownerNodeId: string; internalNodeId: string } | null {
+  const raw = String(id ?? '');
+  if (!raw.startsWith(CUSTOM_NODE_PROJECTION_PREFIX)) return null;
+  const rest = raw.slice(CUSTOM_NODE_PROJECTION_PREFIX.length);
+  const splitAt = rest.indexOf(':');
+  if (splitAt <= 0 || splitAt >= rest.length - 1) return null;
+  return {
+    ownerNodeId: rest.slice(0, splitAt),
+    internalNodeId: rest.slice(splitAt + 1),
+  };
+}
+
+export function resolveRenderedRuntimeNode(input: {
+  renderedNodeId: string;
+  getNode: (nodeId: string) => NodeLike | null | undefined;
+  readCustomNodeState: (config: AnyRecord) => { internal?: { nodes?: NodeLike[] } } | null;
+}): NodeLike | null {
+  const rendered = input.getNode(String(input.renderedNodeId ?? ''));
+  if (rendered) return rendered;
+
+  const projection = parseRenderedProjectionNodeId(String(input.renderedNodeId ?? ''));
+  if (!projection) return null;
+
+  const owner = input.getNode(projection.ownerNodeId);
+  const state = owner ? input.readCustomNodeState((owner.config ?? {}) as AnyRecord) : null;
+  const internalNodes = Array.isArray(state?.internal?.nodes) ? state.internal.nodes : [];
+  return (
+    internalNodes.find((node) => String(node?.id ?? '') === projection.internalNodeId) ?? null
+  );
+}
 
 export function sortByIndex<K, I extends undefined | { index?: number }>(entries: [K, I][]) {
   entries.sort((a, b) => ((a[1] && a[1].index) || 0) - ((b[1] && b[1].index) || 0));

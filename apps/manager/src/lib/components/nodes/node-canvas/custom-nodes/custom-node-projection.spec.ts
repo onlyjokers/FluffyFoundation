@@ -83,6 +83,46 @@ test('buildCustomNodeProjectionGraph creates view-prefixed nodes and connections
   assert.ok(isCustomNodeProjectionId(String(projection.connections[0].targetNodeId)));
 });
 
+test('buildCustomNodeProjectionGraph preserves internal output snapshots for projected live value display', () => {
+  const customNode: NodeInstance = {
+    id: 'custom-1',
+    type: 'custom:def-1',
+    position: { x: 100, y: 200 },
+    config: {},
+    inputValues: {},
+    outputValues: {},
+  };
+  const definition: CustomNodeDefinition = {
+    definitionId: 'def-1',
+    name: 'Projected',
+    template: { nodes: [], connections: [] },
+    ports: [],
+  };
+  const state: CustomNodeInstanceState = {
+    definitionId: 'def-1',
+    groupId: 'group-1',
+    role: 'mother',
+    manualGate: true,
+    internal: {
+      nodes: [
+        {
+          id: 'inner-a',
+          type: 'string',
+          position: { x: 10, y: 20 },
+          config: { value: 'hello' },
+          inputValues: {},
+          outputValues: { value: 'hello' },
+        },
+      ],
+      connections: [],
+    },
+  };
+
+  const projection = buildCustomNodeProjectionGraph({ customNode, state, definition });
+
+  assert.deepEqual(projection.nodes[0]?.outputValues, { value: 'hello' });
+});
+
 test('buildCustomNodeProjectionGraph projects internal custom-node group metadata', () => {
   const customNode: NodeInstance = {
     id: 'custom-1',
