@@ -209,7 +209,7 @@ Purpose: Full-screen Display visual scene layer driven by visualScenes control p
   .display-visual-scenes {
     position: fixed;
     inset: 0;
-    z-index: 0;
+    z-index: var(--layer-scene-base);
     overflow: hidden;
     pointer-events: none;
   }

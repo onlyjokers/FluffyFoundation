@@ -114,7 +114,7 @@
   .client-ui-layer {
     position: fixed;
     inset: 0;
-    z-index: 32;
+    z-index: var(--layer-static-ui);
     overflow: hidden;
     pointer-events: none;
     isolation: isolate;

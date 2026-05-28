@@ -80,7 +80,7 @@ test('DefaultSceneManager stacks ordered scene layers with later layers on top',
     '1-fctTrack',
   ]);
   assert.equal(container.children[0].style.position, 'absolute');
-  assert.equal(container.children[0].style.zIndex, '0');
+  assert.equal(container.children[0].style.zIndex, 'calc(var(--layer-scene-base, 0) + 0)');
   assert.equal(container.children[1].style.position, 'absolute');
-  assert.equal(container.children[1].style.zIndex, '1');
+  assert.equal(container.children[1].style.zIndex, 'calc(var(--layer-scene-base, 0) + 1)');
 });

@@ -46,7 +46,6 @@
   let animationId: number;
   let effectCtx: CanvasRenderingContext2D | null = null;
   let effectPipeline: VisualEffectPipeline | null = null;
-  let baseVisible = true;
   let lastTime = 0;
 
   // Current context data for scene updates
@@ -236,10 +235,8 @@
         melSceneEnabled: $melSceneEnabled,
         asciiOverlay: renderAsciiBorder,
       });
-      setBaseLayerVisibility(!ok);
       if (effectCanvas) effectCanvas.style.visibility = ok ? 'visible' : 'hidden';
     } else {
-      setBaseLayerVisibility(true);
       if (effectCanvas) effectCanvas.style.visibility = 'hidden';
     }
 
@@ -267,29 +264,10 @@
       if (!canvas) continue;
 
       try {
-        container.insertBefore(canvas, effectCanvas);
+        container.appendChild(canvas);
       } catch {
         // ignore
       }
-    }
-  }
-
-  function setBaseLayerVisibility(show: boolean) {
-    if (!container) return;
-    if (baseVisible === show) return;
-    baseVisible = show;
-
-    const canvases = Array.from(container.querySelectorAll('canvas')) as HTMLCanvasElement[];
-    for (const c of canvases) {
-      if (c === effectCanvas) continue;
-      c.style.visibility = show ? 'visible' : 'hidden';
-    }
-
-    const overlays = Array.from(
-      container.querySelectorAll('.video-overlay, .image-overlay')
-    ) as HTMLElement[];
-    for (const el of overlays) {
-      el.style.visibility = show ? 'visible' : 'hidden';
     }
   }
 
@@ -368,13 +346,8 @@
 
 <style>
   .visual-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-    background: #0a0a0f;
+    display: contents;
+    pointer-events: none;
   }
 
   .visual-container :global(canvas) {
@@ -382,13 +355,22 @@
   }
 
   .effect-output {
-    position: absolute;
+    position: fixed;
     inset: 0;
     width: 100%;
     height: 100%;
-    z-index: 3;
+    z-index: var(--layer-effect);
     pointer-events: none;
     visibility: hidden;
+  }
+
+  :global(:root) {
+    --layer-scene-base: 4;
+    --layer-image: 12;
+    --layer-video: 16;
+    --layer-display-text: 20;
+    --layer-static-ui: 24;
+    --layer-effect: 28;
   }
 
 </style>

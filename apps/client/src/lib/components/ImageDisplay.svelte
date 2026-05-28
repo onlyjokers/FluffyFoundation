@@ -110,7 +110,7 @@
   .image-overlay {
     position: fixed;
     inset: 0;
-    z-index: 0; /* Below effect output so post-processing can cover */
+    z-index: var(--layer-image);
     display: flex;
     align-items: center;
     justify-content: center;

@@ -23,7 +23,6 @@ Purpose: Render Display post-processing effects from the current scene/media fra
   let effectCtx: CanvasRenderingContext2D | null = null;
   let effectPipeline: VisualEffectPipeline | null = null;
   let animationFrame: number | null = null;
-  let baseVisible = true;
 
   onMount(() => {
     effectCtx = effectCanvas.getContext('2d');
@@ -35,7 +34,6 @@ Purpose: Render Display post-processing effects from the current scene/media fra
   onDestroy(() => {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     window.removeEventListener('resize', handleResize);
-    setBaseLayerVisibility(true);
   });
 
   function animate(now: number): void {
@@ -51,10 +49,8 @@ Purpose: Render Display post-processing effects from the current scene/media fra
         melSceneEnabled: hasMelScene(),
         asciiOverlay: renderAsciiOverlay,
       });
-      setBaseLayerVisibility(!ok);
       if (effectCanvas) effectCanvas.style.visibility = ok ? 'visible' : 'hidden';
     } else {
-      setBaseLayerVisibility(true);
       if (effectCanvas) effectCanvas.style.visibility = 'hidden';
     }
 
@@ -151,17 +147,6 @@ Purpose: Render Display post-processing effects from the current scene/media fra
       ctx.restore();
     } catch {
       // Cross-origin images without CORS cannot be sampled into the effect canvas.
-    }
-  }
-
-  function setBaseLayerVisibility(show: boolean): void {
-    if (baseVisible === show) return;
-    baseVisible = show;
-    const baseLayers = Array.from(
-      document.querySelectorAll('.display-visual-scenes, .video-overlay, .image-overlay')
-    ) as HTMLElement[];
-    for (const layer of baseLayers) {
-      layer.style.visibility = show ? 'visible' : 'hidden';
     }
   }
 
@@ -267,7 +252,7 @@ Purpose: Render Display post-processing effects from the current scene/media fra
   .display-visual-effects {
     position: fixed;
     inset: 0;
-    z-index: 2;
+    z-index: var(--layer-effect);
     pointer-events: none;
     overflow: hidden;
   }

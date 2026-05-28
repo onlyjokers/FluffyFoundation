@@ -466,7 +466,7 @@ Purpose: Shared video overlay player used by Client and Display apps.
   .video-overlay {
     position: fixed;
     inset: 0;
-    z-index: 0; /* Below effect output so post-processing can cover */
+    z-index: var(--layer-video);
     display: flex;
     align-items: center;
     justify-content: center;

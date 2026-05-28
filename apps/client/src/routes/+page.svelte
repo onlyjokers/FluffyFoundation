@@ -511,7 +511,7 @@
   .text-overlay {
     position: fixed;
     inset: 0;
-    z-index: 24;
+    z-index: var(--layer-display-text);
     display: flex;
     align-items: center;
     justify-content: center;

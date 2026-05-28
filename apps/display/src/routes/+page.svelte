@@ -144,20 +144,20 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
   }
 
   .root :global(.video-overlay) {
-    z-index: 1;
+    z-index: var(--layer-video);
   }
 
   .screen-overlay {
     position: fixed;
     inset: 0;
-    z-index: 3;
+    z-index: var(--layer-display-text);
     pointer-events: none;
   }
 
   .text-overlay {
     position: fixed;
     inset: 0;
-    z-index: 4;
+    z-index: var(--layer-display-text);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -174,5 +174,14 @@ Purpose: Full-screen Display player (Phase 2/3: UI + MultimediaCore + server tra
     text-align: center;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+  }
+
+  :global(:root) {
+    --layer-scene-base: 4;
+    --layer-image: 12;
+    --layer-video: 16;
+    --layer-display-text: 20;
+    --layer-static-ui: 24;
+    --layer-effect: 28;
   }
 </style>

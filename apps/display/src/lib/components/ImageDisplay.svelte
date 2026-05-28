@@ -123,7 +123,7 @@ Purpose: Display image overlay (full-screen) for the Display app.
   .image-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1;
+    z-index: var(--layer-image);
     display: flex;
     align-items: center;
     justify-content: center;

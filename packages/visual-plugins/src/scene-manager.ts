@@ -75,7 +75,7 @@ export class DefaultSceneManager implements SceneManager {
         el.style.inset = '0';
         el.style.width = '100%';
         el.style.height = '100%';
-        el.style.zIndex = String(index);
+        el.style.zIndex = `calc(var(--layer-scene-base, 0) + ${index})`;
         el.style.pointerEvents = 'none';
     }
 
