@@ -85,7 +85,8 @@ async function writeTempImage(bytes: Buffer): Promise<string> {
 
 function normalizeAssetId(raw: string): string {
   const trimmed = raw.trim();
-  return trimmed.startsWith('asset:') ? trimmed.slice('asset:'.length).trim() : trimmed;
+  const withoutPrefix = trimmed.startsWith('asset:') ? trimmed.slice('asset:'.length).trim() : trimmed;
+  return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
 }
 
 @Injectable()

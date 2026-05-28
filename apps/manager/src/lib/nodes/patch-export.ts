@@ -47,6 +47,15 @@ function assetIdFromRef(raw: unknown): string | null {
   return normalized.slice('asset:'.length);
 }
 
+function assetRefFromValue(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('asset:')) return trimmed;
+  if (trimmed.startsWith('shugu://asset/')) return trimmed;
+  return `asset:${trimmed}`;
+}
+
 function collectAssetRefs(value: unknown, out: string[], seen: Set<string>): void {
   if (typeof value === 'string') {
     const normalized = normalizeAssetRef(value);
@@ -79,9 +88,7 @@ export function exportGraphForPatch(
   const groups = Array.isArray(state.groups) ? state.groups : [];
   const byId = new Map(nodes.map((n) => [String(n.id), n]));
   const groupById = new Map(
-    groups
-      .map((group) => [String(group.id ?? ''), group] as const)
-      .filter(([id]) => Boolean(id))
+    groups.map((group) => [String(group.id ?? ''), group] as const).filter(([id]) => Boolean(id))
   );
   const groupIdsByNodeId = new Map<string, string[]>();
   for (const group of groups) {
@@ -165,7 +172,11 @@ export function exportGraphForPatch(
     if (!registry) return true;
     const node = nodes.find((n) => String(n.id) === String(targetNodeId));
     if (!node) return true;
-    if (String(node.type) === 'load-audio-from-assets' && String(targetPortId) === 'asset')
+    if (
+      (String(node.type) === 'load-audio-from-assets' ||
+        String(node.type) === 'load-image-from-assets') &&
+      String(targetPortId) === 'asset'
+    )
       return false;
     const def = registry.get(String(node.type));
     const port = def?.inputs?.find((p) => String(p.id) === String(targetPortId));
@@ -308,7 +319,11 @@ export function exportGraphForPatch(
           String(candidate.targetNodeId) === proxyId && String(candidate.targetPortId) === 'in'
       );
       if (!incoming) return undefined;
-      return readSourceValue(String(incoming.sourceNodeId), String(incoming.sourcePortId), visiting);
+      return readSourceValue(
+        String(incoming.sourceNodeId),
+        String(incoming.sourcePortId),
+        visiting
+      );
     }
     return undefined;
   };
@@ -483,21 +498,31 @@ export function exportGraphForPatch(
   const allNodeById = new Map(nodes.map((n) => [String(n.id), n]));
 
   for (const node of keptNodes) {
-    if (String(node.type) !== 'load-audio-from-assets') continue;
+    if (
+      String(node.type) !== 'load-audio-from-assets' &&
+      String(node.type) !== 'load-image-from-assets'
+    )
+      continue;
     const assetInput = connections.find(
       (c) => String(c.targetNodeId) === String(node.id) && String(c.targetPortId) === 'asset'
     );
     if (!assetInput) continue;
     const source = allNodeById.get(String(assetInput.sourceNodeId));
     const raw = source?.outputValues?.[String(assetInput.sourcePortId)];
+    const ref = assetRefFromValue(raw);
     const configAssetId =
-      String(source?.type ?? '') === 'load-audio-asset-from-assets' ? source?.config?.assetId : undefined;
+      String(source?.type ?? '') === 'load-audio-asset-from-assets'
+        ? source?.config?.assetId
+        : undefined;
     const id =
       assetIdFromRef(raw) ??
       assetIdFromRef(configAssetId) ??
       (typeof raw === 'string' && raw.trim() ? raw.trim().split(/[?#]/)[0] : '');
     if (id) {
       node.config = { ...(node.config ?? {}), assetId: id };
+      if (String(node.type) === 'load-image-from-assets' && ref) {
+        node.inputValues = { ...(node.inputValues ?? {}), asset: ref };
+      }
     }
   }
 

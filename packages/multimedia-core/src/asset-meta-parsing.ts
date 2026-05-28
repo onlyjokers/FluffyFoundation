@@ -10,6 +10,7 @@ export type ParsedAssetMeta = {
 export type ParsedAssetManifest = {
   manifestId: string;
   assets: string[];
+  entries: unknown[];
   updatedAt: number;
 };
 
@@ -39,11 +40,12 @@ export function parseAssetMetaResponse(value: unknown): ParsedAssetMeta {
 
 export function parseStoredManifest(value: unknown): ParsedAssetManifest | null {
   if (!value || typeof value !== 'object') return null;
-  const raw = value as { manifestId?: unknown; assets?: unknown; updatedAt?: unknown };
+  const raw = value as { manifestId?: unknown; assets?: unknown; entries?: unknown; updatedAt?: unknown };
   const manifestId = typeof raw.manifestId === 'string' ? raw.manifestId : '';
   if (!manifestId) return null;
   const assets = Array.isArray(raw.assets) ? raw.assets.map(String) : [];
+  const entries = Array.isArray(raw.entries) ? raw.entries : [];
   const updatedAtRaw = raw.updatedAt;
   const updatedAt = typeof updatedAtRaw === 'number' && Number.isFinite(updatedAtRaw) ? updatedAtRaw : Date.now();
-  return { manifestId, assets, updatedAt };
+  return { manifestId, assets, entries, updatedAt };
 }

@@ -137,7 +137,13 @@ export const coreRuntimeImplByKind: Map<string, CoreRuntimeImpl> = (() => {
       sdk.sendControl(target, cmd.action, cmd.payload ?? {}, cmd.executeAt);
     },
     audioAssets: {},
-    imageAssets: createManagerImageAssetNodeDeps(),
+    imageAssets: createManagerImageAssetNodeDeps({
+      onAssetReady: () => {
+        void import('$lib/nodes/engine').then(({ nodeEngine }) => {
+          nodeEngine.pulseRuntime('image-asset-ready');
+        });
+      },
+    }),
   });
 
   const pick = (type: string): CoreRuntimeImpl => {

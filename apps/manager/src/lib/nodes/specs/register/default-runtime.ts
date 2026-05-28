@@ -104,7 +104,13 @@ export function registerDefaultRuntimeNodes(): void {
       });
     },
   }),
-  imageAssets: createManagerImageAssetNodeDeps(),
+  imageAssets: createManagerImageAssetNodeDeps({
+    onAssetReady: () => {
+      void import('../../engine').then(({ nodeEngine }) => {
+        nodeEngine.pulseRuntime('image-asset-ready');
+      });
+    },
+  }),
   });
   for (const definition of createArduinoUnoNodeDefinitions()) {
     nodeRegistry.register(definition);

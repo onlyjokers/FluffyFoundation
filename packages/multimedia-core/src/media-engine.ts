@@ -47,6 +47,7 @@ export type MediaEngineState = {
 };
 
 type Listener = (state: MediaEngineState) => void;
+type ResolveKind = 'image' | 'video' | 'audio';
 
 export class MediaEngine {
   private readonly listeners = new Set<Listener>();
@@ -68,7 +69,7 @@ export class MediaEngine {
     audio: { url: null, playing: false, loop: false, volume: 1 },
   };
 
-  constructor(private readonly opts: { resolveUrl?: (url: string) => string } = {}) {}
+  constructor(private readonly opts: { resolveUrl?: (url: string, kind?: ResolveKind) => string } = {}) {}
 
   subscribeState(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -85,10 +86,10 @@ export class MediaEngine {
     for (const l of this.listeners) l(this.state);
   }
 
-  private resolve(url: unknown): string | null {
+  private resolve(url: unknown, kind?: ResolveKind): string | null {
     if (typeof url !== 'string' || !url.trim()) return null;
     const raw = url.trim();
-    return this.opts.resolveUrl ? this.opts.resolveUrl(raw) : raw;
+    return this.opts.resolveUrl ? this.opts.resolveUrl(raw, kind) : raw;
   }
 
   private coerceFit(raw: unknown): MediaFit {
@@ -101,7 +102,7 @@ export class MediaEngine {
   }
 
   showImage(payload: { url: string; duration?: number; fit?: MediaFit; scale?: number; offsetX?: number; offsetY?: number; opacity?: number }): void {
-    const url = this.resolve(payload.url);
+    const url = this.resolve(payload.url, 'image');
     const fit = this.coerceFit(payload.fit);
     const scale = typeof payload.scale === 'number' && Number.isFinite(payload.scale) ? Math.max(0.1, Math.min(10, payload.scale)) : 1;
     const offsetX = typeof payload.offsetX === 'number' && Number.isFinite(payload.offsetX) ? payload.offsetX : 0;
@@ -129,7 +130,7 @@ export class MediaEngine {
     sourceNodeId?: string | null;
     fit?: MediaFit;
   }): void {
-    const url = this.resolve(payload.url);
+    const url = this.resolve(payload.url, 'video');
     const sourceNodeIdRaw = payload.sourceNodeId;
     const sourceNodeId =
       typeof sourceNodeIdRaw === 'string' && sourceNodeIdRaw.trim() ? sourceNodeIdRaw.trim() : null;
@@ -186,7 +187,7 @@ export class MediaEngine {
   }
 
   playAudio(payload: { url: string; playing?: boolean; loop?: boolean; volume?: number }): void {
-    const url = this.resolve(payload.url);
+    const url = this.resolve(payload.url, 'audio');
     const playingRaw = payload.playing;
     const playing =
       typeof playingRaw === 'boolean' ? playingRaw : typeof playingRaw === 'number' ? playingRaw >= 0.5 : Boolean(url);

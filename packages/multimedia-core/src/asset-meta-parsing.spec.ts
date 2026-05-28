@@ -38,5 +38,32 @@ test('parseStoredManifest returns null for invalid input', () => {
 
 test('parseStoredManifest returns normalized manifest', () => {
   const parsed = parseStoredManifest({ manifestId: 'm1', assets: ['a', 2], updatedAt: 123 });
-  assert.deepEqual(parsed, { manifestId: 'm1', assets: ['a', '2'], updatedAt: 123 });
+  assert.deepEqual(parsed, { manifestId: 'm1', assets: ['a', '2'], entries: [], updatedAt: 123 });
+});
+
+test('parseStoredManifest preserves structured manifest entries for asset versions', () => {
+  const entry = {
+    id: 'image-1',
+    checksum: { algorithm: 'sha256', value: 'a'.repeat(64) },
+    mimeType: 'image/png',
+    kind: 'image',
+    sizeBytes: 4,
+    variants: [],
+    cachePolicy: { strategy: 'revalidate' },
+    permissions: { scope: 'server-deliverable' },
+  };
+
+  const parsed = parseStoredManifest({
+    manifestId: 'm1',
+    assets: ['asset:image-1'],
+    entries: [entry],
+    updatedAt: 123,
+  });
+
+  assert.deepEqual(parsed, {
+    manifestId: 'm1',
+    assets: ['asset:image-1'],
+    entries: [entry],
+    updatedAt: 123,
+  });
 });

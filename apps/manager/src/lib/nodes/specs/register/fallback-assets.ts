@@ -1,13 +1,34 @@
 /**
  * Purpose: Register manager-side fallback asset nodes when node-core builds are stale.
  */
+import type { NodeDefinition, NodePort } from '@shugu/node-core';
 import { nodeRegistry } from '../../registry';
+
+const assetPort: NodePort = { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' };
+const assetOutputPort: NodePort = { id: 'asset', label: 'Asset', type: 'asset' };
+
+function patchPort(
+  type: string,
+  side: 'inputs' | 'outputs',
+  port: NodePort
+): void {
+  const existing = nodeRegistry.get(type);
+  if (!existing) return;
+  const ports = existing[side] ?? [];
+  if (ports.some((item) => item.id === port.id)) return;
+  nodeRegistry.register({
+    ...existing,
+    [side]: [...ports, port],
+  } as NodeDefinition);
+}
 
 /** Backward-compatible fallback: `load-audio-from-assets` is a newer convenience node.
 // If a dev environment is running with stale node-core builds, templates may fail to import.
 // Register a minimal definition here so graphs can still load (node-core remains the SOT when available).
 */
 export function registerFallbackAssetNodes(): void {
+  patchPort('gpt-image-gen', 'outputs', assetOutputPort);
+  patchPort('load-image-from-assets', 'inputs', assetPort);
 if (!nodeRegistry.get('load-audio-from-assets')) {
   nodeRegistry.register({
     type: 'load-audio-from-assets',
@@ -71,7 +92,7 @@ if (!nodeRegistry.get('load-image-from-assets')) {
     type: 'load-image-from-assets',
     label: 'Load Image From Remote',
     category: 'Assets',
-    inputs: [],
+    inputs: [{ id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' }],
     outputs: [{ id: 'ref', label: 'Image Out', type: 'image', kind: 'sink' }],
     configSchema: [
       {
@@ -94,9 +115,14 @@ if (!nodeRegistry.get('load-image-from-assets')) {
         ],
       },
     ],
-    process: (_inputs, config) => {
-      const assetId =
-        typeof config.assetId === 'string' ? String(config.assetId).trim() : '';
+    process: (inputs, config) => {
+      const assetRaw =
+        typeof inputs.asset === 'string' && String(inputs.asset).trim()
+          ? String(inputs.asset).trim()
+          : typeof config.assetId === 'string'
+            ? String(config.assetId).trim()
+            : '';
+      const assetRef = assetRaw.startsWith('asset:') ? assetRaw : assetRaw ? `asset:${assetRaw}` : '';
       const fitRaw =
         typeof config.fit === 'string'
           ? String(config.fit).trim().toLowerCase()
@@ -104,7 +130,7 @@ if (!nodeRegistry.get('load-image-from-assets')) {
       const fit =
         fitRaw === 'cover' || fitRaw === 'fill' || fitRaw === 'fit-screen' ? fitRaw : 'contain';
       const fitHash = fit !== 'contain' ? `#fit=${fit}` : '';
-      return { ref: assetId ? `asset:${assetId}${fitHash}` : '' };
+      return { ref: assetRef ? `${assetRef}${fitHash}` : '' };
     },
   });
 }

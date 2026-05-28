@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { parseAssetIdFromRef, resolveAssetRefToUrl } from './asset-url-resolver.js';
 import { MediaEngine } from './media-engine.js';
 import { MultimediaCore } from './multimedia-core.js';
 
@@ -170,4 +171,182 @@ test('MediaEngine executable proof covers image, video, audio playback and stop-
   assert.equal(media.getState().image.visible, false);
   assert.equal(media.getState().video.playing, false);
   assert.equal(media.getState().audio.playing, false);
+});
+
+test('asset refs preserve version query params while parsing the stable asset id', () => {
+  assert.equal(parseAssetIdFromRef('asset:image-1?v=2'), 'image-1');
+
+  const resolved = resolveAssetRefToUrl('asset:image-1?v=2#fit=cover', {
+    serverUrl: 'https://server.test/base',
+    readToken: 'read-token',
+  });
+
+  assert.equal(
+    resolved,
+    'https://server.test/api/assets/image-1/content?v=2&token=read-token#fit=cover'
+  );
+});
+
+test('MultimediaCore appends manifest asset checksums to unversioned asset refs', () => {
+  const core = new MultimediaCore({
+    serverUrl: 'https://server.test',
+    timeoutMs: 20,
+    maxRetries: 0,
+    autoStart: false,
+  });
+  try {
+    core.setAssetManifest({
+      manifestId: 'manifest-image-1',
+      updatedAt: 100,
+      assets: ['asset:image-1'],
+      entries: [
+        {
+          id: 'image-1',
+          checksum: { algorithm: 'sha256', value: 'a'.repeat(64) },
+          mimeType: 'image/png',
+          kind: 'image',
+          sizeBytes: 4,
+          variants: [],
+          cachePolicy: { strategy: 'revalidate' },
+          permissions: { scope: 'server-deliverable' },
+        },
+      ],
+    });
+
+    assert.equal(
+      core.resolveAssetRef('asset:image-1'),
+      `https://server.test/api/assets/image-1/content?v=${'a'.repeat(64)}`
+    );
+
+    core.setAssetManifest({
+      manifestId: 'manifest-image-2',
+      updatedAt: 200,
+      assets: ['asset:image-1'],
+      entries: [
+        {
+          id: 'image-1',
+          checksum: { algorithm: 'sha256', value: 'b'.repeat(64) },
+          mimeType: 'image/png',
+          kind: 'image',
+          sizeBytes: 4,
+          variants: [],
+          cachePolicy: { strategy: 'revalidate' },
+          permissions: { scope: 'server-deliverable' },
+        },
+      ],
+    });
+
+    assert.equal(
+      core.resolveAssetRef('asset:image-1'),
+      `https://server.test/api/assets/image-1/content?v=${'b'.repeat(64)}`
+    );
+    assert.equal(
+      core.resolveAssetRef('asset:image-1?v=explicit'),
+      'https://server.test/api/assets/image-1/content?v=explicit'
+    );
+  } finally {
+    core.destroy();
+  }
+});
+
+test('MultimediaCore inserts manifest asset checksums before hash-only image params', () => {
+  const core = new MultimediaCore({
+    serverUrl: 'https://server.test',
+    timeoutMs: 20,
+    maxRetries: 0,
+    autoStart: false,
+  });
+  const entry = (value: string) => ({
+    id: 'image-1',
+    checksum: { algorithm: 'sha256', value },
+    mimeType: 'image/png',
+    kind: 'image',
+    sizeBytes: 4,
+    variants: [],
+    cachePolicy: { strategy: 'revalidate' },
+    permissions: { scope: 'server-deliverable' },
+  });
+
+  try {
+    core.setAssetManifest({
+      manifestId: 'manifest-image-hash-a',
+      updatedAt: 100,
+      assets: ['asset:image-1'],
+      entries: [entry('a'.repeat(64))],
+    });
+
+    assert.equal(
+      core.resolveAssetRef('asset:image-1#fit=cover'),
+      `https://server.test/api/assets/image-1/content?v=${'a'.repeat(64)}#fit=cover`
+    );
+
+    core.media.showImage({ url: 'asset:image-1#fit=cover' });
+
+    assert.equal(
+      core.media.getState().image.url,
+      `https://server.test/api/assets/image-1/content?v=${'a'.repeat(64)}#fit=cover`
+    );
+
+    core.setAssetManifest({
+      manifestId: 'manifest-image-hash-b',
+      updatedAt: 200,
+      assets: ['asset:image-1'],
+      entries: [entry('b'.repeat(64))],
+    });
+
+    assert.equal(
+      core.media.getState().image.url,
+      `https://server.test/api/assets/image-1/content?v=${'b'.repeat(64)}#fit=cover`
+    );
+  } finally {
+    core.destroy();
+  }
+});
+
+test('MultimediaCore refreshes the currently displayed image when an asset checksum changes', () => {
+  const core = new MultimediaCore({
+    serverUrl: 'https://server.test',
+    timeoutMs: 20,
+    maxRetries: 0,
+    autoStart: false,
+  });
+  const entry = (value: string) => ({
+    id: 'image-1',
+    checksum: { algorithm: 'sha256', value },
+    mimeType: 'image/png',
+    kind: 'image',
+    sizeBytes: 4,
+    variants: [],
+    cachePolicy: { strategy: 'revalidate' },
+    permissions: { scope: 'server-deliverable' },
+  });
+
+  try {
+    core.setAssetManifest({
+      manifestId: 'manifest-image-a',
+      updatedAt: 100,
+      assets: ['asset:image-1'],
+      entries: [entry('a'.repeat(64))],
+    });
+    core.media.showImage({ url: 'asset:image-1' });
+
+    assert.equal(
+      core.media.getState().image.url,
+      `https://server.test/api/assets/image-1/content?v=${'a'.repeat(64)}`
+    );
+
+    core.setAssetManifest({
+      manifestId: 'manifest-image-b',
+      updatedAt: 200,
+      assets: ['asset:image-1'],
+      entries: [entry('b'.repeat(64))],
+    });
+
+    assert.equal(
+      core.media.getState().image.url,
+      `https://server.test/api/assets/image-1/content?v=${'b'.repeat(64)}`
+    );
+  } finally {
+    core.destroy();
+  }
 });

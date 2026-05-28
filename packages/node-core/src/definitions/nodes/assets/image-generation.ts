@@ -8,9 +8,11 @@ import { getBooleanValue, getStringValue } from '../node-definition-utils.js';
 type GptImageGenState = {
   lastTrigger: boolean;
   currentSignature: string;
-  currentAssetId: string;
-  assetIdBySignature: Map<string, string>;
-  requestedSignatures: Set<string>;
+  activeRequestId: string;
+  pendingRequestId: string;
+  lastDeliveredAssetId: string;
+  lastDeliveredVersion: number;
+  requestSeq: number;
 };
 
 const stateByNodeId = new Map<string, GptImageGenState>();
@@ -25,9 +27,11 @@ function getState(nodeId: string): GptImageGenState {
   const next: GptImageGenState = {
     lastTrigger: false,
     currentSignature: '',
-    currentAssetId: '',
-    assetIdBySignature: new Map(),
-    requestedSignatures: new Set(),
+    activeRequestId: '',
+    pendingRequestId: '',
+    lastDeliveredAssetId: '',
+    lastDeliveredVersion: 0,
+    requestSeq: 0,
   };
   stateByNodeId.set(nodeId, next);
   return next;
@@ -36,7 +40,8 @@ function getState(nodeId: string): GptImageGenState {
 function normalizeAssetId(raw: string | null | undefined): string {
   const value = typeof raw === 'string' ? raw.trim() : '';
   if (!value) return '';
-  return value.startsWith('asset:') ? value.slice('asset:'.length).trim() : value;
+  const withoutPrefix = value.startsWith('asset:') ? value.slice('asset:'.length).trim() : value;
+  return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
 }
 
 function resolveRequest(
@@ -47,7 +52,8 @@ function resolveRequest(
   const image = getStringValue(inputs.image) ?? getStringValue(config.image) ?? '';
   const model = getStringValue(inputs.model) || getStringValue(config.model) || DEFAULT_MODEL;
   const size = getStringValue(inputs.size) || getStringValue(config.size) || DEFAULT_SIZE;
-  const quality = getStringValue(inputs.quality) || getStringValue(config.quality) || DEFAULT_QUALITY;
+  const quality =
+    getStringValue(inputs.quality) || getStringValue(config.quality) || DEFAULT_QUALITY;
   return {
     prompt,
     ...(image ? { image } : {}),
@@ -67,8 +73,28 @@ function requestSignature(request: GeneratedImageAssetRequest): string {
   });
 }
 
-function outputForAsset(assetId: string): Record<string, unknown> {
-  return assetId ? { image: `asset:${assetId}`, assetId } : { image: '', assetId: '' };
+function outputForAsset(assetId: string, version = 0): Record<string, unknown> {
+  const suffix = version > 0 ? `?v=${encodeURIComponent(String(version))}` : '';
+  return assetId
+    ? { image: `asset:${assetId}${suffix}`, assetId, asset: `asset:${assetId}${suffix}` }
+    : { image: '', assetId: '', asset: '' };
+}
+
+function outputNoop(): Record<string, unknown> {
+  return { image: undefined, assetId: '', asset: '' };
+}
+
+function outputForCurrentAsset(state: GptImageGenState): Record<string, unknown> {
+  return state.lastDeliveredAssetId
+    ? outputForAsset(state.lastDeliveredAssetId, state.lastDeliveredVersion)
+    : outputNoop();
+}
+
+function deliverAsset(state: GptImageGenState, assetId: string): Record<string, unknown> {
+  if (!assetId) return outputForCurrentAsset(state);
+  state.lastDeliveredAssetId = assetId;
+  state.lastDeliveredVersion += 1;
+  return outputForAsset(assetId, state.lastDeliveredVersion);
 }
 
 export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
@@ -79,11 +105,18 @@ export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
     inputs: [
       { id: 'prompt', label: 'Prompt', type: 'string', defaultValue: '' },
       { id: 'image', label: 'Image', type: 'image', defaultValue: '' },
-      { id: 'trigger', label: 'Generate', type: 'boolean', defaultValue: false, buttonLabel: 'Generate' },
+      {
+        id: 'trigger',
+        label: 'Generate',
+        type: 'pulse',
+        defaultValue: false,
+        buttonLabel: 'Generate',
+      },
     ],
     outputs: [
       { id: 'image', label: 'Image', type: 'image' },
       { id: 'assetId', label: 'Asset ID', type: 'string' },
+      { id: 'asset', label: 'Asset', type: 'asset' },
     ],
     configSchema: [
       {
@@ -156,41 +189,56 @@ export function createGptImageGenNode(deps: ClientObjectDeps): NodeDefinition {
 
       if (state.currentSignature !== signature) {
         state.currentSignature = signature;
-        state.currentAssetId = state.assetIdBySignature.get(signature) ?? state.currentAssetId;
+        state.activeRequestId = '';
+        state.pendingRequestId = '';
       }
 
       if (!request.prompt.trim()) {
         state.lastTrigger = trigger;
-        return outputForAsset(state.currentAssetId);
-      }
-
-      const cached =
-        state.assetIdBySignature.get(signature) ??
-        (state.requestedSignatures.has(signature)
-          ? normalizeAssetId(
-              deps.imageAssets?.peekGeneratedImageAsset?.(request) ??
-                deps.imageAssets?.getGeneratedImageAsset?.(request)
-            )
-          : '');
-      if (cached) {
-        state.assetIdBySignature.set(signature, cached);
-        state.currentAssetId = cached;
-        state.lastTrigger = trigger;
-        return outputForAsset(cached);
+        return outputNoop();
       }
 
       const rising = trigger && !state.lastTrigger;
       if (rising) {
-        state.requestedSignatures.add(signature);
-        const nextAssetId = normalizeAssetId(deps.imageAssets?.getGeneratedImageAsset?.(request));
+        state.requestSeq += 1;
+        const requestId = `${context.nodeId}:${state.requestSeq}`;
+        state.activeRequestId = requestId;
+        state.pendingRequestId = requestId;
+        const nextAssetId = normalizeAssetId(
+          deps.imageAssets?.getGeneratedImageAsset?.(request, { requestId, force: true })
+        );
         if (nextAssetId) {
-          state.assetIdBySignature.set(signature, nextAssetId);
-          state.currentAssetId = nextAssetId;
+          state.pendingRequestId = '';
+          state.lastTrigger = trigger;
+          return deliverAsset(state, nextAssetId);
         }
+        state.lastTrigger = trigger;
+        return outputForCurrentAsset(state);
+      }
+
+      if (state.pendingRequestId) {
+        const requestId = state.pendingRequestId;
+        const nextAssetId = normalizeAssetId(
+          deps.imageAssets?.peekGeneratedImageAsset?.(request, { requestId }) ??
+            deps.imageAssets?.getGeneratedImageAsset?.(request, { requestId })
+        );
+        if (nextAssetId && requestId === state.activeRequestId) {
+          state.pendingRequestId = '';
+          state.lastTrigger = trigger;
+          return deliverAsset(state, nextAssetId);
+        }
+        state.lastTrigger = trigger;
+        return outputForCurrentAsset(state);
+      }
+
+      const cachedAssetId = normalizeAssetId(deps.imageAssets?.peekGeneratedImageAsset?.(request));
+      if (cachedAssetId && cachedAssetId !== state.lastDeliveredAssetId) {
+        state.lastTrigger = trigger;
+        return deliverAsset(state, cachedAssetId);
       }
 
       state.lastTrigger = trigger;
-      return outputForAsset(state.currentAssetId);
+      return outputForCurrentAsset(state);
     },
     onDisable: (_inputs, _config, context) => {
       stateByNodeId.delete(context.nodeId);

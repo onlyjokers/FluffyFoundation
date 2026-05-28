@@ -148,14 +148,17 @@ test('OpenAiImageService posts multipart edits when an asset image input is prov
       },
       assets: {
         ...createAssetsStub(uploadCalls),
-        getContentHeaders: () => ({
-          filePath: sourcePath,
-          stored: {
-            ...createAsset('source-image'),
-            storageBackend: 'localfs',
-            storageKey: 'sha',
-          },
-        }),
+        getContentHeaders: (assetId: string) => {
+          assert.equal(assetId, 'source-image');
+          return {
+            filePath: sourcePath,
+            stored: {
+              ...createAsset('source-image'),
+              storageBackend: 'localfs',
+              storageKey: 'sha',
+            },
+          };
+        },
       } as Pick<AssetsService, 'uploadFromTempFile' | 'getContentHeaders'>,
       fetchImpl: async (url, init) => {
         calls.push({ url: String(url), init });
@@ -173,7 +176,7 @@ test('OpenAiImageService posts multipart edits when an asset image input is prov
 
     const result = await service.generateAsset({
       prompt: 'make it brighter',
-      image: 'asset:source-image',
+      image: 'asset:source-image?v=2#fit=cover',
     });
 
     assert.equal(calls[0].url, 'https://www.cctq.ai/v1/images/edits');

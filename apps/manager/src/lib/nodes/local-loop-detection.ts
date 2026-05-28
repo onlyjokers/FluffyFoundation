@@ -19,6 +19,7 @@ export function shouldComputeWhileOffloaded(type: string): boolean {
   if (t.startsWith('logic-')) return true;
   if (t === 'client-button' || t === 'client-input-box') return true;
   if (t === 'generate-tts-audio') return true;
+  if (t === 'gpt-image-gen') return true;
   return false;
 }
 

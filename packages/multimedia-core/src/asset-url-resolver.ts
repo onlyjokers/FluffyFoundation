@@ -16,18 +16,26 @@ export type ResolveAssetRefOptions = {
   readToken?: string | null;
 };
 
+function decodeAssetId(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export function normalizeAssetRef(raw: string): string | null {
   const s = raw.trim();
   if (!s) return null;
 
   if (s.startsWith('asset:')) {
-    const id = s.slice('asset:'.length).trim().split(/[?#]/)[0]?.trim() ?? '';
+    const id = decodeAssetId(s.slice('asset:'.length).trim().split(/[?#]/)[0]?.trim() ?? '');
     return id ? `asset:${id}` : null;
   }
 
   const shuguPrefix = 'shugu://asset/';
   if (s.startsWith(shuguPrefix)) {
-    const id = s.slice(shuguPrefix.length).trim().split(/[?#]/)[0]?.trim() ?? '';
+    const id = decodeAssetId(s.slice(shuguPrefix.length).trim().split(/[?#]/)[0]?.trim() ?? '');
     return id ? `asset:${id}` : null;
   }
 

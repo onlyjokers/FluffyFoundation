@@ -7,6 +7,7 @@ type ManagerImageAssetDepsOptions = {
   fetchImpl?: typeof fetch;
   getLocalStorageItem?: (key: string) => string | null;
   refreshAssets?: () => Promise<void>;
+  onAssetReady?: (assetId: string) => void;
 };
 
 type CacheEntry = {
@@ -56,7 +57,8 @@ function normalizeAssetId(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const trimmed = raw.trim();
   if (!trimmed) return '';
-  return trimmed.startsWith('asset:') ? trimmed.slice('asset:'.length).trim() : trimmed;
+  const withoutPrefix = trimmed.startsWith('asset:') ? trimmed.slice('asset:'.length).trim() : trimmed;
+  return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
 }
 
 export function createManagerImageAssetNodeDeps(
@@ -65,9 +67,15 @@ export function createManagerImageAssetNodeDeps(
   const fetchImpl = options.fetchImpl ?? fetch;
   const getLocalStorageItem = options.getLocalStorageItem ?? readLocalStorageItem;
   const refreshAssets = options.refreshAssets ?? refreshAssetsStore;
+  const onAssetReady = options.onAssetReady;
   const cache = new Map<string, CacheEntry>();
+  const jobCache = new Map<string, CacheEntry & { signature: string }>();
 
-  const startRequest = (signature: string, request: GeneratedImageAssetRequest): void => {
+  const startRequest = (
+    signature: string,
+    request: GeneratedImageAssetRequest,
+    requestId?: string
+  ): void => {
     const serverUrl = getLocalStorageItem(STORAGE_SERVER_URL) ?? '';
     const url = buildUrl(serverUrl);
     const token = getLocalStorageItem(STORAGE_WRITE_TOKEN) ?? '';
@@ -77,7 +85,10 @@ export function createManagerImageAssetNodeDeps(
     };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    cache.set(signature, { status: 'pending', assetId: '', error: null });
+    const pendingEntry = { status: 'pending' as const, assetId: '', error: null };
+    if (requestId) jobCache.set(requestId, { ...pendingEntry, signature });
+    else cache.set(signature, pendingEntry);
+
     void fetchImpl(url, {
       method: 'POST',
       credentials: 'include',
@@ -97,7 +108,10 @@ export function createManagerImageAssetNodeDeps(
           normalizeAssetId(payload.assetRef) ||
           normalizeAssetId((payload.asset as Record<string, unknown> | undefined)?.id);
         if (!assetId) throw new Error('image generation response missing assetId');
-        cache.set(signature, { status: 'ready', assetId, error: null });
+        const readyEntry = { status: 'ready' as const, assetId, error: null };
+        cache.set(signature, readyEntry);
+        if (requestId) jobCache.set(requestId, { ...readyEntry, signature });
+        onAssetReady?.(assetId);
         await refreshAssets().catch(() => undefined);
         globalThis.setTimeout(() => {
           globalThis.dispatchEvent?.(
@@ -106,25 +120,46 @@ export function createManagerImageAssetNodeDeps(
         }, 0);
       })
       .catch((err) => {
-        cache.set(signature, {
+        const errorEntry = {
           status: 'error',
           assetId: '',
           error: err instanceof Error ? err.message : String(err),
-        });
+        } as const;
+        if (requestId) jobCache.set(requestId, { ...errorEntry, signature });
+        else cache.set(signature, errorEntry);
       });
   };
 
   return {
-    peekGeneratedImageAsset: (request) => {
+    peekGeneratedImageAsset: (request, options) => {
+      const requestId = options?.requestId?.trim() ?? '';
+      if (requestId) {
+        const job = jobCache.get(requestId);
+        return job?.status === 'ready' ? job.assetId : '';
+      }
       const signature = requestSignature(request);
       const cached = cache.get(signature);
       return cached?.status === 'ready' ? cached.assetId : '';
     },
-    getGeneratedImageAsset: (request) => {
+    getGeneratedImageAsset: (request, options) => {
       const prompt = request.prompt?.trim() ?? '';
       if (!prompt) return '';
       const signature = requestSignature(request);
+      const requestId = options?.requestId?.trim() ?? '';
+      if (requestId) {
+        const cached = jobCache.get(requestId);
+        if (cached?.status === 'ready') return cached.assetId;
+        if (cached?.status === 'pending') return '';
+        startRequest(signature, request, requestId);
+        return '';
+      }
+
       const cached = cache.get(signature);
+      if (options?.force) {
+        if (cached?.status === 'pending') return '';
+        startRequest(signature, request);
+        return '';
+      }
       if (cached?.status === 'ready') return cached.assetId;
       if (cached?.status === 'pending') return '';
       startRequest(signature, request);

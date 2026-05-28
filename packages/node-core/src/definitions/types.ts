@@ -96,9 +96,20 @@ export type GeneratedImageAssetRequest = {
   quality?: string;
 };
 
+export type GeneratedImageAssetOptions = {
+  requestId?: string;
+  force?: boolean;
+};
+
 export type ImageAssetNodeDeps = {
-  getGeneratedImageAsset?: (request: GeneratedImageAssetRequest) => string | null | undefined;
-  peekGeneratedImageAsset?: (request: GeneratedImageAssetRequest) => string | null | undefined;
+  getGeneratedImageAsset?: (
+    request: GeneratedImageAssetRequest,
+    options?: GeneratedImageAssetOptions
+  ) => string | null | undefined;
+  peekGeneratedImageAsset?: (
+    request: GeneratedImageAssetRequest,
+    options?: GeneratedImageAssetOptions
+  ) => string | null | undefined;
 };
 
 export type ClientObjectDeps = {

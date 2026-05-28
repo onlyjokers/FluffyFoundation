@@ -20,6 +20,7 @@ import {
   type GraphState,
   type AgentCapabilitySettings,
   type CustomNodeDefinition,
+  type NodePort,
   type SemanticActor,
   type SemanticCommand,
   type SemanticCommandResult,
@@ -42,6 +43,8 @@ type PersistedSemanticGraph = {
 const defaultStoragePath = fileURLToPath(new URL('../../data/semantic-graph.json', import.meta.url));
 const emptyGraph: GraphState = { nodes: [], connections: [] };
 const legacyNodeTypeAliases: Record<string, string> = { number: 'float' };
+const assetInputPort: NodePort = { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' };
+const assetOutputPort: NodePort = { id: 'asset', label: 'Asset', type: 'asset' };
 
 const migrateLegacyNodeTypes = (graph: GraphState): GraphState => ({
   nodes: (graph.nodes ?? []).map((node) => ({
@@ -58,6 +61,22 @@ const migrateLegacyCustomDefinitions = (
     ...definition,
     template: migrateLegacyNodeTypes(definition.template),
   }));
+
+const ensurePort = (
+  registry: NodeRegistry,
+  type: string,
+  side: 'inputs' | 'outputs',
+  port: NodePort
+): void => {
+  const definition = registry.get(type);
+  if (!definition) return;
+  const ports = definition[side] ?? [];
+  if (ports.some((item) => item.id === port.id)) return;
+  registry.register({
+    ...definition,
+    [side]: [...ports, port],
+  });
+};
 
 @Injectable()
 export class SemanticGraphAuthorityService {
@@ -85,6 +104,7 @@ export class SemanticGraphAuthorityService {
       executeCommand: () => undefined,
       executeCommandForClientId: () => undefined,
       audioAssets: {},
+      imageAssets: {},
     });
     for (const definition of createArduinoUnoNodeDefinitions()) {
       this.registry.register(definition);
@@ -92,6 +112,8 @@ export class SemanticGraphAuthorityService {
     for (const definition of createPrinterNodeDefinitions()) {
       this.registry.register(definition);
     }
+    ensurePort(this.registry, 'gpt-image-gen', 'outputs', assetOutputPort);
+    ensurePort(this.registry, 'load-image-from-assets', 'inputs', assetInputPort);
     this.persisted = this.load();
     this.syncCustomNodeRegistry();
   }

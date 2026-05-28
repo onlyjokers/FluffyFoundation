@@ -52,14 +52,21 @@ function normalizeAssetRef(raw: string): string | null {
   return null;
 }
 
-function hashManifest(assets: string[]): string {
+function hashManifest(parts: string[]): string {
   // Simple deterministic hash (djb2) to avoid bundling crypto; collisions are acceptable for MVP.
-  const joined = assets.join('|');
+  const joined = parts.join('|');
   let hash = 5381;
   for (let i = 0; i < joined.length; i += 1) {
     hash = ((hash << 5) + hash + joined.charCodeAt(i)) >>> 0;
   }
-  return `m1-${assets.length}-${hash.toString(16)}`;
+  return `m1-${parts.length}-${hash.toString(16)}`;
+}
+
+function hashManifestWithEntries(assets: string[], entries: { id: string; checksum?: { value?: string } }[]): string {
+  const entryVersions = entries
+    .map((entry) => `${String(entry.id)}=${String(entry.checksum?.value ?? '')}`)
+    .sort();
+  return hashManifest([...assets, ...entryVersions]);
 }
 
 function collectAssetRefs(value: unknown, out: string[], seen: Set<string>): void {
@@ -242,11 +249,12 @@ function recomputeAndMaybePush(): void {
     }
   }
 
-  const displayManifestId = hashManifest(allAssets);
+  const displayManifestEntries = buildManifestEntries(allAssets, recordByAssetId, assetIdFromRef);
+  const displayManifestId = hashManifestWithEntries(allAssets, displayManifestEntries);
   const displayManifest: AssetManifest = {
     manifestId: displayManifestId,
     assets: allAssets,
-    entries: buildManifestEntries(allAssets, recordByAssetId, assetIdFromRef),
+    entries: displayManifestEntries,
     updatedAt: Date.now(),
   };
 
@@ -295,11 +303,12 @@ function recomputeAndMaybePush(): void {
       return out;
     })();
 
-    const manifestId = hashManifest(assets);
+    const entries = buildManifestEntries(assets, recordByAssetId, assetIdFromRef);
+    const manifestId = hashManifestWithEntries(assets, entries);
     nextManifestByClientId.set(clientId, {
       manifestId,
       assets,
-      entries: buildManifestEntries(assets, recordByAssetId, assetIdFromRef),
+      entries,
       updatedAt: now,
     });
   }

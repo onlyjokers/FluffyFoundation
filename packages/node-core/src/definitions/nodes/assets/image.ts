@@ -15,12 +15,18 @@ function normalizeAssetId(value: unknown): string {
   return withoutPrefix.split(/[?#]/)[0]?.trim() ?? '';
 }
 
+function normalizeAssetRef(value: unknown): string {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return '';
+  return trimmed.startsWith('asset:') ? trimmed : `asset:${trimmed}`;
+}
+
 export function createLoadImageFromAssetsNode(): NodeDefinition {
   return {
     type: 'load-image-from-assets',
     label: 'Load Image From Remote',
     category: 'Assets',
-    inputs: [],
+    inputs: [{ id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' }],
     outputs: [{ id: 'ref', label: 'Image Out', type: 'image', kind: 'sink' }],
     configSchema: [
       {
@@ -31,7 +37,9 @@ export function createLoadImageFromAssetsNode(): NodeDefinition {
         defaultValue: '',
       },
     ],
-    process: (_inputs, config) => {
+    process: (inputs, config) => {
+      const inputAssetRef = normalizeAssetRef(inputs.asset);
+      if (inputAssetRef) return { ref: inputAssetRef };
       const assetId = normalizeAssetId(config.assetId);
       return { ref: assetId ? `asset:${assetId}` : '' };
     },
@@ -58,7 +66,7 @@ export function createLoadImageFromLocalNode(): NodeDefinition {
       const baseUrl =
         typeof inputs.asset === 'string' && inputs.asset.trim()
           ? inputs.asset.trim()
-          : getRecordString(config, 'assetPath') ?? '';
+          : (getRecordString(config, 'assetPath') ?? '');
       return { ref: baseUrl ? normalizeLocalMediaRef(baseUrl, 'image') : '' };
     },
   };

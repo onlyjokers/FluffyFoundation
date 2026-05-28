@@ -912,6 +912,109 @@ test('patch runtime ignores runtime-only output changes when checking payload dr
   runtime.destroy();
 });
 
+test('patch runtime redeploys when a remote image picker asset changes', () => {
+  let assetId = 'image-a';
+  const graph: GraphState = {
+    nodes: [
+      node('load', 'load-image-from-assets'),
+      node('show', 'proc-show-image'),
+      node('out', 'ui-out'),
+      node('loader', 'client-loader'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      { id: 'image', sourceNodeId: 'load', sourcePortId: 'ref', targetNodeId: 'show', targetPortId: 'in' },
+      { id: 'cmd-source', sourceNodeId: 'show', sourcePortId: 'cmd', targetNodeId: 'out', targetPortId: 'in' },
+      { id: 'cmd', sourceNodeId: 'out', sourcePortId: 'cmd', targetNodeId: 'client', targetPortId: 'in' },
+      { id: 'client-link', sourceNodeId: 'loader', sourcePortId: 'client', targetNodeId: 'client', targetPortId: 'client' },
+    ],
+  };
+  const sent: Array<{ command: string; payload: unknown }> = [];
+  const payloadForAsset = (): PatchPayload => ({
+    ...basePayload(),
+    graph: {
+      nodes: [
+        { ...node('load', 'load-image-from-assets'), config: { assetId } },
+        node('show', 'proc-show-image'),
+        node('out', 'ui-out'),
+      ],
+      connections: [
+        { id: 'image', sourceNodeId: 'load', sourcePortId: 'ref', targetNodeId: 'show', targetPortId: 'in' },
+        { id: 'cmd-source', sourceNodeId: 'show', sourcePortId: 'cmd', targetNodeId: 'out', targetPortId: 'in' },
+      ],
+    },
+    assetRefs: [`asset:${assetId}`],
+    meta: {
+      ...basePayload().meta,
+      loopId: 'patch:ui-out:out:image',
+      requiredCapabilities: ['visual'],
+    },
+  });
+  const definitions = new Map<string, NodeDefinition>([
+    ['load-image-from-assets', definition('load-image-from-assets', 'Load Image', [port('asset', 'asset')], [port('ref', 'image')])],
+    ['proc-show-image', definition('proc-show-image', 'Show Image', [port('in', 'image')], [port('cmd', 'command')])],
+    ['ui-out', definition('ui-out', 'UI Out', [port('in', 'command')], [port('cmd', 'command')])],
+    ['client-loader', definition('client-loader', 'Client Loader', [port('index', 'number')], [port('client', 'client')])],
+    ['client-executor', definition('client-executor', 'Client Executor', [port('client', 'client'), port('in', 'command')], [port('imageOut', 'image')])],
+  ]);
+
+  const runtime = createPatchRuntime({
+    nodeEngine: {
+      getNode: (nodeId) => graph.nodes.find((candidate) => candidate.id === nodeId),
+      getLastComputedInputs: (nodeId) =>
+        nodeId === 'client' ? { client: { clientId: 'client-1', clientIds: ['client-1'] } } : null,
+      exportGraphForPatchFromRootNodeIds: payloadForAsset,
+      lastError: writable<string | null>(null),
+      setPatchOffloadedNodeIds: () => undefined,
+      getTimeRangePlayheadSec: () => null,
+    },
+    nodeRegistry: { get: (type) => definitions.get(type) },
+    adapter: {
+      getNodeVisualState: () => ({}),
+      setNodeVisualState: async () => undefined,
+    } as unknown as CreatePatchRuntimeOptions['adapter'],
+    isRunningStore: readable(true),
+    getGraphState: () => graph,
+    groupDisabledNodeIds: readable(new Set()),
+    executorStatusByClient: readable(new Map()),
+    showExecutorLogs: writable(false),
+    logsClientId: writable(''),
+    loopController: null,
+    managerState: readable({
+      clients: [{ clientId: 'client-1', group: 'audience', connected: true }],
+      selectedClientIds: ['client-1'],
+    }),
+    displayTransport: {
+      getAvailability: defaultAvailability,
+      sendPlugin: defaultAvailability,
+    },
+    getSDK: () => ({
+      sendPluginControl: (_target, _pluginName, command, nextPayload) => {
+        sent.push({ command, payload: nextPayload });
+      },
+    }),
+    ensureDisplayLocalFilesRegisteredFromValue: () => undefined,
+  });
+
+  runtime.scheduleReconcile('initial', { immediate: true });
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+  assert.equal(
+    ((sent[0]?.payload as PatchPayload).graph.nodes.find((item) => item.id === 'load')?.config ?? {}).assetId,
+    'image-a'
+  );
+
+  sent.length = 0;
+  assetId = 'image-b';
+  runtime.onTick();
+
+  assert.deepEqual(sent.map((message) => message.command), ['deploy', 'start']);
+  assert.equal(
+    ((sent[0]?.payload as PatchPayload).graph.nodes.find((item) => item.id === 'load')?.config ?? {}).assetId,
+    'image-b'
+  );
+  runtime.destroy();
+});
+
 test('patch runtime does not report payload drift for the same patch deployed to multiple clients', () => {
   const graph: GraphState = {
     nodes: [

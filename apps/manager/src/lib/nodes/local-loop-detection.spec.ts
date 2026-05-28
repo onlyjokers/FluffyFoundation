@@ -79,6 +79,7 @@ test('shouldComputeWhileOffloaded keeps ClientUI interaction output nodes live f
   assert.equal(shouldComputeWhileOffloaded('client-button'), true);
   assert.equal(shouldComputeWhileOffloaded('client-input-box'), true);
   assert.equal(shouldComputeWhileOffloaded('generate-tts-audio'), true);
+  assert.equal(shouldComputeWhileOffloaded('gpt-image-gen'), true);
   assert.equal(shouldComputeWhileOffloaded('ui-out'), false);
 });
 

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { get } from 'svelte/store';
-import { NodeRuntime } from '@shugu/node-core';
+import { createSemanticCommandBus, NodeRuntime } from '@shugu/node-core';
 import type { ControlAction, ControlPayload, TargetSelector } from '@shugu/protocol';
 
 import { nodeRegistry } from '../../registry';
@@ -49,7 +49,12 @@ test('manager client loader selects a client collection and executor routes comm
     selectedClientIds: [],
   });
   setManagerSDK({
-    sendControl: (target: TargetSelector, action: ControlAction, payload: ControlPayload, executeAt?: number) => {
+    sendControl: (
+      target: TargetSelector,
+      action: ControlAction,
+      payload: ControlPayload,
+      executeAt?: number
+    ) => {
       sent.push({ target, action, payload, executeAt });
     },
   } as never);
@@ -62,7 +67,13 @@ test('manager client loader selects a client collection and executor routes comm
         type: 'proc-synth-update',
         position: { x: 0, y: 0 },
         config: {},
-        inputValues: { active: true, frequency: 440, volume: 0.7, waveform: 'square', durationMs: 200 },
+        inputValues: {
+          active: true,
+          frequency: 440,
+          volume: 0.7,
+          waveform: 'square',
+          durationMs: 200,
+        },
         outputValues: {},
       },
       {
@@ -119,7 +130,10 @@ test('manager client loader selects a client collection and executor routes comm
   assert.equal(updated.length, 2);
   assert.deepEqual(
     updated.map((entry) => entry.target),
-    [{ mode: 'group', groupId: 'client:client-a' }, { mode: 'group', groupId: 'client:client-b' }]
+    [
+      { mode: 'group', groupId: 'client:client-a' },
+      { mode: 'group', groupId: 'client:client-b' },
+    ]
   );
   assert.ok(updated.every((entry) => entry.action === 'modulateSoundUpdate'));
 });
@@ -129,9 +143,7 @@ test('manager default runtime registers client loader and executor nodes', () =>
   state.set({
     ...previousState,
     status: 'connected',
-    clients: [
-      { clientId: 'client-a', connected: true, group: 'client:client-a', connectedAt: 1 },
-    ],
+    clients: [{ clientId: 'client-a', connected: true, group: 'client:client-a', connectedAt: 1 }],
     selectedClientIds: [],
   });
 
@@ -142,10 +154,73 @@ test('manager default runtime registers client loader and executor nodes', () =>
     assert.equal(nodeRegistry.get('url-session')?.label, 'URL Session');
     assert.equal(nodeRegistry.get('url-to-qr-generator')?.label, 'URL to QR Generator');
     assert.equal(nodeRegistry.get('gpt-image-gen')?.label, 'GPT Image Gen');
-    assert.equal(nodeRegistry.get('client-url-session-filter')?.label, 'Client Filter for URL Session');
+    assert.equal(
+      nodeRegistry.get('client-url-session-filter')?.label,
+      'Client Filter for URL Session'
+    );
   } finally {
     state.set(previousState);
   }
+});
+
+test('manager default runtime accepts GPT Image Gen asset into remote image loader', () => {
+  const gpt = nodeRegistry.get('gpt-image-gen');
+  const loader = nodeRegistry.get('load-image-from-assets');
+
+  assert.ok(gpt);
+  assert.ok(loader);
+  assert.deepEqual(
+    gpt.outputs.find((port) => port.id === 'asset'),
+    { id: 'asset', label: 'Asset', type: 'asset' }
+  );
+  assert.deepEqual(
+    loader.inputs.find((port) => port.id === 'asset'),
+    { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' }
+  );
+
+  const bus = createSemanticCommandBus({
+    graph: {
+      nodes: [
+        {
+          id: 'gpt',
+          type: 'gpt-image-gen',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'load',
+          type: 'load-image-from-assets',
+          position: { x: 240, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: nodeRegistry.list(),
+    permissions: [{ actorId: 'canvas', operations: ['node.connect'] }],
+    revision: 1,
+  });
+
+  const result = bus.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.connect',
+      connection: {
+        id: 'gpt-to-image-loader',
+        sourceNodeId: 'gpt',
+        sourcePortId: 'asset',
+        targetNodeId: 'load',
+        targetPortId: 'asset',
+      },
+    },
+    dryRun: true,
+  });
+
+  assert.equal(result.ok, true, result.ok ? undefined : result.message);
 });
 
 test('manager default runtime filters clients by url session id', () => {
@@ -154,8 +229,20 @@ test('manager default runtime filters clients by url session id', () => {
     ...previousState,
     status: 'connected',
     clients: [
-      { clientId: 'client-a', connected: true, group: 'client:client-a', connectedAt: 1, urlSessionId: 'session-a' },
-      { clientId: 'client-b', connected: true, group: 'client:client-b', connectedAt: 2, urlSessionId: 'session-b' },
+      {
+        clientId: 'client-a',
+        connected: true,
+        group: 'client:client-a',
+        connectedAt: 1,
+        urlSessionId: 'session-a',
+      },
+      {
+        clientId: 'client-b',
+        connected: true,
+        group: 'client:client-b',
+        connectedAt: 2,
+        urlSessionId: 'session-b',
+      },
     ],
     selectedClientIds: [],
   });

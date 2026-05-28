@@ -38,6 +38,12 @@ test('display layer variables encode the requested visual priority', () => {
   assert.equal(values.video, 16);
   assert.equal(values.image, 12);
   assert.equal(values['scene-base'], 4);
+
+  assert.ok(values.effect > values['static-ui']);
+  assert.ok(values['static-ui'] > values['display-text']);
+  assert.ok(values['display-text'] > values.video);
+  assert.ok(values.video > values.image);
+  assert.ok(values.image > values['scene-base']);
 });
 
 test('display visual effects do not hide video, image, or scene base layers', () => {

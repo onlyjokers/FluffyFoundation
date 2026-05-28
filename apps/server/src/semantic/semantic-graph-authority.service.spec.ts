@@ -489,6 +489,80 @@ test('SemanticGraphAuthorityService exposes and accepts pulse conversion nodes',
   );
 });
 
+test('SemanticGraphAuthorityService accepts GPT image asset connections into remote image loader', () => {
+  const { service } = createService();
+  const snapshot = service.getSnapshot();
+  const imageGen = snapshot.definitions.find((definition) => definition.type === 'gpt-image-gen');
+  const imageLoader = snapshot.definitions.find(
+    (definition) => definition.type === 'load-image-from-assets'
+  );
+
+  assert.equal(
+    imageGen?.ports.outputs.some((port) => port.id === 'asset' && port.type === 'asset'),
+    true
+  );
+  assert.equal(
+    imageLoader?.ports.inputs.some((port) => port.id === 'asset' && port.type === 'asset'),
+    true
+  );
+  assert.deepEqual(
+    imageGen?.ports.outputs.find((port) => port.id === 'asset'),
+    { id: 'asset', label: 'Asset', type: 'asset' }
+  );
+  assert.deepEqual(
+    imageLoader?.ports.inputs.find((port) => port.id === 'asset'),
+    { id: 'asset', label: 'Asset', type: 'asset', defaultValue: '' }
+  );
+
+  assert.equal(
+    service.dispatch({
+      actor: { id: 'canvas', role: 'operator' },
+      command: {
+        type: 'graph.replace',
+        graph: {
+          nodes: [
+            {
+              id: 'image-gen',
+              type: 'gpt-image-gen',
+              position: { x: 0, y: 0 },
+              config: {},
+              inputValues: {},
+              outputValues: {},
+            },
+            {
+              id: 'image-loader',
+              type: 'load-image-from-assets',
+              position: { x: 240, y: 0 },
+              config: {},
+              inputValues: {},
+              outputValues: {},
+            },
+          ],
+          connections: [],
+        },
+      },
+    }).ok,
+    true
+  );
+
+  const connected = service.dispatch({
+    actor: { id: 'canvas', role: 'operator' },
+    command: {
+      type: 'node.connect',
+      connection: {
+        id: 'image-asset-to-loader',
+        sourceNodeId: 'image-gen',
+        sourcePortId: 'asset',
+        targetNodeId: 'image-loader',
+        targetPortId: 'asset',
+      },
+    },
+  });
+
+  if (!connected.ok) assert.fail(connected.message);
+  assert.equal(connected.ok, true);
+});
+
 test('SemanticGraphAuthorityService exposes and accepts visible manager utility nodes', () => {
   const { service } = createService();
   const snapshot = service.getSnapshot();

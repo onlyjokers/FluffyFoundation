@@ -6,7 +6,7 @@
 
 import { AssetMetaStore } from './indexeddb.js';
 import { parseAssetMetaResponse, parseAssetShaResponse, parseStoredManifest } from './asset-meta-parsing.js';
-import { resolveAssetRefToUrl } from './asset-url-resolver.js';
+import { normalizeAssetRef, resolveAssetRefToUrl } from './asset-url-resolver.js';
 import { MediaEngine } from './media-engine.js';
 import { retryAssetPreload, runAssetPreload, validateManifestEntries } from './preload-state.js';
 import type { AssetError } from '@shugu/protocol';
@@ -84,6 +84,21 @@ function canUseCacheStorage(): boolean {
   return typeof caches !== 'undefined' && typeof caches.open === 'function';
 }
 
+function extractAssetVersions(entries: unknown[]): Map<string, string> {
+  const versions = new Map<string, string>();
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    const checksum = record.checksum && typeof record.checksum === 'object'
+      ? (record.checksum as Record<string, unknown>)
+      : null;
+    const value = typeof checksum?.value === 'string' ? checksum.value.trim() : '';
+    if (id && value) versions.set(id, value);
+  }
+  return versions;
+}
+
 export class MultimediaCore {
   private readonly meta = new AssetMetaStore();
   private readonly listeners = new Set<StateListener>();
@@ -98,6 +113,8 @@ export class MultimediaCore {
   private assetReadToken: string | null;
 
   private manifest: AssetManifestInput | null = null;
+  private assetVersionById = new Map<string, string>();
+  private rawImageRef: string | null = null;
   readonly media: MediaEngine;
   private state: MultimediaCoreState = {
     status: 'idle',
@@ -123,7 +140,12 @@ export class MultimediaCore {
     this.timeoutMs = Math.max(1, Math.floor(config.timeoutMs ?? 30000));
     this.maxRetries = Math.max(0, Math.floor(config.maxRetries ?? 2));
 
-    this.media = new MediaEngine({ resolveUrl: (url) => this.resolveAssetRef(url) });
+    this.media = new MediaEngine({
+      resolveUrl: (url, kind) => {
+        if (kind === 'image') this.rawImageRef = url;
+        return this.resolveAssetRef(url);
+      },
+    });
 
     this.loadLastManifest();
     if (config.autoStart) {
@@ -173,13 +195,51 @@ export class MultimediaCore {
       return;
     }
     if (this.manifest && this.manifest.manifestId === id) return;
+    const previousResolvedImageUrl = this.media.getState().image.url;
+    this.assetVersionById = extractAssetVersions(entries);
     this.manifest = { manifestId: id, assets, entries, updatedAt: manifest.updatedAt ?? Date.now() };
+    this.refreshCurrentImageRef(previousResolvedImageUrl);
     this.persistLastManifest();
     void this.preloadNow('manifest-update');
   }
 
   resolveAssetRef(ref: string): string {
-    return resolveAssetRefToUrl(ref, { serverUrl: this.serverUrl, readToken: this.assetReadToken });
+    return resolveAssetRefToUrl(this.withManifestVersion(ref), {
+      serverUrl: this.serverUrl,
+      readToken: this.assetReadToken,
+    });
+  }
+
+  private withManifestVersion(ref: string): string {
+    const trimmed = typeof ref === 'string' ? ref.trim() : '';
+    if (!trimmed) return ref;
+    const hashIndex = trimmed.indexOf('#');
+    const hash = hashIndex >= 0 ? trimmed.slice(hashIndex) : '';
+    const withoutHash = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+    if (withoutHash.includes('?')) return ref;
+    const normalized = normalizeAssetRef(withoutHash);
+    if (!normalized) return ref;
+    const assetId = normalized.slice('asset:'.length).trim();
+    const version = assetId ? this.assetVersionById.get(assetId) : '';
+    return version ? `${withoutHash}?v=${encodeURIComponent(version)}${hash}` : ref;
+  }
+
+  private refreshCurrentImageRef(previousResolvedImageUrl: string | null): void {
+    const raw = this.rawImageRef;
+    if (!raw) return;
+    const current = this.media.getState().image;
+    if (!current.visible || !current.url) return;
+    const nextResolved = this.resolveAssetRef(raw);
+    if (!nextResolved || nextResolved === previousResolvedImageUrl) return;
+    this.media.showImage({
+      url: raw,
+      duration: current.duration,
+      fit: current.fit,
+      scale: current.scale,
+      offsetX: current.offsetX,
+      offsetY: current.offsetY,
+      opacity: current.opacity,
+    });
   }
 
   /**
@@ -432,7 +492,8 @@ export class MultimediaCore {
     try {
       const parsed = parseStoredManifest(JSON.parse(raw));
       if (!parsed) return;
-      this.manifest = { manifestId: parsed.manifestId, assets: parsed.assets, entries: [], updatedAt: parsed.updatedAt };
+      this.assetVersionById = extractAssetVersions(parsed.entries);
+      this.manifest = { manifestId: parsed.manifestId, assets: parsed.assets, entries: parsed.entries, updatedAt: parsed.updatedAt };
     } catch {
       // ignore
     }

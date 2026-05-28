@@ -51,9 +51,8 @@ function playMedia(deps: ClientControlDeps, mediaPayload: PlayMediaPayload, dela
   const multimediaCore = deps.getMultimediaCore();
   const clip = typeof mediaPayload.url === 'string' ? parseMediaClipParams(mediaPayload.url) : null;
   const baseUrl = clip ? clip.baseUrl : mediaPayload.url;
-  const resolvedUrl =
-    typeof baseUrl === 'string' ? (multimediaCore?.resolveAssetRef(baseUrl) ?? baseUrl) : baseUrl;
-  const resolvedUrlString = typeof resolvedUrl === 'string' ? resolvedUrl : String(resolvedUrl ?? '');
+  const baseUrlString = typeof baseUrl === 'string' ? baseUrl : String(baseUrl ?? '');
+  const resolvedUrlString = multimediaCore?.resolveAssetRef(baseUrlString) ?? baseUrlString;
   const isVideo =
     mediaPayload.mediaType === 'video' || /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(resolvedUrlString);
 
@@ -66,7 +65,7 @@ function playMedia(deps: ClientControlDeps, mediaPayload: PlayMediaPayload, dela
     const reverse = clip?.reverse ?? false;
     const fit = clip?.fit ?? null;
     multimediaCore?.media.playVideo({
-      url: resolvedUrlString,
+      url: baseUrlString,
       sourceNodeId: clip?.sourceNodeId ?? null,
       muted: mediaPayload.muted ?? true,
       loop,
@@ -82,7 +81,7 @@ function playMedia(deps: ClientControlDeps, mediaPayload: PlayMediaPayload, dela
   }
 
   const audioPayload: PlaySoundPayload = {
-    url: resolvedUrl as PlaySoundPayload['url'],
+    url: resolvedUrlString,
     volume: mediaPayload.volume,
     loop: mediaPayload.loop,
     fadeIn: mediaPayload.fadeIn,
@@ -101,15 +100,14 @@ function showImage(deps: ClientControlDeps, imagePayload: ShowImagePayload): voi
   const multimediaCore = deps.getMultimediaCore();
   const clip = typeof imagePayload.url === 'string' ? parseMediaClipParams(imagePayload.url) : null;
   const baseUrl = clip ? clip.baseUrl : imagePayload.url;
-  const url =
-    typeof baseUrl === 'string' ? (multimediaCore?.resolveAssetRef(baseUrl) ?? baseUrl) : baseUrl;
+  const url = typeof baseUrl === 'string' ? baseUrl : String(baseUrl ?? '');
   const fit = clip?.fit ?? null;
   const scale = clip?.scale ?? null;
   const offsetX = clip?.offsetX ?? null;
   const offsetY = clip?.offsetY ?? null;
   const opacity = clip?.opacity ?? null;
   multimediaCore?.media.showImage({
-    url: String(url ?? ''),
+    url,
     duration: imagePayload.duration,
     ...(fit === null ? {} : { fit }),
     ...(scale === null ? {} : { scale }),

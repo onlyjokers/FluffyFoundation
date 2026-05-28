@@ -12,8 +12,8 @@
   export let onHide: (() => void) | undefined = undefined;
 
   let visible = false;
-  let loaded = false;
-  let lastUrl: string | null = null;
+  let currentUrl: string | null = null;
+  let dismissedUrl: string | null = null;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   // Compute transform style from scale and offset
@@ -32,78 +32,77 @@
   $: opacityStyle =
     opacity !== 1 && Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : undefined;
 
-  $: if (url !== lastUrl) {
-    loaded = false;
+  function clearHideTimer() {
+    if (!timeoutId) return;
+    clearTimeout(timeoutId);
+    timeoutId = null;
+  }
+
+  function scheduleHide() {
+    clearHideTimer();
+    if (!duration || duration <= 0) return;
+    timeoutId = setTimeout(() => {
+      dismissedUrl = currentUrl;
+      visible = false;
+      onHide?.();
+    }, duration);
+  }
+
+  $: if (!url) {
+    clearHideTimer();
+    currentUrl = null;
+    dismissedUrl = null;
     visible = false;
-    lastUrl = url;
-  }
-
-  $: if (url && loaded) {
+  } else if (url === dismissedUrl) {
+    // Keep duration-based local hides stable until the upstream command changes URL or clears it.
+    visible = false;
+  } else if (url !== currentUrl) {
+    clearHideTimer();
+    currentUrl = url;
+    dismissedUrl = null;
     visible = true;
-
-    // If duration is set, hide after that time
-    if (duration && duration > 0) {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        visible = false;
-        onHide?.();
-      }, duration);
-    }
   }
 
-  function handleLoad() {
-    loaded = true;
+  function handleActiveLoad() {
+    scheduleHide();
   }
 
-  function handleError() {
+  function handleActiveError() {
     console.error('[ImageDisplay] Failed to load image:', url);
-    loaded = false;
   }
 
   export function hide() {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+    clearHideTimer();
+    dismissedUrl = currentUrl;
     visible = false;
     onHide?.();
   }
 
   onDestroy(() => {
-    if (timeoutId) clearTimeout(timeoutId);
+    clearHideTimer();
   });
 </script>
 
-{#if url}
-  {#if visible}
-    <div
-      class="image-overlay"
-      class:fit-screen={fit === 'fit-screen'}
-      class:fit-cover={fit === 'cover'}
-      class:fit-fill={fit === 'fill'}
-      transition:fade={{ duration: 500 }}
-    >
+{#if url && visible}
+  <div
+    class="image-overlay"
+    class:fit-screen={fit === 'fit-screen'}
+    class:fit-cover={fit === 'cover'}
+    class:fit-fill={fit === 'fill'}
+    transition:fade={{ duration: 500 }}
+  >
+    {#key url}
       <img
         src={url}
         alt=""
-        on:load={handleLoad}
-        on:error={handleError}
+        on:load={handleActiveLoad}
+        on:error={handleActiveError}
         crossorigin="anonymous"
         style:transform={transformStyle}
         style:opacity={opacityStyle}
       />
-    </div>
-  {:else}
-    <!-- Hidden preload -->
-    <img
-      src={url}
-      alt=""
-      on:load={handleLoad}
-      on:error={handleError}
-      crossorigin="anonymous"
-      style="display: none;"
-    />
-  {/if}
+    {/key}
+  </div>
 {/if}
 
 <style>
