@@ -1,16 +1,19 @@
 // Purpose: Regression tests for node picker semantic connection creation.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readable } from 'svelte/store';
+import { get, readable } from 'svelte/store';
 
 import { createPickerController } from './picker-controller';
 
-function createHarness() {
+function createHarness(options: {
+  registryDefinitions?: Array<{ type: string; label: string; category: string }>;
+  graph?: { nodes: unknown[]; connections: unknown[] };
+} = {}) {
   const addedConnections: unknown[] = [];
   const addedNodes: unknown[] = [];
   const controller = createPickerController({
     nodeRegistry: {
-      list: () => [],
+      list: () => options.registryDefinitions ?? [],
     } as never,
     getContainer: () =>
       ({
@@ -30,7 +33,7 @@ function createHarness() {
     addConnection: (connection) => {
       addedConnections.push(connection);
     },
-    graphStateStore: readable({ nodes: [], connections: [] }),
+    graphStateStore: readable(options.graph ?? { nodes: [], connections: [] }),
   });
 
   return { controller, addedConnections, addedNodes };
@@ -66,4 +69,29 @@ test('picker reports successfully added nodes so the canvas can select them', ()
   });
 
   assert.deepEqual(addedNodes, [{ nodeId: 'new-node', type: 'display-object' }]);
+});
+
+test('add picker keeps persisted custom definitions available without a mother node on the canvas', async () => {
+  const { controller } = createHarness({
+    registryDefinitions: [
+      {
+        type: 'custom:persisted-definition',
+        label: 'Persisted Definition',
+        category: 'Custom',
+      },
+    ],
+    graph: { nodes: [], connections: [] },
+  });
+
+  controller.openPicker({ clientX: 100, clientY: 120, mode: 'add' });
+  await Promise.resolve();
+
+  assert.deepEqual(get(controller.categories), ['Custom']);
+  assert.deepEqual(get(controller.items), [
+    {
+      type: 'custom:persisted-definition',
+      label: 'Persisted Definition',
+      category: 'Custom',
+    },
+  ]);
 });

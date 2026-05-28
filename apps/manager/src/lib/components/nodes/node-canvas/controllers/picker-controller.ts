@@ -5,8 +5,6 @@ import { derived, get, writable, type Readable } from 'svelte/store';
 import { tick } from 'svelte';
 import type { NodeRegistry } from '@shugu/node-core';
 import type { Connection as EngineConnection, GraphState, NodeInstance, NodePort, PortType } from '$lib/nodes/types';
-import { CUSTOM_NODE_TYPE_PREFIX } from '$lib/nodes/custom-nodes/store';
-import { readCustomNodeState } from '$lib/nodes/custom-nodes/instance';
 
 export type PickerMode = 'add' | 'connect';
 export type SocketData = { nodeId: string; side: 'input' | 'output'; key: string };
@@ -83,18 +81,6 @@ export function createPickerController(opts: PickerControllerOptions) {
     ([$mode, $query, $initialSocket, $graphState]) => {
     const map = new Map<string, PickerItem[]>();
     const q = normalizeSearchQuery($query);
-    const nodes = Array.isArray($graphState?.nodes) ? ($graphState.nodes as NodeInstance[]) : [];
-    const motherDefinitions = new Set<string>();
-    for (const node of nodes) {
-      const state = readCustomNodeState(node?.config ?? {});
-      if (state?.role === 'mother') motherDefinitions.add(String(state.definitionId));
-    }
-    const isCustomNodeAvailable = (type: string): boolean => {
-      if (!String(type).startsWith(CUSTOM_NODE_TYPE_PREFIX)) return true;
-      const defId = String(type).slice(CUSTOM_NODE_TYPE_PREFIX.length);
-      return Boolean(defId && motherDefinitions.has(defId));
-    };
-
     const addItem = (item: PickerItem) => {
       if (q) {
         const hay = `${item.label} ${item.type} ${item.category}`.toLowerCase();
@@ -113,7 +99,6 @@ export function createPickerController(opts: PickerControllerOptions) {
 
       for (const def of opts.nodeRegistry.list()) {
         if (String(def.category ?? '') === 'Internal') continue;
-        if (!isCustomNodeAvailable(def.type)) continue;
         const ports = (neededSide === 'input' ? def.inputs : def.outputs) ?? [];
         const match = opts.bestMatchingPort(ports, requiredType, neededSide);
         if (!match) continue;
@@ -133,7 +118,6 @@ export function createPickerController(opts: PickerControllerOptions) {
     } else {
       for (const def of opts.nodeRegistry.list()) {
         if (String(def.category ?? '') === 'Internal') continue;
-        if (!isCustomNodeAvailable(def.type)) continue;
         addItem({ type: def.type, label: def.label, category: def.category });
       }
     }
@@ -240,7 +224,7 @@ export function createPickerController(opts: PickerControllerOptions) {
     mode.set(optsOpen.mode);
     initialSocket.set(optsOpen.initialSocket ?? null);
     query.set('');
-    selectedCategory.set(optsOpen.mode === 'connect' ? '' : 'Objects');
+    selectedCategory.set(optsOpen.mode === 'connect' ? '' : pickInitialAddCategory(get(categories)));
     isOpen.set(true);
     void clampPickerToBounds();
   };
@@ -321,4 +305,9 @@ export function createPickerController(opts: PickerControllerOptions) {
     closePicker,
     handlePick,
   };
+}
+
+function pickInitialAddCategory(categories: string[]): string {
+  if (categories.includes('Objects')) return 'Objects';
+  return categories[0] ?? '';
 }
