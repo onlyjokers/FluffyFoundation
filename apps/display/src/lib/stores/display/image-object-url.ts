@@ -1,67 +1,16 @@
 /**
- * Purpose: Convert data-image URLs to revocable object URLs for display refresh stability.
+ * Purpose: Normalize Display image URLs while keeping streaming data-image frames off the blob URL path.
  */
-const IMAGE_OBJECT_URL_REVOKE_DELAY_MS = 800; // allow the fade-out transition to finish
-
-let activeImageObjectUrl: string | null = null;
-let imageObjectUrlSeq = 0;
-
 export function isDataImageUrl(url: string): boolean {
   return url.startsWith('data:image/');
 }
 
-function scheduleRevokeObjectUrl(url: string): void {
-  if (!url) return;
-  if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') return;
-  setTimeout(() => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      // ignore
-    }
-  }, IMAGE_OBJECT_URL_REVOKE_DELAY_MS);
-}
-
 export async function normalizeImageUrlForDisplay(url: string): Promise<string> {
-  const seq = imageObjectUrlSeq;
   const trimmed = url.trim();
-  if (!trimmed) {
-    clearActiveImageObjectUrl();
-    return url;
-  }
-
-  if (!isDataImageUrl(trimmed)) {
-    clearActiveImageObjectUrl();
-    return trimmed;
-  }
-
-  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
-    clearActiveImageObjectUrl();
-    return trimmed;
-  }
-
-  const blob = await fetch(trimmed)
-    .then((response) => response.blob())
-    .catch(() => null);
-  if (!blob) {
-    clearActiveImageObjectUrl();
-    return trimmed;
-  }
-
-  const objectUrl = URL.createObjectURL(blob);
-  if (seq !== imageObjectUrlSeq) {
-    scheduleRevokeObjectUrl(objectUrl);
-    return objectUrl;
-  }
-  const prev = activeImageObjectUrl;
-  activeImageObjectUrl = objectUrl;
-  if (prev) scheduleRevokeObjectUrl(prev);
-  return objectUrl;
+  if (!trimmed) return url;
+  return trimmed;
 }
 
 export function clearActiveImageObjectUrl(): void {
-  imageObjectUrlSeq += 1;
-  const prev = activeImageObjectUrl;
-  activeImageObjectUrl = null;
-  if (prev) scheduleRevokeObjectUrl(prev);
+  // Streaming display frames remain data URLs, so there is no display-owned object URL to revoke.
 }

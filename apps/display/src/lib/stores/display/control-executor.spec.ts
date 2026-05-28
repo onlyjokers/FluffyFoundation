@@ -132,19 +132,22 @@ test('Display executor forwards remote asset image refs to MultimediaCore', asyn
   });
 });
 
-test('Display executor shows the first completed streaming image while newer frames are pending', async () => {
+test('Display executor forwards streaming data image frames without async blob conversion', async () => {
   const originalFetch = globalThis.fetch;
   const originalCreateObjectUrl = URL.createObjectURL;
   const originalRevokeObjectUrl = URL.revokeObjectURL;
-  const resolvers: Array<(value: Response) => void> = [];
   const shown: Array<Parameters<MultimediaCore['media']['showImage']>[0]> = [];
-  let objectUrlSeq = 0;
+  let fetchCalls = 0;
+  let objectUrlCalls = 0;
 
-  globalThis.fetch = (() =>
-    new Promise<Response>((resolve) => {
-      resolvers.push(resolve);
-    })) as typeof fetch;
-  URL.createObjectURL = (() => `blob:frame-${(objectUrlSeq += 1)}`) as typeof URL.createObjectURL;
+  globalThis.fetch = (() => {
+    fetchCalls += 1;
+    return Promise.resolve(new Response(new Blob(['unused'], { type: 'image/webp' })));
+  }) as typeof fetch;
+  URL.createObjectURL = (() => {
+    objectUrlCalls += 1;
+    return `blob:frame-${objectUrlCalls}`;
+  }) as typeof URL.createObjectURL;
   URL.revokeObjectURL = (() => undefined) as typeof URL.revokeObjectURL;
 
   try {
@@ -170,10 +173,14 @@ test('Display executor shows the first completed streaming image while newer fra
     executor.executeControl('showImage', { url: 'data:image/webp;base64,first' });
     executor.executeControl('showImage', { url: 'data:image/webp;base64,second' });
 
-    resolvers[0]?.(new Response(new Blob(['first'], { type: 'image/webp' })));
-    await waitFor(() => shown.length > 0);
+    await waitFor(() => shown.length === 2);
 
-    assert.deepEqual(shown, [{ url: 'blob:frame-1', duration: undefined }]);
+    assert.deepEqual(shown, [
+      { url: 'data:image/webp;base64,first', duration: undefined },
+      { url: 'data:image/webp;base64,second', duration: undefined },
+    ]);
+    assert.equal(fetchCalls, 0);
+    assert.equal(objectUrlCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
     URL.createObjectURL = originalCreateObjectUrl;

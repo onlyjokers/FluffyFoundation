@@ -9,66 +9,73 @@ import { clearActiveImageObjectUrl, normalizeImageUrlForDisplay } from './image-
 test('display data image conversion avoids synchronous base64 loops', () => {
   const source = readFileSync(new URL('./image-object-url.ts', import.meta.url), 'utf8');
 
-  assert.match(source, /fetch\(trimmed\)/);
-  assert.match(source, /imageObjectUrlSeq/);
-  assert.match(source, /seq !== imageObjectUrlSeq/);
+  assert.doesNotMatch(source, /fetch\(trimmed\)/);
+  assert.doesNotMatch(source, /createObjectURL/);
   assert.doesNotMatch(source, /\batob\(/);
   assert.doesNotMatch(source, /new Uint8Array/);
 });
 
-test('display data image conversion keeps earlier frames displayable when a newer frame arrives first', async () => {
+test('display streaming data image frames stay as data URLs to avoid blob churn', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = ((url: string) => {
+    fetchCalls += 1;
+    return Promise.resolve(new Response(new Blob([url], { type: 'image/webp' })));
+  }) as typeof fetch;
+
+  try {
+    const first = 'data:image/webp;base64,first';
+    const second = 'data:image/webp;base64,second';
+
+    assert.equal(await normalizeImageUrlForDisplay(first), first);
+    assert.equal(await normalizeImageUrlForDisplay(second), second);
+    assert.equal(fetchCalls, 0);
+  } finally {
+    clearActiveImageObjectUrl();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('display data image conversion is synchronous so frame order cannot invert', async () => {
   const originalFetch = globalThis.fetch;
   const originalUrl = globalThis.URL;
-  const resolvers: Array<(value: Response) => void> = [];
-  const objectUrls: string[] = [];
+  let fetchCalls = 0;
+  let objectUrlCalls = 0;
 
-  globalThis.fetch = ((url: string) =>
-    new Promise<Response>((resolve) => {
-      resolvers.push(resolve);
-    })) as typeof fetch;
+  globalThis.fetch = (() => {
+    fetchCalls += 1;
+    return Promise.resolve(new Response(new Blob(['unused'], { type: 'image/webp' })));
+  }) as typeof fetch;
   globalThis.URL = {
     createObjectURL: () => {
-      const url = `blob:frame-${objectUrls.length + 1}`;
-      objectUrls.push(url);
-      return url;
+      objectUrlCalls += 1;
+      return `blob:frame-${objectUrlCalls}`;
     },
     revokeObjectURL: () => undefined,
   } as unknown as typeof URL;
 
   try {
-    const first = normalizeImageUrlForDisplay('data:image/webp;base64,first');
-    const second = normalizeImageUrlForDisplay('data:image/webp;base64,second');
-
-    resolvers[1]?.(new Response(new Blob(['second'], { type: 'image/webp' })));
-    assert.equal(await second, 'blob:frame-1');
-
-    resolvers[0]?.(new Response(new Blob(['first'], { type: 'image/webp' })));
-    assert.equal(await first, 'blob:frame-2');
+    assert.equal(await normalizeImageUrlForDisplay('data:image/webp;base64,first'), 'data:image/webp;base64,first');
+    assert.equal(await normalizeImageUrlForDisplay('data:image/webp;base64,second'), 'data:image/webp;base64,second');
+    assert.equal(fetchCalls, 0);
+    assert.equal(objectUrlCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.URL = originalUrl;
   }
 });
 
-test('display data image conversion revokes object URLs returned from out-of-order frames', async () => {
+test('clearing image object state does not schedule periodic revoke work for data frames', async () => {
   const originalFetch = globalThis.fetch;
   const originalUrl = globalThis.URL;
   const originalSetTimeout = globalThis.setTimeout;
-  const resolvers: Array<(value: Response) => void> = [];
-  const objectUrls: string[] = [];
   const revoked: string[] = [];
   const scheduledCallbacks: Array<() => void> = [];
 
   globalThis.fetch = (() =>
-    new Promise<Response>((resolve) => {
-      resolvers.push(resolve);
-    })) as typeof fetch;
+    Promise.resolve(new Response(new Blob(['unused'], { type: 'image/webp' })))) as typeof fetch;
   globalThis.URL = {
-    createObjectURL: () => {
-      const url = `blob:frame-${objectUrls.length + 1}`;
-      objectUrls.push(url);
-      return url;
-    },
+    createObjectURL: () => 'blob:unused',
     revokeObjectURL: (url: string) => {
       revoked.push(url);
     },
@@ -76,23 +83,15 @@ test('display data image conversion revokes object URLs returned from out-of-ord
   globalThis.setTimeout = ((handler: TimerHandler) => {
     if (typeof handler === 'function') scheduledCallbacks.push(handler as () => void);
     return 0 as unknown as ReturnType<typeof setTimeout>;
-  }) as typeof setTimeout;
+  }) as unknown as typeof setTimeout;
 
   try {
-    const first = normalizeImageUrlForDisplay('data:image/webp;base64,first');
-    const second = normalizeImageUrlForDisplay('data:image/webp;base64,second');
-
-    resolvers[1]?.(new Response(new Blob(['second'], { type: 'image/webp' })));
-    assert.equal(await second, 'blob:frame-1');
-
-    resolvers[0]?.(new Response(new Blob(['first'], { type: 'image/webp' })));
-    assert.equal(await first, 'blob:frame-2');
-
+    assert.equal(await normalizeImageUrlForDisplay('data:image/webp;base64,first'), 'data:image/webp;base64,first');
+    assert.equal(await normalizeImageUrlForDisplay('data:image/webp;base64,second'), 'data:image/webp;base64,second');
     clearActiveImageObjectUrl();
-    for (const callback of scheduledCallbacks.splice(0)) callback();
 
-    assert.ok(revoked.includes('blob:frame-1'));
-    assert.ok(revoked.includes('blob:frame-2'));
+    assert.deepEqual(revoked, []);
+    assert.deepEqual(scheduledCallbacks, []);
   } finally {
     clearActiveImageObjectUrl();
     globalThis.fetch = originalFetch;
