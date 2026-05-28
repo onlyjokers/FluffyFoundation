@@ -11,7 +11,8 @@ export type NodeCommand = {
 
 export type ClientUiLayerItem =
   | { type: 'button'; nodeId: string }
-  | { type: 'input'; nodeId: string };
+  | { type: 'input'; nodeId: string }
+  | { type: 'record'; nodeId: string };
 
 export type LatestSensorDataLike = {
   sensorType: SensorType;
@@ -34,7 +35,7 @@ export type ClientObject = {
   sensors?: ClientSensorMessage | null;
 };
 
-export type ClientUiKind = 'button' | 'input';
+export type ClientUiKind = 'button' | 'input' | 'record';
 
 export type ClientUiState = {
   displayed: boolean;
@@ -42,11 +43,16 @@ export type ClientUiState = {
   pressed: boolean;
   inputContent: string;
   firstInputed: boolean;
+  recording?: boolean;
+  assetId?: string;
+  asset?: string;
+  finished?: boolean;
 };
 
 export type ClientUiDeps = {
   getClientUiState?: (nodeId: string) => ClientUiState | null;
   consumeClientButtonPressed?: (nodeId: string) => boolean;
+  consumeRecordSoundFinished?: (nodeId: string) => boolean;
   clearClientUiNode?: (nodeId: string) => void;
   clearClientUi?: () => void;
 };
@@ -85,6 +91,18 @@ export type AudioAssetNodeDeps = {
     name?: string;
     index?: number;
     latest?: boolean;
+  }) => string | null;
+  peekSpeechToText?: (request: {
+    nodeId: string;
+    signature: string;
+    assetId: string;
+    model: string;
+  }) => string | null;
+  getSpeechToText?: (request: {
+    nodeId: string;
+    signature: string;
+    assetId: string;
+    model: string;
   }) => string | null;
 };
 

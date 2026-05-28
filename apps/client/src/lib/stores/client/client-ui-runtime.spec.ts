@@ -110,4 +110,56 @@ describe('clientUiRuntime', () => {
       ]
     );
   });
+
+  it('tracks record controls and emits the uploaded audio asset', () => {
+    resetClientUiRuntime();
+    const events: ClientUiInteractionEvent[] = [];
+    const unsubscribe = clientUiRuntime.onInteraction((event) => events.push(event));
+
+    try {
+      clientUiRuntime.applyPayload({ items: [{ type: 'record', nodeId: 'record-1' }] });
+      clientUiRuntime.setRecording('record-1', true);
+      clientUiRuntime.finishRecording('record-1', {
+        assetId: 'recording-1',
+        asset: 'asset:recording-1',
+      });
+    } finally {
+      unsubscribe();
+    }
+
+    assert.deepEqual(clientUiRuntime.getClientUiState('record-1'), {
+      displayed: true,
+      kind: 'record',
+      pressed: false,
+      inputContent: '',
+      firstInputed: false,
+      recording: false,
+      assetId: 'recording-1',
+      asset: 'asset:recording-1',
+      finished: true,
+    });
+    assert.deepEqual(
+      events.map(({ nodeId, kind, recording, assetId, asset, finished }) => ({
+        nodeId,
+        kind,
+        recording,
+        assetId,
+        asset,
+        finished,
+      })),
+      [
+        { nodeId: 'record-1', kind: 'record', recording: true, assetId: '', asset: '', finished: false },
+        {
+          nodeId: 'record-1',
+          kind: 'record',
+          recording: false,
+          assetId: 'recording-1',
+          asset: 'asset:recording-1',
+          finished: true,
+        },
+      ]
+    );
+    assert.equal(clientUiRuntime.consumeRecordSoundFinished('record-1'), true);
+    assert.equal(clientUiRuntime.consumeRecordSoundFinished('record-1'), false);
+  });
 });

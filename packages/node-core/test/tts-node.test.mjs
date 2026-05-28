@@ -8,6 +8,7 @@ import { NodeRegistry, registerDefaultNodeDefinitions } from '../dist-node-core/
 
 function buildRegistry() {
   const ttsAssets = new Map();
+  const sttTexts = new Map();
   const registry = new NodeRegistry();
   registerDefaultNodeDefinitions(registry, {
     getClientId: () => null,
@@ -26,6 +27,12 @@ function buildRegistry() {
       },
       uploadAudioToDropBox: ({ assetId }) => assetId,
       referenceAudioFromDropBox: ({ assetId }) => assetId ?? 'asset-tts-1',
+      peekSpeechToText: ({ signature }) => sttTexts.get(signature) ?? '',
+      getSpeechToText: ({ signature }) => {
+        const text = sttTexts.get(signature) ?? 'recognized speech';
+        sttTexts.set(signature, text);
+        return text;
+      },
     },
   });
   return registry;
@@ -59,34 +66,118 @@ test('Generate TTS Audio exposes asset refs for Load Audio From Remote chains', 
       { id: 'asset', type: 'asset' },
     ]
   );
-  assert.deepEqual(upload.inputs.map((input) => ({ id: input.id, type: input.type })), [
-    { id: 'assetId', type: 'string' },
-    { id: 'asset', type: 'asset' },
-  ]);
-  assert.deepEqual(reference.outputs.map((output) => ({ id: output.id, type: output.type })), [
-    { id: 'assetId', type: 'string' },
-    { id: 'asset', type: 'asset' },
-  ]);
+  assert.deepEqual(
+    upload.inputs.map((input) => ({ id: input.id, type: input.type })),
+    [
+      { id: 'assetId', type: 'string' },
+      { id: 'asset', type: 'asset' },
+    ]
+  );
+  assert.deepEqual(
+    reference.outputs.map((output) => ({ id: output.id, type: output.type })),
+    [
+      { id: 'assetId', type: 'string' },
+      { id: 'asset', type: 'asset' },
+    ]
+  );
 
   const context = { nodeId: 'tts', time: 0, deltaTime: 0 };
-  assert.deepEqual(
-    generate.process({ text: 'hello', trigger: true }, {}, context),
-    { assetId: 'asset-tts-1', asset: 'asset:asset-tts-1' }
-  );
+  assert.deepEqual(generate.process({ text: 'hello', trigger: true }, {}, context), {
+    assetId: 'asset-tts-1',
+    asset: 'asset:asset-tts-1',
+  });
   assert.deepEqual(loadAsset.process({}, { assetId: 'asset-tts-1' }, context), {
     ref: 'asset:asset-tts-1',
   });
   assert.deepEqual(loadAsset.process({}, { assetId: 'asset:asset-tts-1' }, context), {
     ref: 'asset:asset-tts-1',
   });
+  assert.deepEqual(upload.process({ assetId: 'asset-tts-1' }, {}, context), {
+    assetId: 'asset-tts-1',
+    asset: 'asset:asset-tts-1',
+  });
+  assert.deepEqual(reference.process({}, { assetId: 'asset-tts-1' }, context), {
+    assetId: 'asset-tts-1',
+    asset: 'asset:asset-tts-1',
+  });
+});
+
+test('Speech to Text exposes string output from an audio asset', () => {
+  const registry = buildRegistry();
+  const stt = registry.get('speech-to-text');
+  assert.ok(stt, 'expected speech-to-text definition');
+
   assert.deepEqual(
-    upload.process({ assetId: 'asset-tts-1' }, {}, context),
-    { assetId: 'asset-tts-1', asset: 'asset:asset-tts-1' }
+    stt.inputs.map((input) => [input.id, input.type, input.options?.map((option) => option.value)]),
+    [
+      ['asset', 'asset', undefined],
+      ['trigger', 'pulse', undefined],
+      ['model', 'string', ['qwen3-asr-flash']],
+    ]
+  );
+  assert.equal(
+    stt.configSchema.find((item) => item.key === 'model')?.defaultValue,
+    'qwen3-asr-flash'
   );
   assert.deepEqual(
-    reference.process({}, { assetId: 'asset-tts-1' }, context),
-    { assetId: 'asset-tts-1', asset: 'asset:asset-tts-1' }
+    stt.outputs.map((output) => [output.id, output.type]),
+    [
+      ['text', 'string'],
+      ['done', 'pulse'],
+    ]
   );
+
+  const context = { nodeId: 'stt', time: 0, deltaTime: 0 };
+  assert.deepEqual(stt.process({ asset: 'asset:recording-1', trigger: true }, {}, context), {
+    text: 'recognized speech',
+    done: true,
+  });
+  assert.deepEqual(stt.process({ asset: 'asset:recording-1', trigger: false }, {}, context), {
+    text: 'recognized speech',
+    done: false,
+  });
+});
+
+test('Speech to Text keeps polling after an async request starts empty', () => {
+  const calls = [];
+  const texts = new Map();
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry, {
+    getClientId: () => null,
+    getAllClientIds: () => [],
+    getSelectedClientIds: () => [],
+    executeCommand: () => {},
+    audioAssets: {
+      getSpeechToText: (request) => {
+        calls.push(request);
+        return '';
+      },
+      peekSpeechToText: ({ signature }) => texts.get(signature) ?? '',
+    },
+  });
+
+  const stt = registry.get('speech-to-text');
+  assert.ok(stt, 'expected speech-to-text definition');
+  const context = { nodeId: 'stt-async', time: 0, deltaTime: 0 };
+
+  assert.deepEqual(stt.process({ asset: 'asset:recording-1', trigger: true }, {}, context), {
+    text: '',
+    done: false,
+  });
+  assert.equal(calls.length, 1);
+  const signature = calls[0].signature;
+
+  assert.deepEqual(stt.process({ asset: 'asset:recording-1', trigger: false }, {}, context), {
+    text: '',
+    done: false,
+  });
+
+  texts.set(signature, 'recognized later');
+  assert.deepEqual(stt.process({ asset: 'asset:recording-1', trigger: false }, {}, context), {
+    text: 'recognized later',
+    done: true,
+  });
+  assert.equal(calls.length, 1);
 });
 
 test('Generate TTS Audio keeps polling and outputting generated asset after pulse drops', () => {
@@ -183,7 +274,11 @@ test('Generate TTS Audio exposes pulse trigger and connectable option inputs', (
   assert.ok(node);
 
   assert.deepEqual(
-    node.inputs.map((input) => [input.id, input.type, input.options?.map((option) => option.value)]),
+    node.inputs.map((input) => [
+      input.id,
+      input.type,
+      input.options?.map((option) => option.value),
+    ]),
     [
       ['text', 'string', undefined],
       ['trigger', 'pulse', undefined],

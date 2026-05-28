@@ -32,6 +32,7 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'number-stabilizer',
   'proc-flashlight',
   'proc-show-image',
+  'proc-display-text',
   'proc-play-video',
   'proc-visual-effects',
   'proc-screen-color',
@@ -106,6 +107,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   // Client UI chain
   'client-button',
   'client-input-box',
+  'record-sound-button',
   'tone-osc',
   'tone-delay',
   'tone-resonator',
@@ -114,6 +116,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'tone-granular',
   'play-media',
   'proc-show-image',
+  'proc-display-text',
   'proc-play-video',
   'proc-visual-effects',
   // Generators
@@ -122,6 +125,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   ...PATCH_ROOT_TYPES,
   // AI
   'ai-model-ref',
+  'speech-to-text',
 ]);
 
 export const isLoopDeployableNodeType = (type: string): boolean =>

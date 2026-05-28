@@ -17,9 +17,10 @@ export function shouldComputeWhileOffloaded(type: string): boolean {
   const t = String(type ?? '');
   if (!t) return false;
   if (t.startsWith('logic-')) return true;
-  if (t === 'client-button' || t === 'client-input-box') return true;
-  if (t === 'generate-tts-audio') return true;
+  if (t === 'client-button' || t === 'client-input-box' || t === 'record-sound-button') return true;
+  if (t === 'generate-tts-audio' || t === 'speech-to-text') return true;
   if (t === 'gpt-image-gen') return true;
+  if (t === 'proc-display-text') return true;
   return false;
 }
 

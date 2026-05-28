@@ -78,7 +78,10 @@ test('detectLocalClientLoops ignores cycles without exactly one client and senso
 test('shouldComputeWhileOffloaded keeps ClientUI interaction output nodes live for manager inspection', () => {
   assert.equal(shouldComputeWhileOffloaded('client-button'), true);
   assert.equal(shouldComputeWhileOffloaded('client-input-box'), true);
+  assert.equal(shouldComputeWhileOffloaded('record-sound-button'), true);
   assert.equal(shouldComputeWhileOffloaded('generate-tts-audio'), true);
+  assert.equal(shouldComputeWhileOffloaded('speech-to-text'), true);
+  assert.equal(shouldComputeWhileOffloaded('proc-display-text'), true);
   assert.equal(shouldComputeWhileOffloaded('gpt-image-gen'), true);
   assert.equal(shouldComputeWhileOffloaded('ui-out'), false);
 });

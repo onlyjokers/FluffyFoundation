@@ -211,6 +211,8 @@ export function exportGraphForPatch(
     if (type === 'client-button') return sourcePortId === 'pressed';
     if (type === 'client-input-box')
       return sourcePortId === 'inputContent' || sourcePortId === 'firstInputed';
+    if (type === 'record-sound-button')
+      return sourcePortId === 'asset' || sourcePortId === 'assetId' || sourcePortId === 'recording' || sourcePortId === 'finish';
     return false;
   };
   const shouldTraverseDownstreamTarget = (targetNodeId: string, targetPortId: string): boolean => {

@@ -251,6 +251,7 @@ test('validateMessage accepts client UI payloads', () => {
       items: [
         { type: 'button', nodeId: 'button-1' },
         { type: 'input', nodeId: 'input-1' },
+        { type: 'record', nodeId: 'record-1' },
       ],
     }
   );

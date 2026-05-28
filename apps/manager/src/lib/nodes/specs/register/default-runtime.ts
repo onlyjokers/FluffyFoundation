@@ -80,6 +80,10 @@ export function registerDefaultRuntimeNodes(): void {
         pressed: state.pressed,
         inputContent: state.inputContent,
         firstInputed: state.firstInputed,
+        recording: state.recording,
+        assetId: state.assetId,
+        asset: state.asset,
+        finished: state.finished,
       };
     },
     consumeClientButtonPressed: (nodeId: string) => {
@@ -95,6 +99,20 @@ export function registerDefaultRuntimeNodes(): void {
         return next;
       });
       return pressed;
+    },
+    consumeRecordSoundFinished: (nodeId: string) => {
+      const id = String(nodeId ?? '').trim();
+      if (!id) return false;
+      let finished = false;
+      clientUiInteractions.update((prev) => {
+        const current = prev.get(id);
+        finished = Boolean(current?.finished);
+        if (!current || !finished) return prev;
+        const next = new Map(prev);
+        next.set(id, { ...current, finished: false });
+        return next;
+      });
+      return finished;
     },
   },
   audioAssets: createManagerAudioAssetNodeDeps({

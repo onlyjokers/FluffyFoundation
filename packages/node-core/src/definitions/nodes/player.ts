@@ -201,6 +201,7 @@ export function createUiOutNode(deps: ClientObjectDeps): NodeDefinition {
       const type = getStringValue(record.type);
       if (type === 'button') items.push({ type: 'button', nodeId });
       if (type === 'input') items.push({ type: 'input', nodeId });
+      if (type === 'record') items.push({ type: 'record', nodeId });
     }
     return items;
   };

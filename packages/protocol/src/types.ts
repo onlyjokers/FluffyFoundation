@@ -307,7 +307,8 @@ export interface VisualEffectsPayload {
 
 export type ClientUiLayerItem =
   | { type: 'button'; nodeId: string }
-  | { type: 'input'; nodeId: string };
+  | { type: 'input'; nodeId: string }
+  | { type: 'record'; nodeId: string };
 
 export interface ClientUiPayload {
   items: ClientUiLayerItem[];

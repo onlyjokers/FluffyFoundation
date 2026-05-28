@@ -4,6 +4,7 @@
 export {
   createLoadAudioAssetFromAssetsNode,
   createGenerateTtsAudioAssetNode,
+  createSpeechToTextNode,
   createReferenceAudioFromDropBoxNode,
   createUploadAudioToDropBoxNode,
   createLoadAudioFromAssetsNode,

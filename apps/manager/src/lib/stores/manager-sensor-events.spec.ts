@@ -56,6 +56,20 @@ test('applyClientUiInteractionPayload stores ClientUI node interaction outputs',
     },
     700
   );
+  const recorded = applyClientUiInteractionPayload(
+    submitted,
+    'client-1',
+    {
+      kind: 'client-ui-interaction',
+      nodeId: 'record-1',
+      uiKind: 'record',
+      recording: false,
+      assetId: 'recording-1',
+      asset: 'asset:recording-1',
+      finished: true,
+    },
+    800
+  );
 
   assert.deepEqual(pressed.get('button-1'), {
     clientId: 'client-1',
@@ -72,6 +86,18 @@ test('applyClientUiInteractionPayload stores ClientUI node interaction outputs',
     inputContent: 'hello',
     firstInputed: true,
     updatedAt: 700,
+  });
+  assert.deepEqual(recorded.get('record-1'), {
+    clientId: 'client-1',
+    kind: 'record',
+    pressed: false,
+    inputContent: '',
+    firstInputed: false,
+    recording: false,
+    assetId: 'recording-1',
+    asset: 'asset:recording-1',
+    finished: true,
+    updatedAt: 800,
   });
 });
 

@@ -22,6 +22,15 @@ test('patch deployment policy allows pulse conversion nodes as local patch logic
   assert.doesNotThrow(() => assertPatchDeployableNodeType('pulse-to-boolean'));
 });
 
+test('patch deployment policy allows ClientUI recording and STT nodes', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('record-sound-button'));
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('speech-to-text'));
+});
+
+test('patch deployment policy allows Display Text command nodes', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('proc-display-text'));
+});
+
 test('patch deployment policy allows group gates as runtime group controls', () => {
   assert.doesNotThrow(() => assertPatchDeployableNodeType('group-gate'));
 });

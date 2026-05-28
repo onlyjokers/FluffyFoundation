@@ -72,6 +72,7 @@ function coerceUiChain(raw: unknown): ClientUiLayerItem[] {
     const type = getStringValue(record.type);
     if (type === 'button') out.push({ type: 'button', nodeId });
     if (type === 'input') out.push({ type: 'input', nodeId });
+    if (type === 'record') out.push({ type: 'record', nodeId });
   }
   return out;
 }
@@ -437,6 +438,66 @@ export function createClientButtonNode(deps: ClientObjectDeps): NodeDefinition {
       return {
         out: [...chain, { type: 'button', nodeId: context.nodeId }],
         pressed: deps.clientUi?.consumeClientButtonPressed?.(context.nodeId) ?? false,
+      };
+    },
+    onDisable: (_inputs, _config, context) => {
+      deps.clientUi?.clearClientUiNode?.(context.nodeId);
+    },
+  };
+}
+
+export function createRecordSoundButtonNode(deps: ClientObjectDeps): NodeDefinition {
+  return {
+    type: 'record-sound-button',
+    label: 'Record Sound Button',
+    category: 'ClientUI',
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['client'],
+      sideEffectClass: 'local-state',
+      permissions: ['microphone'],
+      description: 'Renders a record button on the Client and outputs the latest recorded audio asset.',
+      compatibility: [
+        {
+          target: 'client runtime',
+          rule: 'Only records when deployed to a Client node-executor graph.',
+          repairHint: 'Connect the ClientUI node into a deployed patch subgraph.',
+        },
+      ],
+      examples: [
+        {
+          title: 'Record speech from Client',
+          summary: 'Connect Asset to Speech to Text to transcribe the recorded audio.',
+        },
+      ],
+      risks: ['Requires browser microphone permission on the Client.'],
+      repairHints: ['Verify the Display input is true and the Client has microphone permission.'],
+    },
+    inputs: [
+      { id: 'in', label: 'In', type: 'ui' },
+      { id: 'display', label: 'Display', type: 'boolean', defaultValue: true },
+    ],
+    outputs: [
+      { id: 'out', label: 'Out', type: 'ui' },
+      { id: 'recording', label: 'Recording', type: 'boolean' },
+      { id: 'assetId', label: 'Asset ID', type: 'string' },
+      { id: 'asset', label: 'Asset', type: 'asset' },
+      { id: 'finish', label: 'Finish', type: 'pulse' },
+    ],
+    configSchema: [],
+    process: (inputs, _config, context) => {
+      const display = getBooleanValue(inputs.display) ?? true;
+      const chain = coerceUiChain(inputs.in);
+      if (!display) return { out: chain, recording: false, assetId: '', asset: '', finish: false };
+      const state = deps.clientUi?.getClientUiState?.(context.nodeId) ?? null;
+      const assetId = typeof state?.assetId === 'string' ? state.assetId : '';
+      const asset = typeof state?.asset === 'string' ? state.asset : assetId ? `asset:${assetId}` : '';
+      return {
+        out: [...chain, { type: 'record', nodeId: context.nodeId }],
+        recording: Boolean(state?.recording),
+        assetId,
+        asset,
+        finish: deps.clientUi?.consumeRecordSoundFinished?.(context.nodeId) ?? false,
       };
     },
     onDisable: (_inputs, _config, context) => {

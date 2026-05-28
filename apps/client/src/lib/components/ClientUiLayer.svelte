@@ -1,7 +1,7 @@
 <!-- Purpose: Render ClientUI nodes deployed into the Client runtime. -->
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { getSDK } from '$lib/stores/client';
+  import { getSDK, getServerUrl } from '$lib/stores/client';
   import { createAgentTextPayload } from '$lib/client-page/agent-text';
   import {
     clientUiRuntime,
@@ -12,9 +12,73 @@
   type RenderClientUiNodeState = ClientUiNodeState & { nodeId: string };
 
   let inputDrafts: Record<string, string> = {};
+  const recorders = new Map<string, { recorder: MediaRecorder; chunks: Blob[]; stream: MediaStream }>();
 
   function pressButton(nodeId: string): void {
     clientUiRuntime.pressButton(nodeId);
+  }
+
+  function assetRef(assetId: string): string {
+    return assetId ? `asset:${assetId}` : '';
+  }
+
+  function recordingMimeType(): string | undefined {
+    if (typeof MediaRecorder === 'undefined') return undefined;
+    const preferred = 'audio/webm;codecs=opus';
+    return MediaRecorder.isTypeSupported?.(preferred) ? preferred : undefined;
+  }
+
+  async function uploadRecording(nodeId: string, blob: Blob): Promise<void> {
+    const serverUrl = getServerUrl().trim();
+    if (!serverUrl) throw new Error('Missing server URL');
+    const form = new FormData();
+    const extension = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('mpeg') ? 'mp3' : 'webm';
+    form.set('file', blob, `client-recording-${Date.now()}.${extension}`);
+    const response = await fetch(new URL('/api/stt/recording-asset', serverUrl).toString(), {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(body || `Recording upload failed (${response.status})`);
+    }
+    const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const assetId = typeof json.assetId === 'string' ? json.assetId : '';
+    clientUiRuntime.finishRecording(nodeId, { assetId, asset: assetRef(assetId) });
+  }
+
+  async function toggleRecording(nodeId: string): Promise<void> {
+    const current = recorders.get(nodeId);
+    if (current) {
+      current.recorder.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: Blob[] = [];
+      const mimeType = recordingMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorders.set(nodeId, { recorder, chunks, stream });
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+      recorder.addEventListener('stop', () => {
+        recorders.delete(nodeId);
+        stream.getTracks().forEach((track) => track.stop());
+        clientUiRuntime.setRecording(nodeId, false);
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        void uploadRecording(nodeId, blob).catch((error) => {
+          console.warn('[ClientUI] recording upload failed', error);
+        });
+      });
+      recorder.start();
+      clientUiRuntime.setRecording(nodeId, true);
+    } catch (error) {
+      console.warn('[ClientUI] recording failed', error);
+      clientUiRuntime.setRecording(nodeId, false);
+    }
   }
 
   function submitInput(nodeId: string): void {
@@ -38,6 +102,9 @@
   const visibleInputs = (nodes: Map<string, ClientUiNodeState>): RenderClientUiNodeState[] =>
     visibleNodes(nodes).filter((node) => node.kind === 'input');
 
+  const visibleRecorders = (nodes: Map<string, ClientUiNodeState>): RenderClientUiNodeState[] =>
+    visibleNodes(nodes).filter((node) => node.kind === 'record');
+
   const sendInteraction = (event: ClientUiInteractionEvent): void => {
     getSDK()?.sendSensorData(
       'custom',
@@ -48,6 +115,10 @@
         pressed: event.pressed,
         inputContent: event.inputContent,
         firstInputed: event.firstInputed,
+        recording: event.recording,
+        assetId: event.assetId,
+        asset: event.asset,
+        finished: event.finished,
       },
       { trackLatest: false }
     );
@@ -104,6 +175,22 @@
               </button>
             </form>
           </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if visibleRecorders($clientUiRuntime).length > 0}
+      <div class="client-ui-record-dock">
+        {#each visibleRecorders($clientUiRuntime) as node (node.nodeId)}
+          <button
+            class:recording={Boolean(node.recording)}
+            class="client-ui-record-button"
+            type="button"
+            on:click={() => void toggleRecording(node.nodeId)}
+          >
+            <span class="record-dot" aria-hidden="true"></span>
+            {node.recording ? 'Stop' : 'Record'}
+          </button>
         {/each}
       </div>
     {/if}
@@ -217,6 +304,16 @@
     pointer-events: none;
   }
 
+  .client-ui-record-dock {
+    position: absolute;
+    left: 50%;
+    top: calc(50% + 150px);
+    display: grid;
+    gap: 12px;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
   .client-ui-input-shell {
     position: relative;
   }
@@ -240,6 +337,7 @@
 
   .client-ui-button,
   .client-ui-input,
+  .client-ui-record-button,
   .client-ui-submit {
     min-height: 48px;
     border: 0;
@@ -256,6 +354,42 @@
       transform 160ms ease,
       background 160ms ease,
       opacity 160ms ease;
+  }
+
+  .client-ui-record-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 180px;
+    border: 1px solid rgba(250, 245, 220, 0.28);
+    background:
+      linear-gradient(180deg, rgba(13, 18, 20, 0.82), rgba(4, 6, 7, 0.88)),
+      rgba(229, 74, 45, 0.12);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    font-weight: 800;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .client-ui-record-button.recording {
+    border-color: rgba(229, 74, 45, 0.62);
+    background:
+      linear-gradient(180deg, rgba(70, 15, 12, 0.9), rgba(12, 5, 5, 0.92)),
+      rgba(229, 74, 45, 0.24);
+    box-shadow:
+      0 0 0 8px rgba(229, 74, 45, 0.1),
+      0 18px 52px rgba(0, 0, 0, 0.48);
+  }
+
+  .record-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: #e54a2d;
+    box-shadow: 0 0 18px rgba(229, 74, 45, 0.9);
   }
 
   .client-ui-button {
@@ -388,6 +522,7 @@
 
   .client-ui-button:focus-visible,
   .client-ui-input:focus,
+  .client-ui-record-button:focus-visible,
   .client-ui-submit:focus-visible {
     box-shadow:
       0 0 0 3px rgba(255, 255, 255, 0.14),

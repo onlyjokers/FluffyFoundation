@@ -36,5 +36,6 @@ export {
   enableAudio,
   disconnect,
   getSDK,
+  getServerUrl,
   measureLatency,
 } from './client/client-runtime';

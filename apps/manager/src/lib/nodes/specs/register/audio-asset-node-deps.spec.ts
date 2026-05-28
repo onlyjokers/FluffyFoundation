@@ -115,3 +115,42 @@ test('TTS asset deps notify when a generated asset becomes ready', async () => {
   assert.deepEqual(readyAssets, ['asset-tts-ready']);
   assert.equal(deps.peekTtsAudioAsset?.(isolatedRequest), 'asset-tts-ready');
 });
+
+test('STT deps request transcription text and notify when ready', async () => {
+  const readyAssets: string[] = [];
+  const fetchCalls: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const storage = new Map<string, string>([['shugu-server-url', 'https://localhost:3001']]);
+  const deps = createManagerAudioAssetNodeDeps({
+    fetchImpl: async (url, init) => {
+      fetchCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ text: 'recognized speech' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    getLocalStorageItem: (key) => storage.get(key) ?? null,
+    refreshAssets: async () => {},
+    onAssetReady: (assetId) => {
+      readyAssets.push(assetId);
+    },
+  });
+
+  const sttRequest = {
+    nodeId: 'stt',
+    signature: 'stt-signature',
+    assetId: 'recording-1',
+    model: 'qwen3-asr-flash',
+  };
+
+  assert.equal(deps.getSpeechToText?.(sttRequest), '');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(deps.peekSpeechToText?.(sttRequest), 'recognized speech');
+  assert.deepEqual(readyAssets, ['stt:stt']);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'https://localhost:3001/api/stt/transcribe');
+  assert.deepEqual(JSON.parse(String(fetchCalls[0].init?.body)), {
+    assetId: 'recording-1',
+    model: 'qwen3-asr-flash',
+  });
+});

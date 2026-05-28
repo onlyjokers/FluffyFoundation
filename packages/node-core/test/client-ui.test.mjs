@@ -96,6 +96,104 @@ test('client-input-box passes through ui chain and returns empty outputs when di
   assert.deepEqual(out, { out: inputChain, inputContent: '', firstInputed: false });
 });
 
+test('record-sound-button exposes recording state and the latest recorded audio asset', () => {
+  const registry = buildRegistry({
+    getClientUiState: () => ({
+      displayed: true,
+      kind: 'record',
+      pressed: false,
+      inputContent: '',
+      firstInputed: false,
+      recording: false,
+      assetId: 'recording-1',
+      asset: 'asset:recording-1',
+    }),
+  });
+  const def = registry.get('record-sound-button');
+  assert.ok(def, 'expected record-sound-button definition');
+  assert.deepEqual(
+    def.outputs.map((output) => ({ id: output.id, type: output.type })),
+    [
+      { id: 'out', type: 'ui' },
+      { id: 'recording', type: 'boolean' },
+      { id: 'assetId', type: 'string' },
+      { id: 'asset', type: 'asset' },
+      { id: 'finish', type: 'pulse' },
+    ]
+  );
+
+  const out = def.process({ in: [], display: true }, {}, { nodeId: 'record-1', time: 0, deltaTime: 0 });
+
+  assert.deepEqual(out, {
+    out: [{ type: 'record', nodeId: 'record-1' }],
+    recording: false,
+    assetId: 'recording-1',
+    asset: 'asset:recording-1',
+    finish: false,
+  });
+});
+
+test('record-sound-button pulses finish once after recording completes', () => {
+  let finished = true;
+  const registry = buildRegistry({
+    getClientUiState: () => ({
+      displayed: true,
+      kind: 'record',
+      pressed: false,
+      inputContent: '',
+      firstInputed: false,
+      recording: false,
+      assetId: 'recording-1',
+      asset: 'asset:recording-1',
+    }),
+    consumeRecordSoundFinished: () => {
+      const next = finished;
+      finished = false;
+      return next;
+    },
+  });
+  const def = registry.get('record-sound-button');
+  assert.ok(def, 'expected record-sound-button definition');
+  const context = { nodeId: 'record-1', time: 0, deltaTime: 0 };
+
+  assert.deepEqual(def.process({ in: [], display: true }, {}, context), {
+    out: [{ type: 'record', nodeId: 'record-1' }],
+    recording: false,
+    assetId: 'recording-1',
+    asset: 'asset:recording-1',
+    finish: true,
+  });
+  assert.deepEqual(def.process({ in: [], display: true }, {}, context), {
+    out: [{ type: 'record', nodeId: 'record-1' }],
+    recording: false,
+    assetId: 'recording-1',
+    asset: 'asset:recording-1',
+    finish: false,
+  });
+});
+
+test('record-sound-button passes through ui chain and hides recording outputs when display is false', () => {
+  const registry = buildRegistry({
+    getClientUiState: () => ({
+      displayed: true,
+      kind: 'record',
+      pressed: false,
+      inputContent: '',
+      firstInputed: false,
+      recording: true,
+      assetId: 'recording-1',
+      asset: 'asset:recording-1',
+    }),
+  });
+  const def = registry.get('record-sound-button');
+  assert.ok(def, 'expected record-sound-button definition');
+
+  const inputChain = [{ type: 'button', nodeId: 'button-0' }];
+  const out = def.process({ in: inputChain, display: false }, {}, { nodeId: 'record-1', time: 0, deltaTime: 0 });
+
+  assert.deepEqual(out, { out: inputChain, recording: false, assetId: '', asset: '', finish: false });
+});
+
 test('ui-out sends clientUi commands and clears on disable', () => {
   const commands = [];
   const registry = buildRegistry({}, (cmd) => commands.push(cmd));

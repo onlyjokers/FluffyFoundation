@@ -51,6 +51,7 @@ let mediaUnsub: (() => void) | null = null;
 let permissionsUnsub: (() => void) | null = null;
 let browserPermissionsUnsub: (() => void) | null = null;
 let lastReportedPermissions = '';
+let currentServerUrl = '';
 
 const ASSET_READ_TOKEN_STORAGE_KEY = 'shugu-asset-read-token';
 type AudioContextCtor = new (...args: never[]) => AudioContext;
@@ -131,6 +132,7 @@ export function getMultimediaCore(): MultimediaCore | null {
  */
 export function initialize(config: ClientSDKConfig, options?: { autoConnect?: boolean }): void {
   const identity = getOrCreateClientIdentity();
+  currentServerUrl = config.serverUrl;
 
   // Initialize SDK
   sdk = new ClientSDK({
@@ -458,6 +460,10 @@ export function disconnect(): void {
  */
 export function getSDK(): ClientSDK | null {
   return sdk;
+}
+
+export function getServerUrl(): string {
+  return currentServerUrl;
 }
 
 /**

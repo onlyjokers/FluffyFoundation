@@ -169,7 +169,7 @@ function validateClientUi(payload: ObjectRecord, ctx: MutableValidationContext, 
       addReason(ctx, 'protocol.field.invalid', 'message.control.payload.items', `${path}.items[${index}]`, `${path}.items[${index}] must be an object`);
       return;
     }
-    if (!isOneOf(item.type, ['button', 'input'] as const)) {
+    if (!isOneOf(item.type, ['button', 'input', 'record'] as const)) {
       addReason(ctx, fieldCode(item, 'type'), 'message.control.payload.items.type', `${path}.items[${index}].type`, `${path}.items[${index}].type is unsupported`);
     }
     requireNonEmptyString(item, ctx, 'nodeId', 'message.control.payload.items.nodeId', `${path}.items[${index}].nodeId`);

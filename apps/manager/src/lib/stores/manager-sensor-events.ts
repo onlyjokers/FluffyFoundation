@@ -47,10 +47,14 @@ export type ClientScreenshotUpload = {
 
 export type ClientUiInteractionState = {
     clientId: string;
-    kind: 'button' | 'input';
+    kind: 'button' | 'input' | 'record';
     pressed: boolean;
     inputContent: string;
     firstInputed: boolean;
+    recording?: boolean;
+    assetId?: string;
+    asset?: string;
+    finished?: boolean;
     updatedAt: number;
 };
 
@@ -119,7 +123,7 @@ export function applyClientUiInteractionPayload(
     if (!nodeId) return prev;
 
     const rawKind = typeof payload.uiKind === 'string' ? payload.uiKind : '';
-    const kind = rawKind === 'button' || rawKind === 'input' ? rawKind : null;
+    const kind = rawKind === 'button' || rawKind === 'input' || rawKind === 'record' ? rawKind : null;
     if (!kind) return prev;
 
     const current = prev.get(nodeId);
@@ -133,6 +137,20 @@ export function applyClientUiInteractionPayload(
                 ? payload.inputContent
                 : current?.inputContent ?? '',
         firstInputed: Boolean(payload.firstInputed ?? current?.firstInputed ?? false),
+        ...(kind === 'record'
+            ? {
+                  recording: Boolean(payload.recording),
+                  assetId:
+                      typeof payload.assetId === 'string'
+                          ? payload.assetId
+                          : current?.assetId ?? '',
+                  asset:
+                      typeof payload.asset === 'string'
+                          ? payload.asset
+                          : current?.asset ?? '',
+                  finished: Boolean(payload.finished),
+              }
+            : {}),
         updatedAt: now,
     });
     return next;

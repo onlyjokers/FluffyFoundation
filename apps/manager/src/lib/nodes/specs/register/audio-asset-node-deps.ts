@@ -20,6 +20,7 @@ type AssetRequestState = {
 const ttsStates = new Map<string, AssetRequestState>();
 const uploadStates = new Map<string, AssetRequestState>();
 const referenceStates = new Map<string, AssetRequestState>();
+const sttStates = new Map<string, AssetRequestState & { text: string }>();
 
 async function refreshAssetsStore(): Promise<void> {
   const mod = await import('../../../stores/assets');
@@ -67,6 +68,15 @@ function stateFor(map: Map<string, AssetRequestState>, nodeId: string, signature
   return state;
 }
 
+function sttStateFor(nodeId: string, signature: string): AssetRequestState & { text: string } {
+  let state = sttStates.get(nodeId);
+  if (!state || state.signature !== signature) {
+    state = { signature, assetId: '', text: '', inFlight: false, errorSignature: null };
+    sttStates.set(nodeId, state);
+  }
+  return state;
+}
+
 function extractAssetId(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (!value || typeof value !== 'object') return '';
@@ -78,6 +88,12 @@ function extractAssetId(value: unknown): string {
   const asset = record.asset && typeof record.asset === 'object' ? (record.asset as Record<string, unknown>) : null;
   if (typeof asset?.id === 'string') return asset.id.trim();
   return '';
+}
+
+function extractText(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  return typeof record.text === 'string' ? record.text.trim() : '';
 }
 
 function buildReferenceQuery(request: {
@@ -201,6 +217,42 @@ export function createManagerAudioAssetNodeDeps(
           state.inFlight = false;
         });
       return state.assetId;
+    },
+    peekSpeechToText: (request) => {
+      const state = sttStateFor(request.nodeId, request.signature);
+      return state.text;
+    },
+    getSpeechToText: (request) => {
+      const state = sttStateFor(request.nodeId, request.signature);
+      if (state.text || state.inFlight) return state.text;
+      const url = buildUrl('api/stt/transcribe', getLocalStorageItem('shugu-server-url')?.trim() ?? '');
+      if (!url) return '';
+      state.inFlight = true;
+      state.assetId = request.assetId;
+      void fetchJson(fetchImpl, url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetId: request.assetId,
+          model: request.model,
+        }),
+      })
+        .then((json) => {
+          const text = extractText(json);
+          if (text) {
+            state.text = text;
+            state.errorSignature = null;
+            onAssetReady?.(`stt:${request.nodeId}`);
+          }
+        })
+        .catch((error) => {
+          state.errorSignature = request.signature;
+          console.warn('[manager-audio-assets] STT transcription failed', error);
+        })
+        .finally(() => {
+          state.inFlight = false;
+        });
+      return state.text;
     },
   };
 }

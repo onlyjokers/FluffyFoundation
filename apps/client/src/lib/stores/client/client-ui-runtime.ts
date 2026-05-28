@@ -2,7 +2,7 @@
 import type { ClientUiPayload } from '@shugu/protocol';
 import { get, writable } from 'svelte/store';
 
-export type ClientUiKind = 'button' | 'input';
+export type ClientUiKind = 'button' | 'input' | 'record';
 
 export type ClientUiNodeState = {
   displayed: boolean;
@@ -10,6 +10,10 @@ export type ClientUiNodeState = {
   pressed: boolean;
   inputContent: string;
   firstInputed: boolean;
+  recording?: boolean;
+  assetId?: string;
+  asset?: string;
+  finished?: boolean;
 };
 
 export type ClientUiInteractionEvent = ClientUiNodeState & { nodeId: string };
@@ -65,7 +69,7 @@ export const clientUiRuntime = {
       for (const item of rawItems) {
         const nodeId = typeof item?.nodeId === 'string' ? item.nodeId.trim() : '';
         if (!nodeId) continue;
-        if (item.type !== 'button' && item.type !== 'input') continue;
+        if (item.type !== 'button' && item.type !== 'input' && item.type !== 'record') continue;
         const previous = prev.get(nodeId);
         next.set(nodeId, {
           ...(previous ?? createDefaultState(item.type)),
@@ -123,6 +127,50 @@ export const clientUiRuntime = {
       firstInputed: true,
     }));
     if (id && state) emitInteraction(id, state);
+  },
+
+  setRecording(nodeId: string, recording: boolean): void {
+    const id = String(nodeId ?? '').trim();
+    const state = updateNode(id, 'record', (current) => ({
+      ...current,
+      displayed: true,
+      recording: Boolean(recording),
+      assetId: current.assetId ?? '',
+      asset: current.asset ?? '',
+      finished: false,
+    }));
+    if (id && state) emitInteraction(id, state);
+  },
+
+  finishRecording(nodeId: string, asset: { assetId: string; asset: string }): void {
+    const id = String(nodeId ?? '').trim();
+    const assetId = String(asset?.assetId ?? '').trim();
+    const assetRef = String(asset?.asset ?? '').trim() || (assetId ? `asset:${assetId}` : '');
+    const state = updateNode(id, 'record', (current) => ({
+      ...current,
+      displayed: true,
+      recording: false,
+      assetId,
+      asset: assetRef,
+      finished: true,
+    }));
+    if (id && state) emitInteraction(id, state);
+  },
+
+  consumeRecordSoundFinished(nodeId: string): boolean {
+    const id = String(nodeId ?? '').trim();
+    if (!id) return false;
+    const current = get(clientUiNodes).get(id);
+    const finished = Boolean(current?.finished);
+    if (finished) {
+      clientUiNodes.update((prev) => {
+        const next = new Map(prev);
+        const state = next.get(id);
+        if (state) next.set(id, { ...state, finished: false });
+        return next;
+      });
+    }
+    return finished;
   },
 
   clearClientUiNode(nodeId: string): void {

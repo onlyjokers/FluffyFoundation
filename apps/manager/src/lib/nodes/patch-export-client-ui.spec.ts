@@ -1002,3 +1002,59 @@ test('compiled custom ClientUI patch preserves internal group gates', async () =
     runtime.stop();
   }
 });
+
+test('exportGraphForPatch keeps Record Sound STT dependencies for manager-observed Display Text chains', () => {
+  const graph: GraphState = {
+    nodes: [
+      node('record', 'record-sound-button', { display: true }),
+      { ...node('stt', 'speech-to-text'), config: { model: 'qwen3-asr-flash' } },
+      { ...node('display-text', 'proc-display-text'), config: { text: '你好' } },
+      node('display', 'display-object'),
+      node('out', 'ui-out'),
+    ],
+    connections: [
+      {
+        id: 'ui',
+        sourceNodeId: 'record',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
+      {
+        id: 'asset',
+        sourceNodeId: 'record',
+        sourcePortId: 'asset',
+        targetNodeId: 'stt',
+        targetPortId: 'asset',
+      },
+      {
+        id: 'finish',
+        sourceNodeId: 'record',
+        sourcePortId: 'finish',
+        targetNodeId: 'stt',
+        targetPortId: 'trigger',
+      },
+      {
+        id: 'text',
+        sourceNodeId: 'stt',
+        sourcePortId: 'text',
+        targetNodeId: 'display-text',
+        targetPortId: 'text',
+      },
+      {
+        id: 'display-cmd',
+        sourceNodeId: 'display-text',
+        sourcePortId: 'cmd',
+        targetNodeId: 'display',
+        targetPortId: 'in',
+      },
+    ],
+  };
+
+  const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: registry });
+
+  assert.deepEqual(
+    result.graph.nodes.map((item) => item.id).sort(),
+    ['display-text', 'out', 'record', 'stt'].sort()
+  );
+});
