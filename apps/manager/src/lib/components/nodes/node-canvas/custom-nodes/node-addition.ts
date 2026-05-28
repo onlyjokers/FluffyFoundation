@@ -29,6 +29,12 @@ const VARIABLE_NAME_NODE_TYPES = new Set([
   'independent-variable-name',
 ]);
 
+function isGraphStateLike(value: unknown): value is GraphState {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<GraphState>;
+  return Array.isArray(candidate.nodes) && Array.isArray(candidate.connections);
+}
+
 function uniqueVariableName(
   type: string,
   config: Record<string, unknown>,
@@ -62,13 +68,8 @@ function collectVariableNamesFromGraph(
     }
     const state = asRecord(node.config).customNode;
     const internal = asRecord(state).internal;
-    if (
-      internal &&
-      typeof internal === 'object' &&
-      Array.isArray(internal.nodes) &&
-      Array.isArray(internal.connections)
-    ) {
-      collectVariableNamesFromGraph(internal as GraphState, out);
+    if (isGraphStateLike(internal)) {
+      collectVariableNamesFromGraph(internal, out);
     }
   }
   return out;
@@ -125,17 +126,13 @@ function refreshIndependentVariableNames(graph: GraphState, used: Set<string>): 
 
       if (String(node.type) === 'independent-variable-name') {
         config = { ...config, name: nextUniqueVariableName(config.name, used) };
-      } else if (
-        internal &&
-        typeof internal === 'object' &&
-        Array.isArray(internal.nodes) &&
-        Array.isArray(internal.connections)
-      ) {
+      } else if (isGraphStateLike(internal)) {
+        const customNodeState = asRecord(rawState);
         config = {
           ...config,
           customNode: {
-            ...rawState,
-            internal: refreshIndependentVariableNames(internal as GraphState, used),
+            ...customNodeState,
+            internal: refreshIndependentVariableNames(internal, used),
           },
         };
       }

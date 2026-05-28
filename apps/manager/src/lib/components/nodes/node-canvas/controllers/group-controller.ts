@@ -38,6 +38,7 @@ import {
   shouldEnforceFrameForMovedNodes,
 } from './group-drop-helpers';
 import { computeGroupVisualStatePlan } from './group-visual-state';
+import { isGroupDecorationNodeType } from '../groups/group-node-types';
 import {
   easeOutCubic,
   persistFinalNodeTranslations,
