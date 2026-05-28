@@ -164,13 +164,11 @@ export type AgentNodeDefinitionSummary = {
   category: string;
   description: string;
   platforms: NodePlatformTarget[];
-  sideEffects: NodeSideEffectClass;
   permissions: string[];
   ports: { inputs: Record<string, unknown>[]; outputs: Record<string, unknown>[] };
   params: Record<string, unknown>[];
   compatibility: NodeDefinitionMetadata['compatibility'];
   examples: NodeDefinitionMetadata['examples'];
-  risks: string[];
   repairHints: string[];
 };
 
@@ -184,7 +182,6 @@ export function createAgentNodeDefinitionSummary(definition: NodeDefinition): Ag
     category: normalizedDefinition.category,
     description: metadata.description,
     platforms: metadata.platformTargets,
-    sideEffects: metadata.sideEffectClass,
     permissions: metadata.permissions,
     ports: {
       inputs: normalizedDefinition.inputs.map(summarizePort),
@@ -193,7 +190,6 @@ export function createAgentNodeDefinitionSummary(definition: NodeDefinition): Ag
     params: normalizedDefinition.configSchema.map(summarizeParam),
     compatibility: metadata.compatibility,
     examples: metadata.examples,
-    risks: metadata.risks,
     repairHints: metadata.repairHints ?? [],
   };
 }

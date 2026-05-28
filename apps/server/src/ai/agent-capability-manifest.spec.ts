@@ -246,6 +246,83 @@ test('manifest exposes connectable config inputs with option metadata', () => {
   );
 });
 
+test('manifest exposes custom node AI Note manual hints through the standard aiSummary', () => {
+  const snapshot = {
+    revision: 1,
+    nodes: [
+      {
+        id: 'guided',
+        type: 'custom:guided',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    definitions: [
+      {
+        type: 'custom:guided',
+        label: 'Guided',
+        category: 'Custom',
+        ports: { inputs: [], outputs: [] },
+        params: [],
+        aiSummary: {
+          type: 'custom:guided',
+          label: 'Guided',
+          version: '1.0.0',
+          category: 'Custom',
+          description: 'Generated custom node.\n\nUse this custom node to hide shared buttons.',
+          platforms: ['manager', 'client', 'display'],
+          permissions: ['graph:state'],
+          ports: { inputs: [], outputs: [] },
+          params: [],
+          compatibility: [{ target: 'custom-node-manual', rule: 'Works with Client Button.' }],
+          examples: [{ title: 'Guided AI note example', summary: 'Connect Pressed to trigger.' }],
+          repairHints: ['Check variable names.'],
+        },
+      },
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    connections: [],
+    groups: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    deviceCapabilities: [],
+    errors: [],
+    permissions: [],
+    proposals: [],
+  };
+  const targetSpace = {
+    id: 'ai-space:test',
+    parentId: null,
+    kind: 'ai-space' as const,
+    name: 'Test Space',
+    nodeIds: ['guided'],
+    disabled: false,
+    agentPolicy: {
+      enabled: true,
+      allowedCommands: ['node.params.update'],
+      targetScope: { nodeIds: ['guided'] },
+    },
+  };
+
+  const manifest = buildCapabilityManifest(snapshot as never, targetSpace as never) as {
+    nodeTypes: Array<{
+      aiSummary?: {
+        description?: string;
+        compatibility?: Array<{ rule: string }>;
+        examples?: Array<{ summary: string }>;
+        repairHints?: string[];
+      };
+    }>;
+  };
+
+  const summary = manifest.nodeTypes[0].aiSummary;
+  assert.match(summary?.description ?? '', /hide shared buttons/);
+  assert.equal(summary?.compatibility?.[0]?.rule, 'Works with Client Button.');
+  assert.equal(summary?.examples?.[0]?.summary, 'Connect Pressed to trigger.');
+  assert.deepEqual(summary?.repairHints, ['Check variable names.']);
+});
+
 test('manifest exposes GPT image generation ports for agent-created image chains', () => {
   const snapshot = {
     revision: 1,

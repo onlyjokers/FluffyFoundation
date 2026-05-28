@@ -80,6 +80,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'string-variable',
   'number-stabilizer',
   'group-gate',
+  'ai-note',
   // Audio sources/effects
   'load-audio-from-assets',
   'load-audio-from-local',

@@ -26,6 +26,10 @@ test('patch deployment policy allows group gates as runtime group controls', () 
   assert.doesNotThrow(() => assertPatchDeployableNodeType('group-gate'));
 });
 
+test('patch deployment policy allows AI Note documentation nodes', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('ai-note'));
+});
+
 test('patch deployment policy rejects group proxy canvas interface nodes', () => {
   assert.throws(
     () => assertPatchDeployableNodeType('group-proxy'),

@@ -42,6 +42,7 @@ import {
 } from './nodes/logic.js';
 import { createGroupGateNode, createGroupProxyNode } from './nodes/group.js';
 import {
+  createAiNoteNode,
   createBooleanVariableNode,
   createBoolNode,
   createFloatNode,
@@ -159,6 +160,7 @@ function createDefaultNodeDefinitionFactories(deps: ClientObjectDeps): Array<() 
     createNumberScriptNode,
     createShowAnythingNode,
     createNoteNode,
+    createAiNoteNode,
     createIntNode,
     createFloatNode,
     createStringNode,

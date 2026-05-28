@@ -694,10 +694,10 @@ export function createReteBuilder(opts: ReteBuilderOptions): ReteBuilder {
         });
         withControlMeta(curveControl, { nodeId: instance.id, nodeType: instance.type });
         node.addControl(key, curveControl);
-      } else if (instance.type === 'note' && key === 'text') {
+      } else if ((instance.type === 'note' || instance.type === 'ai-note') && key === 'text') {
         const tracker = createLastCommittedTracker(typeof current === 'string' ? current : String(current ?? ''));
         const noteControl = new NoteControl({
-          placeholder: 'Type a note…',
+          placeholder: instance.type === 'ai-note' ? 'Type an AI hint…' : 'Type a note…',
           initial: typeof current === 'string' ? current : String(current ?? ''),
           change: (value) => {
             if (tracker.shouldSkip(value)) return;

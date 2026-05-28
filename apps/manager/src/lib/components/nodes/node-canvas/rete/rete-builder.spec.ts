@@ -1033,6 +1033,62 @@ test('note text control can be switched back to its initial value', () => {
   ]);
 });
 
+test('AI Note text uses the markdown note control path', () => {
+  const nodeRegistry = new NodeRegistry();
+  nodeRegistry.register({
+    type: 'ai-note',
+    label: 'AI Note',
+    category: 'Values',
+    inputs: [],
+    outputs: [],
+    configSchema: [
+      { key: 'kind', label: 'Type', type: 'select', defaultValue: 'description' },
+      { key: 'text', label: 'Text', type: 'string', defaultValue: 'guide' },
+    ],
+    process: () => ({}),
+  });
+  const params: unknown[] = [];
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'ai-note-1',
+        type: 'ai-note',
+        config: { kind: 'description', text: 'guide' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: {
+      any: new ClassicPreset.Socket('any'),
+    },
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+    sendSemanticNodeParams: (nodeId, patch) => {
+      params.push({ nodeId, patch });
+      return true;
+    },
+  });
+
+  const node = builder.buildReteNode({
+    id: 'ai-note-1',
+    type: 'ai-note',
+    config: { kind: 'description', text: 'guide' },
+    inputValues: {},
+    outputValues: {},
+    position: { x: 0, y: 0 },
+  });
+
+  const control = node.controls.text as { controlType?: string; setValue(value: string): void };
+  assert.equal(control.controlType, 'note');
+  control.setValue('updated guide');
+
+  assert.deepEqual(params, [{ nodeId: 'ai-note-1', patch: { text: 'updated guide' } }]);
+});
+
 test('display-object routing inputs render inline controls and dispatch semantic input commands', () => {
   const nodeRegistry = new NodeRegistry();
   nodeRegistry.register({

@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   NodeRegistry,
   createSemanticGraphSnapshot,
+  registerDefaultNodeDefinitions,
 } from '../dist-node-core/index.js';
 
 const fixtureFactory = () => ({
@@ -61,7 +62,8 @@ test('AI context snapshot includes an auto-registered fixture node summary', () 
 
   const direct = registry.listAgentSummaries().find((summary) => summary.type === 'fixture-auto-node');
   assert.ok(direct);
-  assert.equal(direct.sideEffects, 'none');
+  assert.equal('sideEffects' in direct, false);
+  assert.equal('risks' in direct, false);
   assert.deepEqual(direct.ports.inputs[0], {
     id: 'in',
     type: 'number',
@@ -119,6 +121,34 @@ test('connectable config fields become semantic input ports with option metadata
     { value: 'beta', label: 'Beta' },
   ]);
   assert.equal(summary?.ports.inputs.some((input) => input.id === 'assetId'), false);
+});
+
+test('default node registry includes AI Note as an agent manual node', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry);
+
+  const definition = registry.get('ai-note');
+  assert.ok(definition);
+  assert.equal(definition.label, 'AI Note');
+  assert.deepEqual(
+    definition.configSchema.find((field) => field.key === 'kind')?.options?.map((option) => option.value),
+    ['description', 'compatibility', 'examples', 'repairHints']
+  );
+
+  const summary = registry.listAgentSummaries().find((item) => item.type === 'ai-note');
+  assert.ok(summary);
+  assert.match(summary.description, /custom node AI manual/i);
+});
+
+test('AI Note summary still uses the same agent summary shape as ordinary nodes', () => {
+  const registry = new NodeRegistry();
+  registerDefaultNodeDefinitions(registry);
+
+  const aiNote = registry.listAgentSummaries().find((item) => item.type === 'ai-note');
+  const note = registry.listAgentSummaries().find((item) => item.type === 'note');
+  assert.ok(aiNote);
+  assert.ok(note);
+  assert.deepEqual(Object.keys(aiNote).sort(), Object.keys(note).sort());
 });
 
 test('connectable config metadata augments existing same-key input ports', () => {

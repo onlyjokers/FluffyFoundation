@@ -28,6 +28,48 @@ export function createNoteNode(): NodeDefinition {
   };
 }
 
+export function createAiNoteNode(): NodeDefinition {
+  return {
+    type: 'ai-note',
+    label: 'AI Note',
+    category: 'Other',
+    metadata: {
+      version: '1.0.0',
+      platformTargets: ['manager'],
+      sideEffectClass: 'none',
+      permissions: [],
+      compatibility: [],
+      examples: [
+        {
+          title: 'Guide a custom node',
+          summary: 'Place AI Note inside a Custom Node template to add AI-readable manual text.',
+        },
+      ],
+      risks: [],
+      description: 'Adds custom node AI manual text for description, compatibility, examples, or repair hints.',
+      repairHints: ['Use regular Note for human-only canvas notes; use AI Note for Agent-facing custom node hints.'],
+    },
+    inputs: [],
+    outputs: [],
+    configSchema: [
+      {
+        key: 'kind',
+        label: 'Type',
+        type: 'select',
+        defaultValue: 'description',
+        options: [
+          { value: 'description', label: 'Description' },
+          { value: 'compatibility', label: 'Compatibility' },
+          { value: 'examples', label: 'Examples' },
+          { value: 'repairHints', label: 'Repair Hints' },
+        ],
+      },
+      { key: 'text', label: 'Text', type: 'string', defaultValue: '' },
+    ],
+    process: () => ({}),
+  };
+}
+
 const finiteNumber = (value: unknown, fallback = 0): number => {
   const next = typeof value === 'number' ? value : Number(value ?? fallback);
   return Number.isFinite(next) ? next : fallback;
