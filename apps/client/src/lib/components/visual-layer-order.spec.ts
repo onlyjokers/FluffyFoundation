@@ -55,9 +55,14 @@ test('visual effects do not hide higher visual layers', () => {
   assert.doesNotMatch(source, /querySelectorAll\('\\.video-overlay, \\.image-overlay'\)/);
 });
 
-test('visual canvas container does not trap visual layers in a stacking context', () => {
+test('visual canvas container keeps a measurable viewport box without trapping the effect layer', () => {
   const source = visualCanvasSource();
   const visualContainerRule = source.match(/\.visual-container\s*\{[\s\S]*?\n  \}/)?.[0] ?? '';
 
-  assert.doesNotMatch(visualContainerRule, /position:\s*fixed;/);
+  assert.match(visualContainerRule, /position:\s*fixed;/);
+  assert.match(visualContainerRule, /width:\s*100%;/);
+  assert.match(visualContainerRule, /height:\s*100%;/);
+  assert.doesNotMatch(visualContainerRule, /display:\s*contents;/);
+  assert.doesNotMatch(visualContainerRule, /z-index:/);
+  assert.match(source, /<\/div>\s*<canvas class="effect-output"/);
 });

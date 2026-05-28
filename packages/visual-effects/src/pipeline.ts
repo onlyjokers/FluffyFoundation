@@ -5,7 +5,7 @@
 import type { VisualEffect } from '@shugu/protocol';
 
 import type { AsciiEffectRuntime } from './ascii.js';
-import { applyAsciiEffect } from './ascii.js';
+import { applyAsciiEffect, getAsciiGridSize } from './ascii.js';
 import type { ConvolutionEffectRuntime } from './convolution.js';
 import { applyConvolutionEffect } from './convolution.js';
 import {
@@ -106,9 +106,7 @@ function computeEffectTargetFps(
     }
 
     if (type === 'ascii') {
-      const cellSize = Math.max(1, Math.min(100, Math.round(getAsciiCellSize(effect) ?? 11)));
-      const cols = Math.max(24, Math.floor(width / cellSize));
-      const rows = Math.max(18, Math.floor(height / (cellSize * 1.05)));
+      const { cols, rows } = getAsciiGridSize(width, height, getAsciiCellSize(effect) ?? 11);
 
       const cellCount = cols * rows;
       const asciiFps = (() => {

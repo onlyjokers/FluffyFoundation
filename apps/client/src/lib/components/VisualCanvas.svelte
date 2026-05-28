@@ -341,13 +341,19 @@
     />
   {/if}
 
-  <canvas class="effect-output" bind:this={effectCanvas}></canvas>
 </div>
+
+<canvas class="effect-output" bind:this={effectCanvas}></canvas>
 
 <style>
   .visual-container {
-    display: contents;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
+    background: #0a0a0f;
   }
 
   .visual-container :global(canvas) {
