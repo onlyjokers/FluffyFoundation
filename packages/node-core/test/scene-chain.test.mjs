@@ -366,6 +366,35 @@ test('scene-out sends visualScenes and clears on stop', () => {
   });
 });
 
+test('scene-out exposes visualScenes command output for client/display routing', () => {
+  const registry = buildRegistry();
+  const sceneOut = registry.get('scene-out');
+  assert.ok(sceneOut, 'expected scene-out definition');
+
+  const output = sceneOut.process(
+    {
+      in: [
+        { type: 'box', color: '#123456', showBackground: 1, audioSource: 'both' },
+        { type: 'frontCamera' },
+      ],
+    },
+    {},
+    { nodeId: 'out', time: 0, deltaTime: 0 }
+  );
+
+  assert.deepEqual(output, {
+    cmd: {
+      action: 'visualScenes',
+      payload: {
+        scenes: [
+          { type: 'box', color: '#123456', showBackground: 1, audioSource: 'both' },
+          { type: 'frontCamera' },
+        ],
+      },
+    },
+  });
+});
+
 test('scene-out sends configured FCT track scenes', () => {
   const sent = [];
   const registry = buildRegistry({

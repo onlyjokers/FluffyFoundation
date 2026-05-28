@@ -325,9 +325,13 @@ export function connect(config: ManagerSDKConfig): void {
                     }
 
                     const now = Date.now();
+                    let storedScreenshot = false;
                     clientScreenshotUploads.update((prev) => {
-                        return applyClientScreenshotPayload(prev, data.clientId, payload, now) ?? prev;
+                        const next = applyClientScreenshotPayload(prev, data.clientId, payload, now);
+                        storedScreenshot = Boolean(next);
+                        return next ?? prev;
                     });
+                    if (storedScreenshot) nodeEngine.pulseRuntime('client-screenshot');
                     return;
                 }
             }

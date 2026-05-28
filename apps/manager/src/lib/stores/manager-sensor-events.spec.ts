@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   applyClientPresence,
@@ -125,4 +126,10 @@ test('sensor event helpers preserve screenshot, node-media, and readiness semant
     manifestId: 'manifest-1',
     updatedAt: 500,
   });
+});
+
+test('manager screenshot handler pulses node runtime after storing screenshot uploads', () => {
+  const source = readFileSync(new URL('./manager.ts', import.meta.url), 'utf8');
+  assert.match(source, /applyClientScreenshotPayload\(prev,\s*data\.clientId,\s*payload,\s*now\)/);
+  assert.match(source, /nodeEngine\.pulseRuntime\('client-screenshot'\)/);
 });

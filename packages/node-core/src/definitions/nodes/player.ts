@@ -173,7 +173,11 @@ export function createSceneOutNode(deps: ClientObjectDeps): NodeDefinition {
       description: 'Deploy scene layers to selected runtime endpoints.',
     },
     configSchema: [],
-    process: () => ({}),
+    process: (inputs) => {
+      const scenes = coerceSceneChain(inputs.in);
+      const payload: VisualScenesPayload = { scenes };
+      return { cmd: { action: 'visualScenes', payload } };
+    },
     onSink: (inputs) => {
       const scenes = coerceSceneChain(inputs.in);
       const payload: VisualScenesPayload = { scenes };

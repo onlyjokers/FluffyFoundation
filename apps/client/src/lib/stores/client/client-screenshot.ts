@@ -28,6 +28,11 @@ export type PushImageUploadPayload = {
 
 let screenshotUploadInFlight = false;
 
+const CAMERA_SCENE_VIDEO_SELECTOR = [
+  'video.shugu-scene-canvas[data-shugu-scene-id="front-camera-scene"]',
+  'video.shugu-scene-canvas[data-shugu-scene-id="back-camera-scene"]',
+].join(', ');
+
 function normalizeScreenshotFormat(value: unknown): ScreenshotFormat {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (raw === 'image/png') return 'image/png';
@@ -188,9 +193,7 @@ async function captureScreenshotDataUrl(opts: {
       }
 
       // Camera video stream
-      const cameraVideo = container.querySelector(
-        'video.camera-display'
-      ) as HTMLVideoElement | null;
+      const cameraVideo = container.querySelector(CAMERA_SCENE_VIDEO_SELECTOR) as HTMLVideoElement | null;
       const camStream = get(cameraStream);
       const frontEnabled = get(frontCameraEnabled);
       const backEnabled = get(backCameraEnabled);
