@@ -198,7 +198,7 @@ const graphWithDefinitionPortBindings = (
     const id = getString(asRecord(node).id, '');
     if (!requiredIds.has(id)) continue;
     nextNodes.push({
-      ...(asRecord(node) as NodeInstance),
+      ...(asRecord(node) as unknown as NodeInstance),
       config: { ...asRecord(node.config) },
       inputValues: { ...asRecord(node.inputValues) },
       outputValues: {},
@@ -222,7 +222,7 @@ const graphWithDefinitionPortBindings = (
     if (existingConnectionKeys.has(key)) continue;
     existingConnectionKeys.add(key);
     nextConnections.push({
-      ...(asRecord(connection) as Connection),
+      ...(asRecord(connection) as unknown as Connection),
       sourceNodeId,
       sourcePortId,
       targetNodeId,
