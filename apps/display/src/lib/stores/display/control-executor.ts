@@ -215,6 +215,7 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
 } {
   let lastControlLogAt = 0;
   let textClearHandle: ReturnType<typeof setTimeout> | null = null;
+  let showImageSeq = 0;
 
   const isControlBatchPayload = (payload: ControlPayload): payload is ControlBatchPayload =>
     Boolean(
@@ -260,6 +261,7 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
 
     switch (action) {
       case 'showImage': {
+        const currentSeq = (showImageSeq += 1);
         const imagePayload = payload as ShowImagePayload;
         const clip = typeof imagePayload.url === 'string' ? parseMediaClipParams(imagePayload.url) : null;
         const baseUrl = clip ? clip.baseUrl : String(imagePayload.url ?? '');
@@ -269,7 +271,7 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
           return;
         }
         const fit = clip?.fit ?? null;
-        const url = normalizeImageUrlForDisplay(resolvedDisplayUrl ?? baseUrl);
+        const sourceUrl = resolvedDisplayUrl ?? baseUrl;
         if (deps.isDev) {
           const now = Date.now();
           if (now - lastControlLogAt >= 500) {
@@ -281,15 +283,19 @@ export function createDisplayControlExecutor(deps: DisplayControlExecutorDeps): 
             });
           }
         }
-        deps.getMultimediaCore()?.media.showImage({
+        void normalizeImageUrlForDisplay(sourceUrl).then((url) => {
+          if (currentSeq !== showImageSeq) return;
+          deps.getMultimediaCore()?.media.showImage({
           url,
           duration: imagePayload.duration,
           ...(fit === null ? {} : { fit }),
+          });
         });
         return;
       }
 
       case 'hideImage':
+        showImageSeq += 1;
         clearActiveImageObjectUrl();
         if (deps.isDev) {
           const now = Date.now();

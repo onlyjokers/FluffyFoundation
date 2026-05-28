@@ -4,37 +4,10 @@
 const IMAGE_OBJECT_URL_REVOKE_DELAY_MS = 800; // allow the fade-out transition to finish
 
 let activeImageObjectUrl: string | null = null;
+let imageObjectUrlSeq = 0;
 
 export function isDataImageUrl(url: string): boolean {
   return url.startsWith('data:image/');
-}
-
-function dataUrlToBlob(dataUrl: string): Blob | null {
-  if (typeof dataUrl !== 'string') return null;
-  if (!dataUrl.startsWith('data:')) return null;
-
-  const comma = dataUrl.indexOf(',');
-  if (comma < 0) return null;
-
-  const meta = dataUrl.slice(5, comma);
-  const data = dataUrl.slice(comma + 1);
-  const parts = meta.split(';').map((s) => s.trim()).filter(Boolean);
-  const mime = parts[0] && parts[0].includes('/') ? parts[0] : 'application/octet-stream';
-  const isBase64 = parts.includes('base64');
-
-  try {
-    if (!isBase64) {
-      const decoded = decodeURIComponent(data);
-      return new Blob([decoded], { type: mime });
-    }
-
-    const binary = atob(data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return new Blob([bytes], { type: mime });
-  } catch {
-    return null;
-  }
 }
 
 function scheduleRevokeObjectUrl(url: string): void {
@@ -49,7 +22,8 @@ function scheduleRevokeObjectUrl(url: string): void {
   }, IMAGE_OBJECT_URL_REVOKE_DELAY_MS);
 }
 
-export function normalizeImageUrlForDisplay(url: string): string {
+export async function normalizeImageUrlForDisplay(url: string): Promise<string> {
+  const seq = (imageObjectUrlSeq += 1);
   const trimmed = url.trim();
   if (!trimmed) {
     clearActiveImageObjectUrl();
@@ -66,7 +40,10 @@ export function normalizeImageUrlForDisplay(url: string): string {
     return trimmed;
   }
 
-  const blob = dataUrlToBlob(trimmed);
+  const blob = await fetch(trimmed)
+    .then((response) => response.blob())
+    .catch(() => null);
+  if (seq !== imageObjectUrlSeq) return trimmed;
   if (!blob) {
     clearActiveImageObjectUrl();
     return trimmed;
@@ -80,6 +57,7 @@ export function normalizeImageUrlForDisplay(url: string): string {
 }
 
 export function clearActiveImageObjectUrl(): void {
+  imageObjectUrlSeq += 1;
   const prev = activeImageObjectUrl;
   activeImageObjectUrl = null;
   if (prev) scheduleRevokeObjectUrl(prev);

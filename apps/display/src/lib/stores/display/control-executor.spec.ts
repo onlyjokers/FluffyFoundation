@@ -8,6 +8,7 @@ import { get, writable } from 'svelte/store';
 import { createClearedDisplayScreenOverlayState } from '../display-screen-overlay';
 import { createClearedDisplayTextOverlayState } from '../display-text-overlay';
 import { createDisplayControlExecutor } from './control-executor';
+import type { MultimediaCore } from '@shugu/multimedia-core';
 
 test('Display executor applies showText and hideText controls to the text overlay', () => {
   const textOverlay = writable(createClearedDisplayTextOverlayState());
@@ -91,4 +92,35 @@ test('Display executor applies visualEffects controls for post-processing effect
     { type: 'ascii', cellSize: 10 },
     { type: 'convolution', preset: 'sharpen', mix: 1, bias: -1, normalize: false, scale: 0.1 },
   ]);
+});
+
+test('Display executor forwards remote asset image refs to MultimediaCore', async () => {
+  let captured: Parameters<MultimediaCore['media']['showImage']>[0] | null = null;
+  const visualScenes = writable([]);
+  const visualEffects = writable([]);
+  const executor = createDisplayControlExecutor({
+    getMultimediaCore: () =>
+      ({
+        media: {
+          showImage: (payload: Parameters<MultimediaCore['media']['showImage']>[0]) => {
+            captured = payload;
+          },
+        },
+      }) as MultimediaCore,
+    getNodeExecutor: () => null,
+    screenOverlay: writable(createClearedDisplayScreenOverlayState()),
+    textOverlay: writable(createClearedDisplayTextOverlayState()),
+    visualScenes,
+    visualEffects,
+    isDev: false,
+  });
+
+  executor.executeControl('showImage', { url: 'asset:image-1#fit=cover' });
+  await Promise.resolve();
+
+  assert.deepEqual(captured, {
+    url: 'asset:image-1',
+    duration: undefined,
+    fit: 'cover',
+  });
 });

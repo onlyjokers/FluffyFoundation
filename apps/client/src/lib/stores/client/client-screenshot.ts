@@ -40,6 +40,26 @@ function normalizeScreenshotFormat(value: unknown): ScreenshotFormat {
   return 'image/jpeg';
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement, mime: ScreenshotFormat, quality: number): Promise<Blob | null> {
+  if (typeof canvas.toBlob !== 'function') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      canvas.toBlob(resolve, mime, mime === 'image/png' ? undefined : quality);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(blob);
+  });
+}
+
 function getFittedDrawParams(
   srcW: number,
   srcH: number,
@@ -249,20 +269,10 @@ async function captureScreenshotDataUrl(opts: {
 
   const quality = clampNumber(opts.quality, 0.85, 0.1, 1);
   const mime = opts.format;
-  const dataUrl = (() => {
-    try {
-      return mime === 'image/png' ? canvas.toDataURL(mime) : canvas.toDataURL(mime, quality);
-    } catch {
-      // Fallback: default to PNG if the requested format fails.
-      try {
-        return canvas.toDataURL('image/png');
-      } catch {
-        return '';
-      }
-    }
-  })();
+  const blob = await canvasToBlob(canvas, mime, quality);
+  const dataUrl = blob ? await blobToDataUrl(blob) : '';
 
-  if (!dataUrl) return { ok: false, reason: 'toDataURL-failed' };
+  if (!dataUrl) return { ok: false, reason: 'toBlob-failed' };
   return { ok: true, shot: { dataUrl, mime, width: outW, height: outH, createdAt: Date.now() } };
 }
 

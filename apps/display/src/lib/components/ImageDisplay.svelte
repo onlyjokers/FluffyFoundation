@@ -48,27 +48,36 @@ Purpose: Display image overlay (full-screen) for the Display app.
     }, duration);
   };
 
+  const isStreamingFrameUrl = (url: string) =>
+    url.startsWith('blob:') || url.startsWith('data:image/');
+
   $: if (url) {
     if (!activeUrl) {
       clearHideTimer();
       activeUrl = url;
     } else if (url !== activeUrl) {
       clearHideTimer();
-      // Preload via JS Image() to avoid missing `on:load` when the src is a fast blob/data URL.
-      const currentSeq = (preloadSeq += 1);
-      const nextUrl = url;
-      const preloader = new Image();
-      preloader.crossOrigin = 'anonymous';
-      preloader.onload = () => {
-        if (currentSeq !== preloadSeq) return;
-        activeUrl = nextUrl;
+      if (isStreamingFrameUrl(url)) {
+        preloadSeq += 1;
+        activeUrl = url;
         scheduleHide();
-      };
-      preloader.onerror = () => {
-        if (currentSeq !== preloadSeq) return;
-        console.error('[ImageDisplay] Failed to preload image:', nextUrl);
-      };
-      preloader.src = nextUrl;
+      } else {
+        // Preload via JS Image() to avoid missing `on:load` when the src is a fast blob/data URL.
+        const currentSeq = (preloadSeq += 1);
+        const nextUrl = url;
+        const preloader = new Image();
+        preloader.crossOrigin = 'anonymous';
+        preloader.onload = () => {
+          if (currentSeq !== preloadSeq) return;
+          activeUrl = nextUrl;
+          scheduleHide();
+        };
+        preloader.onerror = () => {
+          if (currentSeq !== preloadSeq) return;
+          console.error('[ImageDisplay] Failed to preload image:', nextUrl);
+        };
+        preloader.src = nextUrl;
+      }
     }
   }
 
@@ -98,17 +107,15 @@ Purpose: Display image overlay (full-screen) for the Display app.
     class:fit-cover={fit === 'cover'}
     class:fit-fill={fit === 'fill'}
   >
-    {#key activeUrl}
-      <img
-        src={activeUrl}
-        alt=""
-        on:load={handleActiveLoad}
-        on:error={handleActiveError}
-        crossorigin="anonymous"
-        style:transform={transformStyle}
-        style:opacity={opacityStyle}
-      />
-    {/key}
+    <img
+      src={activeUrl}
+      alt=""
+      on:load={handleActiveLoad}
+      on:error={handleActiveError}
+      crossorigin="anonymous"
+      style:transform={transformStyle}
+      style:opacity={opacityStyle}
+    />
   </div>
 {/if}
 

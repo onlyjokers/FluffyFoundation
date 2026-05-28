@@ -13,3 +13,10 @@ test('push image screenshot capture can find CameraScene video elements', () => 
   assert.match(screenshotSource, /video\.shugu-scene-canvas\[data-shugu-scene-id="front-camera-scene"\]/);
   assert.match(screenshotSource, /video\.shugu-scene-canvas\[data-shugu-scene-id="back-camera-scene"\]/);
 });
+
+test('push image screenshot capture uses async canvas encoding', () => {
+  const screenshotSource = readFileSync(new URL('./client-screenshot.ts', import.meta.url), 'utf8');
+
+  assert.match(screenshotSource, /canvas\.toBlob\(/);
+  assert.doesNotMatch(screenshotSource, /canvas\.toDataURL\(/);
+});
