@@ -273,6 +273,12 @@ test('FctTrackScene uses the migrated FCT WebGL shader renderer contract', () =>
   assert.doesNotMatch(source, /drawShards|drawBars|drawGhosts/);
 });
 
+test('shattered reality separates its line centers from audio energy', () => {
+  assert.match(SHATTERED_REALITY_FRAGMENT_SHADER, /audioSpread/);
+  assert.match(SHATTERED_REALITY_FRAGMENT_SHADER, /spreadDirection/);
+  assert.match(SHATTERED_REALITY_FRAGMENT_SHADER, /centerOffset/);
+});
+
 test('scene registry maps fctTrack payloads to the FCT scene plugin id', () => {
   assert.equal(sceneIdForType('fctTrack'), 'fct-track-scene');
 });

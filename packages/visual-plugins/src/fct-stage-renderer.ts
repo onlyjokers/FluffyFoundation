@@ -469,6 +469,10 @@ vec2 rotate(vec2 vec, float r) {
   return vec * rMatrix;
 }
 
+vec2 spreadDirection(float angle, float amount) {
+  return vec2(cos(angle), sin(angle)) * amount;
+}
+
 vec3 SampleLight(LineLight light, vec2 pos) {
   vec2 l = light.p1 - light.p0;
   float t = dot(normalize(pos - light.p0), normalize(l));
@@ -501,46 +505,51 @@ void main() {
   LineLight light2;
   LineLight light3;
   float tq = 0.0;
+  float audioEnergy = clamp((Flow * 0.35 + Fmid * 0.45 + Fhigh * 0.2) - 0.1, 0.0, 1.0);
+  float audioSpread = smoothstep(0.08, 0.85, audioEnergy) * 0.16;
+  vec2 centerOffset1 = spreadDirection(-0.52 * PI, audioSpread);
+  vec2 centerOffset2 = spreadDirection(0.12 * PI, audioSpread * 1.15);
+  vec2 centerOffset3 = spreadDirection(0.82 * PI, audioSpread * 0.95);
   mat2 mtx1 = mat2(Fmid / 5.0, -0.1, -0.99, 0.33);
   float extantion1 = pattern(vec2(0.1 + uTime), mtx1) * 3.0;
-  light1.p0 = vec2(0.4 - extantion1, 0.5);
-  light1.p1 = vec2(0.6 + extantion1, 0.5);
+  light1.p0 = vec2(0.4 - extantion1, 0.5) + centerOffset1;
+  light1.p1 = vec2(0.6 + extantion1, 0.5) + centerOffset1;
   light1.range = 3.9;
   light1.col = vec3(1.0);
   float r1 = fract(uTime / 3.0 + Fmid);
   vec2 uv1 = rotateUV(vec2(1.0 - uv.x, uv.y), r1 * PI * 2.0 + 0.2);
   vec3 emission1 = SampleLight(light1, uv1) * 0.2;
   emission1 *= smoothstep(0.0, 0.4, Fmid);
-  float q1 = .5 / sdf(uv1 - 0.5, vec2(extantion1 + 0.1, 0.0));
+  float q1 = .5 / sdf(uv1 - 0.5 - centerOffset1, vec2(extantion1 + 0.1, 0.0));
   q1 *= Fmid / 40.0;
   q1 = max(emission1, vec3(q1)).x;
   tq += q1;
   mat2 mtx2 = mat2(Fhigh / 5.0, -0.1, -0.99, 0.33);
   float extantion2 = pattern(vec2(0.1 + uTime), mtx2) * 5.0;
-  light2.p0 = vec2(0.4 - extantion1, 0.5);
-  light2.p1 = vec2(0.6 + extantion1, 0.5);
+  light2.p0 = vec2(0.4 - extantion1, 0.5) + centerOffset2;
+  light2.p1 = vec2(0.6 + extantion1, 0.5) + centerOffset2;
   light2.range = 3.9;
   light2.col = vec3(1.0);
   float r2 = fract(uTime / 2.86 + Fhigh);
   vec2 uv2 = rotateUV(vec2(uv.x, uv.y), r2 * PI * 2.0 + 0.33 + Fhigh);
   vec3 emission2 = SampleLight(light2, uv2) * 0.2;
   emission2 *= smoothstep(0.0, 0.4, Fhigh);
-  float q2 = .5 / sdf(uv2 - 0.5, vec2(extantion2 + 0.1, 0.0));
+  float q2 = .5 / sdf(uv2 - 0.5 - centerOffset2, vec2(extantion2 + 0.1, 0.0));
   q2 *= Fmid / 40.0;
   q2 = max(emission2, vec3(q2)).x * 0.5;
   tq += q2;
   mat2 mtx3 = mat2(Flow / 5.0, -0.1, -0.99, 0.33);
   float extantion3 = pattern(vec2(0.1 + uTime), mtx3) * 5.0;
   extantion3 = 0.9;
-  light3.p0 = vec2(0.4 - extantion3, 0.5);
-  light3.p1 = vec2(0.6 + extantion3, 0.5);
+  light3.p0 = vec2(0.4 - extantion3, 0.5) + centerOffset3;
+  light3.p1 = vec2(0.6 + extantion3, 0.5) + centerOffset3;
   light3.range = 3.9;
   light3.col = vec3(1.0);
   float r3 = fract(uTime / 3.33 + Flow);
   vec2 uv3 = rotateUV(vec2(1.0 - uv.x, uv.y), r3 * PI * 2.0 + 0.33);
   vec3 emission3 = SampleLight(light3, uv3) * 0.2;
   emission3 *= smoothstep(0.0, 0.4, Flow);
-  float q3 = .5 / sdf(uv3 - 0.5, vec2(extantion3 + 0.1, 0.0));
+  float q3 = .5 / sdf(uv3 - 0.5 - centerOffset3, vec2(extantion3 + 0.1, 0.0));
   q3 *= Fmid / 10.0;
   q3 = max(emission3, vec3(q3)).x * 0.5;
   tq += q3;
