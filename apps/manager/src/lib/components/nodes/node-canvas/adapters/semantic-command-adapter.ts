@@ -10,6 +10,8 @@ import {
 import type { SemanticCommandPayload } from '@shugu/protocol';
 import type { Connection as EngineConnection, GraphState, NodeInstance } from '$lib/nodes/types';
 import { patchNodeGraphLayoutPosition } from '$lib/project/nodeGraphLayout';
+import type { NodeGroup } from '../controllers/group-controller';
+import { serializeNodeGroups } from '../io/node-graph-file';
 
 export type CanvasSemanticCommandAdapter = {
   addNode: (node: NodeInstance) => boolean;
@@ -65,9 +67,16 @@ type CanvasSemanticSdk = {
   }) => boolean;
 };
 
-function semanticPayloadFromCommand(command: SemanticCommand): SemanticCommandPayload {
+function semanticPayloadFromCommand(
+  command: SemanticCommand,
+  options?: { getGroups?: () => NodeGroup[] }
+): SemanticCommandPayload {
   const { type, ...rest } = command;
-  return { kind: type, ...rest };
+  const payload: SemanticCommandPayload = { kind: type, ...rest };
+  if (command.type === 'graph.replace' && options?.getGroups) {
+    payload.groups = serializeNodeGroups(options.getGroups());
+  }
+  return payload;
 }
 
 function canvasRequestId(command: SemanticCommand): string {
@@ -91,6 +100,7 @@ export function createNodeCanvasSemanticCommands(input: {
     options?: { dryRun?: boolean }
   ) => boolean | void;
   onPendingCommand?: (command: SemanticCommand, requestId: string) => void;
+  getGroups?: () => NodeGroup[];
 }): CanvasSemanticCommandAdapter {
   const shouldApplyLocally = (command: SemanticCommand): boolean =>
     command.type === 'node.add' ||
@@ -117,7 +127,7 @@ export function createNodeCanvasSemanticCommands(input: {
     }
     const emitted = sdk.sendSemanticCommand({
       requestId,
-      command: semanticPayloadFromCommand(command),
+      command: semanticPayloadFromCommand(command, { getGroups: input.getGroups }),
     });
     if (!emitted) {
       input.onError?.('Manager SDK is not connected');

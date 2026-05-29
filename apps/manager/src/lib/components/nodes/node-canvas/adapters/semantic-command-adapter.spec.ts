@@ -6,6 +6,7 @@ import { createSemanticCommandBus, type SemanticCommand } from '@shugu/node-core
 import { createCanvasSemanticCommandAdapter, createNodeCanvasSemanticCommands } from './semantic-command-adapter';
 import type { NodeInstance } from '$lib/nodes/types';
 import type { NodeDefinition } from '@shugu/node-core';
+import type { NodeGroup } from '../controllers/group-controller';
 
 const definitions: NodeDefinition[] = [
   {
@@ -213,6 +214,40 @@ test('NodeCanvas semantic commands send graph.replace payloads for canvas clear'
     kind: 'graph.replace',
     graph: { nodes: [], connections: [] },
   });
+});
+
+test('NodeCanvas graph.replace payloads include current groups for server semantic sync', () => {
+  const sent: unknown[] = [];
+  const groups: NodeGroup[] = [
+    {
+      id: 'ai-space-1',
+      parentId: null,
+      name: 'AI Space',
+      nodeIds: ['n1'],
+      disabled: false,
+      kind: 'ai-space',
+      minimized: false,
+      agentInterface: { eventBindings: ['client.text.final'] },
+      agentPolicy: { enabled: true },
+    },
+  ];
+  const adapter = createNodeCanvasSemanticCommands({
+    getSDK: () => ({
+      sendSemanticCommand: (input: unknown) => {
+        sent.push(input);
+        return true;
+      },
+    }),
+    getGroups: () => groups,
+  });
+
+  assert.equal(adapter.replaceGraph({ nodes: [numberNode], connections: [] }), true);
+  const payloadGroups = (sent[0] as { command?: { groups?: NodeGroup[] } }).command?.groups ?? [];
+  assert.equal(payloadGroups.length, 1);
+  assert.equal(payloadGroups[0]?.kind, 'ai-space');
+  assert.deepEqual(payloadGroups[0]?.nodeIds, ['n1']);
+  assert.deepEqual(payloadGroups[0]?.agentInterface, groups[0].agentInterface);
+  assert.deepEqual(payloadGroups[0]?.agentPolicy, groups[0].agentPolicy);
 });
 
 test('NodeCanvas semantic commands dry-run structural graph commands before SDK send and apply after send', () => {

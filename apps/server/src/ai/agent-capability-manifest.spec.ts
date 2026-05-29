@@ -76,7 +76,7 @@ test('manifest includes policy-allowed createable node types even when not yet i
 
   assert.deepEqual(
     manifest.nodeTypes.map((definition) => definition.type).sort(),
-    ['number', 'string']
+    ['string']
   );
   assert.deepEqual(
     manifest.createableNodeTypes.map((definition) => definition.type).sort(),
@@ -417,4 +417,125 @@ test('manifest exposes GPT image generation ports for agent-created image chains
       { value: 'high', label: 'High' },
     ]
   );
+});
+
+test('manifest keeps existing scoped node capabilities compact when many new node types are allowed', () => {
+  const manyDefinitions = Array.from({ length: 500 }, (_, index) => ({
+    type: `heavy-${index}`,
+    label: `Heavy ${index}`,
+    category: 'Generated',
+    ports: {
+      inputs: Array.from({ length: 8 }, (_item, inputIndex) => ({
+        id: `input-${inputIndex}`,
+        label: `Input ${inputIndex}`,
+        type: 'string',
+        defaultValue: 'x'.repeat(100),
+      })),
+      outputs: Array.from({ length: 8 }, (_item, outputIndex) => ({
+        id: `output-${outputIndex}`,
+        label: `Output ${outputIndex}`,
+        type: 'string',
+      })),
+    },
+    params: Array.from({ length: 20 }, (_item, paramIndex) => ({
+      key: `param-${paramIndex}`,
+      label: `Param ${paramIndex}`,
+      type: 'string',
+      defaultValue: 'x'.repeat(100),
+      options: Array.from({ length: 12 }, (_option, optionIndex) => ({
+        value: `option-${optionIndex}`,
+        label: `Option ${optionIndex}`,
+      })),
+    })),
+    aiSummary: {
+      type: `heavy-${index}`,
+      label: `Heavy ${index}`,
+      version: '1.0.0',
+      category: 'Generated',
+      description: 'x'.repeat(300),
+      platforms: ['manager', 'client', 'display'],
+      permissions: [],
+      ports: {},
+      params: [],
+      compatibility: [],
+      examples: [],
+      repairHints: [],
+    },
+  }));
+  const snapshot = {
+    revision: 1,
+    nodes: [
+      {
+        id: 'scene',
+        type: 'scene-fct-track',
+        params: { sensitivity: 1 },
+        inputValues: { sensitivity: 2 },
+        outputValues: {},
+      },
+    ],
+    definitions: [
+      {
+        type: 'scene-fct-track',
+        label: 'Scene FCT Track',
+        category: 'Scene',
+        ports: {
+          inputs: [{ id: 'sensitivity', label: 'Sensitivity', type: 'number' }],
+          outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+        },
+        params: [{ key: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0, max: 5 }],
+        aiSummary: {
+          type: 'scene-fct-track',
+          label: 'Scene FCT Track',
+          version: '1.0.0',
+          category: 'Scene',
+          description: 'Controls FCT scene sensitivity.',
+          platforms: ['client'],
+          permissions: [],
+          ports: {},
+          params: [],
+          compatibility: [],
+          examples: [],
+          repairHints: [],
+        },
+      },
+      ...manyDefinitions,
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    connections: [],
+    groups: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    deviceCapabilities: [],
+    errors: [],
+    permissions: [],
+    proposals: [],
+  };
+  const targetSpace = {
+    id: 'ai-space:test',
+    parentId: null,
+    kind: 'ai-space' as const,
+    name: 'Test Space',
+    nodeIds: ['scene'],
+    disabled: false,
+    agentPolicy: {
+      enabled: true,
+      allowedCommands: ['node.add', 'node.params.update'],
+      targetScope: {
+        nodeIds: ['scene'],
+        allowNewNodes: true,
+      },
+    },
+  };
+
+  const manifest = buildCapabilityManifest(snapshot as never, targetSpace as never) as {
+    nodeTypes: Array<{ type: string; params: Array<Record<string, unknown>> }>;
+    createableNodeTypes: Array<Record<string, unknown>>;
+    createableNodeTypeIndex?: Array<{ type: string; label: string; category: string }>;
+  };
+
+  assert.deepEqual(manifest.nodeTypes.map((definition) => definition.type), ['scene-fct-track']);
+  assert.equal(manifest.nodeTypes[0]?.params[0]?.key, 'sensitivity');
+  assert.equal(manifest.createableNodeTypes.length, 0);
+  assert.equal(manifest.createableNodeTypeIndex?.length, 501);
+  assert.ok(JSON.stringify(manifest).length < 50_000);
 });

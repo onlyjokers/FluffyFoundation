@@ -29,6 +29,41 @@ const cloneJsonValue = <T>(value: T): T =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
+function remapNodeIdList(value: unknown, nodeIdMap: Map<string, string>): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const remapped = value
+    .map((id) => nodeIdMap.get(String(id)))
+    .filter(Boolean) as string[];
+  return Array.from(new Set(remapped));
+}
+
+function remapAgentInterface(
+  value: NodeGroup['agentInterface'],
+  nodeIdMap: Map<string, string>
+): NodeGroup['agentInterface'] {
+  if (value === undefined) return undefined;
+  const next = cloneJsonValue(value);
+  const exposedNodeIds = remapNodeIdList(value.exposedNodeIds, nodeIdMap);
+  if (exposedNodeIds) next.exposedNodeIds = exposedNodeIds;
+  return next;
+}
+
+function remapAgentPolicy(
+  value: NodeGroup['agentPolicy'],
+  nodeIdMap: Map<string, string>
+): NodeGroup['agentPolicy'] {
+  if (value === undefined) return undefined;
+  const next = cloneJsonValue(value);
+  const targetScopeNodeIds = remapNodeIdList(value.targetScope?.nodeIds, nodeIdMap);
+  if (targetScopeNodeIds) {
+    next.targetScope = {
+      ...(next.targetScope ?? {}),
+      nodeIds: targetScopeNodeIds,
+    };
+  }
+  return next;
+}
+
 export function parseNodeGroups(value: unknown): NodeGroup[] {
   if (!Array.isArray(value)) return [];
   const groups: NodeGroup[] = [];
@@ -77,8 +112,8 @@ export function serializeNodeGroups(groups: NodeGroup[]): NodeGroup[] {
     minimized: Boolean(group.minimized),
     runtimeActive:
       typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
-    agentInterface:
-      group.agentInterface !== undefined ? cloneJsonValue(group.agentInterface) : undefined,
+      agentInterface:
+        group.agentInterface !== undefined ? cloneJsonValue(group.agentInterface) : undefined,
     agentPolicy: group.agentPolicy !== undefined ? cloneJsonValue(group.agentPolicy) : undefined,
   }));
 }
@@ -155,9 +190,8 @@ export function remapImportedGroups(
       minimized: Boolean(group.minimized),
       runtimeActive:
         typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
-      agentInterface:
-        group.agentInterface !== undefined ? cloneJsonValue(group.agentInterface) : undefined,
-      agentPolicy: group.agentPolicy !== undefined ? cloneJsonValue(group.agentPolicy) : undefined,
+      agentInterface: remapAgentInterface(group.agentInterface, nodeIdMap),
+      agentPolicy: remapAgentPolicy(group.agentPolicy, nodeIdMap),
     });
   }
 

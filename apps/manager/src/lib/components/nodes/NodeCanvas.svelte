@@ -157,6 +157,7 @@
 
   const canvasCommands = createNodeCanvasSemanticCommands({
     getSDK,
+    getGroups: () => get(nodeGroups),
     isLocalOnlyCommand: (command) => {
       const decorationTypes = new Set(['group-gate', 'group-proxy', 'group-frame']);
       if (command.type === 'node.add') {

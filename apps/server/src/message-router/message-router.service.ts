@@ -23,6 +23,7 @@ import {
   addServerTimestamp,
   classifyDelivery,
   createDeliveryMetrics,
+  createServerControlMessage,
   createSemanticResultMessage,
   createSystemMessage,
 } from '@shugu/protocol';
@@ -33,6 +34,7 @@ import {
   type AgentEnvironmentEvent,
 } from '../ai/ai-orchestrator.service.js';
 import { AiDebugLogger } from '../ai/ai-debug-logger.js';
+import { AiAgentRuntimeService, type AiAgentTrigger } from '../ai/ai-agent-runtime.service.js';
 
 function commandFromSemanticMessage(message: SemanticMessage): SemanticCommand {
   const command = message.command as Record<string, unknown>;
@@ -62,8 +64,36 @@ export class MessageRouterService {
     private readonly clientRegistry: ClientRegistryService,
     private readonly semanticAuthority?: SemanticGraphAuthorityService,
     private readonly aiOrchestrator?: AiOrchestratorService,
-    @Optional() private readonly aiDebugLogger?: AiDebugLogger
-  ) {}
+    @Optional() private readonly aiDebugLogger?: AiDebugLogger,
+    @Optional() private readonly aiAgentRuntime?: AiAgentRuntimeService
+  ) {
+    this.aiAgentRuntime?.configureBridge?.({
+      broadcastSemanticSnapshot: (snapshot) => this.broadcastSemanticSnapshot(snapshot),
+      getOnlineClients: () =>
+        this.clientRegistry.getAllClients().flatMap((client) => {
+          const clientId = typeof client.clientId === 'string' ? client.clientId : '';
+          if (!clientId) return [];
+          return [{ clientId, group: typeof client.group === 'string' ? client.group : undefined }];
+        }),
+      hasVisionIdleSpace: () => {
+        const snapshot = this.semanticAuthority?.getSnapshot?.();
+        return Boolean(
+          snapshot?.groups?.some(
+            (group) =>
+              group.kind === 'ai-space' &&
+              group.agentPolicy?.enabled === true &&
+              !group.disabled &&
+              !group.archived &&
+              (group.agentInterface?.eventBindings ?? []).some((binding) =>
+                binding === 'vision.idle' || binding === 'display.ready'
+              )
+          )
+        );
+      },
+      sendClientControl: (target, payload) =>
+        this.routeMessage(createServerControlMessage(target, 'custom', payload), 'server'),
+    });
+  }
 
   /**
    * Set Socket.io server instance
@@ -202,11 +232,16 @@ export class MessageRouterService {
           this.deliveryMetrics.rejected += 1;
           return;
         }
-        this.emitAgentEvent({
-          type: 'client.text.final',
-          clientId: message.from,
-          groupId: this.getAgentGroupIdForClient(message.from),
-          text,
+        const clientId = message.clientId || message.from;
+        this.enqueueAgentTrigger({
+          source: 'user',
+          priority: 'user',
+          event: {
+            type: 'client.text.final',
+            clientId,
+            groupId: this.getAgentGroupIdForClient(clientId),
+            text,
+          },
         });
       }
     }
@@ -215,13 +250,44 @@ export class MessageRouterService {
     if (sensorType === 'custom') {
       const payload = message.payload as Record<string, unknown> | undefined;
       if (payload?.kind === 'client-ui-interaction') {
+        const clientId = message.clientId || message.from;
         console.info('[Gateway] ClientUI interaction', {
-          clientId: message.clientId,
+          clientId,
           nodeId: typeof payload.nodeId === 'string' ? payload.nodeId : undefined,
           uiKind: typeof payload.uiKind === 'string' ? payload.uiKind : undefined,
           pressed: Boolean(payload.pressed),
           firstInputed: Boolean(payload.firstInputed),
           managerCount: managerSocketIds.length,
+        });
+        if (this.shouldWakeAgentFromClientUiInteraction(payload)) {
+          this.enqueueAgentTrigger({
+            source: 'user',
+            priority: 'user',
+            event: {
+              type: 'client.ui.interaction',
+              clientId,
+              groupId: this.getAgentGroupIdForClient(clientId),
+              nodeId: typeof payload.nodeId === 'string' ? payload.nodeId : undefined,
+              uiKind: typeof payload.uiKind === 'string' ? payload.uiKind : undefined,
+              pressed: Boolean(payload.pressed),
+              inputContent: typeof payload.inputContent === 'string' ? payload.inputContent : undefined,
+              firstInputed: Boolean(payload.firstInputed),
+              recording: typeof payload.recording === 'boolean' ? payload.recording : undefined,
+              assetId: typeof payload.assetId === 'string' ? payload.assetId : undefined,
+              asset: typeof payload.asset === 'string' ? payload.asset : undefined,
+              finished: Boolean(payload.finished),
+            },
+          });
+        }
+      }
+      if (payload?.kind === 'client-screenshot') {
+        this.aiAgentRuntime?.handleClientScreenshot({
+          clientId: message.clientId || message.from,
+          dataUrl: typeof payload.dataUrl === 'string' ? payload.dataUrl : '',
+          mime: typeof payload.mime === 'string' ? payload.mime : 'image/webp',
+          width: typeof payload.width === 'number' ? payload.width : 0,
+          height: typeof payload.height === 'number' ? payload.height : 0,
+          createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Date.now(),
         });
       }
     }
@@ -374,7 +440,7 @@ export class MessageRouterService {
     );
   }
 
-  private broadcastSemanticSnapshot(snapshot: Record<string, unknown>): void {
+  broadcastSemanticSnapshot(snapshot: Record<string, unknown>): void {
     const managerSocketIds = this.clientRegistry.getAllManagerSocketIds();
     if (managerSocketIds.length === 0) return;
     const message = addServerTimestamp(
@@ -465,10 +531,14 @@ export class MessageRouterService {
 
     this.emitToSockets(managerSocketIds, message);
 
-    this.emitAgentEvent({
-      type: 'client.joined',
-      clientId,
-      groupId: this.getAgentGroupIdForClient(clientId),
+    this.enqueueAgentTrigger({
+      source: 'system',
+      priority: 'system',
+      event: {
+        type: 'client.joined',
+        clientId,
+        groupId: this.getAgentGroupIdForClient(clientId),
+      },
     });
 
     // Also send full client list
@@ -526,9 +596,25 @@ export class MessageRouterService {
   }
 
   private getAgentGroupIdForClient(clientId: string): string | undefined {
-    const client = this.clientRegistry.getClient(clientId);
+    const client = this.clientRegistry.getClient?.(clientId);
     const group = client?.group;
     return typeof group === 'string' && group.trim() ? group : undefined;
+  }
+
+  private shouldWakeAgentFromClientUiInteraction(payload: Record<string, unknown>): boolean {
+    const uiKind = typeof payload.uiKind === 'string' ? payload.uiKind : '';
+    if (uiKind === 'button') return Boolean(payload.pressed);
+    if (uiKind === 'input') return Boolean(payload.firstInputed);
+    if (uiKind === 'record') return Boolean(payload.finished);
+    return false;
+  }
+
+  private enqueueAgentTrigger(trigger: Omit<AiAgentTrigger, 'id' | 'createdAt'>): void {
+    if (this.aiAgentRuntime) {
+      this.aiAgentRuntime.enqueue({ ...trigger, createdAt: Date.now() });
+      return;
+    }
+    this.emitAgentEvent(trigger.event);
   }
 
   private emitAgentEvent(event: AgentEnvironmentEvent): void {

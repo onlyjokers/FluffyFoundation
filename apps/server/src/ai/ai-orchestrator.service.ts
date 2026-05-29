@@ -29,10 +29,19 @@ import {
   createAiConversationMemoryStore,
   type AiConversationMemoryStore,
 } from './ai-conversation-memory.js';
+import {
+  applyAiContextBudget,
+  buildPromptMessagesFromBlocks,
+  promptBlockContent,
+  type AiPromptBlock,
+} from './ai-context-budgeter.js';
+import { createAiDurableMemory, type AiDurableMemory } from './ai-durable-memory.js';
 import { loadAiSystemPromptFromEnv, type AiPromptConfig } from './ai-prompt-config.js';
+import { trimRecentConversationMessages } from './ai-recent-message-trimmer.js';
 
 export const AI_CHAT_CLIENT = 'SHUGU_AI_CHAT_CLIENT';
 export const AI_SKILL_REGISTRY = 'SHUGU_AI_SKILL_REGISTRY';
+export const AI_DURABLE_MEMORY = 'SHUGU_AI_DURABLE_MEMORY';
 
 export type AgentEnvironmentEvent =
   | {
@@ -48,10 +57,41 @@ export type AgentEnvironmentEvent =
       text: string;
     }
   | {
+      type: 'client.ui.interaction';
+      clientId: string;
+      groupId?: string;
+      nodeId?: string;
+      uiKind?: string;
+      pressed?: boolean;
+      inputContent?: string;
+      firstInputed?: boolean;
+      recording?: boolean;
+      assetId?: string;
+      asset?: string;
+      finished?: boolean;
+    }
+  | {
+      type: 'vision.idle';
+      clientId: string;
+      groupId?: string;
+      image?: {
+        dataUrl: string;
+        mime: string;
+        width: number;
+        height: number;
+        createdAt: number;
+      };
+    }
+  | {
       type: 'display.ready';
       displayId: string;
       groupId?: string;
     };
+
+export type AiAgentTurnContext = {
+  trigger?: unknown;
+  isSuperseded?: () => boolean;
+};
 
 export type AgentCommandPlan = {
   id: string;
@@ -124,12 +164,22 @@ const scopedNodeIdsFor = (space: SemanticGroup): Set<string> =>
     ...(space.agentPolicy?.targetScope?.nodeIds ?? []).map(String),
   ]);
 
-const spaceBindsEvent = (space: SemanticGroup, eventType: AgentEnvironmentEvent['type']): boolean =>
-  space.agentPolicy?.enabled === true &&
-  space.kind === 'ai-space' &&
-  !space.disabled &&
-  !space.archived &&
-  (space.agentInterface?.eventBindings ?? []).includes(eventType);
+const eventBindingAliases = (eventType: AgentEnvironmentEvent['type']): AgentEnvironmentEvent['type'][] => {
+  if (eventType === 'client.ui.interaction') return ['client.ui.interaction', 'client.text.final'];
+  if (eventType === 'vision.idle') return ['vision.idle', 'display.ready'];
+  return [eventType];
+};
+
+const spaceBindsEvent = (space: SemanticGroup, eventType: AgentEnvironmentEvent['type']): boolean => {
+  const bindings = space.agentInterface?.eventBindings ?? [];
+  return (
+    space.agentPolicy?.enabled === true &&
+    space.kind === 'ai-space' &&
+    !space.disabled &&
+    !space.archived &&
+    eventBindingAliases(eventType).some((binding) => bindings.includes(binding))
+  );
+};
 
 const aiSpacesForEvent = (
   snapshot: SemanticGraphSnapshot,
@@ -163,19 +213,6 @@ type PromptMessage = {
   role: 'system' | 'user' | 'assistant';
   content: string;
 };
-type BasePromptMessage = PromptMessage & { role: 'system' | 'user' };
-
-const stableJson = (value: unknown): string => JSON.stringify(value);
-
-const promptMessage = (
-  id: string,
-  role: 'system' | 'user',
-  value: string | Record<string, unknown>
-): BasePromptMessage => ({
-  id,
-  role,
-  content: typeof value === 'string' ? value : stableJson(value),
-});
 
 const promptMessageMetrics = (
   messages: PromptMessage[]
@@ -187,60 +224,88 @@ const promptMessageMetrics = (
     sha256: createHash('sha256').update(message.content).digest('hex'),
   }));
 
-const chatMessagesFrom = (
-  messages: BasePromptMessage[]
-): Array<{ role: 'system' | 'user'; content: string }> =>
-  messages.map(({ role, content }) => ({ role, content }));
+const eventText = (event: AgentEnvironmentEvent): string => {
+  if (event.type === 'client.text.final') return event.text;
+  if (event.type === 'client.joined') return event.message ?? '';
+  if (event.type === 'client.ui.interaction') {
+    return [event.uiKind, event.inputContent, event.assetId, event.asset].filter(Boolean).join(' ');
+  }
+  if (event.type === 'vision.idle') return event.image ? 'vision idle image available' : 'vision idle';
+  return event.displayId;
+};
 
-const buildPromptMessages = (input: {
+const buildPromptBlocks = (input: {
   systemPrompt: string;
   event: AgentEnvironmentEvent;
   targetSpace: SemanticGroup;
   snapshot: Record<string, unknown>;
   capabilityManifest: Record<string, unknown>;
   memory: unknown;
+  durableMemory: unknown;
   skills: AgentSkillRef[];
-}): BasePromptMessage[] => {
+}): AiPromptBlock[] => {
   const targetSpace = compactGroup(input.targetSpace);
   return [
-    promptMessage('system', 'system', input.systemPrompt),
-    promptMessage(
-      'protocol',
-      'user',
-      [
+    { id: 'system', role: 'system', priority: 'must', content: input.systemPrompt },
+    {
+      id: 'protocol',
+      role: 'user',
+      priority: 'must',
+      content: [
         'AI_ORCHESTRATOR_PROTOCOL_V1',
         'Return only a valid AgentActionPlan JSON object.',
         'Prefer actions over raw commands.',
         'Allowed actions: setParam, addNode, connect, disconnect, removeNode.',
         'Use only IDs, node types, ports, params, and bounds present in later context messages.',
         'Do not use canvas layout or node positions.',
-      ].join('\n')
-    ),
-    promptMessage('capabilityManifest', 'user', {
-      kind: 'capabilityManifest',
-      capabilityManifest: input.capabilityManifest,
-    }),
-    promptMessage('skills', 'user', {
-      kind: 'skills',
-      skills: input.skills,
-    }),
-    promptMessage('targetSpace', 'user', {
-      kind: 'targetSpace',
-      targetSpaceId: input.targetSpace.id,
-      targetSpace,
-    }),
-    promptMessage('snapshot', 'user', {
-      kind: 'semanticSnapshot',
-      snapshot: input.snapshot,
-    }),
-    promptMessage('memory', 'user', {
-      kind: 'conversationMemory',
-      memory: input.memory,
-    }),
-    promptMessage('event', 'user', {
-      kind: 'event',
-      event: input.event,
-    }),
+      ].join('\n'),
+    },
+    {
+      id: 'authorityRules',
+      role: 'user',
+      priority: 'must',
+      content: {
+        kind: 'authorityRules',
+        writeAuthority: 'semantic-command-bus-only',
+        mustDryRun: true,
+        mustRespectPolicy: true,
+        memoryIsAdvisory: true,
+        semanticSnapshotIsSourceOfTruth: true,
+      },
+    },
+    {
+      id: 'targetSpace',
+      role: 'user',
+      priority: 'must',
+      content: {
+        kind: 'targetSpace',
+        targetSpaceId: input.targetSpace.id,
+        targetSpace,
+      },
+    },
+    { id: 'event', role: 'user', priority: 'must', content: { kind: 'event', event: input.event } },
+    {
+      id: 'currentTaskContext',
+      role: 'user',
+      priority: 'high',
+      content: { kind: 'currentTaskContext', eventType: input.event.type, text: eventText(input.event) },
+    },
+    { id: 'snapshot', role: 'user', priority: 'high', content: { kind: 'semanticSnapshot', snapshot: input.snapshot } },
+    {
+      id: 'capabilityManifest',
+      role: 'user',
+      priority: 'medium',
+      content: { kind: 'capabilityManifest', capabilityManifest: input.capabilityManifest },
+    },
+    { id: 'skills', role: 'user', priority: 'medium', content: { kind: 'skills', skills: input.skills } },
+    {
+      id: 'aiNotesAndCustomNodeHints',
+      role: 'user',
+      priority: 'medium',
+      content: { kind: 'aiNotesAndCustomNodeHints', source: 'capabilityManifest.aiSummary' },
+    },
+    { id: 'durableMemory', role: 'user', priority: 'low', content: input.durableMemory as Record<string, unknown> },
+    { id: 'memory', role: 'user', priority: 'low', content: { kind: 'conversationMemory', memory: input.memory } },
   ];
 };
 
@@ -257,12 +322,16 @@ export class AiOrchestratorService {
     private readonly skillRegistry: AgentSkillRegistry,
     private readonly aiDebugLogger?: Pick<AiDebugLogger, 'write'>,
     promptConfig: AiPromptConfig = loadAiSystemPromptFromEnv(),
-    private readonly memory: AiConversationMemoryStore = createAiConversationMemoryStore()
+    private readonly memory: AiConversationMemoryStore = createAiConversationMemoryStore(),
+    private readonly durableMemory: AiDurableMemory = createAiDurableMemory()
   ) {
     this.promptConfig = promptConfig;
   }
 
-  async handleEnvironmentEvent(event: AgentEnvironmentEvent): Promise<AiTurnResult> {
+  async handleEnvironmentEvent(
+    event: AgentEnvironmentEvent,
+    context: AiAgentTurnContext = {}
+  ): Promise<AiTurnResult> {
     const eventId = `ai-event:${Date.now()}:${randomUUID()}`;
     const snapshot = this.semanticAuthority.getSnapshot();
     const spaces = aiSpacesForEvent(snapshot, event);
@@ -289,19 +358,46 @@ export class AiOrchestratorService {
         snapshot: compactSemanticSnapshot(snapshot, targetSpace),
         capabilityManifest: buildCapabilityManifest(snapshot, targetSpace),
         memory: this.memory.snapshot(targetSpace.id),
+        durableMemory: await this.durableMemory.recall({
+          targetSpaceId: targetSpace.id,
+          query: eventText(event),
+        }),
         skills,
       };
-      const promptMessages = buildPromptMessages({
+      const trimmedMemoryEntries = await trimRecentConversationMessages(
+        promptPayload.memory.entries.map((entry, index) => ({
+          role: 'user' as const,
+          id: index,
+          content: JSON.stringify(entry),
+        }))
+      );
+      const memoryEntriesByIndex = new Map(promptPayload.memory.entries.map((entry, index) => [index, entry]));
+      const conversationMemory = {
+        ...promptPayload.memory,
+        entries: trimmedMemoryEntries.flatMap((entry) =>
+          typeof entry.id === 'number' && memoryEntriesByIndex.has(entry.id)
+            ? [memoryEntriesByIndex.get(entry.id)]
+            : []
+        ),
+      };
+      const promptBlocks = buildPromptBlocks({
         systemPrompt: this.promptConfig.systemPrompt,
         event,
         targetSpace,
         snapshot: promptPayload.snapshot,
         capabilityManifest: promptPayload.capabilityManifest,
-        memory: promptPayload.memory,
+        memory: conversationMemory,
+        durableMemory: promptPayload.durableMemory,
         skills,
       });
+      const budgetedPrompt = applyAiContextBudget(promptBlocks);
+      const promptMessages = budgetedPrompt.blocks.map((block) => ({
+        id: block.id,
+        role: block.role,
+        content: promptBlockContent(block),
+      }));
       const promptMetrics = promptMessageMetrics(promptMessages);
-      const messages = chatMessagesFrom(promptMessages);
+      const messages = buildPromptMessagesFromBlocks(budgetedPrompt.blocks);
 
       this.aiDebugLogger?.write({
         kind: 'ai.turn.request',
@@ -314,6 +410,10 @@ export class AiOrchestratorService {
         chatClient: this.chatClient.describeConfig(),
         promptSource: this.promptConfig.source,
         promptMessages: promptMetrics,
+        promptBudget: {
+          totalChars: budgetedPrompt.totalChars,
+          dropped: budgetedPrompt.dropped,
+        },
         messages,
       });
 
@@ -384,6 +484,22 @@ export class AiOrchestratorService {
         : skills;
 
       const dispatchResults: SemanticCommandResult[] = [];
+      if (context.isSuperseded?.()) {
+        this.memory.rememberFailure({
+          targetSpaceId: targetSpace.id,
+          event,
+          error: 'AI turn was superseded before semantic apply.',
+        });
+        turns.push({ targetSpaceId: targetSpace.id, plan: null, skills: activeSkills, dispatchResults });
+        this.aiDebugLogger?.write({
+          kind: 'ai.turn.superseded',
+          eventId,
+          turnId,
+          targetSpaceId: targetSpace.id,
+          plan,
+        });
+        continue;
+      }
       dispatchResults.push(
         ...this.applyPlanCommands({
           eventId,

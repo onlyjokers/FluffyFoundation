@@ -79,8 +79,61 @@ test('parsed and remapped graph AI spaces keep AI metadata', () => {
   assert.equal(groups[0].id, 'ai-space:new-ai');
   assert.equal(groups[0].kind, 'ai-space');
   assert.deepEqual(groups[0].nodeIds, ['node:new-display']);
-  assert.deepEqual(groups[0].agentInterface, aiInterface);
-  assert.deepEqual(groups[0].agentPolicy, aiPolicy);
+  assert.deepEqual(groups[0].agentInterface, {
+    ...aiInterface,
+    exposedNodeIds: ['node:new-display'],
+  });
+  assert.deepEqual(groups[0].agentPolicy, {
+    ...aiPolicy,
+    targetScope: { ...aiPolicy.targetScope, nodeIds: ['node:new-display'] },
+  });
+});
+
+test('remapped graph AI spaces rewrite scoped AI metadata node ids', () => {
+  const { groups } = remapImportedGroups(
+    [
+      {
+        id: 'g-ai',
+        parentId: null,
+        kind: 'ai-space',
+        name: 'AI Space',
+        nodeIds: ['n-display', 'n-input'],
+        disabled: false,
+        minimized: false,
+        agentInterface: {
+          ...aiInterface,
+          exposedNodeIds: ['n-display', 'n-input', 'missing-node'],
+        },
+        agentPolicy: {
+          ...aiPolicy,
+          targetScope: {
+            ...aiPolicy.targetScope,
+            nodeIds: ['n-display', 'n-input', 'missing-node'],
+            allowedNodeTypes: ['string'],
+            deniedNodeTypes: ['network'],
+          },
+        },
+      } as NodeGroup,
+    ],
+    new Map([
+      ['n-display', 'node:new-display'],
+      ['n-input', 'node:new-input'],
+    ]),
+    (group) => (group?.kind === 'ai-space' ? 'ai-space:new-ai' : 'group:new-ai')
+  );
+
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].nodeIds, ['node:new-display', 'node:new-input']);
+  assert.deepEqual(groups[0].agentInterface?.exposedNodeIds, [
+    'node:new-display',
+    'node:new-input',
+  ]);
+  assert.deepEqual(groups[0].agentPolicy?.targetScope?.nodeIds, [
+    'node:new-display',
+    'node:new-input',
+  ]);
+  assert.deepEqual(groups[0].agentPolicy?.targetScope?.allowedNodeTypes, ['string']);
+  assert.deepEqual(groups[0].agentPolicy?.targetScope?.deniedNodeTypes, ['network']);
 });
 
 test('serialized graph AI spaces keep AI metadata', () => {

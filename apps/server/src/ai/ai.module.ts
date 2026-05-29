@@ -13,10 +13,17 @@ import { SemanticModule } from '../semantic/semantic.module.js';
 import { SemanticGraphAuthorityService } from '../semantic/semantic-graph-authority.service.js';
 import {
   AI_CHAT_CLIENT,
+  AI_DURABLE_MEMORY,
   AI_SKILL_REGISTRY,
   AiOrchestratorService,
 } from './ai-orchestrator.service.js';
+import { AiAgentRuntimeService } from './ai-agent-runtime.service.js';
 import { createConfiguredAiClient } from './ai-client-factory.js';
+import {
+  createAiDurableMemory,
+  createMem0DurableMemoryProvider,
+  type AiDurableMemory,
+} from './ai-durable-memory.js';
 import { AiDebugLogger, createAiDebugLoggerFromEnv } from './ai-debug-logger.js';
 
 const defaultSkills: AgentSkillDoc[] = [
@@ -72,16 +79,55 @@ const defaultSkills: AgentSkillDoc[] = [
       useFactory: createConfiguredAiClient,
     },
     {
+      provide: AI_DURABLE_MEMORY,
+      useFactory: async () => {
+        const durableMemoryMode = (process.env.SHUGU_AI_MEMORY_DURABLE ?? 'off').trim().toLowerCase();
+        if (durableMemoryMode !== 'mem0') {
+          return createAiDurableMemory({ provider: null, source: 'off' });
+        }
+        return createAiDurableMemory({
+          provider: await createMem0DurableMemoryProvider(),
+          source: 'mem0',
+        });
+      },
+    },
+    {
       provide: AiOrchestratorService,
-      inject: [SemanticGraphAuthorityService, AI_CHAT_CLIENT, AI_SKILL_REGISTRY, AiDebugLogger],
+      inject: [
+        SemanticGraphAuthorityService,
+        AI_CHAT_CLIENT,
+        AI_SKILL_REGISTRY,
+        AiDebugLogger,
+        AI_DURABLE_MEMORY,
+      ],
       useFactory: (
         semanticAuthority: SemanticGraphAuthorityService,
         chatClient: OpenAiCompatibleClient,
         skillRegistry: AgentSkillRegistry,
-        aiDebugLogger: AiDebugLogger
-      ) => new AiOrchestratorService(semanticAuthority, chatClient, skillRegistry, aiDebugLogger),
+        aiDebugLogger: AiDebugLogger,
+        durableMemory: AiDurableMemory
+      ) =>
+        new AiOrchestratorService(
+          semanticAuthority,
+          chatClient,
+          skillRegistry,
+          aiDebugLogger,
+          undefined,
+          undefined,
+          durableMemory
+        ),
+    },
+    {
+      provide: AiAgentRuntimeService,
+      inject: [AiOrchestratorService, AiDebugLogger],
+      useFactory: (orchestrator: AiOrchestratorService, aiDebugLogger: AiDebugLogger) =>
+        new AiAgentRuntimeService({
+          orchestrator,
+          broadcastSemanticSnapshot: () => undefined,
+          debugLogger: aiDebugLogger,
+        }),
     },
   ],
-  exports: [AiOrchestratorService, AiDebugLogger],
+  exports: [AiOrchestratorService, AiAgentRuntimeService, AiDebugLogger],
 })
 export class AiModule {}

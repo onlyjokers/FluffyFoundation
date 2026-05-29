@@ -388,27 +388,162 @@ test('orchestrator orders prompt messages for provider prefix caching and logs p
   assert.equal(capturedMessages[0]?.role, 'system');
   assert.ok(capturedMessages.length >= 6);
   assert.match(capturedMessages[1]?.content ?? '', /AI_ORCHESTRATOR_PROTOCOL_V1/);
-  assert.match(capturedMessages[2]?.content ?? '', /"kind":"capabilityManifest"/);
-  assert.match(capturedMessages[3]?.content ?? '', /"kind":"skills"/);
-  assert.match(capturedMessages[4]?.content ?? '', /"kind":"targetSpace"/);
-  assert.match(capturedMessages.at(-1)?.content ?? '', /"kind":"event"/);
-  assert.match(capturedMessages.at(-1)?.content ?? '', /"text":"你好"/);
-  assert.equal(
-    capturedMessages.slice(0, -1).some((message) => message.content.includes('"text":"你好"')),
-    false
-  );
 
   const requestLog = debugRecords.find((record) => record.kind === 'ai.turn.request') as
     | { promptMessages?: Array<{ id?: string; sha256?: string; chars?: number }> }
     | undefined;
   assert.ok(requestLog);
+  const messageById = new Map(
+    requestLog.promptMessages?.map((message, index) => [message.id, capturedMessages[index]]) ?? []
+  );
+  assert.match(messageById.get('capabilityManifest')?.content ?? '', /"kind":"capabilityManifest"/);
+  assert.match(messageById.get('skills')?.content ?? '', /"kind":"skills"/);
+  assert.match(messageById.get('targetSpace')?.content ?? '', /"kind":"targetSpace"/);
+  assert.match(messageById.get('event')?.content ?? '', /"kind":"event"/);
+  assert.match(messageById.get('event')?.content ?? '', /"text":"你好"/);
+  assert.equal(messageById.get('system')?.content.includes('"text":"你好"'), false);
   assert.deepEqual(
     requestLog.promptMessages?.map((message) => message.id),
-    ['system', 'protocol', 'capabilityManifest', 'skills', 'targetSpace', 'snapshot', 'memory', 'event']
+    [
+      'system',
+      'protocol',
+      'authorityRules',
+      'targetSpace',
+      'event',
+      'currentTaskContext',
+      'snapshot',
+      'capabilityManifest',
+      'skills',
+      'aiNotesAndCustomNodeHints',
+      'durableMemory',
+      'memory'
+    ]
   );
-  assert.equal(requestLog.promptMessages?.at(-1)?.id, 'event');
-  assert.match(requestLog.promptMessages?.at(-1)?.sha256 ?? '', /^[a-f0-9]{64}$/);
-  assert.equal(typeof requestLog.promptMessages?.at(-1)?.chars, 'number');
+  assert.equal(requestLog.promptMessages?.some((message) => message.id === 'compressionNotice'), false);
+  assert.match(requestLog.promptMessages?.find((message) => message.id === 'event')?.sha256 ?? '', /^[a-f0-9]{64}$/);
+  assert.equal(typeof requestLog.promptMessages?.find((message) => message.id === 'event')?.chars, 'number');
+});
+
+test('orchestrator supports client UI and vision idle events and skips apply when superseded', async () => {
+  const dispatches: Array<{ command: Record<string, unknown>; dryRun?: boolean }> = [];
+  const prompts: string[] = [];
+  const authority = {
+    getSnapshot: () => ({
+      revision: 24,
+      nodes: [
+        {
+          id: 'display:text',
+          type: 'proc-display-text',
+          params: { text: 'idle' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [],
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:agent',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Agent Space',
+          nodeIds: ['display:text'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update'],
+            targetScope: { nodeIds: ['display:text'], allowNewNodes: false },
+          },
+          agentInterface: {
+            exposedNodeIds: ['display:text'],
+            callableCommands: ['node.params.update'],
+            eventBindings: ['client.ui.interaction', 'vision.idle'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: { command: Record<string, unknown>; dryRun?: boolean }) => {
+      dispatches.push(input);
+      return {
+        ok: true,
+        command: input.command,
+        dryRun: Boolean(input.dryRun),
+        previousRevision: 24,
+        appliedRevision: 25,
+        rollbackToken: 'rollback:24',
+        audit: { id: 'audit:24', command: input.command, dryRun: Boolean(input.dryRun) },
+        snapshot: authority.getSnapshot(),
+      };
+    },
+  };
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+      prompts.push(input.messages.map((message) => message.content).join('\n'));
+      return {
+        raw: { ok: true },
+        content:
+          '{"id":"turn:ui","commands":[{"type":"node.params.update","scopeGroupId":"ai-space:agent","nodeId":"display:text","params":{"text":"updated"}}]}',
+        parsed: {
+          id: 'turn:ui',
+          commands: [
+            {
+              type: 'node.params.update',
+              scopeGroupId: 'ai-space:agent',
+              nodeId: 'display:text',
+              params: { text: 'updated' },
+            },
+          ],
+        },
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+  const orchestrator = new AiOrchestratorService(authority as never, chatClient as never, skillRegistry);
+
+  const superseded = await orchestrator.handleEnvironmentEvent(
+    {
+      type: 'client.ui.interaction',
+      clientId: 'client-1',
+      nodeId: 'button-1',
+      uiKind: 'button',
+      pressed: true,
+    },
+    { isSuperseded: () => true }
+  );
+
+  assert.equal(superseded.turns[0]?.plan, null);
+  assert.deepEqual(dispatches.map((entry) => entry.dryRun), [true]);
+
+  await orchestrator.handleEnvironmentEvent({
+    type: 'vision.idle',
+    clientId: 'client-1',
+    image: {
+      dataUrl: 'data:image/webp;base64,abc',
+      mime: 'image/webp',
+      width: 100,
+      height: 60,
+      createdAt: 123,
+    },
+  });
+
+  assert.equal(dispatches.some((entry) => entry.dryRun === false), true);
+  assert.equal(prompts.some((prompt) => prompt.includes('client.ui.interaction')), true);
+  assert.equal(prompts.some((prompt) => prompt.includes('vision.idle')), true);
+  assert.equal(prompts.some((prompt) => prompt.includes('data:image/webp;base64,abc')), true);
 });
 
 test('orchestrator targets only enabled AI spaces whose interface binds the incoming event', async () => {
@@ -1225,6 +1360,120 @@ test('orchestrator repairs natural-language-plus-json output instead of using fl
   ]);
 });
 
+test('orchestrator stops repair after max attempts and does not apply invalid commands', async () => {
+  const previousMaxAttempts = process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS;
+  process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS = '1';
+  const dispatches: Array<{ command: Record<string, unknown>; dryRun?: boolean }> = [];
+  const authority = {
+    getSnapshot: () => ({
+      revision: 41,
+      nodes: [
+        {
+          id: 'display:text',
+          type: 'proc-display-text',
+          params: { text: 'idle' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      definitions: [],
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:agent',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Agent Space',
+          nodeIds: ['display:text'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.params.update'],
+            targetScope: { nodeIds: ['display:text'], allowNewNodes: false },
+          },
+          agentInterface: {
+            exposedNodeIds: ['display:text'],
+            callableCommands: ['node.params.update'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: { command: Record<string, unknown>; dryRun?: boolean }) => {
+      dispatches.push(input);
+      return {
+        ok: false,
+        command: input.command,
+        dryRun: Boolean(input.dryRun),
+        stage: 'dry-run',
+        message: 'Target node not found.',
+        validationErrors: [
+          {
+            code: 'GRAPH.NODE_NOT_FOUND',
+            path: 'nodeId',
+            severity: 'error',
+            message: 'Target node not found.',
+            repairOptions: ['Choose an existing scoped node id.'],
+          },
+        ],
+        previousRevision: 41,
+        appliedRevision: 41,
+        snapshot: authority.getSnapshot(),
+      };
+    },
+  };
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async () => ({
+      raw: { ok: true },
+      content: JSON.stringify({
+        version: 1,
+        id: 'turn:bad',
+        actions: [{ op: 'setParam', nodeId: 'display:text', param: 'text', value: 'bad' }],
+      }),
+      parsed: {
+        version: 1,
+        id: 'turn:bad',
+        actions: [{ op: 'setParam', nodeId: 'display:text', param: 'text', value: 'bad' }],
+      },
+      request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+    }),
+  };
+
+  try {
+    const orchestrator = new AiOrchestratorService(
+      authority as never,
+      chatClient as never,
+      skillRegistry
+    );
+    const result = await orchestrator.handleEnvironmentEvent({
+      type: 'client.text.final',
+      clientId: 'client-1',
+      text: 'update',
+    });
+
+    assert.equal(result.turns[0]?.plan, null);
+    assert.deepEqual(dispatches.map((item) => item.dryRun), [true, true]);
+    assert.equal(dispatches.some((item) => item.dryRun === false), false);
+  } finally {
+    if (previousMaxAttempts === undefined) delete process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS;
+    else process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS = previousMaxAttempts;
+  }
+});
+
 test('orchestrator includes bounded per-space conversation memory in later turns', async () => {
   const prompts: string[] = [];
   const authority = {
@@ -1330,4 +1579,186 @@ test('orchestrator includes bounded per-space conversation memory in later turns
   assert.equal(prompts[0].includes('"memory"'), true);
   assert.equal(prompts[1].includes('"first greeting"'), true);
   assert.equal(prompts[1].includes('"maxTurns"'), true);
+});
+
+test('orchestrator keeps capability manifest available when many node definitions exist', async () => {
+  const manyDefinitions = Array.from({ length: 500 }, (_, index) => ({
+    type: `heavy-${index}`,
+    label: `Heavy ${index}`,
+    category: 'Generated',
+    ports: {
+      inputs: Array.from({ length: 8 }, (_item, inputIndex) => ({
+        id: `input-${inputIndex}`,
+        label: `Input ${inputIndex}`,
+        type: 'string',
+        defaultValue: 'x'.repeat(100),
+      })),
+      outputs: Array.from({ length: 8 }, (_item, outputIndex) => ({
+        id: `output-${outputIndex}`,
+        label: `Output ${outputIndex}`,
+        type: 'string',
+      })),
+    },
+    params: Array.from({ length: 20 }, (_item, paramIndex) => ({
+      key: `param-${paramIndex}`,
+      label: `Param ${paramIndex}`,
+      type: 'string',
+      defaultValue: 'x'.repeat(100),
+      options: Array.from({ length: 12 }, (_option, optionIndex) => ({
+        value: `option-${optionIndex}`,
+        label: `Option ${optionIndex}`,
+      })),
+    })),
+    aiSummary: {
+      type: `heavy-${index}`,
+      label: `Heavy ${index}`,
+      version: '1.0.0',
+      category: 'Generated',
+      description: 'x'.repeat(300),
+      platforms: ['manager', 'client', 'display'],
+      permissions: [],
+      ports: {},
+      params: [],
+      compatibility: [],
+      examples: [],
+      repairHints: [],
+    },
+  }));
+  const authority = {
+    getSnapshot: () => ({
+      revision: 61,
+      nodes: [
+        {
+          id: 'scene',
+          type: 'scene-fct-track',
+          params: { sensitivity: 1 },
+          inputValues: { sensitivity: 2 },
+          outputValues: {},
+        },
+      ],
+      definitions: [
+        {
+          type: 'scene-fct-track',
+          label: 'Scene FCT Track',
+          category: 'Scene',
+          ports: {
+            inputs: [{ id: 'sensitivity', label: 'Sensitivity', type: 'number' }],
+            outputs: [{ id: 'out', label: 'Out', type: 'scene' }],
+          },
+          params: [{ key: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0, max: 5 }],
+          aiSummary: {
+            type: 'scene-fct-track',
+            label: 'Scene FCT Track',
+            version: '1.0.0',
+            category: 'Scene',
+            description: 'Controls FCT scene sensitivity.',
+            platforms: ['client'],
+            permissions: [],
+            ports: {},
+            params: [],
+            compatibility: [],
+            examples: [],
+            repairHints: [],
+          },
+        },
+        ...manyDefinitions,
+      ],
+      customDefinitions: [],
+      agentCapabilities: { version: 1, nodes: [] },
+      connections: [],
+      groups: [
+        {
+          id: 'ai-space:large',
+          parentId: null,
+          kind: 'ai-space',
+          name: 'Large Space',
+          nodeIds: ['scene'],
+          disabled: false,
+          agentPolicy: {
+            enabled: true,
+            allowedActorIds: ['ai-orchestrator'],
+            allowedCommands: ['node.add', 'node.params.update'],
+            targetScope: { nodeIds: ['scene'], allowNewNodes: true },
+            budgets: { maxNodes: 16, maxConnections: 20, maxParamsPerCommand: 8 },
+          },
+          agentInterface: {
+            exposedNodeIds: ['scene'],
+            callableCommands: ['node.add', 'node.params.update'],
+            eventBindings: ['client.text.final'],
+          },
+        },
+      ],
+      partitions: [],
+      runtimeStatus: { running: false, deployedPartitionIds: [] },
+      deviceCapabilities: [],
+      errors: [],
+      permissions: [],
+      proposals: [],
+    }),
+    dispatch: (input: { command: Record<string, unknown>; dryRun?: boolean }) => ({
+      ok: true,
+      command: input.command,
+      dryRun: Boolean(input.dryRun),
+      previousRevision: 61,
+      appliedRevision: 62,
+      rollbackToken: 'rollback:61',
+      snapshot: authority.getSnapshot(),
+    }),
+  };
+  const prompts: string[] = [];
+  const debugRecords: Array<Record<string, unknown>> = [];
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+      prompts.push(input.messages.map((message) => message.content).join('\n'));
+      return {
+        raw: { ok: true },
+        content: JSON.stringify({
+          version: 1,
+          id: 'turn:large',
+          summary: 'adjust scene',
+          actions: [{ op: 'setParam', nodeId: 'scene', param: 'sensitivity', value: 3 }],
+        }),
+        parsed: {
+          version: 1,
+          id: 'turn:large',
+          summary: 'adjust scene',
+          actions: [{ op: 'setParam', nodeId: 'scene', param: 'sensitivity', value: 3 }],
+        },
+        request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+      };
+    },
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry,
+    { write: (record: Record<string, unknown>) => debugRecords.push(record) }
+  );
+
+  await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    text: '提高敏感度',
+  });
+
+  const requestLog = debugRecords.find((record) => record.kind === 'ai.turn.request') as
+    | { promptBudget?: { dropped?: Array<{ id: string }> } }
+    | undefined;
+  assert.ok(requestLog);
+  assert.equal(
+    requestLog.promptBudget?.dropped?.some((item) => item.id === 'capabilityManifest'),
+    false
+  );
+  assert.match(prompts[0], /"kind":"capabilityManifest"/);
+  assert.match(prompts[0], /"type":"scene-fct-track"/);
+  assert.match(prompts[0], /"key":"sensitivity"/);
+  assert.equal(prompts[0].includes('"param-19"'), false);
 });

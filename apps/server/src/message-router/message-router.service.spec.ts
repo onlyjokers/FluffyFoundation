@@ -101,8 +101,12 @@ test('MessageRouterService drops volatile telemetry under backpressure and recor
   assert.equal(router.getDeliveryMetrics().dropped, 1);
 });
 
-test('MessageRouterService forwards ClientUI interaction sensor events to managers', () => {
+test('MessageRouterService forwards ClientUI interaction sensor events to managers and wakes AI runtime', () => {
   const { router, reliableMessages } = createRouter(1, 1);
+  const triggers: unknown[] = [];
+  (router as unknown as { aiAgentRuntime?: { enqueue: (trigger: unknown) => void } }).aiAgentRuntime = {
+    enqueue: (trigger) => triggers.push(trigger),
+  };
   const info = console.info;
   const logs: unknown[][] = [];
   console.info = (...args: unknown[]) => {
@@ -128,6 +132,25 @@ test('MessageRouterService forwards ClientUI interaction sensor events to manage
   assert.equal(reliableMessages.length, 1);
   assert.equal(reliableMessages[0]?.type, 'data');
   assert.equal((reliableMessages[0] as { payload?: { kind?: string } }).payload?.kind, 'client-ui-interaction');
+  assert.deepEqual(
+    triggers.map((entry) => (entry as { event?: { type?: string; uiKind?: string; pressed?: boolean } }).event),
+    [
+      {
+        type: 'client.ui.interaction',
+        clientId: 'client-1',
+        groupId: undefined,
+        nodeId: 'client-button-1',
+        uiKind: 'button',
+        pressed: true,
+        inputContent: '',
+        firstInputed: false,
+        recording: undefined,
+        assetId: undefined,
+        asset: undefined,
+        finished: false,
+      },
+    ]
+  );
   assert.equal(router.getDeliveryMetrics().rejected, 0);
   assert.deepEqual(logs, [
     [
@@ -141,6 +164,68 @@ test('MessageRouterService forwards ClientUI interaction sensor events to manage
         managerCount: 1,
       },
     ],
+  ]);
+});
+
+test('MessageRouterService keeps the real client id when waking AI from agent text', () => {
+  const { router, reliableMessages } = createRouter(1, 1);
+  const triggers: unknown[] = [];
+  (router as unknown as { aiAgentRuntime?: { enqueue: (trigger: unknown) => void } }).aiAgentRuntime = {
+    enqueue: (trigger) => triggers.push(trigger),
+  };
+
+  router.routeMessage(
+    createSensorDataMessage('client-1', 'custom', {
+      kind: 'agent-text',
+      text: 'hi',
+    }),
+    'socket-client-1'
+  );
+
+  assert.equal(reliableMessages.length, 1);
+  assert.deepEqual(
+    triggers.map((entry) => (entry as { event?: unknown }).event),
+    [
+      {
+        type: 'client.text.final',
+        clientId: 'client-1',
+        groupId: undefined,
+        text: 'hi',
+      },
+    ]
+  );
+});
+
+test('MessageRouterService passes client screenshots to AI runtime capture waiters', () => {
+  const { router, reliableMessages } = createRouter(1, 1);
+  const screenshots: unknown[] = [];
+  (router as unknown as { aiAgentRuntime?: { handleClientScreenshot: (input: unknown) => void } }).aiAgentRuntime = {
+    handleClientScreenshot: (input) => screenshots.push(input),
+  };
+
+  router.routeMessage(
+    createSensorDataMessage('client-1', 'custom', {
+      kind: 'client-screenshot',
+      dataUrl: 'data:image/webp;base64,abc',
+      mime: 'image/webp',
+      width: 100,
+      height: 60,
+      createdAt: 123,
+    }),
+    'socket-client-1'
+  );
+
+  assert.equal(reliableMessages.length, 1);
+  assert.equal((reliableMessages[0] as { payload?: { kind?: string } }).payload?.kind, 'client-screenshot');
+  assert.deepEqual(screenshots, [
+    {
+      clientId: 'client-1',
+      dataUrl: 'data:image/webp;base64,abc',
+      mime: 'image/webp',
+      width: 100,
+      height: 60,
+      createdAt: 123,
+    },
   ]);
 });
 
@@ -365,23 +450,12 @@ test('MessageRouterService broadcasts semantic snapshots after AI agent mutation
     getAllClients: () => [{ clientId: 'client-1', connected: true, group: 'ai-space:demo' }],
     getAllGroupOwnershipEntries: () => [],
   };
-  const aiOrchestrator = {
-    handleEnvironmentEvent: async () => ({
-      event: { type: 'client.joined', clientId: 'client-1', groupId: 'ai-space:demo' },
-      turns: [
-        {
-          targetSpaceId: 'ai-space:demo',
-          plan: null,
-          skills: [],
-          dispatchResults: [
-            { ok: true, dryRun: true, snapshot: semanticSnapshot },
-            { ok: true, dryRun: false, snapshot: aiSnapshot },
-          ],
-        },
-      ],
-    }),
+  const aiAgentRuntime = {
+    enqueue: async () => {
+      router.broadcastSemanticSnapshot(aiSnapshot);
+    },
   };
-  const router = new MessageRouterService(registry as never, undefined, aiOrchestrator as never);
+  const router = new MessageRouterService(registry as never, undefined, undefined, undefined, aiAgentRuntime as never);
   const server = {
     to: (socketIds: string[]) => ({
       emit: (_event: string, message: Message) => delivered.push({ socketIds, message }),

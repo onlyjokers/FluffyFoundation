@@ -27,6 +27,32 @@ const nodeTypeAllowedByPolicy = (type: string, targetSpace: SemanticGroup): bool
   return true;
 };
 
+const compactNodeDefinition = (definition: {
+  type: string;
+  label?: string;
+  category?: string;
+  ports?: unknown;
+  params?: unknown;
+  aiSummary?: unknown;
+}): Record<string, unknown> => ({
+  type: definition.type,
+  label: definition.label,
+  category: definition.category,
+  ports: definition.ports,
+  params: definition.params,
+  aiSummary: definition.aiSummary,
+});
+
+const compactCreateableNodeTypeIndex = (definition: {
+  type: string;
+  label?: string;
+  category?: string;
+}): Record<string, unknown> => ({
+  type: definition.type,
+  label: definition.label,
+  category: definition.category,
+});
+
 export const agentCapabilityForNodeType = (
   snapshot: Pick<SemanticGraphSnapshot, 'agentCapabilities'>,
   type: string
@@ -81,6 +107,7 @@ export const buildCapabilityManifest = (
   const scopedNodeIds = scopedNodeIdsFor(targetSpace);
   const scopedNodes = snapshot.nodes.filter((node) => scopedNodeIds.has(String(node.id)));
   const scopedTypes = new Set(scopedNodes.map((node) => String(node.type)));
+  const explicitlyAllowedNodeTypes = targetSpace.agentPolicy?.targetScope?.allowedNodeTypes ?? [];
   const createableDefinitions = targetSpace.agentPolicy?.targetScope?.allowNewNodes === true
     ? snapshot.definitions.filter(
         (definition) =>
@@ -88,11 +115,11 @@ export const buildCapabilityManifest = (
           agentCapabilityForNodeType(snapshot, definition.type).enabled
       )
     : [];
-  const visibleDefinitions = snapshot.definitions.filter((definition) => {
+  const scopedDefinitions = snapshot.definitions.filter((definition) => {
     if (!agentCapabilityForNodeType(snapshot, definition.type).enabled) return false;
-    if (scopedTypes.has(definition.type)) return true;
-    return createableDefinitions.some((item) => item.type === definition.type);
+    return scopedTypes.has(definition.type);
   });
+  const includeFullCreateableDefinitions = explicitlyAllowedNodeTypes.length > 0;
   const disabledNodeTypes = snapshot.definitions
     .filter((definition) => !agentCapabilityForNodeType(snapshot, definition.type).enabled)
     .map((definition) => {
@@ -107,22 +134,11 @@ export const buildCapabilityManifest = (
     version: 1,
     targetSpace: compactGroup(targetSpace),
     allowedCommands: targetSpace.agentPolicy?.allowedCommands ?? targetSpace.agentInterface?.callableCommands ?? [],
-    nodeTypes: visibleDefinitions.map((definition) => ({
-      type: definition.type,
-      label: definition.label,
-      category: definition.category,
-      ports: definition.ports,
-      params: definition.params,
-      aiSummary: definition.aiSummary,
-    })),
-    createableNodeTypes: createableDefinitions.map((definition) => ({
-      type: definition.type,
-      label: definition.label,
-      category: definition.category,
-      ports: definition.ports,
-      params: definition.params,
-      aiSummary: definition.aiSummary,
-    })),
+    nodeTypes: scopedDefinitions.map(compactNodeDefinition),
+    createableNodeTypes: includeFullCreateableDefinitions
+      ? createableDefinitions.map(compactNodeDefinition)
+      : [],
+    createableNodeTypeIndex: createableDefinitions.map(compactCreateableNodeTypeIndex),
     disabledNodeTypes,
   };
 };
