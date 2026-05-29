@@ -1,6 +1,7 @@
 <!-- Purpose: Asset library UI for browsing/uploading/tagging media assets stored in the Asset Service. -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import AssetBulkActions from './AssetBulkActions.svelte';
   import AssetDrawer from './AssetDrawer.svelte';
   import AssetEmptyState from './AssetEmptyState.svelte';
   import AssetGrid from './AssetGrid.svelte';
@@ -15,6 +16,7 @@
     getActiveAdvancedFilterCount,
     getFilteredSortedAssets,
     inferAssetKindFromFileLike as inferKindFromFile,
+    pruneAssetSelection,
     type SortMode,
     type UploadItem,
     type ViewMode,
@@ -54,6 +56,9 @@
 
   let selectedId: string | null = null;
   let drawerOpen = false;
+  let selectedAssetIds = new Set<string>();
+  let bulkDeleteRunning = false;
+  let bulkError = '';
 
   let uploadInput: HTMLInputElement | null = null;
   let uploadQueue: UploadItem[] = [];
@@ -307,6 +312,54 @@
     }
   }
 
+  function toggleAssetSelection(assetId: string, selected?: boolean): void {
+    const next = new Set(selectedAssetIds);
+    const shouldSelect = selected ?? !next.has(assetId);
+    if (shouldSelect) next.add(assetId);
+    else next.delete(assetId);
+    selectedAssetIds = next;
+  }
+
+  function selectVisibleAssets(): void {
+    const next = new Set(selectedAssetIds);
+    for (const asset of filtered) next.add(asset.id);
+    selectedAssetIds = next;
+  }
+
+  function clearAssetSelection(): void {
+    selectedAssetIds = new Set();
+    bulkError = '';
+  }
+
+  async function deleteSelectedAssets(): Promise<void> {
+    const ids = [...selectedAssetIds];
+    if (ids.length === 0 || bulkDeleteRunning) return;
+    if (!confirm(`Delete ${ids.length} selected asset${ids.length === 1 ? '' : 's'}?\n\nThis cannot be undone.`)) {
+      return;
+    }
+
+    bulkError = '';
+    bulkDeleteRunning = true;
+    try {
+      const result = await assetsStore.deleteAssets(ids, { serverUrl });
+      if (result.failed.length > 0) {
+        bulkError = `${result.failed.length} asset${result.failed.length === 1 ? '' : 's'} failed to delete.`;
+      }
+
+      const deleted = new Set(result.deletedIds);
+      selectedAssetIds = new Set(ids.filter((id) => !deleted.has(id)));
+      if (selectedId && deleted.has(selectedId)) {
+        closeDrawer();
+        selectedId = null;
+      }
+      await refreshAssets();
+    } catch (err) {
+      bulkError = err instanceof Error ? err.message : String(err);
+    } finally {
+      bulkDeleteRunning = false;
+    }
+  }
+
   async function saveSelectedAsset(asset: AssetRecord): Promise<void> {
     saveError = '';
     isSaving = true;
@@ -388,6 +441,8 @@
   });
 
   $: selected = selectedId ? (assets.find((a) => a.id === selectedId) ?? null) : null;
+  $: selectedAssetIds = pruneAssetSelection(selectedAssetIds, assets);
+  $: selectedCount = selectedAssetIds.size;
   $: if (drawerOpen && selected && selected.id !== editorAssetId) {
     editorAssetId = selected.id;
     ensureDrawerEditState(selected);
@@ -481,6 +536,10 @@
       <div class="banner error">{errorMessage ?? 'Unknown error'}</div>
     {/if}
 
+    {#if bulkError}
+      <div class="banner error">{bulkError}</div>
+    {/if}
+
     <section class="capacity-panel" aria-label="Asset capacity">
       <div class="capacity-main">
         <div>
@@ -514,6 +573,15 @@
       {/if}
     </section>
 
+    <AssetBulkActions
+      {selectedCount}
+      filteredCount={filtered.length}
+      {bulkDeleteRunning}
+      {selectVisibleAssets}
+      {clearAssetSelection}
+      {deleteSelectedAssets}
+    />
+
     {#if status === 'loading' && assets.length === 0}
       <AssetEmptyState title="Loading assets…" />
     {:else if filtered.length === 0}
@@ -523,11 +591,13 @@
         assets={filtered}
         {selectedId}
         {drawerOpen}
+        {selectedAssetIds}
         {buildAssetContentUrl}
         {openDrawer}
+        {toggleAssetSelection}
       />
     {:else}
-      <AssetList assets={filtered} {openDrawer} />
+      <AssetList assets={filtered} {selectedAssetIds} {openDrawer} {toggleAssetSelection} />
     {/if}
 
     <AssetUploadQueue {uploadQueue} />

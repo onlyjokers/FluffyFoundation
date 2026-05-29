@@ -12,20 +12,37 @@
   export let assets: AssetRecord[] = [];
   export let selectedId: string | null = null;
   export let drawerOpen = false;
+  export let selectedAssetIds: Set<string> = new Set();
   export let buildAssetContentUrl: (assetId: string) => string | null = () => null;
   export let openDrawer: (assetId: string) => void = () => undefined;
+  export let toggleAssetSelection: (assetId: string, selected?: boolean) => void = () => undefined;
 </script>
 
 <div class="grid">
   {#each assets as a (a.id)}
     {@const contentUrl = buildAssetContentUrl(a.id)}
-    <button
+    <div
       class="asset-card {kindTone(a.kind)}"
       class:selected={a.id === selectedId && drawerOpen}
-      type="button"
+      class:bulk-selected={selectedAssetIds.has(a.id)}
+      role="button"
+      tabindex="0"
       on:click={() => openDrawer(a.id)}
+      on:keydown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openDrawer(a.id);
+      }}
     >
       <div class="thumb">
+        <input
+          class="select-box"
+          type="checkbox"
+          aria-label={`Select ${a.originalName}`}
+          checked={selectedAssetIds.has(a.id)}
+          on:click|stopPropagation
+          on:change={(event) => toggleAssetSelection(a.id, event.currentTarget.checked)}
+        />
         {#if a.kind === 'image' && contentUrl}
           <img
             class="thumb-media"
@@ -67,7 +84,7 @@
           </div>
         {/if}
       </div>
-    </button>
+    </div>
   {/each}
 </div>
 
@@ -110,6 +127,11 @@
       0 14px 38px rgba(0, 0, 0, 0.4);
   }
 
+  .asset-card.bulk-selected {
+    border-color: rgba(34, 197, 94, 0.58);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2);
+  }
+
   .thumb {
     position: relative;
     aspect-ratio: 16 / 10;
@@ -118,6 +140,20 @@
       radial-gradient(800px 320px at 70% 50%, rgba(6, 182, 212, 0.18), transparent 60%),
       rgba(15, 23, 42, 0.6);
     overflow: hidden;
+  }
+
+  .select-box {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.68);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    accent-color: #22c55e;
+    cursor: pointer;
   }
 
   .thumb-media {

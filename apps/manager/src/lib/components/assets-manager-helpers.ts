@@ -262,6 +262,21 @@ export function buildFileTypeOptions(assets: AssetRecord[]): Array<{ value: stri
   ];
 }
 
+export function pruneAssetSelection(selectedIds: Set<string>, assets: AssetRecord[]): Set<string> {
+  if (selectedIds.size === 0) return selectedIds;
+  const available = new Set(assets.map((asset) => asset.id));
+  let changed = false;
+  const next: string[] = [];
+  for (const id of selectedIds) {
+    if (available.has(id)) {
+      next.push(id);
+    } else {
+      changed = true;
+    }
+  }
+  return changed ? new Set(next) : selectedIds;
+}
+
 export function getActiveAdvancedFilterCount(opts: Omit<AssetFilterOptions, 'sortMode'>): number {
   const tagFilterTokens = parseTagFilter(opts.filterTags);
   return [

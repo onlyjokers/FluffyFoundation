@@ -27,7 +27,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import type { AssetKind, AssetRecord } from './assets.types.js';
 import { AudioDropBoxService, type AudioDropBoxEntry } from './audio-dropbox.service.js';
-import { AssetsService } from './assets.service.js';
+import { AssetsService, type BulkDeleteAssetsResult } from './assets.service.js';
 import { requireAssetReadAuth, requireAssetWriteAuth } from './assets.auth.js';
 import { parseByteRangeHeader } from './range.js';
 import { readAssetServiceConfig } from './assets.config.js';
@@ -217,6 +217,16 @@ export class AssetsController {
       latest: query.latest,
     });
     return { entry };
+  }
+
+  @Post('bulk-delete')
+  async bulkDelete(
+    @Body() body: unknown,
+    @Req() req: Request
+  ): Promise<BulkDeleteAssetsResult> {
+    requireAssetWriteAuth(req, this.assets.config.writeToken, this.managerAuth);
+    const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    return await this.assets.deleteAssets(record.ids);
   }
 
   @Delete(':id')

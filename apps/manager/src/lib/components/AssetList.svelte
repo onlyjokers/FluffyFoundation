@@ -11,12 +11,15 @@
   } from './assets-manager-helpers';
 
   export let assets: AssetRecord[] = [];
+  export let selectedAssetIds: Set<string> = new Set();
   export let openDrawer: (assetId: string) => void = () => undefined;
+  export let toggleAssetSelection: (assetId: string, selected?: boolean) => void = () => undefined;
 </script>
 
 <Card class="list-card">
   <div class="list">
     <div class="list-head">
+      <div>Select</div>
       <div>Name</div>
       <div>Kind</div>
       <div>Source</div>
@@ -25,14 +28,34 @@
       <div>ID</div>
     </div>
     {#each assets as a (a.id)}
-      <button class="list-row" type="button" on:click={() => openDrawer(a.id)}>
+      <div
+        class="list-row"
+        class:bulk-selected={selectedAssetIds.has(a.id)}
+        role="button"
+        tabindex="0"
+        on:click={() => openDrawer(a.id)}
+        on:keydown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          openDrawer(a.id);
+        }}
+      >
+        <div class="cell select-cell">
+          <input
+            type="checkbox"
+            aria-label={`Select ${a.originalName}`}
+            checked={selectedAssetIds.has(a.id)}
+            on:click|stopPropagation
+            on:change={(event) => toggleAssetSelection(a.id, event.currentTarget.checked)}
+          />
+        </div>
         <div class="cell name" title={a.originalName}>{a.originalName}</div>
         <div class="cell"><span class="pill">{kindPillLabel(a.kind)}</span></div>
         <div class="cell"><span class="pill source">{formatAssetSourceLabel(a.source)}</span></div>
         <div class="cell mono">{formatAssetBytes(a.sizeBytes)}</div>
         <div class="cell mono">{formatAssetDateTime(a.createdAt)}</div>
         <div class="cell mono" title={a.id}>{shortAssetId(a.id)}</div>
-      </button>
+      </div>
     {/each}
   </div>
 </Card>
@@ -51,7 +74,7 @@
   .list-head,
   .list-row {
     display: grid;
-    grid-template-columns: minmax(240px, 1.4fr) 110px 140px 120px 170px 160px;
+    grid-template-columns: 68px minmax(240px, 1.4fr) 110px 140px 120px 170px 160px;
     gap: 10px;
     align-items: center;
     padding: 10px 12px;
@@ -81,6 +104,10 @@
     background: rgba(6, 182, 212, 0.06);
   }
 
+  .list-row.bulk-selected {
+    background: rgba(34, 197, 94, 0.08);
+  }
+
   .cell {
     min-width: 0;
     overflow: hidden;
@@ -90,6 +117,20 @@
 
   .cell.name {
     font-weight: 700;
+  }
+
+  .select-cell {
+    overflow: visible;
+  }
+
+  .select-cell input {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    accent-color: #22c55e;
+    cursor: pointer;
   }
 
   .pill {

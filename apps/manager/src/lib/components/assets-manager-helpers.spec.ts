@@ -9,6 +9,7 @@ import {
   getFilteredSortedAssets,
   inferAssetKindFromFileLike,
   parseTagFilter,
+  pruneAssetSelection,
   shortAssetId,
 } from './assets-manager-helpers';
 
@@ -92,4 +93,20 @@ test('asset helpers keep query, advanced filters, and kind-grouped sort semantic
     filtered.map((asset) => asset.id),
     ['audio-new', 'audio-old']
   );
+});
+
+test('asset helper prunes stale selected asset ids after refresh', () => {
+  const next = pruneAssetSelection(new Set(['keep', 'deleted', 'also-keep']), [
+    baseAsset({ id: 'keep' }),
+    baseAsset({ id: 'also-keep' }),
+  ]);
+
+  assert.deepEqual(Array.from(next), ['keep', 'also-keep']);
+});
+
+test('asset helper keeps selected asset set identity when no ids are stale', () => {
+  const selected = new Set(['keep']);
+  const next = pruneAssetSelection(selected, [baseAsset({ id: 'keep' })]);
+
+  assert.equal(next, selected);
 });

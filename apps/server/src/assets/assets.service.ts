@@ -21,6 +21,11 @@ type AssetUsage = {
   protectedBytes: number;
   maxTotalBytes: number;
 };
+export type BulkDeleteAssetsResult = {
+  deletedIds: string[];
+  missingIds: string[];
+  failed: Array<{ id: string; error: string }>;
+};
 
 type StoredIndex = {
   byId: Map<string, StoredAssetRecord>;
@@ -401,6 +406,31 @@ export class AssetsService {
 
       return { deleted: true };
     });
+  }
+
+  async deleteAssets(ids: unknown): Promise<BulkDeleteAssetsResult> {
+    const requested = Array.isArray(ids) ? ids : [];
+    const normalizedIds = requested
+      .map((id) => String(id ?? '').trim())
+      .filter(Boolean);
+    const uniqueIds = Array.from(new Set(normalizedIds));
+    const result: BulkDeleteAssetsResult = {
+      deletedIds: [],
+      missingIds: [],
+      failed: [],
+    };
+
+    for (const id of uniqueIds) {
+      try {
+        const deleted = await this.deleteAsset(id);
+        if (deleted.deleted) result.deletedIds.push(id);
+        else result.missingIds.push(id);
+      } catch (err) {
+        result.failed.push({ id, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return result;
   }
 
   async updateAsset(

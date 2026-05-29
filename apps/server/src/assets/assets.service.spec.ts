@@ -179,3 +179,38 @@ test('AssetsService persists max total capacity settings', async () => {
     assert.equal(second.getSettings().maxTotalBytes, 12345);
   });
 });
+
+test('AssetsService bulk deletes existing assets and reports missing ids', async () => {
+  await withAssetEnv(async (dir) => {
+    const service = new AssetsService();
+    await service.init();
+
+    const first = await service.uploadFromTempFile({
+      tempPath: await writeTempAsset(dir, 'first.txt', 'first'),
+      mimeType: 'text/plain',
+      originalName: 'first.txt',
+    });
+    const second = await service.uploadFromTempFile({
+      tempPath: await writeTempAsset(dir, 'second.txt', 'second'),
+      mimeType: 'text/plain',
+      originalName: 'second.txt',
+      source: 'ai-image',
+      autoDiscardable: true,
+    });
+    const keep = await service.uploadFromTempFile({
+      tempPath: await writeTempAsset(dir, 'keep.txt', 'keep'),
+      mimeType: 'text/plain',
+      originalName: 'keep.txt',
+    });
+
+    const result = await service.deleteAssets([first.asset.id, 'missing-asset', second.asset.id]);
+
+    assert.deepEqual(result.deletedIds, [first.asset.id, second.asset.id]);
+    assert.deepEqual(result.missingIds, ['missing-asset']);
+    assert.deepEqual(result.failed, []);
+    assert.equal(service.getAssetRecord(first.asset.id), null);
+    assert.equal(service.getAssetRecord(second.asset.id), null);
+    assert.ok(service.getAssetRecord(keep.asset.id), 'unselected asset should remain');
+    assert.equal(service.getUsage().totalBytes, keep.asset.sizeBytes);
+  });
+});

@@ -20,6 +20,12 @@ export type AssetSettings = {
   maxTotalBytes: number;
 };
 
+export type BulkDeleteAssetsResult = {
+  deletedIds: string[];
+  missingIds: string[];
+  failed: Array<{ id: string; error: string }>;
+};
+
 export type AssetRecord = {
   id: string;
   kind: AssetKind;
@@ -197,8 +203,42 @@ async function updateSettings(
   }));
 }
 
+async function deleteAssets(
+  ids: string[],
+  opts?: { serverUrl?: string }
+): Promise<BulkDeleteAssetsResult> {
+  const serverUrl = typeof opts?.serverUrl === 'string' ? opts.serverUrl : readServerUrl();
+  const url = buildUrl(serverUrl, 'api/assets/bulk-delete');
+  if (!url) throw new Error('Missing or invalid Server URL.');
+  const data = await fetchJson(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  const record = (data ?? {}) as Record<string, unknown>;
+  return {
+    deletedIds: Array.isArray(record.deletedIds)
+      ? record.deletedIds.map((id) => String(id)).filter(Boolean)
+      : [],
+    missingIds: Array.isArray(record.missingIds)
+      ? record.missingIds.map((id) => String(id)).filter(Boolean)
+      : [],
+    failed: Array.isArray(record.failed)
+      ? record.failed
+          .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+          .map((item) => ({
+            id: String(item.id ?? ''),
+            error: String(item.error ?? 'delete failed'),
+          }))
+          .filter((item) => item.id)
+      : [],
+  };
+}
+
 export const assetsStore = {
   subscribe: store.subscribe,
   refresh,
   updateSettings,
+  deleteAssets,
 };
