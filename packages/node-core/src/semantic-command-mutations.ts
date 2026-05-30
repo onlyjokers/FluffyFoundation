@@ -14,6 +14,14 @@ import {
   cloneRuntimeStatus,
 } from './semantic-graph-snapshot.js';
 
+const uniqueWith = (values: string[] | undefined, value: string): string[] => {
+  const next = values ? [...values] : [];
+  return next.includes(value) ? next : [...next, value];
+};
+
+const withoutValue = (values: string[] | undefined, value: string): string[] | undefined =>
+  values ? values.filter((item) => String(item) !== value) : undefined;
+
 const commandToChanges = (command: SemanticCommand): GraphChange[] => {
   switch (command.type) {
     case 'node.add':
@@ -101,13 +109,58 @@ export function applySemanticCommand(state: CommandState, command: SemanticComma
       break;
     case 'node.add':
       if (command.scopeGroupId) {
-        next.groups = next.groups.map((group) =>
-          group.id === command.scopeGroupId && !group.nodeIds.includes(command.node.id)
-            ? { ...group, nodeIds: [...group.nodeIds, command.node.id] }
-            : group
-        );
+        const nodeId = String(command.node.id);
+        next.groups = next.groups.map((group) => {
+          if (group.id !== command.scopeGroupId) return group;
+          return {
+            ...group,
+            nodeIds: uniqueWith(group.nodeIds, nodeId),
+            agentInterface: group.agentInterface
+              ? {
+                  ...group.agentInterface,
+                  exposedNodeIds: uniqueWith(group.agentInterface.exposedNodeIds, nodeId),
+                }
+              : group.agentInterface,
+            agentPolicy: group.agentPolicy
+              ? {
+                  ...group.agentPolicy,
+                  targetScope: group.agentPolicy.targetScope
+                    ? {
+                        ...group.agentPolicy.targetScope,
+                        nodeIds: uniqueWith(group.agentPolicy.targetScope.nodeIds, nodeId),
+                      }
+                    : group.agentPolicy.targetScope,
+                }
+              : group.agentPolicy,
+          };
+        });
       }
       break;
+    case 'node.remove': {
+      const nodeId = String(command.nodeId);
+      next.groups = next.groups.map((group) => ({
+        ...group,
+        nodeIds: group.nodeIds.filter((item) => String(item) !== nodeId),
+        agentInterface: group.agentInterface
+          ? {
+              ...group.agentInterface,
+              exposedNodeIds: withoutValue(group.agentInterface.exposedNodeIds, nodeId),
+            }
+          : group.agentInterface,
+        agentPolicy: group.agentPolicy
+          ? {
+              ...group.agentPolicy,
+              targetScope: group.agentPolicy.targetScope
+                ? {
+                    ...group.agentPolicy.targetScope,
+                    nodeIds: withoutValue(group.agentPolicy.targetScope.nodeIds, nodeId),
+                  }
+                : group.agentPolicy.targetScope,
+            }
+          : group.agentPolicy,
+      }));
+      break;
+    }
     case 'node.params.update':
       next.graph = {
         ...next.graph,

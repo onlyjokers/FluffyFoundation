@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildCapabilityManifest } from './agent-capability-manifest.js';
+import { createSemanticGraphSnapshot } from '@shugu/node-core';
 
 test('manifest includes policy-allowed createable node types even when not yet in the AI Space', () => {
   const snapshot = {
@@ -81,6 +82,83 @@ test('manifest includes policy-allowed createable node types even when not yet i
   assert.deepEqual(
     manifest.createableNodeTypes.map((definition) => definition.type).sort(),
     ['number', 'string']
+  );
+});
+
+test('manifest exposes normalized full graph permissions for legacy AI Spaces', () => {
+  const snapshot = createSemanticGraphSnapshot({
+    revision: 1,
+    graph: {
+      nodes: [
+        {
+          id: 'message',
+          type: 'string',
+          position: { x: 0, y: 0 },
+          config: { value: 'hello' },
+          inputValues: {},
+          outputValues: {},
+        },
+        {
+          id: 'display',
+          type: 'proc-display-text',
+          position: { x: 0, y: 0 },
+          config: { text: 'hello' },
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'string',
+        label: 'String',
+        category: 'Values',
+        inputs: [],
+        outputs: [{ id: 'value', label: 'Value', type: 'string' }],
+        configSchema: [{ key: 'value', label: 'Value', type: 'string', defaultValue: '' }],
+      },
+      {
+        type: 'proc-display-text',
+        label: 'Display Text',
+        category: 'Processors',
+        inputs: [],
+        outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+        configSchema: [{ key: 'text', label: 'Text', type: 'string', defaultValue: '' }],
+      },
+    ],
+    groups: [
+      {
+        id: 'ai-space:legacy',
+        parentId: null,
+        kind: 'ai-space',
+        name: 'Legacy AI Space',
+        nodeIds: ['message', 'display'],
+        disabled: false,
+        agentInterface: {
+          exposedNodeIds: ['message'],
+          callableCommands: ['node.params.update', 'node.add', 'node.connect', 'node.disconnect'],
+        },
+        agentPolicy: {
+          enabled: true,
+          allowedCommands: ['node.params.update', 'node.add', 'node.connect', 'node.disconnect'],
+          targetScope: { nodeIds: ['message'], allowNewNodes: true },
+        },
+      },
+    ],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+  });
+  const targetSpace = snapshot.groups[0];
+
+  const manifest = buildCapabilityManifest(snapshot, targetSpace) as {
+    allowedCommands: string[];
+    nodeTypes: Array<{ type: string }>;
+  };
+
+  assert.equal(manifest.allowedCommands.includes('node.remove'), true);
+  assert.deepEqual(
+    manifest.nodeTypes.map((definition) => definition.type).sort(),
+    ['proc-display-text', 'string']
   );
 });
 
@@ -535,7 +613,195 @@ test('manifest keeps existing scoped node capabilities compact when many new nod
 
   assert.deepEqual(manifest.nodeTypes.map((definition) => definition.type), ['scene-fct-track']);
   assert.equal(manifest.nodeTypes[0]?.params[0]?.key, 'sensitivity');
-  assert.equal(manifest.createableNodeTypes.length, 0);
-  assert.equal(manifest.createableNodeTypeIndex?.length, 501);
+  assert.equal(
+    manifest.createableNodeTypes.every(
+      (definition) => typeof definition.type === 'string' && !definition.type.startsWith('heavy-')
+    ),
+    true
+  );
+  assert.ok((manifest.createableNodeTypeIndex?.length ?? 0) < 100);
+  assert.ok(JSON.stringify(manifest).length < 40_000);
+});
+
+test('manifest exposes full details for common agent-created nodes even when many new node types are allowed', () => {
+  const manyDefinitions = Array.from({ length: 500 }, (_, index) => ({
+    type: `heavy-${index}`,
+    label: `Heavy ${index}`,
+    category: 'Generated',
+    ports: {
+      inputs: Array.from({ length: 8 }, (_item, inputIndex) => ({
+        id: `input-${inputIndex}`,
+        label: `Input ${inputIndex}`,
+        type: 'string',
+        defaultValue: 'x'.repeat(100),
+      })),
+      outputs: Array.from({ length: 8 }, (_item, outputIndex) => ({
+        id: `output-${outputIndex}`,
+        label: `Output ${outputIndex}`,
+        type: 'string',
+      })),
+    },
+    params: Array.from({ length: 20 }, (_item, paramIndex) => ({
+      key: `param-${paramIndex}`,
+      label: `Param ${paramIndex}`,
+      type: 'string',
+      defaultValue: 'x'.repeat(100),
+    })),
+  }));
+  const snapshot = {
+    revision: 1,
+    nodes: [
+      {
+        id: 'aggregator',
+        type: 'cmd-aggregator',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    definitions: [
+      ...manyDefinitions,
+      {
+        type: 'cmd-aggregator',
+        label: 'Cmd Aggregator',
+        category: 'Objects',
+        ports: {
+          inputs: [{ id: 'in1', label: 'In 1', type: 'command' }],
+          outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+        },
+        params: [],
+      },
+      {
+        type: 'proc-flashlight',
+        label: 'Flashlight',
+        category: 'Processors',
+        ports: {
+          inputs: [{ id: 'trigger', label: 'Trigger', type: 'boolean' }],
+          outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+        },
+        params: [{ key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true }],
+      },
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    connections: [],
+    groups: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    deviceCapabilities: [],
+    errors: [],
+    permissions: [],
+    proposals: [],
+  };
+  const targetSpace = {
+    id: 'ai-space:test',
+    parentId: null,
+    kind: 'ai-space' as const,
+    name: 'Test Space',
+    nodeIds: ['aggregator'],
+    disabled: false,
+    agentPolicy: {
+      enabled: true,
+      allowedCommands: ['node.add', 'node.connect', 'node.params.update'],
+      targetScope: {
+        nodeIds: ['aggregator'],
+        allowNewNodes: true,
+      },
+    },
+  };
+
+  const manifest = buildCapabilityManifest(snapshot as never, targetSpace as never) as {
+    createableNodeTypes: Array<{
+      type: string;
+      ports?: { inputs?: Array<Record<string, unknown>>; outputs?: Array<Record<string, unknown>> };
+      params?: Array<Record<string, unknown>>;
+    }>;
+    createableNodeTypeIndex?: Array<{ type: string }>;
+    createableNodeTypeIndexTruncated?: boolean;
+  };
+
+  const flashlight = manifest.createableNodeTypes.find((definition) => definition.type === 'proc-flashlight');
+  assert.equal(flashlight?.ports?.inputs?.[0]?.id, 'trigger');
+  assert.equal(flashlight?.ports?.outputs?.[0]?.id, 'cmd');
+  assert.equal(flashlight?.params?.[0]?.key, 'enabled');
+  assert.equal(manifest.createableNodeTypeIndex?.some((definition) => definition.type === 'proc-flashlight'), true);
+  assert.equal(manifest.createableNodeTypeIndexTruncated, true);
+  assert.equal(manifest.createableNodeTypeIndex?.some((definition) => definition.type === 'heavy-499'), false);
   assert.ok(JSON.stringify(manifest).length < 50_000);
+});
+
+test('manifest strips duplicated and unsafe fields from AI summaries while preserving author guidance', () => {
+  const snapshot = {
+    revision: 1,
+    nodes: [
+      {
+        id: 'display-text',
+        type: 'proc-display-text',
+        params: {},
+        inputValues: {},
+        outputValues: {},
+      },
+    ],
+    definitions: [
+      {
+        type: 'proc-display-text',
+        label: 'Display Text',
+        category: 'Processors',
+        ports: {
+          inputs: [{ id: 'text', label: 'Text', type: 'string' }],
+          outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+        },
+        params: [{ key: 'text', label: 'Text', type: 'string', defaultValue: '' }],
+        aiSummary: {
+          description: 'Shows text to the audience.',
+          compatibility: [{ target: 'display-object', rule: 'Route cmd to Display.' }],
+          examples: [{ prompt: 'say hi', actions: [{ op: 'setParam' }] }],
+          repairHints: ['Use an existing display text node before adding one.'],
+          sideEffects: ['May flash the screen.'],
+          risks: ['Could spam viewers.'],
+          ports: { duplicated: true },
+          params: [{ duplicated: true }],
+          permissions: ['network'],
+        },
+      },
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    connections: [],
+    groups: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    deviceCapabilities: [],
+    errors: [],
+    permissions: [],
+    proposals: [],
+  };
+  const targetSpace = {
+    id: 'ai-space:test',
+    parentId: null,
+    kind: 'ai-space' as const,
+    name: 'Test Space',
+    nodeIds: ['display-text'],
+    disabled: false,
+    agentPolicy: {
+      enabled: true,
+      allowedCommands: ['node.params.update'],
+      targetScope: {
+        nodeIds: ['display-text'],
+        allowNewNodes: false,
+      },
+    },
+  };
+
+  const manifest = buildCapabilityManifest(snapshot as never, targetSpace as never) as {
+    nodeTypes: Array<{ aiSummary?: Record<string, unknown>; ports?: unknown; params?: unknown }>;
+  };
+  const definition = manifest.nodeTypes[0];
+
+  assert.ok(definition?.ports);
+  assert.ok(definition?.params);
+  assert.deepEqual(Object.keys(definition?.aiSummary ?? {}).sort(), [
+    'compatibility',
+    'description',
+    'examples',
+    'repairHints',
+  ]);
 });

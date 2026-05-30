@@ -39,6 +39,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const normalizeStringArray = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.map(String).filter(Boolean) : undefined;
 
+const aiSpaceGraphCommands = [
+  'node.params.update',
+  'node.inputs.update',
+  'node.add',
+  'node.connect',
+  'node.disconnect',
+  'node.remove',
+] as const;
+
+const mergeStringArrays = (...values: Array<string[] | undefined>): string[] => [
+  ...new Set(values.flatMap((items) => items ?? [])),
+];
+
 const normalizeAgentPorts = (value: unknown): AgentGroupInterface['publicInputs'] | undefined =>
   Array.isArray(value)
     ? value
@@ -291,57 +304,88 @@ export const normalizeDefinitions = (
   });
 
 export const normalizeGroups = (groups: SemanticSnapshotInput['groups'] = []): SemanticGroup[] =>
-  groups.map((group) => ({
-    id: String(group.id ?? ''),
-    parentId: group.parentId ? String(group.parentId) : null,
-    name: String(group.name ?? 'Group'),
-    nodeIds: Array.isArray(group.nodeIds)
+  groups.map((group) => {
+    const nodeIds = Array.isArray(group.nodeIds)
       ? group.nodeIds.map((id) => String(id)).filter(Boolean)
-      : [],
-    disabled: Boolean(group.disabled),
-    kind: group.kind === 'ai-space' ? 'ai-space' : group.kind === 'group' ? 'group' : undefined,
-    archived: group.archived === undefined ? undefined : Boolean(group.archived),
-    runtimeActive: group.runtimeActive === undefined ? undefined : Boolean(group.runtimeActive),
-    owner:
-      group.owner && typeof group.owner === 'object'
-        ? {
-            actorId: String((group.owner as Record<string, unknown>).actorId ?? ''),
+      : [];
+    const kind = group.kind === 'ai-space' ? 'ai-space' : group.kind === 'group' ? 'group' : undefined;
+    const agentInterface = normalizeAgentInterface(group.agentInterface);
+    const agentPolicy = normalizeAgentPolicy(group.agentPolicy);
+    const aiSpaceNodeIds = kind === 'ai-space' ? nodeIds : [];
+    return {
+      id: String(group.id ?? ''),
+      parentId: group.parentId ? String(group.parentId) : null,
+      name: String(group.name ?? 'Group'),
+      nodeIds,
+      disabled: Boolean(group.disabled),
+      kind,
+      archived: group.archived === undefined ? undefined : Boolean(group.archived),
+      runtimeActive: group.runtimeActive === undefined ? undefined : Boolean(group.runtimeActive),
+      owner:
+        group.owner && typeof group.owner === 'object'
+          ? {
+              actorId: String((group.owner as Record<string, unknown>).actorId ?? ''),
+              role: String(
+                (group.owner as Record<string, unknown>).role ?? 'client'
+              ) as ControlPlaneActorRole,
+              capabilities: Array.isArray((group.owner as Record<string, unknown>).capabilities)
+                ? (((group.owner as Record<string, unknown>).capabilities as unknown[]).map(
+                    String
+                  ) as ControlPlaneCapability[])
+                : [],
+            }
+          : undefined,
+      ownerStack: Array.isArray(group.ownerStack)
+        ? group.ownerStack.map((owner) => ({
+            actorId: String((owner as Record<string, unknown>).actorId ?? ''),
             role: String(
-              (group.owner as Record<string, unknown>).role ?? 'client'
+              (owner as Record<string, unknown>).role ?? 'client'
             ) as ControlPlaneActorRole,
-            capabilities: Array.isArray((group.owner as Record<string, unknown>).capabilities)
-              ? (((group.owner as Record<string, unknown>).capabilities as unknown[]).map(
+            capabilities: Array.isArray((owner as Record<string, unknown>).capabilities)
+              ? (((owner as Record<string, unknown>).capabilities as unknown[]).map(
                   String
                 ) as ControlPlaneCapability[])
               : [],
-          }
+          }))
         : undefined,
-    ownerStack: Array.isArray(group.ownerStack)
-      ? group.ownerStack.map((owner) => ({
-          actorId: String((owner as Record<string, unknown>).actorId ?? ''),
-          role: String(
-            (owner as Record<string, unknown>).role ?? 'client'
-          ) as ControlPlaneActorRole,
-          capabilities: Array.isArray((owner as Record<string, unknown>).capabilities)
-            ? (((owner as Record<string, unknown>).capabilities as unknown[]).map(
-                String
-              ) as ControlPlaneCapability[])
-            : [],
-        }))
-      : undefined,
-    transferable: group.transferable === undefined ? undefined : Boolean(group.transferable),
-    surface: group.surface === 'public' || group.surface === 'internal' ? group.surface : undefined,
-    visibility:
-      group.visibility && typeof group.visibility === 'object'
-        ? {
-            defaultAccess: String(
-              (group.visibility as Record<string, unknown>).defaultAccess ?? 'visible-readonly'
-            ) as ControlPlaneVisibilityAccess,
-          }
-        : undefined,
-    agentInterface: normalizeAgentInterface(group.agentInterface),
-    agentPolicy: normalizeAgentPolicy(group.agentPolicy),
-  }));
+      transferable: group.transferable === undefined ? undefined : Boolean(group.transferable),
+      surface: group.surface === 'public' || group.surface === 'internal' ? group.surface : undefined,
+      visibility:
+        group.visibility && typeof group.visibility === 'object'
+          ? {
+              defaultAccess: String(
+                (group.visibility as Record<string, unknown>).defaultAccess ?? 'visible-readonly'
+              ) as ControlPlaneVisibilityAccess,
+            }
+          : undefined,
+      agentInterface:
+        kind === 'ai-space'
+          ? {
+              ...(agentInterface ?? {}),
+              exposedNodeIds: mergeStringArrays(agentInterface?.exposedNodeIds, aiSpaceNodeIds),
+              callableCommands: mergeStringArrays(
+                agentInterface?.callableCommands,
+                [...aiSpaceGraphCommands]
+              ),
+            }
+          : agentInterface,
+      agentPolicy:
+        kind === 'ai-space'
+          ? {
+              ...(agentPolicy ?? {}),
+              allowedCommands: mergeStringArrays(
+                agentPolicy?.allowedCommands,
+                [...aiSpaceGraphCommands]
+              ),
+              targetScope: {
+                ...(agentPolicy?.targetScope ?? {}),
+                nodeIds: mergeStringArrays(agentPolicy?.targetScope?.nodeIds, aiSpaceNodeIds),
+                allowNewNodes: agentPolicy?.targetScope?.allowNewNodes ?? true,
+              },
+            }
+          : agentPolicy,
+    };
+  });
 
 export function createSemanticGraphSnapshot(input: SemanticSnapshotInput): SemanticGraphSnapshot {
   const graph = cloneGraph(input.graph ?? { nodes: [], connections: [] });

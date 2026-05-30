@@ -6,12 +6,14 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import type { AgentSkillRef, AgentSkillRegistry, OpenAiCompatibleClient } from '@shugu/ai-core';
-import type {
-  SemanticActor,
-  SemanticCommand,
-  SemanticCommandResult,
-  SemanticGraphSnapshot,
-  SemanticGroup,
+import {
+  createGroupSovereigntyPolicy,
+  createSemanticCommandBus,
+  type SemanticActor,
+  type SemanticCommand,
+  type SemanticCommandResult,
+  type SemanticGraphSnapshot,
+  type SemanticGroup,
 } from '@shugu/node-core';
 import { SemanticGraphAuthorityService } from '../semantic/semantic-graph-authority.service.js';
 import type { AiDebugLogger } from './ai-debug-logger.js';
@@ -149,14 +151,72 @@ const planSchema = {
   },
 };
 
-const compactGroup = (group: SemanticGroup): Record<string, unknown> => ({
-  id: group.id,
-  kind: group.kind,
-  name: group.name,
-  nodeIds: group.nodeIds,
-  agentInterface: group.agentInterface,
-  agentPolicy: group.agentPolicy,
-});
+const aiPlanMaxTokens = 1_600;
+const aiRepairMaxTokens = 1_200;
+const repairDetailAllowList = new Set([
+  'ok',
+  'error',
+  'path',
+  'stage',
+  'message',
+  'repairOptions',
+  'validationErrors',
+  'type',
+  'command',
+  'dryRun',
+]);
+const repairValidationErrorAllowList = new Set([
+  'code',
+  'path',
+  'severity',
+  'message',
+  'repairOptions',
+]);
+const repairCommandAllowList = new Set(['type', 'nodeId', 'connectionId', 'scopeGroupId']);
+
+const compactRepairValue = (
+  value: unknown,
+  allowList: Set<string>,
+  nestedAllowList: Set<string> = allowList
+): unknown => {
+  if (Array.isArray(value)) {
+    return value.slice(0, 8).map((item) => compactRepairValue(item, nestedAllowList, nestedAllowList));
+  }
+  if (!value || typeof value !== 'object') return value;
+  const record = value as Record<string, unknown>;
+  const compact: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    if (!allowList.has(key)) continue;
+    if (key === 'validationErrors') {
+      compact[key] = compactRepairValue(entry, repairValidationErrorAllowList, repairValidationErrorAllowList);
+    } else if (key === 'command' && entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      compact[key] = compactRepairValue(entry, repairCommandAllowList, repairCommandAllowList);
+    } else {
+      compact[key] = entry;
+    }
+  }
+  return compact;
+};
+
+const compactRepairDetailsForPrompt = (details: unknown): unknown =>
+  compactRepairValue(details, repairDetailAllowList, repairDetailAllowList);
+
+const compactGroup = (group: SemanticGroup): Record<string, unknown> => {
+  const eventBindings = group.agentInterface?.eventBindings?.filter(
+    (binding) => binding !== 'client.joined'
+  );
+  return {
+    id: group.id,
+    kind: group.kind,
+    name: group.name,
+    nodeIds: group.nodeIds,
+    agentInterface:
+      group.agentInterface && eventBindings
+        ? { ...group.agentInterface, eventBindings }
+        : group.agentInterface,
+    agentPolicy: group.agentPolicy,
+  };
+};
 
 const scopedNodeIdsFor = (space: SemanticGroup): Set<string> =>
   new Set([
@@ -184,7 +244,10 @@ const spaceBindsEvent = (space: SemanticGroup, eventType: AgentEnvironmentEvent[
 const aiSpacesForEvent = (
   snapshot: SemanticGraphSnapshot,
   event: AgentEnvironmentEvent
-): SemanticGroup[] => snapshot.groups.filter((group) => spaceBindsEvent(group, event.type));
+): SemanticGroup[] => {
+  if (event.type === 'client.joined') return [];
+  return snapshot.groups.filter((group) => spaceBindsEvent(group, event.type));
+};
 
 const snapshotSummary = (snapshot: SemanticGraphSnapshot): Record<string, unknown> => ({
   revision: snapshot.revision,
@@ -255,7 +318,7 @@ const buildPromptBlocks = (input: {
         'AI_ORCHESTRATOR_PROTOCOL_V1',
         'Return only a valid AgentActionPlan JSON object.',
         'Prefer actions over raw commands.',
-        'Allowed actions: setParam, addNode, connect, disconnect, removeNode.',
+        'Allowed actions: setParam, setInput, addNode, connect, disconnect, removeNode.',
         'Use only IDs, node types, ports, params, and bounds present in later context messages.',
         'Do not use canvas layout or node positions.',
       ].join('\n'),
@@ -424,6 +487,7 @@ export class AiOrchestratorService {
         const completion = await this.chatClient.completeJson<AgentCommandPlan>({
           messages,
           schema: { name: 'agent_command_plan', schema: planSchema },
+          maxTokens: aiPlanMaxTokens,
         });
         activeCompletionRequest = completion.request;
         this.aiDebugLogger?.write({
@@ -557,11 +621,52 @@ export class AiOrchestratorService {
     eventId: string;
     turnId: string;
     targetSpaceId: string;
+    snapshot: SemanticGraphSnapshot;
     commands: SemanticCommand[];
   }): SemanticCommandResult[] {
+    const validationBus = createSemanticCommandBus({
+      graph: {
+        nodes: input.snapshot.nodes.map((node) => ({
+          id: node.id,
+          type: node.type,
+          position: { x: 0, y: 0 },
+          config: node.params,
+          inputValues: node.inputValues,
+          outputValues: node.outputValues,
+        })),
+        connections: input.snapshot.connections,
+      },
+      groups: input.snapshot.groups,
+      definitions: input.snapshot.definitions.map((definition) => ({
+        type: definition.type,
+        label: definition.label,
+        category: definition.category,
+        inputs: definition.ports.inputs,
+        outputs: definition.ports.outputs,
+        configSchema: definition.params,
+        aiSummary: definition.aiSummary,
+      })),
+      customDefinitions: input.snapshot.customDefinitions,
+      agentCapabilities: input.snapshot.agentCapabilities,
+      partitions: input.snapshot.partitions,
+      runtimeStatus: input.snapshot.runtimeStatus,
+      deviceCapabilities: input.snapshot.deviceCapabilities,
+      errors: input.snapshot.errors,
+      permissions: input.snapshot.permissions,
+      proposals: input.snapshot.proposals,
+      revision: input.snapshot.revision,
+      policy: createGroupSovereigntyPolicy(),
+    });
     const dispatchResults: SemanticCommandResult[] = [];
     for (const command of input.commands) {
-      const dryRun = this.semanticAuthority.dispatch({ actor: aiActor, command, dryRun: true });
+      const simulated = validationBus.dispatch({ actor: aiActor, command, dryRun: false });
+      const dryRun = simulated.ok
+        ? {
+            ...simulated,
+            dryRun: true,
+            audit: { ...simulated.audit, dryRun: true },
+          }
+        : { ...simulated, dryRun: true };
       dispatchResults.push(dryRun);
       this.aiDebugLogger?.write({
         kind: 'ai.turn.dispatch',
@@ -620,6 +725,7 @@ export class AiOrchestratorService {
       eventId: input.eventId,
       turnId: input.turnId,
       targetSpaceId: input.targetSpace.id,
+      snapshot: input.snapshot,
       commands: compiled.commands,
     });
     const failed = dryRunResults.find((result) => !result.ok);
@@ -668,21 +774,26 @@ export class AiOrchestratorService {
       targetSpaceId: input.targetSpace.id,
       error: input.planError,
     });
+    const compactRepairDetails = compactRepairDetailsForPrompt(input.repairDetails);
 
     const messages = [
       ...input.baseMessages,
-      {
-        role: 'assistant' as const,
-        content: input.completion.content,
-      },
+      ...(input.completion.content.trim()
+        ? [
+            {
+              role: 'assistant' as const,
+              content: input.completion.content,
+            },
+          ]
+        : []),
       {
         role: 'user' as const,
         content: JSON.stringify({
           kind: 'repair',
           error: input.planError,
-          details: input.repairDetails,
-          instruction: 'Return a corrected valid AgentActionPlan JSON object only.',
-          promptPayload: input.promptPayload,
+          details: compactRepairDetails,
+          instruction:
+            'Return a corrected valid AgentActionPlan JSON object only. Use the existing context messages above; do not ask for clarification.',
         }),
       },
     ];
@@ -692,12 +803,14 @@ export class AiOrchestratorService {
       turnId: input.turnId,
       targetSpaceId: input.targetSpace.id,
       error: input.planError,
-      details: input.repairDetails,
-      messages,
+      detailSummary: compactRepairDetails,
+      messageCount: messages.length,
+      promptChars: messages.reduce((sum, message) => sum + message.content.length, 0),
     });
     const completion = await this.chatClient.completeJson<AgentCommandPlan>({
       messages,
       schema: { name: 'agent_command_plan_repair', schema: planSchema },
+      maxTokens: aiRepairMaxTokens,
     });
     this.aiDebugLogger?.write({
       kind: 'ai.turn.repair.response',

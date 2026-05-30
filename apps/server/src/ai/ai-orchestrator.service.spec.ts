@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createAgentSkillRegistry } from '@shugu/ai-core';
+import { createGroupSovereigntyPolicy, createSemanticCommandBus } from '@shugu/node-core';
 
 import { AiOrchestratorService } from './ai-orchestrator.service.js';
 
@@ -18,7 +19,7 @@ const skillRegistry = createAgentSkillRegistry({
       triggers: {
         nodeTypes: ['display-breathing'],
         commandTypes: ['node.params.update'],
-        eventTypes: ['client.joined', 'client.text.final'],
+        eventTypes: ['client.text.final'],
       },
       content: 'Full display breathing guidance.',
     },
@@ -28,14 +29,14 @@ const skillRegistry = createAgentSkillRegistry({
       summary: 'Explains scoped node.add in an AI Space sandbox.',
       triggers: {
         commandTypes: ['node.add'],
-        eventTypes: ['client.joined'],
+        eventTypes: ['client.text.final'],
       },
       content: 'Full scoped node.add guidance.',
     },
   ],
 });
 
-test('orchestrator emits semantic commands for joined and text events through the authority bus', async () => {
+test('orchestrator ignores client joins and emits semantic commands for text events through the authority bus', async () => {
   const dispatches: Array<{
     actor: { id: string; role: string };
     command: Record<string, unknown>;
@@ -215,17 +216,8 @@ test('orchestrator emits semantic commands for joined and text events through th
     groupId: 'ai-space:agent',
     message: 'hello',
   });
-  assert.equal(joined.turns[0]?.plan?.commands.length, 1);
-  assert.equal(dispatches.length, 2);
-  assert.equal(dispatches[0].command.type, 'node.add');
-  assert.equal(dispatches[0].dryRun, true);
-  assert.equal(dispatches[0].command.scopeGroupId, 'ai-space:agent');
-  assert.deepEqual(
-    (dispatches[0].command as { node: { position: { x: number; y: number } } }).node.position,
-    { x: 0, y: 0 }
-  );
-  assert.equal(dispatches[1].command.type, 'node.add');
-  assert.equal(dispatches[1].dryRun, false);
+  assert.deepEqual(joined.turns, []);
+  assert.equal(dispatches.length, 0);
 
   const text = await orchestrator.handleEnvironmentEvent({
     type: 'client.text.final',
@@ -234,19 +226,17 @@ test('orchestrator emits semantic commands for joined and text events through th
     text: 'make it warmer',
   });
   assert.equal(text.turns[0]?.plan?.commands[0]?.type, 'node.params.update');
-  assert.equal(dispatches.length, 4);
-  assert.equal(dispatches[2].command.type, 'node.params.update');
-  assert.equal(dispatches[2].dryRun, true);
-  assert.equal(dispatches[3].command.type, 'node.params.update');
-  assert.equal(dispatches[3].dryRun, false);
-  assert.equal(dispatches[3].command.scopeGroupId, 'ai-space:agent');
+  assert.equal(dispatches.length, 1);
+  assert.equal(dispatches[0].command.type, 'node.params.update');
+  assert.equal(dispatches[0].dryRun, false);
+  assert.equal(dispatches[0].command.scopeGroupId, 'ai-space:agent');
   assert.equal(
     prompts.some((prompt) => prompt.includes('Display Breathing Node')),
     true
   );
   assert.equal(
     prompts.some((prompt) => prompt.includes('client.joined')),
-    true
+    false
   );
   assert.equal(
     prompts.some((prompt) => prompt.includes('client.text.final')),
@@ -526,7 +516,7 @@ test('orchestrator supports client UI and vision idle events and skips apply whe
   );
 
   assert.equal(superseded.turns[0]?.plan, null);
-  assert.deepEqual(dispatches.map((entry) => entry.dryRun), [true]);
+  assert.deepEqual(dispatches.map((entry) => entry.dryRun), []);
 
   await orchestrator.handleEnvironmentEvent({
     type: 'vision.idle',
@@ -546,7 +536,7 @@ test('orchestrator supports client UI and vision idle events and skips apply whe
   assert.equal(prompts.some((prompt) => prompt.includes('data:image/webp;base64,abc')), true);
 });
 
-test('orchestrator targets only enabled AI spaces whose interface binds the incoming event', async () => {
+test('orchestrator never targets spaces for client joined events even when legacy spaces bind them', async () => {
   const dispatches: Array<{
     actor: { id: string; role: string };
     command: Record<string, unknown>;
@@ -722,15 +712,9 @@ test('orchestrator targets only enabled AI spaces whose interface binds the inco
     message: 'hello',
   });
 
-  assert.equal(prompts.length, 1);
-  assert.equal(prompts[0].includes('"targetSpaceId":"ai-space:enabled"'), true);
-  assert.equal(prompts[0].includes('group:ordinary'), false);
-  assert.equal(prompts[0].includes('ai-space:disabled'), false);
-  assert.equal(result.turns.length, 1);
-  assert.equal(result.turns[0]?.targetSpaceId, 'ai-space:enabled');
-  assert.equal(dispatches.length, 2);
-  assert.equal(dispatches[0].dryRun, true);
-  assert.equal(dispatches[1].dryRun, false);
+  assert.equal(prompts.length, 0);
+  assert.deepEqual(result.turns, []);
+  assert.equal(dispatches.length, 0);
 });
 
 test('orchestrator stays silent when no AI space binds the event', async () => {
@@ -1065,9 +1049,6 @@ test('orchestrator compiles action DSL with manifest context, driver-node param 
   assert.equal(prompts[0].includes('"capabilityManifest"'), true);
   assert.equal(prompts[0].includes('"position"'), false);
   assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
-    ['node.params.update', true],
-    ['node.params.update', true],
-    ['node.remove', true],
     ['node.params.update', false],
     ['node.params.update', false],
     ['node.remove', false],
@@ -1089,6 +1070,137 @@ test('orchestrator compiles action DSL with manifest context, driver-node param 
     scopeGroupId: 'ai-space:agent',
     nodeId: 'note:remove-me',
   });
+});
+
+test('orchestrator dry-runs add and connect plans transactionally before applying', async () => {
+  const dispatches: Array<{
+    actor: { id: string; role: string };
+    command: Record<string, unknown>;
+    dryRun?: boolean;
+  }> = [];
+  const bus = createSemanticCommandBus({
+    revision: 51,
+    graph: {
+      nodes: [
+        {
+          id: 'aggregator',
+          type: 'cmd-aggregator',
+          position: { x: 0, y: 0 },
+          config: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+      connections: [],
+    },
+    definitions: [
+      {
+        type: 'cmd-aggregator',
+        label: 'Cmd Aggregator',
+        category: 'Objects',
+        inputs: [{ id: 'in1', label: 'In 1', type: 'command' }],
+        outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+        configSchema: [],
+      },
+      {
+        type: 'proc-display-text',
+        label: 'Display Text',
+        category: 'Processors',
+        inputs: [],
+        outputs: [{ id: 'cmd', label: 'Cmd', type: 'command' }],
+        configSchema: [{ key: 'text', label: 'Text', type: 'string', defaultValue: '你好' }],
+      },
+    ],
+    customDefinitions: [],
+    agentCapabilities: { version: 1, nodes: [] },
+    groups: [
+      {
+        id: 'ai-space:agent',
+        parentId: null,
+        kind: 'ai-space',
+        name: 'Agent Space',
+        nodeIds: ['aggregator'],
+        disabled: false,
+        agentPolicy: {
+          enabled: true,
+          allowedActorIds: ['ai-orchestrator'],
+          allowedCommands: ['node.add', 'node.connect'],
+          targetScope: { nodeIds: ['aggregator'], allowNewNodes: true },
+        },
+        agentInterface: {
+          exposedNodeIds: ['aggregator'],
+          callableCommands: ['node.add', 'node.connect'],
+          eventBindings: ['client.text.final'],
+        },
+      },
+    ],
+    partitions: [],
+    runtimeStatus: { running: false, deployedPartitionIds: [] },
+    proposals: [],
+    policy: createGroupSovereigntyPolicy(),
+  });
+  const authority = {
+    getSnapshot: () => bus.getSnapshot(),
+    dispatch: (input: {
+      actor: { id: string; role: string };
+      command: Record<string, unknown>;
+      dryRun?: boolean;
+    }) => {
+      dispatches.push(input);
+      return bus.dispatch(input as never);
+    },
+  };
+  const chatClient = {
+    describeConfig: () => ({
+      baseUrl: 'https://code.b886.top/v1',
+      model: 'gpt-5.5',
+      apiKey: '[REDACTED]',
+      supportsJsonSchema: true,
+      timeoutMs: 30_000,
+    }),
+    completeJson: async () => ({
+      raw: { ok: true },
+      content: JSON.stringify({
+        version: 1,
+        id: 'turn:add-connect',
+        actions: [
+          {
+            op: 'addNode',
+            nodeId: 'display-text',
+            nodeType: 'proc-display-text',
+            params: { text: '你好' },
+          },
+          {
+            op: 'connect',
+            sourceNodeId: 'display-text',
+            sourcePortId: 'cmd',
+            targetNodeId: 'aggregator',
+            targetPortId: 'in1',
+          },
+        ],
+      }),
+      parsed: null,
+      request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
+    }),
+  };
+
+  const orchestrator = new AiOrchestratorService(
+    authority as never,
+    chatClient as never,
+    skillRegistry
+  );
+
+  const result = await orchestrator.handleEnvironmentEvent({
+    type: 'client.text.final',
+    clientId: 'client-1',
+    text: '添加 Display Text 并连接到 aggregator',
+  });
+
+  assert.equal(result.turns[0]?.plan?.id, 'turn:add-connect');
+  assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
+    ['node.add', false],
+    ['node.connect', false],
+  ]);
 });
 
 test('orchestrator repairs invalid JSON/action output with validation feedback before applying', async () => {
@@ -1209,6 +1321,7 @@ test('orchestrator repairs invalid JSON/action output with validation feedback b
       parsed: null,
     },
   ];
+  const completionInputs: Array<{ messages: Array<{ content: string }>; maxTokens?: number }> = [];
   const chatClient = {
     describeConfig: () => ({
       baseUrl: 'https://code.b886.top/v1',
@@ -1217,7 +1330,8 @@ test('orchestrator repairs invalid JSON/action output with validation feedback b
       supportsJsonSchema: true,
       timeoutMs: 30_000,
     }),
-    completeJson: async (input: { messages: Array<{ content: string }> }) => {
+    completeJson: async (input: { messages: Array<{ content: string }>; maxTokens?: number }) => {
+      completionInputs.push(input);
       prompts.push(input.messages.map((message) => message.content).join('\n'));
       const response = responses.shift();
       assert.ok(response);
@@ -1245,12 +1359,21 @@ test('orchestrator repairs invalid JSON/action output with validation feedback b
 
   assert.equal(prompts.length, 2);
   assert.equal(prompts[1].includes('repair'), true);
+  assert.equal(prompts[1].includes('promptPayload'), false);
+  assert.ok(prompts[1].length < prompts[0].length + 2_000);
+  assert.equal(typeof completionInputs[0]?.maxTokens, 'number');
+  assert.equal(typeof completionInputs[1]?.maxTokens, 'number');
+  const repairRecord = loggerRecords.find((record) => record.kind === 'ai.turn.repair.request') as
+    | Record<string, unknown>
+    | undefined;
+  assert.ok(repairRecord);
+  assert.equal(Object.prototype.hasOwnProperty.call(repairRecord, 'messages'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(repairRecord, 'details'), false);
+  assert.equal(JSON.stringify(repairRecord).includes('promptPayload'), false);
   assert.equal(result.turns[0]?.plan?.id, 'turn:repaired');
   assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
-    ['node.params.update', true],
     ['node.params.update', false],
   ]);
-  assert.equal(loggerRecords.some((record) => record.kind === 'ai.turn.repair.request'), true);
 });
 
 test('orchestrator repairs natural-language-plus-json output instead of using flashlight regex fallback', async () => {
@@ -1355,7 +1478,6 @@ test('orchestrator repairs natural-language-plus-json output instead of using fl
   assert.equal(prompts.length, 2);
   assert.equal(result.turns[0]?.plan?.id, 'turn:fixed');
   assert.deepEqual(dispatches.map((item) => [item.command.type, item.dryRun]), [
-    ['node.params.update', true],
     ['node.params.update', false],
   ]);
 });
@@ -1442,12 +1564,12 @@ test('orchestrator stops repair after max attempts and does not apply invalid co
       content: JSON.stringify({
         version: 1,
         id: 'turn:bad',
-        actions: [{ op: 'setParam', nodeId: 'display:text', param: 'text', value: 'bad' }],
+        actions: [{ op: 'setParam', nodeId: 'missing:text', param: 'text', value: 'bad' }],
       }),
       parsed: {
         version: 1,
         id: 'turn:bad',
-        actions: [{ op: 'setParam', nodeId: 'display:text', param: 'text', value: 'bad' }],
+        actions: [{ op: 'setParam', nodeId: 'missing:text', param: 'text', value: 'bad' }],
       },
       request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
     }),
@@ -1466,7 +1588,7 @@ test('orchestrator stops repair after max attempts and does not apply invalid co
     });
 
     assert.equal(result.turns[0]?.plan, null);
-    assert.deepEqual(dispatches.map((item) => item.dryRun), [true, true]);
+    assert.deepEqual(dispatches.map((item) => item.dryRun), []);
     assert.equal(dispatches.some((item) => item.dryRun === false), false);
   } finally {
     if (previousMaxAttempts === undefined) delete process.env.SHUGU_AI_REPAIR_MAX_ATTEMPTS;

@@ -57,12 +57,12 @@ const agentGroup = {
     publicInputs: [{ id: 'prompt', type: 'string', label: 'Prompt' }],
     publicOutputs: [{ id: 'effect', type: 'number', label: 'Effect' }],
     exposedNodeIds: ['inside'],
-    callableCommands: ['node.params.update', 'node.add', 'node.connect'],
+    callableCommands: ['node.params.update', 'node.add', 'node.connect', 'node.remove'],
   },
   agentPolicy: {
     enabled: true,
     allowedActorIds: ['ai-1'],
-    allowedCommands: ['node.params.update', 'node.add', 'node.connect'],
+    allowedCommands: ['node.params.update', 'node.add', 'node.connect', 'node.remove'],
     deniedSurfaces: ['partition', 'secrets'],
     targetScope: {
       nodeIds: ['inside'],
@@ -121,7 +121,75 @@ test('AI can mutate and create nodes inside an assigned AI Space sandbox', () =>
 
   assert.equal(added.ok, true);
   assert.equal(bus.getSnapshot().groups[0]?.nodeIds.includes('agent:new'), true);
+  assert.equal(
+    bus.getSnapshot().groups[0]?.agentPolicy?.targetScope?.nodeIds?.includes('agent:new'),
+    true
+  );
+  assert.equal(
+    bus.getSnapshot().groups[0]?.agentInterface?.exposedNodeIds?.includes('agent:new'),
+    true
+  );
   assert.equal(bus.getSnapshot().nodes.find((node) => node.id === 'agent:new')?.params.value, 2);
+
+  const removed = bus.dispatch({
+    actor: aiActor,
+    command: {
+      type: 'node.remove',
+      scopeGroupId: 'ai-space:agent',
+      nodeId: 'agent:new',
+    },
+  });
+  assert.equal(removed.ok, true);
+  assert.equal(
+    bus.getSnapshot().nodes.some((node) => node.id === 'agent:new'),
+    false
+  );
+});
+
+test('Legacy AI Space groups are normalized with full in-space graph permissions', () => {
+  const bus = createSemanticCommandBus({
+    graph,
+    groups: [
+      {
+        ...agentGroup,
+        nodeIds: ['inside', 'outside'],
+        agentInterface: {
+          exposedNodeIds: ['inside'],
+          callableCommands: ['node.params.update', 'node.add', 'node.connect', 'node.disconnect'],
+        },
+        agentPolicy: {
+          enabled: true,
+          allowedActorIds: ['ai-1'],
+          allowedCommands: ['node.params.update', 'node.add', 'node.connect', 'node.disconnect'],
+          targetScope: { nodeIds: ['inside'], allowNewNodes: true },
+        },
+      },
+    ],
+    definitions,
+    policy: createGroupSovereigntyPolicy(),
+    revision: 10,
+  });
+
+  const group = bus.getSnapshot().groups[0];
+  assert.equal(group?.agentInterface?.callableCommands?.includes('node.remove'), true);
+  assert.equal(group?.agentPolicy?.allowedCommands?.includes('node.remove'), true);
+  assert.equal(group?.agentInterface?.exposedNodeIds?.includes('outside'), true);
+  assert.equal(group?.agentPolicy?.targetScope?.nodeIds?.includes('outside'), true);
+
+  const removed = bus.dispatch({
+    actor: aiActor,
+    command: {
+      type: 'node.remove',
+      scopeGroupId: 'ai-space:agent',
+      nodeId: 'outside',
+    },
+  });
+
+  assert.equal(removed.ok, true);
+  assert.equal(
+    bus.getSnapshot().nodes.some((node) => node.id === 'outside'),
+    false
+  );
 });
 
 test('AI sandbox rejects out-of-scope targets and budget overflow without live mutation', () => {
