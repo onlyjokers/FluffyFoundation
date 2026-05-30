@@ -82,10 +82,35 @@ test('parsed and remapped graph AI spaces keep AI metadata', () => {
   assert.deepEqual(groups[0].agentInterface, {
     ...aiInterface,
     exposedNodeIds: ['node:new-display'],
+    callableCommands: [
+      'node.params.update',
+      'node.inputs.update',
+      'node.add',
+      'node.connect',
+      'node.disconnect',
+      'node.remove',
+    ],
+    eventBindings: ['client.text.final'],
   });
   assert.deepEqual(groups[0].agentPolicy, {
     ...aiPolicy,
+    allowedCommands: [
+      'node.params.update',
+      'group.update',
+      'node.inputs.update',
+      'node.add',
+      'node.connect',
+      'node.disconnect',
+      'node.remove',
+    ],
     targetScope: { ...aiPolicy.targetScope, nodeIds: ['node:new-display'] },
+    budgets: {
+      maxNodes: 128,
+      maxConnections: 256,
+      maxParamsPerCommand: 32,
+      maxCommandsPerTurn: 64,
+      maxRetries: 2,
+    },
   });
 });
 
@@ -128,12 +153,106 @@ test('remapped graph AI spaces rewrite scoped AI metadata node ids', () => {
     'node:new-display',
     'node:new-input',
   ]);
+  assert.deepEqual(groups[0].agentInterface?.eventBindings, ['client.text.final']);
   assert.deepEqual(groups[0].agentPolicy?.targetScope?.nodeIds, [
     'node:new-display',
     'node:new-input',
   ]);
   assert.deepEqual(groups[0].agentPolicy?.targetScope?.allowedNodeTypes, ['string']);
   assert.deepEqual(groups[0].agentPolicy?.targetScope?.deniedNodeTypes, ['network']);
+});
+
+test('AI spaces expose all member nodes after remap even when legacy metadata is stale', () => {
+  const { groups } = remapImportedGroups(
+    [
+      {
+        id: 'g-ai',
+        parentId: null,
+        kind: 'ai-space',
+        name: 'AI Space',
+        nodeIds: ['n-display', 'n-input'],
+        disabled: false,
+        minimized: false,
+        agentInterface: {
+          ...aiInterface,
+          exposedNodeIds: ['n-display'],
+        },
+        agentPolicy: {
+          ...aiPolicy,
+          targetScope: { ...aiPolicy.targetScope, nodeIds: ['n-display'] },
+        },
+      } as NodeGroup,
+    ],
+    new Map([
+      ['n-display', 'node:new-display'],
+      ['n-input', 'node:new-input'],
+    ]),
+    (group) => (group?.kind === 'ai-space' ? 'ai-space:new-ai' : 'group:new-ai')
+  );
+
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].agentInterface?.exposedNodeIds, [
+    'node:new-display',
+    'node:new-input',
+  ]);
+  assert.deepEqual(groups[0].agentPolicy?.targetScope?.nodeIds, [
+    'node:new-display',
+    'node:new-input',
+  ]);
+});
+
+test('AI spaces upgrade legacy command surface and budgets without lowering existing limits', () => {
+  const [group] = serializeNodeGroups([
+    {
+      id: 'g-ai',
+      parentId: null,
+      kind: 'ai-space',
+      name: 'AI Space',
+      nodeIds: ['n-display'],
+      disabled: false,
+      minimized: false,
+      agentInterface: {
+        ...aiInterface,
+        callableCommands: ['node.params.update'],
+      },
+      agentPolicy: {
+        ...aiPolicy,
+        allowedCommands: ['node.params.update'],
+        budgets: {
+          maxNodes: 512,
+          maxConnections: 8,
+          maxParamsPerCommand: 4,
+          maxCommandsPerTurn: 4,
+          maxRetries: 1,
+        },
+      },
+    } as NodeGroup,
+  ]);
+
+  assert.deepEqual(group?.agentInterface?.callableCommands, [
+    'node.params.update',
+    'node.inputs.update',
+    'node.add',
+    'node.connect',
+    'node.disconnect',
+    'node.remove',
+  ]);
+  assert.deepEqual(group?.agentPolicy?.allowedCommands, [
+    'node.params.update',
+    'node.inputs.update',
+    'node.add',
+    'node.connect',
+    'node.disconnect',
+    'node.remove',
+  ]);
+  assert.deepEqual(group?.agentPolicy?.budgets, {
+    maxNodes: 512,
+    maxConnections: 256,
+    maxParamsPerCommand: 32,
+    maxCommandsPerTurn: 64,
+    maxRetries: 2,
+  });
+  assert.deepEqual(group?.agentPolicy?.deniedSurfaces, ['network']);
 });
 
 test('serialized graph AI spaces keep AI metadata', () => {
@@ -153,14 +272,50 @@ test('serialized graph AI spaces keep AI metadata', () => {
 
   assert.equal(groups.length, 1);
   assert.equal(groups[0].kind, 'ai-space');
-  assert.deepEqual(groups[0].agentInterface, aiInterface);
-  assert.deepEqual(groups[0].agentPolicy, aiPolicy);
+  assert.deepEqual(groups[0].agentInterface, {
+    ...aiInterface,
+    callableCommands: [
+      'node.params.update',
+      'node.inputs.update',
+      'node.add',
+      'node.connect',
+      'node.disconnect',
+      'node.remove',
+    ],
+    eventBindings: ['client.text.final'],
+  });
+  assert.deepEqual(groups[0].agentPolicy, {
+    ...aiPolicy,
+    allowedCommands: [
+      'node.params.update',
+      'group.update',
+      'node.inputs.update',
+      'node.add',
+      'node.connect',
+      'node.disconnect',
+      'node.remove',
+    ],
+    budgets: {
+      maxNodes: 128,
+      maxConnections: 256,
+      maxParamsPerCommand: 32,
+      maxCommandsPerTurn: 64,
+      maxRetries: 2,
+    },
+  });
 });
 
 test('template import payload classifier recognizes the AI Agent demo as a node graph', () => {
   const parsed = readAiAgentDemoTemplate();
 
   assert.equal(getTemplateImportPayloadKind(parsed), 'node-graph');
+  const aiSpace = (parsed as { groups?: Array<{ agentInterface?: { callableCommands?: string[] }; agentPolicy?: { allowedCommands?: string[]; budgets?: Record<string, number> } }> }).groups?.find(
+    (group) => group.agentPolicy?.allowedCommands?.includes('node.params.update')
+  );
+  assert.equal(aiSpace?.agentInterface?.callableCommands?.includes('node.inputs.update'), true);
+  assert.equal(aiSpace?.agentPolicy?.allowedCommands?.includes('node.inputs.update'), true);
+  assert.equal((aiSpace?.agentPolicy?.budgets?.maxNodes ?? 0) >= 128, true);
+  assert.equal((aiSpace?.agentPolicy?.budgets?.maxCommandsPerTurn ?? 0) >= 64, true);
 });
 
 test('parsed node graph files preserve embedded custom node definitions', () => {

@@ -53,7 +53,7 @@ const createDemoSnapshot = () => ({
         publicOutputs: [{ id: 'display', type: 'string', label: 'Display response' }],
         exposedNodeIds: ['display:greeting', 'client:pulse'],
         callableCommands: ['node.params.update'],
-        eventBindings: ['client.joined', 'client.text.final'],
+        eventBindings: ['client.text.final'],
       },
     },
   ],
@@ -74,7 +74,7 @@ const skillRegistry = createAgentSkillRegistry({
       triggers: {
         nodeTypes: ['display-breathing', 'client-pulse'],
         commandTypes: ['node.params.update'],
-        eventTypes: ['client.joined', 'client.text.final'],
+        eventTypes: ['client.text.final'],
       },
       content: 'Use node.params.update inside the assigned AI Space.',
     },
@@ -90,7 +90,7 @@ const waitFor = async (condition: () => boolean): Promise<void> => {
   assert.equal(condition(), true);
 };
 
-test('AI demo loop routes client join and text through the shared semantic layer', async () => {
+test('AI demo loop routes client text through the shared semantic layer', async () => {
   const delivered: Array<{ socketIds: string[]; message: Message }> = [];
   const dispatches: Array<{ command: Record<string, unknown>; dryRun?: boolean }> = [];
   const authority = {
@@ -119,31 +119,6 @@ test('AI demo loop routes client join and text through the shared semantic layer
     }),
     completeJson: async (input: { messages: Array<{ content: string }> }) => {
       const prompt = input.messages.map((message) => message.content).join('\n');
-      if (prompt.includes('"type":"client.joined"')) {
-        return {
-          raw: null,
-          content: '',
-          parsed: {
-            id: 'demo:join',
-            summary: 'Greet traveler and pulse the phone.',
-            commands: [
-              {
-                type: 'node.params.update',
-                scopeGroupId: 'ai-space:client-1',
-                nodeId: 'display:greeting',
-                params: { message: '你好，旅行者', intensity: 0.7 },
-              },
-              {
-                type: 'node.params.update',
-                scopeGroupId: 'ai-space:client-1',
-                nodeId: 'client:pulse',
-                params: { brightness: 1, flicker: 0.5 },
-              },
-            ],
-          },
-          request: { url: 'https://code.b886.top/v1/chat/completions', body: {} },
-        };
-      }
       return {
         raw: null,
         content: '',
@@ -199,31 +174,14 @@ test('AI demo loop routes client join and text through the shared semantic layer
   };
   router.setServer(server as never);
 
-  router.notifyClientJoined('client-1');
-  await waitFor(() => dispatches.length === 4);
-
-  assert.deepEqual(
-    dispatches.map((entry) => [entry.command.type, entry.command.nodeId, entry.dryRun]),
-    [
-      ['node.params.update', 'display:greeting', true],
-      ['node.params.update', 'client:pulse', true],
-      ['node.params.update', 'display:greeting', false],
-      ['node.params.update', 'client:pulse', false],
-    ]
-  );
-  assert.equal(
-    delivered.some((entry) => (entry.message as { action?: string }).action === 'clientJoined'),
-    true
-  );
-
   router.routeMessage(
     createSensorDataMessage('client-1', 'custom', { kind: 'agent-text', text: '我想去看海' }),
     'socket-client-1'
   );
-  await waitFor(() => dispatches.length === 6);
+  await waitFor(() => dispatches.length === 2);
 
   assert.deepEqual(
-    dispatches.slice(4).map((entry) => [entry.command.type, entry.command.nodeId, entry.dryRun]),
+    dispatches.map((entry) => [entry.command.type, entry.command.nodeId, entry.dryRun]),
     [
       ['node.params.update', 'display:greeting', true],
       ['node.params.update', 'display:greeting', false],

@@ -139,6 +139,122 @@ test('AI action DSL accepts addNode/connect aliases emitted by models', () => {
   );
 });
 
+test('AI action DSL accepts top-level connect endpoint aliases emitted by models', () => {
+  const parsed = parseAgentPlan(
+    {
+      version: 1,
+      id: 'turn-create-client-top-level-connect',
+      actions: [
+        { op: 'addNode', nodeId: 'client-new', type: 'client-loader' },
+        {
+          op: 'connect',
+          sourceNodeId: 'source-a',
+          sourcePortId: 'value',
+          targetNodeId: 'client-new',
+          targetPortId: 'range',
+        },
+      ],
+    },
+    ''
+  );
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+
+  const compiled = compileAgentPlan({
+    plan: parsed.value,
+    snapshot,
+    targetSpace,
+  });
+
+  assert.equal(compiled.ok, true);
+  if (!compiled.ok) return;
+  const connectCommand = compiled.commands[1];
+  assert.equal(connectCommand.type, 'node.connect');
+  if (connectCommand.type !== 'node.connect') return;
+  assert.deepEqual(
+    {
+      sourceNodeId: connectCommand.connection.sourceNodeId,
+      sourcePortId: connectCommand.connection.sourcePortId,
+      targetNodeId: connectCommand.connection.targetNodeId,
+      targetPortId: connectCommand.connection.targetPortId,
+    },
+    {
+      sourceNodeId: 'source-a',
+      sourcePortId: 'value',
+      targetNodeId: 'client-new',
+      targetPortId: 'range',
+    }
+  );
+});
+
+test('AI action DSL compiles setInput actions to scoped node input updates', () => {
+  const parsed = parseAgentPlan(
+    {
+      version: 1,
+      id: 'turn-set-input',
+      actions: [{ op: 'setInput', nodeId: 'target', input: 'enabled', value: true }],
+    },
+    ''
+  );
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+
+  const compiled = compileAgentPlan({
+    plan: parsed.value,
+    snapshot: {
+      ...snapshot,
+      nodes: [
+        ...snapshot.nodes,
+        {
+          id: 'target',
+          type: 'bool',
+          params: {},
+          inputValues: {},
+          outputValues: {},
+        },
+      ],
+    },
+    targetSpace: {
+      ...targetSpace,
+      nodeIds: [...targetSpace.nodeIds, 'target'],
+      agentPolicy: {
+        ...targetSpace.agentPolicy,
+        allowedCommands: ['node.inputs.update'],
+        targetScope: {
+          ...(targetSpace.agentPolicy?.targetScope ?? {}),
+          nodeIds: [...(targetSpace.agentPolicy?.targetScope?.nodeIds ?? []), 'target'],
+        },
+      },
+    },
+  });
+
+  assert.equal(compiled.ok, true);
+  if (!compiled.ok) return;
+  assert.deepEqual(compiled.commands, [
+    {
+      type: 'node.inputs.update',
+      scopeGroupId: targetSpace.id,
+      nodeId: 'target',
+      inputValues: { enabled: true },
+    },
+  ]);
+});
+
+test('AI action DSL accepts setInput port aliases emitted by models', () => {
+  const parsed = parseAgentPlan(
+    {
+      version: 1,
+      id: 'turn-set-input-port',
+      actions: [{ op: 'setInput', nodeId: 'target', portId: 'display', value: false }],
+    },
+    ''
+  );
+
+  assert.equal(parsed.ok, true);
+});
+
 test('AI action DSL rejects node types disabled in agent capability settings', () => {
   const parsed = parseAgentPlan(
     {

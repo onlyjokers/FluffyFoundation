@@ -531,16 +531,6 @@ export class MessageRouterService {
 
     this.emitToSockets(managerSocketIds, message);
 
-    this.enqueueAgentTrigger({
-      source: 'system',
-      priority: 'system',
-      event: {
-        type: 'client.joined',
-        clientId,
-        groupId: this.getAgentGroupIdForClient(clientId),
-      },
-    });
-
     // Also send full client list
     this.broadcastClientListUpdate();
   }
@@ -604,8 +594,6 @@ export class MessageRouterService {
   private shouldWakeAgentFromClientUiInteraction(payload: Record<string, unknown>): boolean {
     const uiKind = typeof payload.uiKind === 'string' ? payload.uiKind : '';
     if (uiKind === 'button') return Boolean(payload.pressed);
-    if (uiKind === 'input') return Boolean(payload.firstInputed);
-    if (uiKind === 'record') return Boolean(payload.finished);
     return false;
   }
 

@@ -137,7 +137,7 @@
         {#each visibleButtons($clientUiRuntime) as node, index (node.nodeId)}
           <div class="client-ui-button-shell" style={`--slot-opacity:${Math.max(0.5, 0.82 - index * 0.08)};`}>
             <button class="client-ui-button" type="button" on:click={() => pressButton(node.nodeId)}>
-              Press
+              <span class="control-label">Press</span>
             </button>
           </div>
         {/each}
@@ -162,7 +162,7 @@
                 type="submit"
                 disabled={!String(inputDrafts[node.nodeId] ?? '').trim()}
               >
-                Send
+                <span class="control-label">Send</span>
               </button>
             </form>
           </div>
@@ -179,8 +179,8 @@
             type="button"
             on:click={() => void toggleRecording(node.nodeId)}
           >
-            <span class="record-dot" aria-hidden="true"></span>
-            {node.recording ? 'Stop' : 'Record'}
+            <span class="control-indicator record-dot" aria-hidden="true"></span>
+            <span class="control-label">{node.recording ? 'Stop' : 'Record'}</span>
           </button>
         {/each}
       </div>
@@ -197,9 +197,9 @@
     pointer-events: none;
     isolation: isolate;
     --client-ui-bg: rgba(10, 13, 16, 0.78);
-    --client-ui-bg-strong: rgba(16, 20, 24, 0.9);
-    --client-ui-border: rgba(255, 255, 255, 0.2);
-    --client-ui-border-strong: rgba(255, 255, 255, 0.34);
+    --client-ui-bg-strong: rgba(18, 23, 28, 0.92);
+    --client-ui-border: rgba(255, 255, 255, 0.18);
+    --client-ui-border-strong: rgba(255, 255, 255, 0.38);
     --client-ui-text: rgba(255, 255, 255, 0.92);
     --client-ui-muted: rgba(255, 255, 255, 0.48);
     --client-ui-accent: #7dd3c7;
@@ -210,8 +210,10 @@
   .client-ui-stage {
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at 50% 52%, rgba(0, 0, 0, 0.18), transparent 36%);
-    opacity: 0.38;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(125, 211, 199, 0.08), transparent 22%),
+      radial-gradient(circle at 50% 62%, rgba(0, 0, 0, 0.24), transparent 44%);
+    opacity: 0.5;
   }
 
   .client-ui-button-stage {
@@ -232,6 +234,16 @@
     display: grid;
     place-items: center;
     opacity: var(--slot-opacity, 0.82);
+  }
+
+  .client-ui-button-shell::before {
+    position: absolute;
+    inset: -10px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 55%);
+    content: '';
+    opacity: 0.72;
+    pointer-events: none;
   }
 
   .client-ui-input-dock {
@@ -281,21 +293,79 @@
       opacity 160ms ease;
   }
 
+  .client-ui-button,
+  .client-ui-record-button,
+  .client-ui-submit {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .client-ui-button::before,
+  .client-ui-record-button::before,
+  .client-ui-submit::before,
+  .client-ui-input-form::before {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.11), transparent 42%),
+      linear-gradient(90deg, rgba(125, 211, 199, 0.16), transparent 26%, transparent 74%, rgba(255, 255, 255, 0.05));
+    content: '';
+    opacity: 0.8;
+    pointer-events: none;
+  }
+
+  .client-ui-button::after,
+  .client-ui-record-button::after,
+  .client-ui-submit::after {
+    position: absolute;
+    top: 9px;
+    bottom: 9px;
+    left: 10px;
+    width: 3px;
+    border-radius: 999px;
+    background: rgba(125, 211, 199, 0.72);
+    content: '';
+    opacity: 0.72;
+  }
+
   .client-ui-record-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     min-width: 152px;
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+    background:
+      linear-gradient(180deg, rgba(19, 24, 28, 0.88), rgba(8, 10, 12, 0.86)),
+      var(--client-ui-bg);
+    box-shadow:
+      0 14px 34px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
     font-weight: 650;
     cursor: pointer;
   }
 
+  .client-ui-record-button:hover {
+    border-color: var(--client-ui-border-strong);
+    background: var(--client-ui-bg-strong);
+    transform: translateY(-1px);
+  }
+
   .client-ui-record-button.recording {
     border-color: rgba(239, 107, 90, 0.72);
-    background: rgba(43, 18, 17, 0.88);
+    background:
+      linear-gradient(180deg, rgba(58, 25, 23, 0.92), rgba(20, 9, 9, 0.9)),
+      rgba(43, 18, 17, 0.88);
     color: rgba(255, 242, 239, 0.96);
+  }
+
+  .client-ui-record-button.recording::after {
+    background: rgba(239, 107, 90, 0.85);
+  }
+
+  .control-indicator {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
   }
 
   .record-dot {
@@ -303,6 +373,11 @@
     height: 9px;
     border-radius: 999px;
     background: var(--client-ui-record);
+    box-shadow: 0 0 0 4px rgba(239, 107, 90, 0.1);
+  }
+
+  .client-ui-record-button.recording .record-dot {
+    animation: client-ui-record-pulse 1.2s ease-in-out infinite;
   }
 
   .client-ui-button {
@@ -312,9 +387,20 @@
     width: clamp(156px, 22vw, 220px);
     min-height: 56px;
     padding: 0 28px;
-    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+    background:
+      linear-gradient(180deg, rgba(22, 28, 32, 0.9), rgba(8, 10, 12, 0.86)),
+      var(--client-ui-bg);
+    box-shadow:
+      0 18px 44px rgba(0, 0, 0, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
     font-weight: 650;
     cursor: pointer;
+  }
+
+  .control-label,
+  .control-indicator {
+    position: relative;
+    z-index: 1;
   }
 
   .client-ui-button:hover {
@@ -347,13 +433,19 @@
     overflow: hidden;
     border: 1px solid var(--client-ui-border);
     border-radius: 14px;
-    background: var(--client-ui-bg);
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    background:
+      linear-gradient(180deg, rgba(17, 22, 26, 0.9), rgba(8, 10, 12, 0.86)),
+      var(--client-ui-bg);
+    box-shadow:
+      0 16px 44px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(16px) saturate(1.1);
     pointer-events: auto;
   }
 
   .client-ui-input {
+    position: relative;
+    z-index: 1;
     min-width: 0;
     padding: 0 12px;
     border-color: transparent;
@@ -370,9 +462,11 @@
 
   .client-ui-submit {
     min-height: 48px;
-    padding: 0 18px;
+    padding: 0 18px 0 22px;
     border-radius: 10px;
-    background: rgba(125, 211, 199, 0.16);
+    background:
+      linear-gradient(180deg, rgba(125, 211, 199, 0.24), rgba(125, 211, 199, 0.12)),
+      rgba(125, 211, 199, 0.16);
     color: rgba(232, 255, 251, 0.96);
     font-weight: 650;
     cursor: pointer;
@@ -395,6 +489,17 @@
     box-shadow: none;
     color: var(--client-ui-muted);
     opacity: 1;
+  }
+
+  @keyframes client-ui-record-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 4px rgba(239, 107, 90, 0.12);
+    }
+
+    50% {
+      box-shadow: 0 0 0 7px rgba(239, 107, 90, 0.18);
+    }
   }
 
   @media (max-width: 520px) {

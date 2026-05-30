@@ -23,6 +23,23 @@ type ParsedNodeGraphFile = {
 
 type TemplateImportPayloadKind = 'midi-template' | 'node-graph' | 'unsupported';
 
+const AI_SPACE_GRAPH_COMMANDS = [
+  'node.params.update',
+  'node.inputs.update',
+  'node.add',
+  'node.connect',
+  'node.disconnect',
+  'node.remove',
+] as const;
+const AI_SPACE_EVENT_BINDINGS = ['client.text.final', 'display.ready'] as const;
+const AI_SPACE_DEFAULT_BUDGETS = {
+  maxNodes: 128,
+  maxConnections: 256,
+  maxParamsPerCommand: 32,
+  maxCommandsPerTurn: 64,
+  maxRetries: 2,
+} as const;
+
 const cloneJsonValue = <T>(value: T): T =>
   value == null ? value : (JSON.parse(JSON.stringify(value)) as T);
 
@@ -48,6 +65,31 @@ function remapAgentInterface(
   return next;
 }
 
+function withoutJoinBindings(value: unknown): string[] | undefined {
+  const source = Array.isArray(value) ? value : AI_SPACE_EVENT_BINDINGS;
+  const bindings = source
+    .map((binding) => String(binding))
+    .filter((binding) => binding && binding !== 'client.joined');
+  return Array.from(new Set(bindings));
+}
+
+function mergeStringList(existing: unknown, required: readonly string[]): string[] {
+  const values = Array.isArray(existing) ? existing.map(String).filter(Boolean) : [];
+  return Array.from(new Set([...values, ...required]));
+}
+
+function upgradeAiSpaceBudgets(value: unknown): Record<keyof typeof AI_SPACE_DEFAULT_BUDGETS, number> {
+  const existing = isRecord(value) ? value : {};
+  const next: Record<keyof typeof AI_SPACE_DEFAULT_BUDGETS, number> = { ...AI_SPACE_DEFAULT_BUDGETS };
+  for (const key of Object.keys(AI_SPACE_DEFAULT_BUDGETS) as Array<keyof typeof AI_SPACE_DEFAULT_BUDGETS>) {
+    const current = existing[key];
+    if (typeof current === 'number' && Number.isFinite(current)) {
+      next[key] = Math.max(current, AI_SPACE_DEFAULT_BUDGETS[key]);
+    }
+  }
+  return next;
+}
+
 function remapAgentPolicy(
   value: NodeGroup['agentPolicy'],
   nodeIdMap: Map<string, string>
@@ -64,6 +106,52 @@ function remapAgentPolicy(
   return next;
 }
 
+function normalizeAiSpaceMetadata(group: NodeGroup): NodeGroup {
+  if (group.kind !== 'ai-space') return group;
+  const nodeIds = Array.from(new Set((group.nodeIds ?? []).map(String).filter(Boolean)));
+  const existingExposed = (group.agentInterface?.exposedNodeIds ?? [])
+    .map(String)
+    .filter(Boolean);
+  const existingScope = (group.agentPolicy?.targetScope?.nodeIds ?? [])
+    .map(String)
+    .filter(Boolean);
+  const exposedNodeIds = Array.from(new Set([...existingExposed, ...nodeIds]));
+  const targetScopeNodeIds = Array.from(new Set([...existingScope, ...nodeIds]));
+  const eventBindings = withoutJoinBindings(group.agentInterface?.eventBindings);
+
+  return {
+    ...group,
+    nodeIds,
+    agentInterface:
+      group.agentInterface !== undefined
+        ? {
+            ...group.agentInterface,
+            exposedNodeIds,
+            callableCommands: mergeStringList(
+              group.agentInterface.callableCommands,
+              AI_SPACE_GRAPH_COMMANDS
+            ),
+            eventBindings,
+          }
+        : undefined,
+    agentPolicy:
+      group.agentPolicy !== undefined
+        ? {
+            ...group.agentPolicy,
+            allowedCommands: mergeStringList(
+              group.agentPolicy.allowedCommands,
+              AI_SPACE_GRAPH_COMMANDS
+            ),
+            targetScope: {
+              ...(group.agentPolicy.targetScope ?? {}),
+              nodeIds: targetScopeNodeIds,
+            },
+            budgets: upgradeAiSpaceBudgets(group.agentPolicy.budgets),
+          }
+        : undefined,
+  };
+}
+
 export function parseNodeGroups(value: unknown): NodeGroup[] {
   if (!Array.isArray(value)) return [];
   const groups: NodeGroup[] = [];
@@ -78,7 +166,7 @@ export function parseNodeGroups(value: unknown): NodeGroup[] {
     const nodeIds = nodeIdsRaw.map((v) => String(v)).filter(Boolean);
     const disabled = Boolean(item.disabled);
     const minimized = Boolean(item.minimized);
-    groups.push({
+    groups.push(normalizeAiSpaceMetadata({
       id,
       parentId,
       name,
@@ -96,26 +184,29 @@ export function parseNodeGroups(value: unknown): NodeGroup[] {
         item.agentPolicy !== undefined
           ? (cloneJsonValue(item.agentPolicy) as NodeGroup['agentPolicy'])
           : undefined,
-    });
+    }));
   }
   return groups;
 }
 
 export function serializeNodeGroups(groups: NodeGroup[]): NodeGroup[] {
-  return (Array.isArray(groups) ? groups : []).map((group) => ({
-    id: String(group.id),
-    parentId: group.parentId ? String(group.parentId) : null,
-    name: String(group.name ?? ''),
-    nodeIds: (group.nodeIds ?? []).map((id) => String(id)).filter(Boolean),
-    disabled: Boolean(group.disabled),
-    kind: group.kind === 'ai-space' ? 'ai-space' : group.kind === 'group' ? 'group' : undefined,
-    minimized: Boolean(group.minimized),
-    runtimeActive:
-      typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
+  return (Array.isArray(groups) ? groups : []).map((source) => {
+    const group = normalizeAiSpaceMetadata(source);
+    return {
+      id: String(group.id),
+      parentId: group.parentId ? String(group.parentId) : null,
+      name: String(group.name ?? ''),
+      nodeIds: (group.nodeIds ?? []).map((id) => String(id)).filter(Boolean),
+      disabled: Boolean(group.disabled),
+      kind: group.kind === 'ai-space' ? 'ai-space' : group.kind === 'group' ? 'group' : undefined,
+      minimized: Boolean(group.minimized),
+      runtimeActive:
+        typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
       agentInterface:
         group.agentInterface !== undefined ? cloneJsonValue(group.agentInterface) : undefined,
-    agentPolicy: group.agentPolicy !== undefined ? cloneJsonValue(group.agentPolicy) : undefined,
-  }));
+      agentPolicy: group.agentPolicy !== undefined ? cloneJsonValue(group.agentPolicy) : undefined,
+    };
+  });
 }
 
 export function parseNodeGraphFile(payload: unknown): ParsedNodeGraphFile | null {
@@ -180,7 +271,7 @@ export function remapImportedGroups(
       .filter(Boolean) as string[];
     const uniqueNodeIds = Array.from(new Set(nodeIds));
     if (uniqueNodeIds.length === 0) continue;
-    kept.push({
+    kept.push(normalizeAiSpaceMetadata({
       id,
       parentId,
       name,
@@ -192,7 +283,7 @@ export function remapImportedGroups(
         typeof group.runtimeActive === 'boolean' ? Boolean(group.runtimeActive) : undefined,
       agentInterface: remapAgentInterface(group.agentInterface, nodeIdMap),
       agentPolicy: remapAgentPolicy(group.agentPolicy, nodeIdMap),
-    });
+    }));
   }
 
   if (kept.length === 0)
@@ -247,6 +338,10 @@ export function remapImportedGroups(
   for (const g of remapped) {
     if (g.parentId) continue;
     computeUnion(String(g.id));
+  }
+
+  for (let index = 0; index < remapped.length; index += 1) {
+    remapped[index] = normalizeAiSpaceMetadata(remapped[index]);
   }
 
   return { groups: remapped, groupIdMap };

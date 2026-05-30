@@ -62,6 +62,35 @@ test('planGroupFromSelection can create an AI Space from the current selection',
     nodeIds: ['a'],
     allowNewNodes: true,
   });
+  assert.deepEqual(result.group?.agentInterface?.eventBindings, [
+    'client.text.final',
+    'display.ready',
+  ]);
+  assert.deepEqual(result.group?.agentInterface?.callableCommands, [
+    'node.params.update',
+    'node.inputs.update',
+    'node.add',
+    'node.connect',
+    'node.disconnect',
+    'node.remove',
+  ]);
+  assert.deepEqual(result.group?.agentPolicy?.allowedCommands, [
+    'node.params.update',
+    'node.inputs.update',
+    'node.add',
+    'node.connect',
+    'node.disconnect',
+    'node.remove',
+  ]);
+  assert.equal(result.group?.agentInterface?.callableCommands?.includes('node.remove'), true);
+  assert.equal(result.group?.agentPolicy?.allowedCommands?.includes('node.remove'), true);
+  assert.deepEqual(result.group?.agentPolicy?.budgets, {
+    maxNodes: 128,
+    maxConnections: 256,
+    maxParamsPerCommand: 32,
+    maxCommandsPerTurn: 64,
+    maxRetries: 2,
+  });
 });
 
 test('planGroupFromSelection denies cross-group selections', () => {

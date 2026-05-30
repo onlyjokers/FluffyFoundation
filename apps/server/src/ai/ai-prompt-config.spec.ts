@@ -18,6 +18,7 @@ test('loads the repository editable system prompt file when no env override is s
     assert.match(prompt.source, /apps\/server\/prompts\/ai-orchestrator\.system\.txt$/);
     assert.match(prompt.systemPrompt, /AgentActionPlan v1/);
     assert.match(prompt.systemPrompt, /Return only one valid JSON object/);
+    assert.match(prompt.systemPrompt, /explicitly asks to add, create, delete, remove, connect, or disconnect/);
   } finally {
     if (previousInline === undefined) {
       delete process.env.SHUGU_AI_SYSTEM_PROMPT;

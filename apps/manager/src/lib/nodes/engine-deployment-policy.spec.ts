@@ -31,6 +31,10 @@ test('patch deployment policy allows Display Text command nodes', () => {
   assert.doesNotThrow(() => assertPatchDeployableNodeType('proc-display-text'));
 });
 
+test('patch deployment policy allows command aggregators inside UI command patches', () => {
+  assert.doesNotThrow(() => assertPatchDeployableNodeType('cmd-aggregator'));
+});
+
 test('patch deployment policy allows group gates as runtime group controls', () => {
   assert.doesNotThrow(() => assertPatchDeployableNodeType('group-gate'));
 });
@@ -50,6 +54,13 @@ test('patch deployment policy rejects the legacy Aliyun TTS audio source node', 
   assert.throws(
     () => assertPatchDeployableNodeType('aliyun-tts'),
     /Patch contains non-deployable node type: aliyun-tts/
+  );
+});
+
+test('patch deployment policy rejects Client Executor as a routing-only node', () => {
+  assert.throws(
+    () => assertPatchDeployableNodeType('client-executor'),
+    /Patch contains non-deployable node type: client-executor/
   );
 });
 

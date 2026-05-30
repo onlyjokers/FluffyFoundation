@@ -9,6 +9,7 @@ const LOOP_DEPLOYABLE_NODE_TYPES = new Set([
   'client-executor',
   'proc-client-sensors',
   'math',
+  'cmd-aggregator',
   'ai-model-ref',
   // Gates
   'logic-not',
@@ -108,6 +109,7 @@ const PATCH_DEPLOYABLE_NODE_TYPES = new Set([
   'client-button',
   'client-input-box',
   'record-sound-button',
+  'cmd-aggregator',
   'tone-osc',
   'tone-delay',
   'tone-resonator',

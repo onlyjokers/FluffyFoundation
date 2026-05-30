@@ -9,6 +9,10 @@ import { customNodeDefinitions, replaceCustomNodeDefinitions } from '$lib/nodes/
 import type { CustomNodeDefinition } from '$lib/nodes/custom-nodes/types';
 import { definitionsInCycles } from '$lib/nodes/custom-nodes/deps';
 import { get } from 'svelte/store';
+import {
+  parseProjectGroupsFromStorage,
+  serializeProjectGroupsForStorage,
+} from './project-groups-storage';
 
 const STORAGE_KEY = 'shugu-project-v1';
 
@@ -39,15 +43,7 @@ function safeGetStorage(): Storage | null {
 }
 
 function buildSnapshot(): ProjectSnapshot {
-  const groups = (get(nodeGroupsState) ?? []).map((g) => ({
-    id: String(g.id),
-    parentId: g.parentId ? String(g.parentId) : null,
-    name: String(g.name ?? ''),
-    nodeIds: (g.nodeIds ?? []).map((id) => String(id)).filter(Boolean),
-    disabled: Boolean(g.disabled),
-    minimized: Boolean(g.minimized),
-    runtimeActive: typeof g.runtimeActive === 'boolean' ? g.runtimeActive : undefined,
-  }));
+  const groups = serializeProjectGroupsForStorage(get(nodeGroupsState) ?? []);
   const customNodes = (get(customNodeDefinitions) ?? []).map((def) => ({
     definitionId: String(def.definitionId ?? ''),
     name: String(def.name ?? ''),
@@ -101,7 +97,7 @@ export function readLocalProjectForServerMigration(): LegacyProjectMigrationSnap
     if (!snapshot?.graph || !Array.isArray(snapshot.graph.nodes)) return null;
     return {
       graph: snapshot.graph,
-      ...(snapshot.groups ? { groups: snapshot.groups } : {}),
+      ...(snapshot.groups ? { groups: parseProjectGroupsFromStorage(snapshot.groups) } : {}),
     };
   } catch (err) {
     console.warn('[ProjectManager] Failed to read project for server migration', err);
@@ -117,36 +113,6 @@ export function loadLocalProject(): boolean {
 
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     Boolean(value && typeof value === 'object' && !Array.isArray(value));
-
-  type ParsedGroup = {
-    id: string;
-    parentId: string | null;
-    name: string;
-    nodeIds: string[];
-    disabled: boolean;
-    minimized: boolean;
-    runtimeActive?: boolean;
-  };
-
-  const parseNodeGroups = (value: unknown): ParsedGroup[] => {
-    if (!Array.isArray(value)) return [];
-    const groups: ParsedGroup[] = [];
-    for (const item of value) {
-      if (!isRecord(item)) continue;
-      const id = typeof item.id === 'string' ? item.id : '';
-      if (!id) continue;
-      const name = typeof item.name === 'string' ? item.name : String(item.name ?? '');
-      const parentIdRaw = item.parentId;
-      const parentId = typeof parentIdRaw === 'string' && parentIdRaw ? parentIdRaw : null;
-      const nodeIdsRaw = Array.isArray(item.nodeIds) ? item.nodeIds : [];
-      const nodeIds = nodeIdsRaw.map((v) => String(v)).filter(Boolean);
-      const disabled = Boolean(item.disabled);
-      const minimized = Boolean(item.minimized);
-      const runtimeActive = typeof item.runtimeActive === 'boolean' ? item.runtimeActive : undefined;
-      groups.push({ id, parentId, name, nodeIds, disabled, minimized, runtimeActive });
-    }
-    return groups;
-  };
 
   const parseCustomNodes = (value: unknown): CustomNodeDefinition[] => {
     if (!Array.isArray(value)) return [];
@@ -242,7 +208,7 @@ export function loadLocalProject(): boolean {
 
     // Restore groups immediately after graph load so group-port normalization doesn't delete
     // gate/proxy nodes as "orphans" due to missing group metadata.
-    nodeGroupsState.set(parseNodeGroups(snapshot?.groups));
+    nodeGroupsState.set(parseProjectGroupsFromStorage(snapshot?.groups));
 
     if (snapshot?.parameters?.length) {
       for (const p of snapshot.parameters) {

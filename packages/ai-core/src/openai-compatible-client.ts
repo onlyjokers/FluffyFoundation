@@ -112,57 +112,68 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleClientConfi
     async completeJson<T = unknown>(
       input: OpenAiCompatibleCompletionInput
     ): Promise<OpenAiCompatibleCompletionResult<T>> {
-      const body: Record<string, unknown> = {
-        model: config.model,
-        messages: input.messages,
-      };
-      if (typeof input.temperature === 'number') body.temperature = input.temperature;
-      if (typeof input.maxTokens === 'number') body.max_tokens = input.maxTokens;
-
-      const responseFormat = responseFormatFor(input, supportsJsonSchema);
-      if (responseFormat) body.response_format = responseFormat;
-
-      config.logger?.({
-        kind: 'request',
-        url,
-        model: config.model,
-        responseFormat: responseFormat?.type === 'json_schema' ? 'json_schema' : responseFormat?.type === 'json_object' ? 'json_object' : 'none',
-        apiKey: '[REDACTED]',
-      });
-
-      const controller = new AbortController();
-      const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetchImpl(url, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${config.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => '');
-          throw new Error(`OpenAI-compatible request failed with HTTP ${response.status}${errorText ? `: ${errorText}` : ''}`);
-        }
-
-        const responseText = await response.text();
-        const { raw, content } = parseCompletionResponse(responseText);
-        const parsed = content ? jsonParse<T>(content) : null;
-        config.logger?.({
-          kind: 'response',
-          url,
-          status: response.status,
+      const performRequest = async (
+        useJsonSchema: boolean
+      ): Promise<OpenAiCompatibleCompletionResult<T>> => {
+        const body: Record<string, unknown> = {
           model: config.model,
-          parsed: parsed !== null,
+          messages: input.messages,
+          stream: false,
+        };
+        if (typeof input.temperature === 'number') body.temperature = input.temperature;
+        if (typeof input.maxTokens === 'number') body.max_tokens = input.maxTokens;
+
+        const responseFormat = responseFormatFor(input, useJsonSchema);
+        if (responseFormat) body.response_format = responseFormat;
+
+        config.logger?.({
+          kind: 'request',
+          url,
+          model: config.model,
+          responseFormat: responseFormat?.type === 'json_schema' ? 'json_schema' : responseFormat?.type === 'json_object' ? 'json_object' : 'none',
+          apiKey: '[REDACTED]',
         });
 
-        return { raw, content, parsed, request: { url, body } };
-      } finally {
-        clearTimeout(timeout);
+        const controller = new AbortController();
+        const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetchImpl(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${config.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`OpenAI-compatible request failed with HTTP ${response.status}${errorText ? `: ${errorText}` : ''}`);
+          }
+
+          const responseText = await response.text();
+          const { raw, content } = parseCompletionResponse(responseText);
+          const parsed = content ? jsonParse<T>(content) : null;
+          config.logger?.({
+            kind: 'response',
+            url,
+            status: response.status,
+            model: config.model,
+            parsed: parsed !== null,
+          });
+
+          return { raw, content, parsed, request: { url, body } };
+        } finally {
+          clearTimeout(timeout);
+        }
+      };
+
+      const first = await performRequest(supportsJsonSchema);
+      if (input.schema && supportsJsonSchema && !first.content.trim()) {
+        return performRequest(false);
       }
+      return first;
     },
   };
 }

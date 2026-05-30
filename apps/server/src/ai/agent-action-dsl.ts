@@ -15,6 +15,7 @@ type JsonRecord = Record<string, unknown>;
 
 export type AgentAction =
   | { op: 'setParam'; nodeId: string; param: string; value: unknown }
+  | { op: 'setInput'; nodeId: string; input: string; value: unknown }
   | {
       op: 'addNode';
       nodeType: string;
@@ -79,6 +80,18 @@ const normalizeAction = (value: unknown): AgentAction | null => {
     if (typeof value.nodeId !== 'string' || typeof value.param !== 'string') return null;
     return { op: 'setParam', nodeId: value.nodeId, param: value.param, value: value.value };
   }
+  if (value.op === 'setInput') {
+    const input =
+      typeof value.input === 'string'
+        ? value.input
+        : typeof value.port === 'string'
+          ? value.port
+          : typeof value.portId === 'string'
+            ? value.portId
+            : null;
+    if (typeof value.nodeId !== 'string' || !input) return null;
+    return { op: 'setInput', nodeId: value.nodeId, input, value: value.value };
+  }
   if (value.op === 'addNode') {
     const nodeType =
       typeof value.nodeType === 'string'
@@ -106,30 +119,39 @@ const normalizeAction = (value: unknown): AgentAction | null => {
   if (value.op === 'connect') {
     const source = isRecord(value.source) ? value.source : isRecord(value.from) ? value.from : null;
     const target = isRecord(value.target) ? value.target : isRecord(value.to) ? value.to : null;
-    if (!source || !target) return null;
+    const sourceNodeId =
+      source && typeof source.nodeId === 'string'
+        ? source.nodeId
+        : typeof value.sourceNodeId === 'string'
+          ? value.sourceNodeId
+          : null;
+    const targetNodeId =
+      target && typeof target.nodeId === 'string'
+        ? target.nodeId
+        : typeof value.targetNodeId === 'string'
+          ? value.targetNodeId
+          : null;
     const sourcePort =
-      typeof source.port === 'string'
+      source && typeof source.port === 'string'
         ? source.port
-        : typeof source.portId === 'string'
+        : source && typeof source.portId === 'string'
           ? source.portId
-          : null;
+          : typeof value.sourcePortId === 'string'
+            ? value.sourcePortId
+            : null;
     const targetPort =
-      typeof target.port === 'string'
+      target && typeof target.port === 'string'
         ? target.port
-        : typeof target.portId === 'string'
+        : target && typeof target.portId === 'string'
           ? target.portId
-          : null;
-    if (
-      typeof source.nodeId !== 'string' ||
-      typeof target.nodeId !== 'string' ||
-      !sourcePort ||
-      !targetPort
-    )
-      return null;
+          : typeof value.targetPortId === 'string'
+            ? value.targetPortId
+            : null;
+    if (!sourceNodeId || !targetNodeId || !sourcePort || !targetPort) return null;
     return {
       op: 'connect',
-      source: { nodeId: source.nodeId, port: sourcePort },
-      target: { nodeId: target.nodeId, port: targetPort },
+      source: { nodeId: sourceNodeId, port: sourcePort },
+      target: { nodeId: targetNodeId, port: targetPort },
       id:
         typeof value.id === 'string'
           ? value.id
@@ -339,13 +361,31 @@ export function compileAgentPlan(input: {
       continue;
     }
 
+    if (action.op === 'setInput') {
+      if (!scopedNodeIds.has(action.nodeId)) {
+        return {
+          ok: false,
+          error: `Node is outside target AI Space: ${action.nodeId}`,
+          path: `actions.${index}.nodeId`,
+          repairOptions: ['Choose a node listed in capabilityManifest.nodes.'],
+        };
+      }
+      commands.push({
+        type: 'node.inputs.update',
+        scopeGroupId: input.targetSpace.id,
+        nodeId: action.nodeId,
+        inputValues: { [action.input]: action.value },
+      });
+      continue;
+    }
+
     if (action.op === 'addNode') {
       if (input.targetSpace.agentPolicy?.targetScope?.allowNewNodes !== true) {
         return {
           ok: false,
           error: 'AI Space policy does not allow adding nodes.',
           path: `actions.${index}.op`,
-          repairOptions: ['Use setParam/connect/disconnect/removeNode on existing nodes.'],
+          repairOptions: ['Use setParam/setInput/connect/disconnect/removeNode on existing nodes.'],
         };
       }
       const definition = definitionForType(input.snapshot.definitions, action.nodeType);
@@ -430,7 +470,7 @@ export function compileAgentPlan(input: {
       ok: false,
       error: 'Unsupported action op.',
       path: `actions.${index}.op`,
-      repairOptions: ['Use setParam, addNode, connect, disconnect, or removeNode.'],
+      repairOptions: ['Use setParam, setInput, addNode, connect, disconnect, or removeNode.'],
     };
   }
 

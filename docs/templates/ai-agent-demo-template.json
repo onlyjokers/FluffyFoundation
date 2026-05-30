@@ -6,7 +6,7 @@
     "spaceId": "ai-space:traveler-greeting",
     "intent": "Persistent AI operator sandbox for greeting, client signaling, display pulses, and follow-up reactions.",
     "runtimeConfig": "gpt-5.5 is configured by server env variables, not by a canvas node.",
-    "eventBindings": ["client.joined", "client.text.final", "display.ready"],
+    "eventBindings": ["client.text.final", "display.ready"],
     "expectedCommands": ["node.params.update", "node.add", "node.connect", "node.disconnect", "node.remove"]
   },
   "graph": {
@@ -16,7 +16,7 @@
         "type": "note",
         "position": { "x": 80, "y": 80 },
         "config": {
-          "text": "AI Space demo. The server-side AI Orchestrator listens for client.joined and client.text.final, then mutates nodes inside this green AI Space."
+          "text": "AI Space demo. The server-side AI Orchestrator listens for client.text.final and display.ready, then mutates nodes inside this green AI Space."
         },
         "inputValues": {},
         "outputValues": {}
@@ -257,7 +257,6 @@
       "minimized": false,
       "agentInterface": {
         "publicInputs": [
-          { "id": "client_joined", "type": "event", "label": "Client Joined" },
           { "id": "client_text", "type": "string", "label": "Client Text" },
           { "id": "display_ready", "type": "event", "label": "Display Ready" }
         ],
@@ -282,18 +281,20 @@
         ],
         "callableCommands": [
           "node.params.update",
+          "node.inputs.update",
           "node.add",
           "node.connect",
           "node.disconnect",
           "node.remove"
         ],
-        "eventBindings": ["client.joined", "client.text.final", "display.ready"]
+        "eventBindings": ["client.text.final", "display.ready"]
       },
       "agentPolicy": {
         "enabled": true,
         "allowedActorIds": ["ai-orchestrator"],
         "allowedCommands": [
           "node.params.update",
+          "node.inputs.update",
           "node.add",
           "node.connect",
           "node.disconnect",
@@ -318,10 +319,10 @@
           "allowNewNodes": true
         },
         "budgets": {
-          "maxNodes": 16,
-          "maxConnections": 20,
-          "maxParamsPerCommand": 8,
-          "maxCommandsPerTurn": 12,
+          "maxNodes": 128,
+          "maxConnections": 256,
+          "maxParamsPerCommand": 32,
+          "maxCommandsPerTurn": 64,
           "maxRetries": 2
         },
         "approvalRequired": false,

@@ -4,6 +4,32 @@
 import type { NodeInstance, NodePort, PortType } from '$lib/nodes/types';
 import type { NodeRegistry } from '@shugu/node-core';
 
+const validPortTypes = new Set<PortType>([
+  'number',
+  'boolean',
+  'pulse',
+  'string',
+  'asset',
+  'color',
+  'audio',
+  'image',
+  'video',
+  'scene',
+  'effect',
+  'client',
+  'command',
+  'fuzzy',
+  'array',
+  'any',
+]);
+
+function resolveGroupProxyPortType(instance: NodeInstance): PortType {
+  const config = instance.config as Record<string, unknown> | undefined;
+  const raw = config?.portType;
+  const value = typeof raw === 'string' ? raw : raw ? String(raw) : '';
+  return validPortTypes.has(value as PortType) ? (value as PortType) : 'any';
+}
+
 export function isCompatiblePortType(sourceType: PortType, targetType: PortType): boolean {
   if (sourceType === 'asset' || targetType === 'asset') {
     return sourceType === 'asset' && targetType === 'asset';
@@ -54,8 +80,13 @@ export function getPortDefForSocket(
   if (!instance) return null;
   const def = nodeRegistry.get(instance.type);
   if (!def) return null;
-  if (socket.side === 'output') return (def.outputs ?? []).find((p) => p.id === socket.key) ?? null;
-  return (def.inputs ?? []).find((p) => p.id === socket.key) ?? null;
+  const port =
+    socket.side === 'output'
+      ? ((def.outputs ?? []).find((p) => p.id === socket.key) ?? null)
+      : ((def.inputs ?? []).find((p) => p.id === socket.key) ?? null);
+  if (!port) return null;
+  if (instance.type === 'group-proxy') return { ...port, type: resolveGroupProxyPortType(instance) };
+  return port;
 }
 
 export function inputAllowsMultiple(

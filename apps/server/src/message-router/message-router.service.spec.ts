@@ -167,6 +167,63 @@ test('MessageRouterService forwards ClientUI interaction sensor events to manage
   ]);
 });
 
+test('MessageRouterService forwards text input interactions without waking AI twice', () => {
+  const { router, reliableMessages } = createRouter(1, 1);
+  const triggers: unknown[] = [];
+  (router as unknown as { aiAgentRuntime?: { enqueue: (trigger: unknown) => void } }).aiAgentRuntime = {
+    enqueue: (trigger) => triggers.push(trigger),
+  };
+  const info = console.info;
+  console.info = () => undefined;
+
+  try {
+    router.routeMessage(
+      createSensorDataMessage('client-1', 'custom', {
+        kind: 'client-ui-interaction',
+        nodeId: 'client-input-1',
+        uiKind: 'input',
+        inputContent: 'hi',
+        firstInputed: true,
+      }),
+      'socket-client-1'
+    );
+  } finally {
+    console.info = info;
+  }
+
+  assert.equal(reliableMessages.length, 1);
+  assert.equal((reliableMessages[0] as { payload?: { kind?: string } }).payload?.kind, 'client-ui-interaction');
+  assert.deepEqual(triggers, []);
+});
+
+test('MessageRouterService forwards record interactions without waking AI before STT text arrives', () => {
+  const { router, reliableMessages } = createRouter(1, 1);
+  const triggers: unknown[] = [];
+  (router as unknown as { aiAgentRuntime?: { enqueue: (trigger: unknown) => void } }).aiAgentRuntime = {
+    enqueue: (trigger) => triggers.push(trigger),
+  };
+  const info = console.info;
+  console.info = () => undefined;
+
+  try {
+    router.routeMessage(
+      createSensorDataMessage('client-1', 'custom', {
+        kind: 'client-ui-interaction',
+        nodeId: 'client-record-1',
+        uiKind: 'record',
+        finished: true,
+      }),
+      'socket-client-1'
+    );
+  } finally {
+    console.info = info;
+  }
+
+  assert.equal(reliableMessages.length, 1);
+  assert.equal((reliableMessages[0] as { payload?: { kind?: string } }).payload?.kind, 'client-ui-interaction');
+  assert.deepEqual(triggers, []);
+});
+
 test('MessageRouterService keeps the real client id when waking AI from agent text', () => {
   const { router, reliableMessages } = createRouter(1, 1);
   const triggers: unknown[] = [];
@@ -194,6 +251,22 @@ test('MessageRouterService keeps the real client id when waking AI from agent te
       },
     ]
   );
+});
+
+test('MessageRouterService notifies managers about client joins without waking AI runtime', () => {
+  const { router, reliableMessages } = createRouter(1, 1);
+  const triggers: unknown[] = [];
+  (router as unknown as { aiAgentRuntime?: { enqueue: (trigger: unknown) => void } }).aiAgentRuntime = {
+    enqueue: (trigger) => triggers.push(trigger),
+  };
+
+  router.notifyClientJoined('client-1');
+
+  assert.equal(
+    reliableMessages.some((message) => message.type === 'system' && (message as { action?: string }).action === 'clientJoined'),
+    true
+  );
+  assert.deepEqual(triggers, []);
 });
 
 test('MessageRouterService passes client screenshots to AI runtime capture waiters', () => {
@@ -468,7 +541,10 @@ test('MessageRouterService broadcasts semantic snapshots after AI agent mutation
   };
   router.setServer(server as never);
 
-  router.notifyClientJoined('client-1');
+  router.routeMessage(
+    createSensorDataMessage('client-1', 'custom', { kind: 'agent-text', text: 'hi' }),
+    'socket-client-1'
+  );
   await waitFor(() =>
     delivered.some(
       (entry) =>

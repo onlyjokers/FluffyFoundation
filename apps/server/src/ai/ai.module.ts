@@ -45,7 +45,7 @@ const defaultSkills: AgentSkillDoc[] = [
     summary: 'Use node.add with scopeGroupId inside an AI Space sandbox.',
     triggers: {
       commandTypes: ['node.add'],
-      eventTypes: ['client.joined'],
+      eventTypes: ['client.text.final', 'display.ready', 'vision.idle'],
     },
     content:
       'scopeGroupId must point to an AI Space (kind=ai-space) with enabled agentPolicy and allowNewNodes.',
@@ -54,14 +54,14 @@ const defaultSkills: AgentSkillDoc[] = [
     id: 'demo.ai-space-reaction',
     title: 'AI Space Client and Display Reaction',
     summary:
-      'For client.joined and client.text.final, update only nodes inside the assigned AI Space to answer with text and pulse the client/display.',
+      'For text, voice, and display/vision events, update only nodes inside the assigned AI Space to answer by changing the graph.',
     triggers: {
       nodeTypes: ['proc-flashlight', 'proc-screen-color', 'proc-display-text', 'string', 'show-anything'],
       commandTypes: ['node.params.update'],
-      eventTypes: ['client.joined', 'client.text.final', 'display.ready'],
+      eventTypes: ['client.text.final', 'display.ready', 'vision.idle'],
     },
     content:
-      'Use node.params.update with the target AI Space scopeGroupId. On client.text.final, write a concise answer into the proc-display-text text param and mirror it into the string preview value. Keep colors, rates, opacity, and text concise. Do not touch network or secret surfaces.',
+      'Use node.params.update with the target AI Space scopeGroupId. On client.text.final, communicate only through graph actions: update an existing visible response node, variable, visual, or control node. If policy allows node.add and no visible response target exists, create/connect an appropriate visible response node. Do not rely on summary text because the user cannot see it. Do not touch network or secret surfaces.',
   },
 ];
 

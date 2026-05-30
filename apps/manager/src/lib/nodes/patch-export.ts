@@ -226,6 +226,23 @@ export function exportGraphForPatch(
     if (type === 'client' || type === 'command') return false;
     return true;
   };
+  const isCommandInputPort = (targetNodeId: string, targetPortId: string): boolean => {
+    if (!registry) return false;
+    const node = byId.get(targetNodeId);
+    if (!node) return false;
+    const def = registry.get(String(node.type));
+    const port = def?.inputs?.find((p) => String(p.id) === String(targetPortId));
+    return Boolean(port) && String(port?.type ?? '') === 'command';
+  };
+  const commandOutputPortsFor = (nodeId: string): string[] => {
+    if (!registry) return [];
+    const node = byId.get(nodeId);
+    if (!node) return [];
+    const def = registry.get(String(node.type));
+    return (def?.outputs ?? [])
+      .filter((port) => String(port.type) === 'command')
+      .map((port) => String(port.id));
+  };
   const visitDownstream = (nodeId: string) => {
     const id = String(nodeId);
     if (!id || !keep.has(id)) return;
@@ -258,8 +275,57 @@ export function exportGraphForPatch(
     return changed;
   };
 
+  const addCommandRoutingDependencies = () => {
+    if (!registry) return false;
+    let changed = false;
+    const visitedPorts = new Set<string>();
+    const visitCommandRoute = (nodeId: string, portId: string) => {
+      const routeKey = `${nodeId}:${portId}`;
+      if (visitedPorts.has(routeKey)) return;
+      visitedPorts.add(routeKey);
+
+      const outgoing = outgoingBySource.get(nodeId) ?? [];
+      for (const edge of outgoing) {
+        if (String(edge.sourcePortId) !== portId) continue;
+        const targetNodeId = String(edge.targetNodeId);
+        const targetPortId = String(edge.targetPortId);
+        if (!isCommandInputPort(targetNodeId, targetPortId)) continue;
+        const target = byId.get(targetNodeId);
+        if (!target) continue;
+        const targetType = String(target.type ?? '');
+
+        if (targetType === 'client-executor' || targetType === 'display-object') {
+          continue;
+        }
+
+        const before = keep.size;
+        visit(targetNodeId);
+        if (keep.size !== before) changed = true;
+
+        for (const incoming of incomingByTarget.get(targetNodeId) ?? []) {
+          if (!isCommandInputPort(targetNodeId, String(incoming.targetPortId))) continue;
+          const innerBefore = keep.size;
+          visit(String(incoming.sourceNodeId));
+          if (keep.size !== innerBefore) changed = true;
+        }
+
+        for (const outPortId of commandOutputPortsFor(targetNodeId)) {
+          visitCommandRoute(targetNodeId, outPortId);
+        }
+      }
+    };
+
+    for (const rootId of rootNodeIds) {
+      visitCommandRoute(String(rootId), 'cmd');
+    }
+    return changed;
+  };
+
   while (addClientUiOutputDependencies()) {
     // Adding a downstream UI interaction consumer can expose another exported ClientUI node.
+  }
+  while (addCommandRoutingDependencies()) {
+    // UI root command outputs can be merged with sibling command processors before routing to a target.
   }
 
   const addGroupAndAncestors = (out: Set<string>, groupId: string) => {
@@ -371,6 +437,9 @@ export function exportGraphForPatch(
     }
     while (addClientUiOutputDependencies()) {
       // Adding setters can expose more ClientUI feedback paths.
+    }
+    while (addCommandRoutingDependencies()) {
+      // Adding downstream command routes can expose command processors with their own dependencies.
     }
     if (keep.size === before) break;
   }

@@ -26,7 +26,7 @@ export type AiContextBudgetResult = {
   totalChars: number;
 };
 
-const DEFAULT_MAX_CHARS = 180_000;
+const DEFAULT_MAX_CHARS = 50_000;
 const priorityRank: Record<AiPromptBlockPriority, number> = {
   must: 0,
   high: 1,

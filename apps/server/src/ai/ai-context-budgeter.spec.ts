@@ -33,6 +33,22 @@ test('applyAiContextBudget preserves must-keep blocks and emits compression noti
   assert.ok(result.totalChars <= 700);
 });
 
+test('applyAiContextBudget keeps the default prompt under the provider-safe character budget', () => {
+  const blocks: AiPromptBlock[] = [
+    { id: 'system', role: 'system', priority: 'must', content: 'system rules' },
+    { id: 'protocol', role: 'user', priority: 'must', content: 'protocol rules' },
+    { id: 'targetSpace', role: 'user', priority: 'must', content: { targetSpaceId: 'ai-space:agent' } },
+    { id: 'event', role: 'user', priority: 'must', content: { type: 'client.text.final', text: 'go' } },
+    { id: 'snapshot', role: 'user', priority: 'high', content: { nodes: [{ id: 'node:1' }] } },
+    { id: 'capabilityManifest', role: 'user', priority: 'medium', content: { manifest: 'x'.repeat(60_000) } },
+    { id: 'memory', role: 'user', priority: 'low', content: { turns: ['y'.repeat(10_000)] } },
+  ];
+
+  const result = applyAiContextBudget(blocks);
+
+  assert.ok(result.totalChars <= 50_000);
+});
+
 test('buildPromptMessagesFromBlocks keeps block order and stringifies structured content', () => {
   const messages = buildPromptMessagesFromBlocks([
     { id: 'system', role: 'system', priority: 'must', content: 'system rules' },

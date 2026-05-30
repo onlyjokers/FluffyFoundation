@@ -1058,3 +1058,62 @@ test('exportGraphForPatch keeps Record Sound STT dependencies for manager-observ
     ['display-text', 'out', 'record', 'stt'].sort()
   );
 });
+
+test('exportGraphForPatch includes sibling Display Text commands merged through UI command aggregators', () => {
+  const graph: GraphState = {
+    nodes: [
+      node('client-input', 'client-input-box', { display: true }),
+      { ...node('display-text', 'proc-display-text', { text: 'Hi!!' }), config: { text: 'Hi!' } },
+      { ...node('aggregator', 'cmd-aggregator'), config: { inCount: 2 } },
+      node('out', 'ui-out'),
+      node('client', 'client-executor'),
+    ],
+    connections: [
+      {
+        id: 'ui',
+        sourceNodeId: 'client-input',
+        sourcePortId: 'out',
+        targetNodeId: 'out',
+        targetPortId: 'in',
+      },
+      {
+        id: 'display-text-cmd',
+        sourceNodeId: 'display-text',
+        sourcePortId: 'cmd',
+        targetNodeId: 'aggregator',
+        targetPortId: 'in1',
+      },
+      {
+        id: 'ui-cmd',
+        sourceNodeId: 'out',
+        sourcePortId: 'cmd',
+        targetNodeId: 'aggregator',
+        targetPortId: 'in2',
+      },
+      {
+        id: 'aggregate-cmd',
+        sourceNodeId: 'aggregator',
+        sourcePortId: 'cmd',
+        targetNodeId: 'client',
+        targetPortId: 'in',
+      },
+    ],
+  };
+
+  const result = exportGraphForPatch(graph, { rootNodeIds: ['out'], nodeRegistry: registry });
+
+  assert.deepEqual(
+    result.graph.nodes.map((item) => item.id).sort(),
+    ['aggregator', 'client-input', 'display-text', 'out'].sort()
+  );
+  assert.deepEqual(
+    result.graph.connections
+      .map((item) => `${item.sourceNodeId}:${item.sourcePortId}->${item.targetNodeId}:${item.targetPortId}`)
+      .sort(),
+    [
+      'client-input:out->out:in',
+      'display-text:cmd->aggregator:in1',
+      'out:cmd->aggregator:in2',
+    ].sort()
+  );
+});

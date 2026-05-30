@@ -21,6 +21,23 @@ type PlanGroupFromSelectionResult = {
   reparentGroups: Array<{ groupId: string; parentId: string | null }>;
 };
 
+const AI_SPACE_GRAPH_COMMANDS = [
+  'node.params.update',
+  'node.inputs.update',
+  'node.add',
+  'node.connect',
+  'node.disconnect',
+  'node.remove',
+] as const;
+
+const AI_SPACE_DEFAULT_BUDGETS = {
+  maxNodes: 128,
+  maxConnections: 256,
+  maxParamsPerCommand: 32,
+  maxCommandsPerTurn: 64,
+  maxRetries: 2,
+} as const;
+
 function buildGroupMembership(groups: NodeGroup[]) {
   const byId = new Map<string, NodeGroup>();
   const groupNodeSets = new Map<string, Set<string>>();
@@ -194,32 +211,16 @@ export function planGroupFromSelection(
             kind: 'ai-space' as const,
             agentInterface: {
               exposedNodeIds: [...nodeIds],
-              callableCommands: [
-                'node.params.update',
-                'node.add',
-                'node.connect',
-                'node.disconnect',
-              ],
-              eventBindings: ['client.joined', 'client.text.final', 'display.ready'],
+              callableCommands: [...AI_SPACE_GRAPH_COMMANDS],
+              eventBindings: ['client.text.final', 'display.ready'],
             },
             agentPolicy: {
               enabled: true,
               allowedActorIds: ['ai-orchestrator'],
-              allowedCommands: [
-                'node.params.update',
-                'node.add',
-                'node.connect',
-                'node.disconnect',
-              ],
+              allowedCommands: [...AI_SPACE_GRAPH_COMMANDS],
               deniedSurfaces: ['network', 'secrets', 'storage'],
               targetScope: { nodeIds: [...nodeIds], allowNewNodes: true },
-              budgets: {
-                maxNodes: 16,
-                maxConnections: 20,
-                maxParamsPerCommand: 8,
-                maxCommandsPerTurn: 12,
-                maxRetries: 2,
-              },
+              budgets: { ...AI_SPACE_DEFAULT_BUDGETS },
               approvalRequired: false,
               rollbackOnReject: true,
             },

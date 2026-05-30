@@ -255,6 +255,34 @@ test('getPortDefForSocket preserves nodeEngine.getNode receiver context', () => 
   assert.equal(port?.type, 'number');
 });
 
+test('getPortDefForSocket resolves group proxy ports from their dynamic portType config', () => {
+  const nodeRegistry = new NodeRegistry();
+  registerDefaultNodeDefinitions(nodeRegistry);
+  const builder = createReteBuilder({
+    nodeRegistry,
+    nodeEngine: {
+      getNode: () => ({
+        id: 'proxy-1',
+        type: 'group-proxy',
+        config: { direction: 'output', portType: 'client' },
+        inputValues: {},
+        outputValues: {},
+        position: { x: 0, y: 0 },
+      }),
+      updateNodeInputValue: () => {},
+      updateNodeConfig: () => {},
+    },
+    sockets: createReteSockets(),
+    getNumberParamOptions: () => [],
+    sendNodeOverride: () => {},
+  });
+
+  const port = builder.getPortDefForSocket({ nodeId: 'proxy-1', side: 'input', key: 'in' });
+
+  assert.equal(port?.id, 'in');
+  assert.equal(port?.type, 'client');
+});
+
 test('inputAllowsMultiple preserves nodeEngine.getNode receiver context', () => {
   const builder = createBuilderWithThisBoundGetNode();
 
